@@ -7,6 +7,7 @@ import path from 'path'
 export default defineConfig({
   title: "Perofamily Wiki",
   description: "Documentation for PeroCore - The AI Desktop Companion",
+  base: '/PeroCore/', // Deploy to GitHub Pages: https://YoKONCy.github.io/PeroCore/
   head: [['link', { rel: 'icon', href: '/logo.png' }]],
   appearance: true, // Enable dark mode toggle
   markdown: {
@@ -48,6 +49,7 @@ export default defineConfig({
         text: '⚙️ 外围系统',
         items: [
           { text: 'Bedrock 3D 引擎', link: '/peripheral-systems/bedrock' },
+          { text: '控制面板', link: '/peripheral-systems/dashboard' },
           { text: '角色管理', link: '/peripheral-systems/character' }
         ]
       },

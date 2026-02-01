@@ -35,6 +35,10 @@
 <a href="https://github.com/YoKONCy/Peroperochat">
   <img src="https://img.shields.io/badge/Mobile-Peroperochat-FF69B4?style=for-the-badge&logo=android&logoColor=white" alt="Mobile">
 </a>
+&nbsp;
+<a href="https://www.perofamily.top">
+  <img src="https://img.shields.io/badge/Wiki-Documentation-blueviolet?style=for-the-badge&logo=wikipedia&logoColor=white" alt="Wiki">
+</a>
 
 <br/><br/>
 </div>
@@ -69,6 +73,7 @@
 
 | Section | Description | Link |
 |:-------:|:------------|:----:|
+| 📖 | **Wiki** - 项目官方中文文档 (Documentation) | [Visit](https://www.perofamily.top) |
 | 🌟 | **Philosophy** - 核心理念：有温度的伙伴 | [Jump](#-philosophy) |
 | 🏗️ | **Architecture** - 核心架构与模块详解 | [Jump](#-technical-architecture) |
 | 💬 | **Social Mode** - 社交模式与群聊分身 | [Jump](#-social-mode) |
@@ -288,8 +293,6 @@ cd PeroCore
 # 2. 启动服务 (Backend + Gateway + NapCat)
 docker-compose up -d
 ```
-
-详细文档请参阅 Wiki (建设中)。
 
 <br/>
 

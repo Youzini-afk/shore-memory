@@ -1,40 +1,64 @@
 {
-  "hash": "9faa7e5b",
+  "hash": "fe309840",
   "configHash": "2edaf0a6",
-  "lockfileHash": "3a240825",
-  "browserHash": "1e61be4e",
+  "lockfileHash": "4d5d5a9e",
+  "browserHash": "ccaf91c6",
   "optimized": {
     "vue": {
       "src": "../../../../node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "file": "vue.js",
-      "fileHash": "316dfa7d",
+      "fileHash": "66f629b6",
       "needsInterop": false
     },
     "vitepress > @vue/devtools-api": {
       "src": "../../../../node_modules/vitepress/node_modules/@vue/devtools-api/dist/index.js",
       "file": "vitepress___@vue_devtools-api.js",
-      "fileHash": "80218527",
+      "fileHash": "6932060a",
       "needsInterop": false
     },
     "vitepress > @vueuse/core": {
       "src": "../../../../node_modules/vitepress/node_modules/@vueuse/core/index.mjs",
       "file": "vitepress___@vueuse_core.js",
-      "fileHash": "ced89ca5",
+      "fileHash": "86059b8a",
       "needsInterop": false
     },
-    "echarts": {
-      "src": "../../../../node_modules/echarts/index.js",
-      "file": "echarts.js",
-      "fileHash": "3da83165",
+    "three": {
+      "src": "../../../../node_modules/three/build/three.module.js",
+      "file": "three.js",
+      "fileHash": "68f08735",
+      "needsInterop": false
+    },
+    "three/examples/jsm/controls/OrbitControls.js": {
+      "src": "../../../../node_modules/three/examples/jsm/controls/OrbitControls.js",
+      "file": "three_examples_jsm_controls_OrbitControls__js.js",
+      "fileHash": "09716eb7",
+      "needsInterop": false
+    },
+    "element-plus": {
+      "src": "../../../../node_modules/element-plus/es/index.mjs",
+      "file": "element-plus.js",
+      "fileHash": "f40c83e6",
+      "needsInterop": false
+    },
+    "@element-plus/icons-vue": {
+      "src": "../../../../node_modules/@element-plus/icons-vue/dist/index.js",
+      "file": "@element-plus_icons-vue.js",
+      "fileHash": "25588574",
       "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-LE5NDSFD": {
-      "file": "chunk-LE5NDSFD.js"
+    "chunk-DGTOYCXY": {
+      "file": "chunk-DGTOYCXY.js"
     },
-    "chunk-PZ5AY32C": {
-      "file": "chunk-PZ5AY32C.js"
+    "chunk-AYDLU7NO": {
+      "file": "chunk-AYDLU7NO.js"
+    },
+    "chunk-OE76NJSB": {
+      "file": "chunk-OE76NJSB.js"
+    },
+    "chunk-5WRI5ZAA": {
+      "file": "chunk-5WRI5ZAA.js"
     }
   }
 }

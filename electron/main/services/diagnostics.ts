@@ -193,11 +193,22 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     // 检查 C:\Windows\System32\vcruntime140.dll
     const systemRoot = process.env.SystemRoot || 'C:\\Windows'
     const vcRuntime = path.join(systemRoot, 'System32/vcruntime140.dll')
+    const vcRuntime1 = path.join(systemRoot, 'System32/vcruntime140_1.dll') // Python 3.10+ needs this
     const sysWow64 = path.join(systemRoot, 'SysWOW64/vcruntime140.dll')
+    
     let vcRedistInstalled = (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
+    let vcRedist1Installed = (await fs.pathExists(vcRuntime1))
     
     if (!vcRedistInstalled) {
-        errors.push('关键系统组件缺失: VCRUNTIME140.dll (Visual C++ Redistributable)。这会导致 Python 无法启动。')
+        errors.push('关键系统组件缺失: VCRUNTIME140.dll。请安装 Visual C++ Redistributable。')
+    }
+    if (!vcRedist1Installed) {
+        // Warning but not error, as some systems might have it elsewhere or statically linked (unlikely for python)
+        // 警告但不是错误，因为某些系统可能在其他地方拥有它或静态链接（对于python来说不太可能）
+        console.warn('[Diagnostics] vcruntime140_1.dll not found in System32')
+        // We add it to errors because Python 3.10 WILL fail without it
+        // 我们将其添加到错误中，因为 Python 3.10 如果没有它将会失败
+        errors.push('关键系统组件缺失: VCRUNTIME140_1.dll。请安装最新版 Visual C++ Redistributable。')
     }
 
     // 6. Node.js Check

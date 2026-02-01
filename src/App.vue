@@ -76,6 +76,21 @@ window.addEventListener('unhandledrejection', (event) => {
     window.$notify(msg, 'error', '未捕获的 Promise 异常');
   }
 });
+
+// 监听后端系统错误
+if (window.electron && window.electron.on) {
+    window.electron.on('system-error', (errorMsg) => {
+        console.error('[System Error]', errorMsg)
+        if (window.$notify) {
+             // 格式化错误信息，使其更易读
+            let displayMsg = errorMsg
+            if (errorMsg.includes('Traceback')) {
+                displayMsg = '后端核心发生崩溃，请检查日志。'
+            }
+            window.$notify(displayMsg, 'error', '系统核心错误', 10000)
+        }
+    })
+}
 </script>
 
 <style>

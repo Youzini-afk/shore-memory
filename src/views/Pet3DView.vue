@@ -4,6 +4,7 @@
     <!-- 3D 角色组件 -->
     <BedrockAvatar 
       ref="avatarRef" 
+      :isDragging="isDragging"
       @pet="onPet"
       @hover-start="onHoverStart"
       @hover-end="onHoverEnd"
@@ -557,18 +558,17 @@ const sendAudioBuffer = () => {
     // 2. 转换为 WAV
     const wavBlob = encodeWAV(merged, audioContext.value.sampleRate)
     
-    // 3. 转 Base64 发送
+    // 3. 发送音频流 (通过 Gateway)
     const reader = new FileReader()
     reader.onloadend = () => {
-        const base64data = reader.result.split(',')[1]
-        if (voiceWs.value && voiceWs.value.readyState === WebSocket.OPEN) {
-            voiceWs.value.send(JSON.stringify({
-                type: 'speech_end',
-                data: base64data
-            }))
+        if (reader.result) {
+            const uint8Array = new Uint8Array(reader.result)
+            console.log('[Voice] 发送语音流，大小:', uint8Array.length)
+            gatewayClient.sendStream('master', uint8Array, 'audio/wav')
+                .catch(err => console.error('[Voice] 发送语音失败:', err))
         }
     }
-    reader.readAsDataURL(wavBlob)
+    reader.readAsArrayBuffer(wavBlob)
     
     audioBuffer = []
 }

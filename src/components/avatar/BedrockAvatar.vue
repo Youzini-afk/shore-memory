@@ -18,6 +18,10 @@ import { BedrockLoader } from './lib/BedrockLoader';
 import { AnimationManager } from './lib/AnimationManager';
 import { molangContext } from './lib/Molang';
 
+const props = defineProps<{
+  isDragging?: boolean
+}>();
+
 const emit = defineEmits(['pet', 'hover-start', 'hover-end']);
 
 const container = ref<HTMLElement | null>(null);
@@ -26,6 +30,8 @@ const loading = ref(true);
 const errorMsg = ref('');
 const animList = ref<string[]>([]);
 const selectedAnim = ref('');
+
+let dragInfluence = 0; // 0 = Normal, 1 = Full Drag Effect
 
 const clothingState = ref({
   dress: true,
@@ -520,15 +526,118 @@ function animate() {
   // Apply Procedural Animation Overrides (Post-Update)
   // 应用程序化动画覆盖 (更新后)
   if (scene.value) {
+      // --- Dragging / Lifted Physics ---
+      // 拖拽/被拎起物理效果
+      // Smoothly transition dragInfluence (0.0 to 1.0)
+      const targetInfluence = props.isDragging ? 1.0 : 0.0;
+      // Use 'dragInfluence' stored in outer scope or ref (defined below)
+      // 使用存储在外部作用域或 ref 中的 'dragInfluence' (定义在下面)
+      dragInfluence += (targetInfluence - dragInfluence) * 0.1;
+
+      if (dragInfluence > 0.01) {
+          const time = Date.now() * 0.008;
+          const swingX = Math.sin(time) * 0.1; // Gentle swing / 轻微摆动
+          const swingZ = Math.cos(time * 0.8) * 0.05; 
+          
+          // Use CORRECT bone names from main.json
+          // 使用 main.json 中的正确骨骼名称
+          
+          const body = scene.value.getObjectByName('AllBody') || scene.value.getObjectByName('Body');
+          const upperBody = scene.value.getObjectByName('UpperBody'); // Chest
+          
+          const armL = scene.value.getObjectByName('LeftArm') || scene.value.getObjectByName('ArmLeft');
+          const armR = scene.value.getObjectByName('RightArm') || scene.value.getObjectByName('ArmRight');
+          
+          const legL = scene.value.getObjectByName('LeftLeg') || scene.value.getObjectByName('LegLeft');
+          const legR = scene.value.getObjectByName('RightLeg') || scene.value.getObjectByName('LegRight');
+          
+          const head = scene.value.getObjectByName('Head');
+
+          // Helper: Lerp current rotation towards target rotation
+          // 辅助函数：将当前旋转插值到目标旋转
+          // We add the target offset multiplied by dragInfluence
+          // 我们加上乘以 dragInfluence 的目标偏移量
+          
+          // Body: Tilt forward slightly (gravity) and swing
+          // 身体：轻微前倾（重力）并摆动
+          if (body) {
+              const targetRotX = THREE.MathUtils.degToRad(15) + swingX * 0.5;
+              const targetRotZ = swingZ;
+              body.rotation.x = THREE.MathUtils.lerp(body.rotation.x, targetRotX, dragInfluence);
+              body.rotation.z = THREE.MathUtils.lerp(body.rotation.z, targetRotZ, dragInfluence);
+          } else if (upperBody) {
+              const targetRotX = THREE.MathUtils.degToRad(15) + swingX * 0.5;
+              const targetRotZ = swingZ;
+              upperBody.rotation.x = THREE.MathUtils.lerp(upperBody.rotation.x, targetRotX, dragInfluence);
+              upperBody.rotation.z = THREE.MathUtils.lerp(upperBody.rotation.z, targetRotZ, dragInfluence);
+          }
+          
+          // Arms: Dangle loosely
+          // 手臂：松散下垂
+          if (armL) {
+              const targetRotZ = THREE.MathUtils.degToRad(20); 
+              const targetRotX = THREE.MathUtils.degToRad(10) + swingX;
+              armL.rotation.z = THREE.MathUtils.lerp(armL.rotation.z, targetRotZ, dragInfluence);
+              armL.rotation.x = THREE.MathUtils.lerp(armL.rotation.x, targetRotX, dragInfluence);
+          }
+          if (armR) {
+              const targetRotZ = THREE.MathUtils.degToRad(-20);
+              const targetRotX = THREE.MathUtils.degToRad(10) + swingX;
+              armR.rotation.z = THREE.MathUtils.lerp(armR.rotation.z, targetRotZ, dragInfluence);
+              armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, targetRotX, dragInfluence);
+          }
+          
+          // Legs: Dangle vertically
+          // 腿部：垂直下垂
+          if (legL) {
+              const targetRotX = THREE.MathUtils.degToRad(15) + swingX * 1.5; 
+              const targetRotZ = THREE.MathUtils.degToRad(5);
+              legL.rotation.x = THREE.MathUtils.lerp(legL.rotation.x, targetRotX, dragInfluence);
+              legL.rotation.z = THREE.MathUtils.lerp(legL.rotation.z, targetRotZ, dragInfluence);
+          }
+          if (legR) {
+              const targetRotX = THREE.MathUtils.degToRad(15) + swingX * 1.5;
+              const targetRotZ = THREE.MathUtils.degToRad(-5);
+              legR.rotation.x = THREE.MathUtils.lerp(legR.rotation.x, targetRotX, dragInfluence);
+              legR.rotation.z = THREE.MathUtils.lerp(legR.rotation.z, targetRotZ, dragInfluence);
+          }
+          
+          // Head: Look up/around (trying to see who grabbed her)
+          // 头部：向上看/环顾四周（试图看谁抓住了她）
+          if (head) {
+             const targetRotX = THREE.MathUtils.degToRad(-45);
+             const targetRotZ = swingZ * 0.5;
+             
+             // Blend head tracking out as drag influence increases
+             // 随着拖拽影响增加，淡出头部追踪
+             // But here we are applying on top of animation manager updates.
+             // 但这里我们是在动画管理器更新之上应用的。
+             // Since AnimationManager resets bones or applies animation, we are overriding.
+             // 由于 AnimationManager 重置骨骼或应用动画，我们正在覆盖。
+             
+             // To blend properly, we need to know the 'original' rotation from animation.
+             // 为了正确混合，我们需要知道来自动画的“原始”旋转。
+             // AnimationManager.update() has already run. So head.rotation contains anim + head tracking.
+             // AnimationManager.update() 已经运行。所以 head.rotation 包含动画 + 头部追踪。
+             
+             head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetRotX, dragInfluence);
+             head.rotation.z = THREE.MathUtils.lerp(head.rotation.z, targetRotZ, dragInfluence);
+          }
+      }
+
       const leftEyelid = scene.value.getObjectByName('LeftEyelid');
       const rightEyelid = scene.value.getObjectByName('RightEyelid');
       const eyeBrow = scene.value.getObjectByName('EyeBrow');
       
       // Target scale: 0.1 (Squint) when petting, 1.0 (Open) when not
       // If shy, use a partial squint (e.g. 0.8) for a "shy/embarrassed" look
+      // If dragging, eyes wide open (Surprised)
       // 目标缩放：抚摸时 0.1 (眯眼)，否则 1.0 (睁眼)
       // 如果害羞，使用部分眯眼 (例如 0.8) 表现“害羞/尴尬”的样子
-      const targetSquint = isPetting ? 0.7 : (isShy.value ? 0.85 : 1.0);
+      // 如果拖拽中，睁大眼睛（惊讶）
+      let targetSquint = isPetting ? 0.7 : (isShy.value ? 0.85 : 1.0);
+      if (props.isDragging) targetSquint = 1.2;
+
       currentSquint += (targetSquint - currentSquint) * 0.2;
       
       if (leftEyelid) leftEyelid.scale.y = currentSquint;

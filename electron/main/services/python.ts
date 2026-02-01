@@ -52,7 +52,7 @@ export async function startBackend(window: BrowserWindow, enableSocialMode: bool
     const env = {
         ...process.env,
         PYTHONPATH: pythonPathEnv,
-        PYTHONHOME: undefined,
+        PYTHONHOME: path.dirname(pythonPath), // Explicitly set to python dir to avoid picking up system python env
         PYTHONSTARTUP: undefined,
         PIP_CONFIG_FILE: undefined,
         PYTHONNOUSERSITE: '1',
@@ -72,6 +72,15 @@ export async function startBackend(window: BrowserWindow, enableSocialMode: bool
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false, // Ensure it dies with parent // 确保随父进程退出
         windowsHide: true
+    })
+
+    child.on('error', (err) => {
+        console.error(`[Backend Spawn Error] Failed to spawn python process: ${err.message}`)
+        try {
+            if (window && !window.isDestroyed()) {
+                window.webContents.send('system-error', `后端启动失败 (Spawn Error): ${err.message}`)
+            }
+        } catch (e) {}
     })
 
     child.stdout?.on('data', (data) => {
