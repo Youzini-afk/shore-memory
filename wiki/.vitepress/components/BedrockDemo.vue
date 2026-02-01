@@ -39,6 +39,7 @@
 
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref, shallowRef, watch } from 'vue';
+import { withBase } from 'vitepress';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 
@@ -195,16 +196,16 @@ async function loadModel() {
         // 为了演示，我们需要确保 public/assets/3d 存在
         const config = {
           name: "Rossi",
-          model: `/assets/3d/Rossi/models/main.json`,
-          texture: `/assets/3d/Rossi/textures/texture.png`,
+          model: withBase('/assets/3d/Rossi/models/main.json'),
+          texture: withBase('/assets/3d/Rossi/textures/texture.png'),
           animation: [
-            `/assets/3d/Rossi/animations/main.animation.json`,
-            `/assets/3d/Rossi/animations/tac.animation.json`,
-            `/assets/3d/Rossi/animations/carryon.animation.json`,
-            `/assets/3d/Rossi/animations/extra.animation.json`,
-            `/assets/3d/Rossi/animations/tlm.animation.json`
+            withBase('/assets/3d/Rossi/animations/main.animation.json'),
+            withBase('/assets/3d/Rossi/animations/tac.animation.json'),
+            withBase('/assets/3d/Rossi/animations/carryon.animation.json'),
+            withBase('/assets/3d/Rossi/animations/extra.animation.json'),
+            withBase('/assets/3d/Rossi/animations/tlm.animation.json')
           ],
-          animation_controllers: `/assets/3d/Rossi/controller/controller.json`
+          animation_controllers: withBase('/assets/3d/Rossi/controller/controller.json')
         };
         
         const rootGroup = await loader.load(config, animManager);

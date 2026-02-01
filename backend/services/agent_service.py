@@ -1766,11 +1766,11 @@ class AgentService:
                                         img_data = base64.b64decode(encoded)
                                         
                                         current_dir = os.path.dirname(os.path.abspath(__file__))
-                                        project_root = os.path.dirname(os.path.dirname(current_dir))
-                                        workspace_dir = os.path.join(project_root, "pero_workspace")
+                                        backend_dir = os.path.dirname(current_dir)
+                                        data_dir = os.environ.get("PERO_DATA_DIR", os.path.join(backend_dir, "data"))
                                         
                                         date_str = datetime.now().strftime("%Y-%m-%d")
-                                        upload_dir = os.path.join(workspace_dir, "uploads", date_str)
+                                        upload_dir = os.path.join(data_dir, "uploads", date_str)
                                         os.makedirs(upload_dir, exist_ok=True)
                                         
                                         filename = f"{uuid.uuid4()}.{ext}"

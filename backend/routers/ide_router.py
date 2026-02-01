@@ -116,14 +116,22 @@ from utils.workspace_utils import get_workspace_root, get_global_workspace_root
 
 @router.get("/image")
 async def get_workspace_image(path: str):
-    # 对于图像，我们可能希望在当前代理的工作区或全局工作区中搜索
-    # 但为了简单起见，我们暂时坚持使用活跃代理的工作区
-    base_dir = get_workspace_root() 
     # 路径应相对于工作区，例如 "uploads/2026-01-21/xxx.png"
     # 防止目录遍历攻击
     safe_path = os.path.normpath(path)
     if safe_path.startswith("..") or os.path.isabs(safe_path):
          raise HTTPException(status_code=403, detail="Access denied")
+
+    # [Refactor] Uploads moved to backend/data/uploads
+    # Check if path starts with uploads (normalized)
+    # safe_path is like "uploads\2026...\..." on Windows
+    if safe_path.startswith("uploads") and (len(safe_path) == 7 or safe_path[7] in [os.sep, '/']):
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        backend_dir = os.path.dirname(current_dir)
+        base_dir = os.environ.get("PERO_DATA_DIR", os.path.join(backend_dir, "data"))
+    else:
+        # 对于其他图像，我们暂时坚持使用活跃代理的工作区
+        base_dir = get_workspace_root() 
          
     target_path = os.path.join(base_dir, safe_path)
     
