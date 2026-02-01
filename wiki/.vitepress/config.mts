@@ -7,7 +7,7 @@ import path from 'path'
 export default defineConfig({
   title: "Perofamily Wiki",
   description: "Documentation for PeroCore - The AI Desktop Companion",
-  base: '/PeroCore/', // Deploy to GitHub Pages: https://YoKONCy.github.io/PeroCore/
+  // base: '/PeroCore/', // Deploy to GitHub Pages: https://YoKONCy.github.io/PeroCore/
   head: [['link', { rel: 'icon', href: '/logo.png' }]],
   appearance: true, // Enable dark mode toggle
   markdown: {
