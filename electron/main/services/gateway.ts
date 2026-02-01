@@ -89,10 +89,27 @@ export async function startGateway(window: BrowserWindow) {
 
     gatewayProcess.stderr?.on('data', (data) => {
         const line = data.toString().trim()
-        console.error(`[网关错误] ${line}`)
+        // Go log.Println outputs to stderr by default. We need to distinguish actual errors from logs.
+        // Heuristic: Check for common error keywords.
+        const lowerLine = line.toLowerCase()
+        const isError = lowerLine.includes('error') || 
+                       lowerLine.includes('panic') || 
+                       lowerLine.includes('fail') || 
+                       lowerLine.includes('fatal') ||
+                       lowerLine.includes('exception') ||
+                       lowerLine.includes('invalid') // Token errors often have 'invalid'
+
+        const prefix = isError ? '[网关错误]' : '[网关日志]'
+        const logPrefix = isError ? '[错误]' : '[网关]'
+
+        if (isError) {
+            console.error(`${prefix} ${line}`)
+        } else {
+            console.log(`${prefix} ${line}`)
+        }
         
         if (logHistory.length >= MAX_LOGS) logHistory.shift()
-        logHistory.push(`[错误] ${line}`)
+        logHistory.push(`${logPrefix} ${line}`)
     })
 
     gatewayProcess.on('close', (code) => {

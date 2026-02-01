@@ -142,8 +142,18 @@ class MDPManager:
                 metadata = yaml.safe_load(yaml_block) or {}
             except yaml.YAMLError as e:
                 logger.error(f"文件 {file_path} 中存在 YAML 错误: {e}")
-        
-        # Strip HTML comments
+        else:
+            # Fallback: Try to parse metadata from HTML comments if frontmatter is missing
+            # Pattern: description: "..." or version: "..." inside comments
+            desc_match = re.search(r'description:\s*["\'](.*?)["\']', raw_content)
+            if desc_match:
+                metadata["description"] = desc_match.group(1)
+            
+            ver_match = re.search(r'version:\s*["\'](.*?)["\']', raw_content)
+            if ver_match:
+                metadata["version"] = ver_match.group(1)
+
+        # Strip HTML comments (IMPORTANT: This ensures comments don't leak into the prompt)
         content = re.sub(r'<!--[\s\S]*?-->', '', content)
         
         return MDPrompt(key, content.strip(), metadata, key)
@@ -159,107 +169,139 @@ class MDPManager:
     def render(self, template_name: str, context: Dict[str, Any] = None) -> str:
         """
         使用 Jinja2 递归解析渲染提示词。
-        
-        Args:
-            template_name: 提示词文件键 (例如 "tasks/scorer_summary" 或 "agent_id/system_prompt")
-            context: 要注入的变量
+        """
+        if context is None:
+            context = {}
             
-        Returns:
-            渲染后的字符串
+        return self._render_template(template_name, context)
+
+    def render_blocks(self, template_name: str, context: Dict[str, Any] = None) -> Dict[str, str]:
+        """
+        渲染模版中的特定 Block (header/footer)。
+        如果模版未使用 block 语法，则默认全部内容归为 header。
         """
         if context is None:
             context = {}
             
         if not self.jinja_env:
-            return f"{{{{Error: Jinja2 not initialized}}}}"
+            return {"header": f"{{{{Error: Jinja2 not initialized}}}}", "footer": ""}
 
-        # ---------------------------------------------------------
-        # 支持 Agent 专属覆盖
-        # 如果 context 中包含 agent_name，优先尝试加载 agents/{agent_name}/{template_name}
-        # ---------------------------------------------------------
+        # 1. 获取 Template 对象
+        target_template_name = self._resolve_template_name(template_name, context)
+        try:
+            template = self._get_template(target_template_name)
+        except Exception as e:
+            logger.error(f"Template not found: {e}")
+            return {"header": f"{{{{Missing Prompt: {template_name}}}}}", "footer": ""}
+
+        # 2. 尝试渲染 header 和 footer block
+        # Jinja2 的 Template.blocks 属性包含了所有 block 的渲染函数
+        # 但我们需要先渲染 context，所以必须使用 context 渲染 block
+        
+        result = {"header": "", "footer": ""}
+        
+        # 检查模版是否有 block 定义
+        if not template.blocks:
+            # 没有 block，全量渲染为 header
+            result["header"] = self._render_template(template_name, context)
+            return result
+
+        # 辅助渲染函数：渲染 Block 并递归展开变量
+        def render_block_content(block_name):
+            try:
+                # 渲染 block
+                # 注意：Jinja2 的 render_block 方法直接返回渲染后的字符串
+                block_context = template.new_context(context)
+                rendered = "".join(template.blocks[block_name](block_context))
+                # 递归展开 (复用 _recursive_render)
+                return self._recursive_render(rendered, context)
+            except Exception as e:
+                # 如果 Block 不存在，返回空
+                return ""
+
+        if "header" in template.blocks:
+            result["header"] = render_block_content("header")
+        else:
+            # 如果没有 header block，但有其他 block，这通常是不规范的，
+            # 但我们可以尝试渲染整个模版作为 header (可能会重复包含 footer 如果 footer 也在其中)
+            # 为了安全起见，如果有 footer block 但没有 header block，
+            # 我们假设用户只想分离 footer，其余部分应该用其他方式获取？
+            # 或者我们简单地全量渲染？
+            # 最佳实践：必须成对使用 header/footer。
+            # 这里做个兼容：如果没有 header block，全量渲染作为 header
+            result["header"] = self._render_template(template_name, context)
+
+        if "footer" in template.blocks:
+            result["footer"] = render_block_content("footer")
+            
+        return result
+
+    def _resolve_template_name(self, template_name: str, context: Dict[str, Any]) -> str:
+        """解析最终的模版名称 (处理 Agent 覆盖)。"""
         agent_name = context.get("agent_name")
         target_template_name = template_name
         
         if agent_name:
-            # 构造覆盖路径，例如 "pero/core/abilities/work_log"
-            # 注意：agent_name 对应的目录必须在 FileSystemLoader 的根目录下 (即 mdp/agents)
             override_name = f"{agent_name}/{template_name}"
-            
             # 检查 override 是否存在
-            # 我们可以简单地尝试 get_template
-            found_override = False
             try:
                 self.jinja_env.get_template(override_name)
-                target_template_name = override_name
-                found_override = True
-                logger.debug(f"MDP: 使用 Agent 覆盖提示词: {override_name}")
+                return override_name
             except jinja2.TemplateNotFound:
-                # 尝试 .md
                 try:
                     self.jinja_env.get_template(f"{override_name}.md")
-                    target_template_name = f"{override_name}.md"
-                    found_override = True
-                    logger.debug(f"MDP: 使用 Agent 覆盖提示词: {override_name}.md")
+                    return f"{override_name}.md"
                 except jinja2.TemplateNotFound:
                     pass
-            
-            if not found_override:
-                # 仅在调试模式下记录，避免日志刷屏
-                pass
+        return target_template_name
 
+    def _get_template(self, template_name: str):
+        """获取 Template 对象，支持 .md 后缀回退。"""
         try:
-            # 步骤 1: 初始渲染
-            template = None
+            return self.jinja_env.get_template(template_name)
+        except jinja2.TemplateNotFound:
+            return self.jinja_env.get_template(f"{template_name}.md")
+
+    def _recursive_render(self, content: str, context: Dict[str, Any]) -> str:
+        """递归展开变量。"""
+        rendered = content
+        max_depth = 5
+        for _ in range(max_depth):
+            if "{{" not in rendered:
+                break
+            
+            matches = re.findall(r"\{\{\s*([a-zA-Z0-9_./]+)\s*\}\}", rendered)
+            new_context = context.copy()
+            
+            for var in matches:
+                if var not in new_context and var in self.prompts:
+                    new_context[var] = self.prompts[var].content
+            
+            prev_rendered = rendered
             try:
-                template = self.jinja_env.get_template(target_template_name)
-            except jinja2.TemplateNotFound:
-                # 尝试添加 .md 后缀 (针对 FileSystemLoader)
-                try:
-                    template = self.jinja_env.get_template(f"{target_template_name}.md")
-                except jinja2.TemplateNotFound:
-                    pass
-
-            if not template:
-                 logger.warning(f"提示词模板 '{target_template_name}' (及其 .md 变体) 未找到。 (Original request: {template_name})")
-                 return f"{{{{Missing Prompt: {template_name}}}}}"
-
-            rendered = template.render(**context)
-            
-            # 步骤 2: 递归展开
-            # 我们循环最多 5 次以解析嵌套变量 (例如 {{ persona }} -> content)
-            max_depth = 5
-            for _ in range(max_depth):
-                if "{{" not in rendered:
-                    break
-                
-                # 扫描剩余的 {{ var }}，支持隐式包含
-                matches = re.findall(r"\{\{\s*([a-zA-Z0-9_./]+)\s*\}\}", rendered)
-                new_context = context.copy()
-                
-                for var in matches:
-                    # 如果 var 不在上下文中但作为提示词存在，则注入它
-                    if var not in new_context and var in self.prompts:
-                        new_context[var] = self.prompts[var].content
-                
-                # 即使没有从 prompts 加载新变量，上下文中可能已包含需要展开的变量（如 chain_logic）。
-                # 因此，只要发现 {{}} 占位符，就尝试使用当前上下文再次渲染。
-                # 通过比较渲染前后的结果来检测是否收敛，防止因无法解析的变量导致的死循环。
-                prev_rendered = rendered
                 rendered = self.jinja_env.from_string(rendered).render(**new_context)
+            except Exception:
+                # 如果展开出错，保留原样
+                break
                 
-                if rendered == prev_rendered:
-                    # 没有变化，说明剩余的 {{}} 无法被当前 context 解析
-                    break
-                    
-                # 如果有变化，说明展开成功（无论是通过新注入的提示词，还是已有的 context）
-                # 继续下一轮循环
+            if rendered == prev_rendered:
+                break
+        return rendered
 
-            
-            return rendered
+    def _render_template(self, template_name: str, context: Dict[str, Any]) -> str:
+        """内部全量渲染逻辑。"""
+        if not self.jinja_env:
+            return "{{Error: Jinja2 not initialized}}"
 
+        target_template_name = self._resolve_template_name(template_name, context)
+        
+        try:
+            template = self._get_template(target_template_name)
+            rendered = template.render(**context)
+            return self._recursive_render(rendered, context)
         except Exception as e:
             logger.error(f"渲染提示词 '{template_name}' 时出错: {e}")
-            return f"{{{{Error Rendering: {template_name}}}}}"
+            return "{{Error Rendering: " + str(template_name) + "}}"
 
 # 全局单例实例
 _mdp_instance = None

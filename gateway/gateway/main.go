@@ -20,13 +20,21 @@ var (
 )
 
 func generateAndSaveToken() {
-	b := make([]byte, 32)
-	_, err := rand.Read(b)
-	if err != nil {
-		log.Fatal("Failed to generate token:", err)
+	// Check for fixed token from env (useful for Cloud/Docker deployments)
+	envToken := os.Getenv("GATEWAY_TOKEN")
+	if envToken != "" {
+		authToken = envToken
+		log.Printf("🔑 Using Fixed Gateway Token from ENV: %s", authToken)
+	} else {
+		// Generate random token
+		b := make([]byte, 32)
+		_, err := rand.Read(b)
+		if err != nil {
+			log.Fatal("Failed to generate token:", err)
+		}
+		authToken = base64.URLEncoding.EncodeToString(b)
+		log.Printf("🔑 Gateway Access Token: %s", authToken)
 	}
-	authToken = base64.URLEncoding.EncodeToString(b)
-	log.Printf("🔑 Gateway Access Token: %s", authToken)
 
 	// Define path to save token: defaults to data/gateway_token.json (Docker/Local relative)
 	// Can be overridden by env var for legacy dev support

@@ -294,7 +294,7 @@ class SocialMemoryService:
             personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
             from services.mdp.manager import mdp
-            report_prompt = mdp.render("services/social/reporting/daily_report_generator", {
+            report_prompt = mdp.render("social/reporting/daily_report_generator", {
                 "agent_name": bot_name,
                 "date_str": date_str,
                 "total_messages": total_messages,

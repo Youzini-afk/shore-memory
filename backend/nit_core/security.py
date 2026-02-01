@@ -70,8 +70,7 @@ class NITSecurityManager:
     def get_injection_prompt(cls, nit_id: str) -> str:
         """生成注入到 System Prompt 的安全提示"""
         return f"""
-[NIT SECURITY PROTOCOL]
-Current Session ID: {nit_id}
-IMPORTANT: For this turn, you MUST wrap all NIT scripts in <nit-{nit_id}>...</nit-{nit_id}> tags.
-Legacy NIT 1.0 format ([[[NIT_CALL]]]) and standard <nit> tags are currently DISABLED.
+[NIT 安全协议]
+当前会话 ID: {nit_id}
+重要提示: 在本轮对话中，你必须将所有 NIT 脚本包裹在 <nit-{nit_id}>...</nit-{nit_id}> 标签中。
 """

@@ -201,7 +201,7 @@ class MemorySecretaryService:
         bot_name = await self._get_bot_name()
         if agent_id != "pero": bot_name = agent_id.capitalize()
 
-        prompt = self.mdp.render("services/memory/maintenance/memory_auditor", {
+        prompt = self.mdp.render("tasks/memory/maintenance/memory_auditor", {
             "agent_name": bot_name,
             "memory_data": json.dumps(mem_data, ensure_ascii=False)
         })
@@ -238,9 +238,9 @@ class MemorySecretaryService:
         bot_name = await self._get_bot_name()
         if agent_id != "pero": bot_name = agent_id.capitalize()
 
-        prompt = self.mdp.render("services/memory/maintenance/preference_extractor", {
+        prompt = self.mdp.render("tasks/memory/maintenance/preference_extractor", {
             "agent_name": bot_name,
-            "memory_texts": chr(10).join(memory_texts)
+            "memory_texts": "\n".join(memory_texts)
         })
 
         try:
@@ -274,7 +274,7 @@ class MemorySecretaryService:
         mem_data = [{"id": m.id, "content": m.content} for m in memories]
         
         bot_name = await self._get_bot_name()
-        prompt = self.mdp.render("services/memory/maintenance/importance_tagger", {
+        prompt = self.mdp.render("tasks/memory/maintenance/importance_tagger", {
             "agent_name": bot_name,
             "memory_data": json.dumps(mem_data, ensure_ascii=False)
         })
@@ -325,7 +325,7 @@ class MemorySecretaryService:
         batch_memories = memories[:80]
         mem_data = [{"id": m.id, "content": m.content, "time": m.realTime} for m in batch_memories]
         
-        prompt = self.mdp.render("services/memory/maintenance/memory_consolidator", {
+        prompt = self.mdp.render("tasks/memory/maintenance/memory_consolidator", {
             "memory_data": json.dumps(mem_data, ensure_ascii=False)
         })
 
@@ -523,13 +523,13 @@ class MemorySecretaryService:
             # [Fix] 显式禁止使用 Pio/Tia 等默认名，强制使用 bot_name
             # 在 Prompt 中已添加 "禁止使用其他名字" 的约束
 
-            prompt = self.mdp.render("services/memory/maintenance/waifu_text_updater", {
-                "agent_name": bot_name,
-                "tone_style": tone_style,
-                "context_text": context_text,
-                "current_texts": json.dumps(current_texts, ensure_ascii=False),
-                "target_fields": json.dumps(target_fields, ensure_ascii=False)
-            })
+            prompt = self.mdp.render("tasks/memory/maintenance/waifu_text_updater", {
+            "agent_name": bot_name,
+            "tone_style": tone_style,
+            "context_text": context_text,
+            "current_texts": json.dumps(current_texts, ensure_ascii=False),
+            "target_fields": json.dumps(target_fields, ensure_ascii=False)
+        })
 
             # 4. 调用 LLM
             response = await llm.chat([{"role": "user", "content": prompt}], temperature=0.7, timeout=300.0)

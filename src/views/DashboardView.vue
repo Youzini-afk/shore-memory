@@ -655,6 +655,19 @@
                     
                     <div class="memory-bottom">
                       <div class="tags-row">
+                        <!-- 显示簇 -->
+                        <el-tag 
+                          v-for="c in (m.clusters ? m.clusters.split(',') : [])" 
+                          :key="c" 
+                          size="small" 
+                          effect="dark"
+                          type="warning"
+                          class="mini-tag"
+                          style="margin-right: 4px;"
+                        >
+                          {{ c.replace(/[\[\]]/g, '') }}
+                        </el-tag>
+                        <!-- 显示标签 -->
                         <el-tag 
                           v-for="t in (m.tags ? m.tags.split(',') : [])" 
                           :key="t" 
@@ -975,11 +988,33 @@
     <!-- 弹窗 -->
     <el-dialog v-model="showGlobalSettings" title="全局服务商配置" width="500px" center>
       <el-form label-position="top">
+        <el-form-item label="服务商 (Provider)">
+          <el-select v-model="globalConfig.provider" placeholder="选择服务商" style="width:100%" @change="handleGlobalProviderChange">
+            <el-option label="OpenAI (兼容)" value="openai" />
+            <el-option label="SiliconFlow (硅基流动)" value="siliconflow" />
+            <el-option label="DeepSeek (深度求索)" value="deepseek" />
+            <el-option label="Moonshot (Kimi)" value="moonshot" />
+            <el-option label="DashScope (阿里百炼)" value="dashscope" />
+            <el-option label="Volcengine (火山引擎)" value="volcengine" />
+            <el-option label="Groq" value="groq" />
+            <el-option label="Zhipu (智谱GLM)" value="zhipu" />
+            <el-option label="MiniMax" value="minimax" />
+            <el-option label="Mistral" value="mistral" />
+            <el-option label="01.AI (零一万物)" value="yi" />
+            <el-option label="xAI (Grok)" value="xai" />
+            <el-option label="StepFun (阶跃星辰)" value="stepfun" />
+            <el-option label="Hunyuan (腾讯混元)" value="hunyuan" />
+          </el-select>
+        </el-form-item>
         <el-form-item label="API Key">
           <el-input v-model="globalConfig.global_llm_api_key" type="password" show-password />
         </el-form-item>
         <el-form-item label="API Base URL">
-          <el-input v-model="globalConfig.global_llm_api_base" placeholder="https://api.openai.com" />
+          <el-input 
+            v-model="globalConfig.global_llm_api_base" 
+            placeholder="https://api.openai.com" 
+            :disabled="globalConfig.provider === 'deepseek'"
+          />
         </el-form-item>
       </el-form>
       <template #footer>
@@ -1034,7 +1069,10 @@
              <el-input v-model="currentEditingModel.api_key" type="password" />
           </el-form-item>
           <el-form-item label="Base URL" v-if="!['gemini', 'anthropic'].includes(currentEditingModel.provider)">
-             <el-input v-model="currentEditingModel.api_base" />
+             <el-input 
+               v-model="currentEditingModel.api_base" 
+               :disabled="!!providerDefaults[currentEditingModel.provider]"
+             />
           </el-form-item>
         </div>
 
@@ -1121,9 +1159,13 @@
         <div class="debug-segments-viewer">
            <div v-for="(segment, index) in debugSegments" :key="index" :class="['debug-segment', segment.type]">
               <div v-if="segment.type === 'thinking'" class="segment-label">Thinking Chain (思维链)</div>
+              <div v-if="segment.type === 'monologue'" class="segment-label">Inner Monologue (内心独白)</div>
               <div v-if="segment.type === 'nit'" class="segment-label">NIT Script (工具调用)</div>
               
               <div v-if="segment.type === 'thinking'" class="segment-content thinking-content">
+                {{ segment.content }}
+              </div>
+              <div v-else-if="segment.type === 'monologue'" class="segment-content monologue-content">
                 {{ segment.content }}
               </div>
               <div v-else-if="segment.type === 'nit'" class="segment-content nit-content">
@@ -1141,6 +1183,42 @@
 </template>
 
 <style scoped>
+/* Prompt Dialog Styles */
+.prompt-preview-container {
+  max-height: 60vh;
+  overflow-y: auto;
+  padding: 10px;
+}
+.prompt-message-item {
+  margin-bottom: 20px;
+  border: 1px solid #e4e7ed;
+  border-radius: 8px;
+  overflow: hidden;
+}
+.prompt-role-badge {
+  padding: 5px 15px;
+  font-weight: bold;
+  font-size: 12px;
+  color: white;
+  background: #909399;
+}
+.prompt-role-badge.system { background: #F56C6C; }
+.prompt-role-badge.user { background: #409EFF; }
+.prompt-role-badge.assistant { background: #67C23A; }
+
+.prompt-content-box {
+  padding: 15px;
+  background: #fcfcfc;
+  overflow-x: auto;
+}
+.prompt-content-box pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: Consolas, Monaco, monospace;
+  font-size: 13px;
+  color: #303133;
+}
+
 /* Debug Dialog Styles */
 /* 调试对话框样式 */
 .debug-segments-viewer {
@@ -1164,6 +1242,11 @@
   border-color: #e1f3d8;
 }
 
+.debug-segment.monologue {
+  background-color: #fdf6ec;
+  border-color: #faecd8;
+}
+
 .debug-segment.nit {
   background-color: #f4f4f5;
   border-color: #e9e9eb;
@@ -1184,6 +1267,14 @@
 
 .thinking-content {
   color: #67c23a;
+  font-style: italic;
+  font-family: monospace;
+  white-space: pre-wrap;
+  font-size: 0.9em;
+}
+
+.monologue-content {
+  color: #e6a23c;
   font-style: italic;
   font-family: monospace;
   white-space: pre-wrap;
@@ -1237,7 +1328,8 @@ import {
   Tools,
   Aim,
   Picture,
-  ArrowDown
+  ArrowDown,
+  Document
 } from '@element-plus/icons-vue'
 import TerminalPanel from '../components/TerminalPanel.vue'
 import NapCatTerminal from '../components/NapCatTerminal.vue'
@@ -1274,6 +1366,9 @@ const isDreaming = ref(false)
 const showDebugDialog = ref(false)
 const currentDebugLog = ref(null)
 const debugSegments = ref([])
+const showPromptDialog = ref(false)
+const currentPromptMessages = ref([])
+const isLoadingPrompt = ref(false)
 
 // --- API 交互 ---
 const API_BASE = (window.electron) ? 'http://localhost:9120/api' : '/api'
@@ -1306,7 +1401,23 @@ const showModelEditor = ref(false)
 const remoteModels = ref([])
 const isFetchingRemote = ref(false)
 const currentEditingModel = ref({})
-const globalConfig = ref({ global_llm_api_key: '', global_llm_api_base: '' })
+const providerDefaults = {
+  "siliconflow": "https://api.siliconflow.cn/v1",
+  "deepseek": "https://api.deepseek.com",
+  "moonshot": "https://api.moonshot.cn/v1",
+  "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+  "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
+  "groq": "https://api.groq.com/openai/v1",
+  "zhipu": "https://open.bigmodel.cn/api/paas/v4",
+  "minimax": "https://api.minimax.chat/v1",
+  "mistral": "https://api.mistral.ai/v1",
+  "yi": "https://api.lingyiwanwu.com/v1",
+  "xai": "https://api.x.ai/v1",
+  "stepfun": "https://api.stepfun.com/v1",
+  "hunyuan": "https://api.hunyuan.cloud.tencent.com/v1"
+}
+
+const globalConfig = ref({ global_llm_api_key: '', global_llm_api_base: '', provider: '' })
 
 // MCP 配置相关
 const mcps = ref([])
@@ -1329,6 +1440,36 @@ const openDebugDialog = (log) => {
   parseDebugContent(log.raw_content || log.content || "")
 }
 
+const openPromptDialog = async (log) => {
+  showPromptDialog.value = true
+  isLoadingPrompt.value = true
+  currentPromptMessages.value = []
+  
+  try {
+     const res = await fetchWithTimeout(`${API_BASE}/agents/preview_prompt`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+           session_id: log.session_id || selectedSessionId.value || 'default',
+           source: log.source || selectedSource.value || 'desktop',
+           log_id: log.id
+        })
+     }, 10000)
+     
+     if (res.ok) {
+        const data = await res.json()
+        currentPromptMessages.value = data.messages
+     } else {
+        const err = await res.json()
+        ElMessage.error('获取提示词失败: ' + (err.detail || '未知错误'))
+     }
+  } catch (e) {
+     ElMessage.error('获取提示词请求异常: ' + e.message)
+  } finally {
+     isLoadingPrompt.value = false
+  }
+}
+
 const parseDebugContent = (content) => {
   if (!content) {
     debugSegments.value = []
@@ -1341,7 +1482,8 @@ const parseDebugContent = (content) => {
     { type: 'nit', regex: /\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\]/gi },
     { type: 'nit', regex: /<(nit(?:-[0-9a-fA-F]{4})?)>[\s\S]*?<\/\1>/gi },
     { type: 'thinking', regex: /【Thinking[\s\S]*?】/gi },
-    { type: 'thinking', regex: /<think>[\s\S]*?<\/think>/gi }
+    { type: 'thinking', regex: /<think>[\s\S]*?<\/think>/gi },
+    { type: 'monologue', regex: /【Monologue[\s\S]*?】/gi }
   ]
 
   let matches = []
@@ -2472,6 +2614,18 @@ const fetchConfig = async () => {
     const data = await res.json()
     globalConfig.value.global_llm_api_key = data.global_llm_api_key || ''
     globalConfig.value.global_llm_api_base = data.global_llm_api_base || 'https://api.openai.com'
+    
+    // Infer provider from base URL
+    // 从 base URL 推断服务商
+    const foundProvider = Object.keys(providerDefaults).find(key => providerDefaults[key] === globalConfig.value.global_llm_api_base)
+    if (foundProvider) {
+      globalConfig.value.provider = foundProvider
+    } else if (globalConfig.value.global_llm_api_base.includes('api.openai.com')) {
+      globalConfig.value.provider = 'openai'
+    } else {
+      globalConfig.value.provider = ''
+    }
+    
     currentActiveModelId.value = data.current_model_id ? parseInt(data.current_model_id) : null
     secretaryModelId.value = data.scorer_model_id ? parseInt(data.scorer_model_id) : null
     reflectionModelId.value = data.reflection_model_id ? parseInt(data.reflection_model_id) : null
@@ -2722,26 +2876,22 @@ const openModelEditor = (model) => {
 
 const handleProviderChange = (val) => {
   // Auto-fill API Base for known providers if empty or using default
-  const defaults = {
-    "siliconflow": "https://api.siliconflow.cn/v1",
-    "deepseek": "https://api.deepseek.com",
-    "moonshot": "https://api.moonshot.cn/v1",
-    "dashscope": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-    "volcengine": "https://ark.cn-beijing.volces.com/api/v3",
-    "groq": "https://api.groq.com/openai/v1",
-    "zhipu": "https://open.bigmodel.cn/api/paas/v4",
-    "minimax": "https://api.minimax.chat/v1",
-    "mistral": "https://api.mistral.ai/v1",
-    "yi": "https://api.lingyiwanwu.com/v1",
-    "xai": "https://api.x.ai/v1",
-    "stepfun": "https://api.stepfun.com/v1",
-    "hunyuan": "https://api.hunyuan.cloud.tencent.com/v1"
-  }
-  
-  if (defaults[val] && (!currentEditingModel.value.api_base || currentEditingModel.value.api_base.includes('api.openai.com'))) {
-     currentEditingModel.value.api_base = defaults[val]
+  // 强制使用官方 API Base 如果是已知服务商
+  if (providerDefaults[val]) {
+     currentEditingModel.value.api_base = providerDefaults[val]
   } else if (val === 'openai' && !currentEditingModel.value.api_base) {
      currentEditingModel.value.api_base = "https://api.openai.com"
+  }
+}
+
+const handleGlobalProviderChange = (val) => {
+  // DeepSeek 强制使用官方 API Base
+  if (val === 'deepseek') {
+     globalConfig.value.global_llm_api_base = providerDefaults[val]
+  } else if (providerDefaults[val] && (!globalConfig.value.global_llm_api_base || globalConfig.value.global_llm_api_base.includes('api.openai.com'))) {
+     globalConfig.value.global_llm_api_base = providerDefaults[val]
+  } else if (val === 'openai' && !globalConfig.value.global_llm_api_base) {
+     globalConfig.value.global_llm_api_base = "https://api.openai.com"
   }
 }
 
@@ -2875,6 +3025,91 @@ const activateModel = async (id, configKey) => {
 
 // Logs Logic
 // 日志逻辑
+
+// Cloud Sync State
+const syncConfig = ref({
+  enabled: false,
+  mode: 'client',
+  url: '',
+  token: ''
+})
+
+const syncStatus = ref({
+  running: false,
+  mode: 'client',
+  status: 'disconnected'
+})
+
+const serverInfo = ref({
+  port: 14747,
+  token: ''
+})
+
+const fetchSyncConfig = async () => {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/sync/config`, {}, 3000)
+    if (res.ok) {
+      const data = await res.json()
+      syncConfig.value = data
+    }
+  } catch (e) {
+    console.error('Failed to fetch sync config:', e)
+  }
+}
+
+const fetchSyncStatus = async () => {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/sync/status`, {}, 3000)
+    if (res.ok) {
+      const data = await res.json()
+      syncStatus.value = data
+      
+      // If server mode, fetch server info
+      if (data.mode === 'server') {
+        const infoRes = await fetchWithTimeout(`${API_BASE}/sync/server-info`, {}, 3000)
+        if (infoRes.ok) {
+          serverInfo.value = await infoRes.json()
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Failed to fetch sync status:', e)
+  }
+}
+
+const saveSyncConfig = async () => {
+  try {
+    await fetchWithTimeout(`${API_BASE}/sync/config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(syncConfig.value)
+    }, 5000)
+    ElMessage.success('云端同步配置已更新')
+    await fetchSyncStatus()
+  } catch (e) {
+    ElMessage.error('保存失败: ' + e.message)
+  }
+}
+
+const copyToClipboard = (text) => {
+  if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => {
+      ElMessage.success('已复制到剪贴板')
+    }).catch(err => {
+      ElMessage.error('复制失败: ' + err)
+    })
+  } else {
+    // Fallback
+    const textArea = document.createElement("textarea")
+    textArea.value = text
+    document.body.appendChild(textArea)
+    textArea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textArea)
+    ElMessage.success('已复制到剪贴板')
+  }
+}
+
 const initSessionAndFetchLogs = async () => {
   // 不在这里设置 isLogsFetching，而是交给 fetchLogs 统一管理
   // 仅负责初始化 session ID
@@ -3395,6 +3630,28 @@ onUnmounted(() => {
   33% { transform: translate(30px, -50px) scale(1.1); }
   66% { transform: translate(-20px, 20px) scale(0.9); }
   100% { transform: translate(0, 0) scale(1); }
+}
+
+/* Server Info Box */
+.server-info-box {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 15px;
+  border-radius: 8px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.token-display {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.token-display span {
+  font-family: monospace;
+  background: rgba(0, 0, 0, 0.05);
+  padding: 2px 6px;
+  border-radius: 4px;
 }
 
 /* --- 3. Main Glass Layout --- */

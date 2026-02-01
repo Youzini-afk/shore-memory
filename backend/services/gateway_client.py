@@ -50,6 +50,7 @@ class GatewayClient:
                 async with websockets.connect(self.uri) as websocket:
                     self.websocket = websocket
                     logger.info("已连接到 Gateway")
+                    self.emit("connect")
                     
                     await self.send_hello()
                     await self.send_test_broadcast()
@@ -85,6 +86,7 @@ class GatewayClient:
                     await self.handle_envelope(envelope)
         except websockets.ConnectionClosed:
             logger.warning("Gateway 连接已关闭")
+            self.emit("disconnect")
 
     async def send_hello(self):
         envelope = perolink_pb2.Envelope()

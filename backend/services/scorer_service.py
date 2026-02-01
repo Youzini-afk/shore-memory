@@ -143,11 +143,11 @@ class ScorerService:
         # 查找日志
         log = await self.session.get(ConversationLog, log_id)
         if not log:
-            print(f"[秘书] 未找到日志 {log_id}")
+            print(f"[秘书] Log {log_id} not found")
             return False
         
         if not log.pair_id:
-            print(f"[秘书] 日志 {log_id} 没有 pair_id，无法重试")
+            print(f"[秘书] Log {log_id} has no pair_id, cannot retry")
             return False
             
         # 查找配对
@@ -158,24 +158,28 @@ class ScorerService:
         assistant_msg = next((r for r in results if r.role == 'assistant'), None)
         
         if not user_msg or not assistant_msg:
-             print(f"[秘书] {log.pair_id} 的配对不完整")
+             print(f"[秘书] Incomplete pair for {log.pair_id}")
              # 如果我们至少有一个，我们可能会尝试？但是 user_content 和 assistant_content 是必需的。
              # 如果只有一个存在，我们实际上无法进行“交互分析”。
              return False
              
+        # 从日志中获取 agent_id (如果存在)
+        agent_id = log.agent_id if hasattr(log, "agent_id") and log.agent_id else "pero"
+
         await self.process_interaction(
             user_msg.content, 
             assistant_msg.content, 
             source=log.source, 
-            pair_id=log.pair_id
+            pair_id=log.pair_id,
+            agent_id=agent_id
         )
         return True
 
-    async def process_interaction(self, user_content: str, assistant_content: str, source: str = "desktop", pair_id: str = None):
+    async def process_interaction(self, user_content: str, assistant_content: str, source: str = "desktop", pair_id: str = None, agent_id: str = "pero"):
         """
         处理一次交互：调用秘书分析，然后存入 Memory
         """
-        print(f"[秘书] 开始交互分析... (pair_id: {pair_id})", flush=True)
+        print(f"[秘书] Starting interaction analysis... (pair_id: {pair_id}, agent_id: {agent_id})", flush=True)
         
         # 智能清理助手内容以删除数据转储
         assistant_content = self._smart_clean_text(assistant_content)
@@ -199,17 +203,22 @@ class ScorerService:
         
         # 获取当前 Agent 名称 (用于 Prompt 注入)
         config_manager = get_config_manager()
-        bot_name = config_manager.get("bot_name", "Pero")
         
         # Get Agent Profile for dynamic persona injection
         from services.agent_manager import AgentManager
         agent_manager = AgentManager()
-        agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+        # Use the passed agent_id to get the correct profile, fallback to active if not found (though agent_id should be correct)
+        agent_profile = agent_manager.agents.get(agent_id)
+        if not agent_profile and agent_id == "pero":
+             # Fallback for legacy pero ID logic if needed
+             agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+             
+        bot_name = agent_profile.name if agent_profile else config_manager.get("bot_name", "Pero")
         identity_label = agent_profile.identity_label if agent_profile else "智能助手"
         personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
         # 渲染分析提示词
-        system_prompt = self.mdp.render("services/memory/scorer/summary", {
+        system_prompt = self.mdp.render("tasks/memory/scorer/summary", {
             "agent_name": bot_name,
             "identity_label": identity_label,
             "personality_tags": personality_tags
@@ -217,7 +226,7 @@ class ScorerService:
         
         # 验证是否加载成功，如果包含 Error 则记录警告 (虽然 render 会返回错误信息，但不会抛出异常)
         if "Missing Prompt" in system_prompt:
-             print(f"[秘书] 警告: 缺少 MDP 提示词 'services/memory/scorer/summary'。请检查 mdp/prompts 目录。")
+             print(f"[秘书] 警告: 缺少 MDP 提示词 'tasks/memory/scorer/summary'。请检查 mdp/prompts 目录。")
         
         # Determine the role label and process user content if it's a system trigger
         owner_name = "用户"
@@ -240,7 +249,7 @@ class ScorerService:
             # Let's keep it but emphasize the label.
         
         # 使用 MDPManager 渲染 User Prompt
-        user_prompt = self.mdp.render("services/memory/scorer/user_input", {
+        user_prompt = self.mdp.render("tasks/memory/scorer/user_input", {
             "user_label": user_label,
             "user_content": user_content,
             "agent_name": bot_name,
@@ -307,7 +316,8 @@ class ScorerService:
                 base_importance=data.get("importance", 5),
                 sentiment=data.get("sentiment", "neutral"),
                 source=source,
-                memory_type=data.get("type", "event")
+                memory_type=data.get("type", "event"),
+                agent_id=agent_id
             )
             
             # 3. 如果有 pair_id，更新对话日志的元数据

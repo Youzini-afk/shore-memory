@@ -91,6 +91,7 @@ from services.embedding_service import embedding_service
 from services.browser_bridge_service import browser_bridge_service
 from services.screenshot_service import screenshot_manager
 from services.gateway_client import gateway_client
+from services.sync_service import sync_service
 from services.scheduler_service import scheduler_service
 from nit_core.plugins.social_adapter.social_service import get_social_service
 from core.config_manager import get_config_manager
@@ -583,10 +584,15 @@ async def lifespan(app: FastAPI):
     # Start Gateway Client
     gateway_client.start_background()
     print("[Main] Gateway 客户端已启动。")
+    
+    # Start Cloud Sync Service
+    await sync_service.load_config()
+    sync_service.start()
 
     yield
     
     # Shutdown
+    await sync_service.stop()
     await gateway_client.stop()
     cleanup_task.cancel()
     weekly_report_task.cancel()
@@ -615,6 +621,9 @@ from nit_core.plugins.social_adapter.social_router import router as social_route
 app.include_router(social_router)
 
 app.include_router(scheduler_router, prefix="/api/scheduler", tags=["Scheduler"])
+
+from routers.sync_router import router as sync_router
+app.include_router(sync_router)
 
 class TTSPreviewRequest(BaseModel):
     text: str

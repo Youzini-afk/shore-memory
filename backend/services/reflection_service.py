@@ -140,7 +140,8 @@ class ReflectionService:
             print(f"[Reflection] 正在整合来自 {date_key} 的 {len(group)} 条记忆...")
             
             # 生成总结
-            summary_text = await self._generate_summary(llm, group, date_key)
+            temp = config.get("temperature", 0.4)
+            summary_text = await self._generate_summary(llm, group, date_key, temperature=temp)
             if not summary_text:
                 continue
                 
@@ -227,10 +228,10 @@ class ReflectionService:
             
         print("[Reflection] 记忆整合完成。")
 
-    async def _generate_summary(self, llm: LLMService, memories: List[Memory], date_str: str) -> str:
+    async def _generate_summary(self, llm: LLMService, memories: List[Memory], date_str: str, temperature: float = 0.3) -> str:
         mem_text = "\n".join([f"- {m.realTime.split(' ')[1] if m.realTime else ''}: {m.content}" for m in memories])
         
-        prompt = mdp.render("capabilities/reflection_summary", {
+        prompt = mdp.render("tasks/memory/reflection/summary", {
             "date_str": date_str,
             "mem_text": mem_text
         })
@@ -425,7 +426,7 @@ class ReflectionService:
 
     async def _analyze_relation(self, llm: LLMService, m1: Memory, m2: Memory) -> Optional[dict]:
         """让 LLM 分析两条记忆的关系"""
-        prompt = mdp.render("services/memory/reflection/relation", {
+        prompt = mdp.render("tasks/memory/reflection/relation", {
             "m1_time": m1.realTime,
             "m1_content": m1.content,
             "m1_tags": m1.tags,

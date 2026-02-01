@@ -389,13 +389,16 @@ class MemoryService:
         return (await session.exec(statement)).all()
 
     @staticmethod
-    async def get_recent_logs(session: AsyncSession, source: str, session_id: str, limit: int = 20, offset: int = 0, date_str: str = None, sort: str = "asc", agent_id: str = "pero") -> List[ConversationLog]:
+    async def get_recent_logs(session: AsyncSession, source: str, session_id: str, limit: int = 20, offset: int = 0, date_str: str = None, sort: str = "asc", agent_id: str = "pero", before_id: Optional[int] = None) -> List[ConversationLog]:
         """获取指定来源和会话的最近对话记录"""
         from sqlmodel import desc, asc
         from datetime import datetime, time
         
         statement = select(ConversationLog).where(ConversationLog.source == source).where(ConversationLog.session_id == session_id).where(ConversationLog.agent_id == agent_id)
         
+        if before_id:
+            statement = statement.where(ConversationLog.id < before_id)
+
         if date_str:
             try:
                 # 假设 date_str 格式为 YYYY-MM-DD

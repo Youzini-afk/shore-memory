@@ -6,7 +6,7 @@
 
 该算子在理论上源自认知科学中经典的**扩散激活 (Spreading Activation)** 模型。它摒弃了传统向量数据库（Vector DB）死板的 Top-K 检索模式，通过高性能的 Rust 工程实现，完成了类脑化的关联联想与逻辑回溯。
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Language: Rust](https://img.shields.io/badge/Language-Rust-orange.svg)](https://www.rust-lang.org/)
 
 ---
@@ -86,12 +86,7 @@ for node_id, score in sorted(results.items(), key=lambda x: x[1], reverse=True)[
 
 ## 📜 许可证 (License)
 
-本项目采用 **GPL-3.0 开源许可证**。
-
-**对于大厂/商业机构的特别说明：**
-- 您可以自由使用本引擎。
-- 如果您对本引擎的源代码进行了修改或封装，根据 GPL-3.0 协议，您**必须**公开您的源代码。
-- 我们尊重原创，也请尊重每一行用 Rust 堆出来的性能。
+本项目采用 **Apache-2.0 开源许可证**。
 
 ---
 

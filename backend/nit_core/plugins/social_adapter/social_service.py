@@ -145,7 +145,7 @@ class SocialService:
             if user_id == str(self.bot_info.get("user_id")):
                 return
 
-            logger.info(f"[Social] 处理消息事件: type={msg_type}, user={user_id}")
+            logger.debug(f"[Social] 处理消息事件: type={msg_type}, user={user_id}")
 
             # 2. 转交 Session Manager 处理完整逻辑 (Buffer, Persistence, Trigger)
             await self.session_manager.handle_message(event)
@@ -241,7 +241,7 @@ class SocialService:
                 # 其他实现返回带有键的字典
                 requests = data.get("request", []) + data.get("requester", [])
             
-            logger.info(f"[Social] 启动时发现 {len(requests)} 条系统消息。")
+            logger.debug(f"[Social] 启动时发现 {len(requests)} 条系统消息。")
             
             for req in requests:
                 # 仅处理未处理的消息？
@@ -414,7 +414,7 @@ class SocialService:
                 session_state = "active" if is_active else "observing"
                 target_session.state = session_state # Sync state
                 
-                logger.info(f"[Social-Group] 触发检查: {target_session.session_name} (状态: {session_state}, 上次互动: {int(time_since_active)}s 前)")
+                logger.debug(f"[Social-Group] 触发检查: {target_session.session_name} (状态: {session_state}, 上次互动: {int(time_since_active)}s 前)")
                 
                 # 尝试说话
                 spoke = False
@@ -441,7 +441,7 @@ class SocialService:
                     interval = random.randint(1800, 3600) 
                     
                 self._next_group_thought_time = now + timedelta(seconds=interval)
-                logger.info(f"[Social-Group] 下次检查将在 {interval} 秒后。")
+                logger.debug(f"[Social-Group] 下次检查将在 {interval} 秒后。")
 
             except asyncio.CancelledError:
                 break
@@ -491,7 +491,7 @@ class SocialService:
                             continue
                             
                         # 潜水期检查
-                        logger.info(f"[Social-Private] 触发检查: {session.session_name}")
+                        logger.debug(f"[Social-Private] 触发检查: {session.session_name}")
                         spoke = await self._attempt_random_thought(session)
                         
                         # 设定下一次检查时间
@@ -507,7 +507,7 @@ class SocialService:
                             pass
                             
                         session.next_scan_time = now + timedelta(seconds=next_interval)
-                        logger.info(f"[Social-Private] {session.session_name} 下次检查在 {next_interval//3600} 小时后。")
+                        logger.debug(f"[Social-Private] {session.session_name} 下次检查在 {next_interval//3600} 小时后。")
 
             except asyncio.CancelledError:
                 break
@@ -590,7 +590,7 @@ class SocialService:
                 return False
             target_session = random.choice(sessions)
         
-        logger.info(f"[Social] 秘书正在观察 {target_session.session_name} ({target_session.session_id})...")
+        logger.debug(f"[Social] 秘书正在观察 {target_session.session_name} ({target_session.session_id})...")
 
         # 计算会话状态
         now = datetime.now()
@@ -651,11 +651,11 @@ class SocialService:
             bot_name = self.bot_info.get("nickname", self.config_manager.get("bot_name", "Pero"))
             
             # [Refactor] Split prompts for Group and Private to avoid schizophrenia
-            template_name = "services/social/decisions/secretary_decision_group"
-            rules_template_name = "services/social/decisions/secretary_decision_group_rules"
+            template_name = "social/decisions/secretary_decision_group"
+            rules_template_name = "social/decisions/secretary_decision_group_rules"
             if target_session.session_type == "private":
-                template_name = "services/social/decisions/secretary_decision_private"
-                rules_template_name = "services/social/decisions/secretary_decision_private_rules"
+                template_name = "social/decisions/secretary_decision_private"
+                rules_template_name = "social/decisions/secretary_decision_private_rules"
             
             # [Fix] Determine correct target name for private chat
             target_name = target_session.session_name
@@ -730,7 +730,7 @@ class SocialService:
             user_content_payload = [{"type": "text", "text": f"Context:\n{recent_context}\n\nDecision?"}]
             
             if processed_images:
-                logger.info(f"[Social] Secretary 发现 {len(processed_images)} 张图片，注入上下文。")
+                logger.debug(f"[Social] Secretary 发现 {len(processed_images)} 张图片，注入上下文。")
                 for img_url in processed_images:
                     user_content_payload.append({
                         "type": "image_url",
@@ -787,7 +787,7 @@ class SocialService:
                 content = re.sub(pattern, '', content, flags=re.IGNORECASE).strip()
                 
                 if content.upper() in ["PASS", "IGNORE", "NONE", "NULL", "NO"]:
-                    logger.info(f"[Social] 秘书决定不说话 (PASS)。原因/内容: {content}")
+                    logger.debug(f"[Social] 秘书决定不说话 (PASS)。原因/内容: {content}")
                     return False
                 
                 if not content:
@@ -799,7 +799,7 @@ class SocialService:
                     return False
                 
                 # 4. 说话！
-                logger.info(f"[Social] 秘书决定发言: {content}")
+                logger.debug(f"[Social] 秘书决定发言: {content}")
                 await self.send_msg(target_session, content)
                 
                 # 5. 更新状态
@@ -929,7 +929,7 @@ class SocialService:
                 active_agent = agent_manager.agents.get(agent_manager.active_agent_id)
                 bot_name = active_agent.name if active_agent else self.config_manager.get("bot_name", "Pero")
                 
-                prompt = mdp.render("services/social/reporting/daily_report_generator", {
+                prompt = mdp.render("social/reporting/daily_report_generator", {
                     "agent_name": bot_name,
                     "date_str": date_str,
                     "total_messages": len(logs),
@@ -1183,7 +1183,7 @@ class SocialService:
                     if agent_profile:
                         bot_name = agent_profile.name
 
-                prompt = mdp.render("services/social/decisions/friend_request_decision", {
+                prompt = mdp.render("social/decisions/friend_request_decision", {
                     "agent_name": bot_name,
                     "user_id": user_id,
                     "comment": comment,
@@ -1222,7 +1222,7 @@ class SocialService:
                 notify_msg = result.get("notify_master", "")
                 greeting = result.get("greeting_message", "")
                 
-                logger.info(f"[Social] 好友请求决定: {decision}, 通知: {notify_msg}, 问候: {greeting}")
+                logger.debug(f"[Social] 好友请求决定: {decision}, 通知: {notify_msg}, 问候: {greeting}")
                 
                 if decision == "HOLD":
                     # 延迟处理
@@ -1270,7 +1270,7 @@ class SocialService:
                             # 确保 user_id 是 int
                             target_id = int(user_id)
                             await self.send_private_msg(target_id, greeting)
-                            logger.info(f"[Social] 向新朋友 {user_id} 发送问候: {greeting}")
+                            logger.debug(f"[Social] 向新朋友 {user_id} 发送问候: {greeting}")
                             
                             # 记录 Pero 的打招呼内容
                             await MemoryService.save_log(
@@ -1304,7 +1304,7 @@ class SocialService:
         删除好友。
         """
         await self._send_api("delete_friend", {"user_id": user_id})
-        logger.info(f"[Social] 好友 {user_id} 已删除。")
+        logger.debug(f"[Social] 好友 {user_id} 已删除。")
 
     async def _perform_active_agent_response(self, session: SocialSession, current_mode: str = "ACTIVE_OBSERVATION", extra_images: list = None) -> bool:
         """
@@ -1319,7 +1319,7 @@ class SocialService:
         Returns:
             bool: 是否发送了消息
         """
-        logger.info(f"[{session.session_id}] _perform_active_agent_response 开始执行。")
+        logger.debug(f"[{session.session_id}] _perform_active_agent_response 开始执行。")
         spoke = False
         
         # [Preemption] 注册当前任务到 Session
@@ -1328,14 +1328,14 @@ class SocialService:
         try:
             # [Scheme 2] 强制延迟 0.5s，给数据库写入留出喘息时间，释放文件锁
             # [Debug] Check if sleep hangs
-            logger.info(f"[{session.session_id}] 正在休眠 0.5s 以等待数据库写入...")
+            logger.debug(f"[{session.session_id}] 正在休眠 0.5s 以等待数据库写入...")
             await asyncio.sleep(0.5)
-            logger.info(f"[{session.session_id}] 休眠结束。")
+            logger.debug(f"[{session.session_id}] 休眠结束。")
             
             # 1. 构建 XML 上下文
             history_limit = 100
             
-            logger.info(f"[{session.session_id}] 获取最近消息历史...")
+            logger.debug(f"[{session.session_id}] 获取最近消息历史...")
             # 获取历史记录
             # [Fix] Add timeout to detect hang
             try:
@@ -1350,7 +1350,7 @@ class SocialService:
                     ),
                     timeout=2.0
                 )
-                logger.info(f"[{session.session_id}] 获取到 {len(recent_messages)} 条历史消息。")
+                logger.debug(f"[{session.session_id}] 获取到 {len(recent_messages)} 条历史消息。")
             except asyncio.TimeoutError:
                 logger.error(f"[{session.session_id}] 获取最近消息历史超时 (2s)！启用内存降级策略。")
                 recent_messages = []
@@ -1399,11 +1399,11 @@ class SocialService:
                         if len(relevant_users) >= 3:
                             break
             
-            logger.info(f"[{session.session_id}] 发现相关用户: {relevant_users}")
+            logger.debug(f"[{session.session_id}] 发现相关用户: {relevant_users}")
             
             # 2. Fetch private history for these users
             if relevant_users:
-                logger.info(f"[{session.session_id}] 正在获取相关私聊上下文: {relevant_users}")
+                logger.debug(f"[{session.session_id}] 正在获取相关私聊上下文: {relevant_users}")
                 # 使用并发获取以提高速度，并增加超时保护
                 async def fetch_private_safe(uid):
                         try:
@@ -1463,7 +1463,7 @@ class SocialService:
             if session.session_type == "private":
                 latest_group_id = await self.session_manager.get_latest_active_group(session.session_id)
                 if latest_group_id:
-                    logger.info(f"[{session.session_id}] 发现最近活跃群聊: {latest_group_id}，正在获取上下文...")
+                    logger.debug(f"[{session.session_id}] 发现最近活跃群聊: {latest_group_id}，正在获取上下文...")
                     try:
                         # Fetch group history (limit 10)
                         # 这里我们不需要太复杂的并发，因为只有一个群
@@ -1555,7 +1555,7 @@ class SocialService:
                 # Take the last 2 (newest)
                 if len(all_potential_images) > 2:
                     dropped_count = len(all_potential_images) - 2
-                    logger.info(f"[Social] 发现 {len(all_potential_images)} 张图片 (历史+缓冲)，丢弃旧的 {dropped_count} 张。保留最后 2 张。")
+                    logger.debug(f"[Social] 发现 {len(all_potential_images)} 张图片 (历史+缓冲)，丢弃旧的 {dropped_count} 张。保留最后 2 张。")
                     session_images = all_potential_images[-2:]
                 else:
                     session_images = all_potential_images
@@ -1582,17 +1582,18 @@ class SocialService:
             # 2. 调用 AgentService
             from services.agent_service import AgentService # 延迟导入以避免循环依赖
             
-            logger.info(f"[{session.session_id}] 正在建立主数据库连接...")
+            logger.debug(f"[{session.session_id}] 正在建立主数据库连接...")
             async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             async with async_session() as db_session:
-                logger.info(f"[{session.session_id}] 主数据库连接已建立。初始化 AgentService...")
+                logger.debug(f"[{session.session_id}] 主数据库连接已建立。初始化 AgentService...")
                 from services.agent_service import AgentService
                 agent = AgentService(db_session)
                 
                 from services.prompt_service import PromptManager
                 prompt_manager = PromptManager()
-                logger.info(f"[{session.session_id}] 获取系统 Prompt...")
-                core_system_prompt = await prompt_manager.get_rendered_system_prompt(db_session, is_social_mode=True)
+                # logger.info(f"[{session.session_id}] 获取系统 Prompt...")
+                # [Fix] Don't pre-render system prompt here, as it causes recursive injection in AgentService.
+                # core_system_prompt = await prompt_manager.get_rendered_system_prompt(db_session, is_social_mode=True)
                 
                 owner_qq = self.config_manager.get("owner_qq") or "未知"
                 
@@ -1622,7 +1623,7 @@ class SocialService:
                     agent_name = agent_profile.name
                     custom_persona = agent_profile.social_custom_persona
                     traits = agent_profile.social_traits
-                    logger.info(f"[{session.session_id}] Using active agent persona: {agent_name}")
+                    logger.debug(f"[{session.session_id}] Using active agent persona: {agent_name}")
 
                 identity_label = agent_profile.identity_label if agent_profile else "智能助手"
                 personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
@@ -1631,7 +1632,7 @@ class SocialService:
                     # 尝试从 MDP 加载默认人设模板 (personas/social_default.md)
                     fallback_persona = f"你是一个{identity_label}，正在以社交模式与用户交流。"
                     try:
-                        rendered_default = mdp.render("services/social/personas/social_default", {
+                        rendered_default = mdp.render("social/personas/social_default", {
                             "owner_qq": owner_qq,
                             "identity_label": identity_label,
                             "personality_tags": personality_tags
@@ -1647,8 +1648,8 @@ class SocialService:
                 if self.config_manager.get("social_traits"):
                     traits = self.config_manager.get("social_traits")
 
-                logger.info(f"[{session.session_id}] 渲染 Social Instructions (Agent: {agent_name})...")
-                social_instructions = mdp.render("services/social/social_instructions", {
+                logger.debug(f"[{session.session_id}] 渲染 Social Instructions (Agent: {agent_name})...")
+                social_instructions = mdp.render("social/social_instructions", {
                     "agent_name": agent_name,
                     "current_mode": current_mode,
                     "owner_qq": owner_qq,
@@ -1659,17 +1660,17 @@ class SocialService:
                 
                 # [Fix] Inject XML Guide and Time Awareness for Active Initiative
                 current_time_str = datetime.now().strftime('%H:%M:%S')
-                xml_guide = mdp.render("services/social/active_mode_guide", {
+                xml_guide = mdp.render("social/active_mode_guide", {
                     "current_time": current_time_str
                 })
 
-                instruction_prompt = mdp.render("services/social/social_rules", {
+                instruction_prompt = mdp.render("social/social_rules", {
                     "current_mode": current_mode
                 })
                 
                 # [MDP Refactor] 构建变量字典供 MDP 渲染使用
                 prompt_variables = {
-                    "system_core": core_system_prompt,
+                    # "system_core": core_system_prompt, # Removed to avoid duplication
                     "social_instructions": social_instructions,
                     "xml_guide": xml_guide,
                     "xml_context": xml_context,
@@ -1703,7 +1704,7 @@ class SocialService:
 
                 config = await agent._get_llm_config()
                 if config.get("enable_vision") and processed_images:
-                    logger.info(f"注入 {len(processed_images)} 张图片到社交聊天上下文。")
+                    logger.debug(f"注入 {len(processed_images)} 张图片到社交聊天上下文。")
                     for img_url in processed_images:
                         user_content.append({
                             "type": "image_url",
@@ -1717,13 +1718,13 @@ class SocialService:
                 
                 messages = [{"role": "user", "content": user_content}]
 
-                logger.info(f"正在呼叫会话 {session.session_id} 的社交 Agent ({current_mode})...")
-                logger.info(f"[{session.session_id}] 准备调用 agent.chat (Unified Pipeline)...")
+                logger.debug(f"正在呼叫会话 {session.session_id} 的社交 Agent ({current_mode})...")
+                logger.debug(f"[{session.session_id}] 准备调用 agent.chat (Unified Pipeline)...")
                 
                 # [Stage 3 Refactor] Use unified chat pipeline with Capability Filter
                 response_text = ""
                 try:
-                    logger.info(f"[{session.session_id}] 调用 AgentService.chat (source=social, MDP-Driven)...")
+                    logger.debug(f"[{session.session_id}] 调用 AgentService.chat (source=social, MDP-Driven)...")
                     
                     # [MDP Integration] Inject variables into AgentService context via initial_variables
                     
@@ -1744,9 +1745,9 @@ class SocialService:
                     logger.error(f"[{session.session_id}] Agent.chat 调用失败: {e}", exc_info=True)
                     response_text = "" # Fallback
 
-                logger.info(f"[{session.session_id}] agent.chat 完成。收到响应长度: {len(response_text)}")
+                logger.debug(f"[{session.session_id}] agent.chat 完成。收到响应长度: {len(response_text)}")
                 
-                logger.info(f"社交 Agent 响应: {response_text}")
+                logger.debug(f"社交 Agent 响应: {response_text}")
                 
                 # 3. 发送回复
                 # [Fix] 增强空值检查，防止 response_text 为 None 时报错
@@ -1772,13 +1773,13 @@ class SocialService:
                     except Exception as e:
                         logger.error(f"持久化 Pero 回复失败: {e}")
                 elif response_text and "[PASS]" in response_text:
-                     logger.info(f"[{session.session_id}] Agent 决定 PASS (活跃观察)。")
+                     logger.debug(f"[{session.session_id}] Agent 决定 PASS (活跃观察)。")
                 else:
-                    logger.info(f"[Social] 跳过回复。响应为空或 IGNORE。（内容: '{response_text}'）")
+                    logger.debug(f"[Social] 跳过回复。响应为空或 IGNORE。（内容: '{response_text}'）")
             
             # [State Reset] 如果是 Summoned，处理完必须清除
             if session.state == "summoned":
-                logger.info(f"[{session.session_id}] 正在将状态从 SUMMONED 重置为 OBSERVING。")
+                logger.debug(f"[{session.session_id}] 正在将状态从 SUMMONED 重置为 OBSERVING。")
                 session.state = "observing"
                 
             return spoke
@@ -1803,7 +1804,7 @@ class SocialService:
         - SUMMONED: 直接调用 AgentService 进行回复 (Action Layer)。
         - OBSERVING: 调用 Secretary (Think Layer) 决定是否插嘴。
         """
-        logger.info(f"--- [FLUSH] 处理会话 {session.session_id} (状态: {session.state}) ---")
+        logger.debug(f"--- [FLUSH] 处理会话 {session.session_id} (状态: {session.state}) ---")
         
         # [New Feature] 尝试触发记忆总结
         # 即使这次不回复，我们也检查是否积累了足够的消息需要总结
@@ -1832,7 +1833,7 @@ class SocialService:
                             logger.warning(f"[Social] 图片下载任务失败（已完成）: {e}")
 
         if all_pending_tasks:
-            logger.info(f"[{session.session_id}] 等待 {len(all_pending_tasks)} 个图片下载...")
+            logger.debug(f"[{session.session_id}] 等待 {len(all_pending_tasks)} 个图片下载...")
             try:
                 # Wait with timeout (e.g. 10 seconds)
                 done, pending = await asyncio.wait(all_pending_tasks, timeout=10.0)
@@ -1865,7 +1866,7 @@ class SocialService:
         if session.state != "summoned" and not is_active:
             # 既不是被召唤，也不活跃（潜水模式），交给秘书层判断 (Low Cost)
             # 如果缓冲区是因为满了或超时刷新的，说明可能正在热聊
-            logger.info(f"[{session.session_id}] 偷听刷新 (潜水模式)。委派给秘书 (后台任务)。")
+            logger.debug(f"[{session.session_id}] 偷听刷新 (潜水模式)。委派给秘书 (后台任务)。")
             
             # [Optimization] 使用 create_task 避免阻塞 flush 流程
             task = asyncio.create_task(self._attempt_random_thought(target_session=session))
@@ -1880,7 +1881,7 @@ class SocialService:
 
         # 确定模式，供 Prompt 使用
         current_mode = "SUMMONED" if session.state == "summoned" else "ACTIVE_OBSERVATION"
-        logger.info(f"[{session.session_id}] 正在以 {current_mode} 模式处理。调用主 Agent。")
+        logger.debug(f"[{session.session_id}] 正在以 {current_mode} 模式处理。调用主 Agent。")
 
         # --- 以下是被动呼唤 (Summoned) 或 活跃观察 (Active) 的处理逻辑 (Action Layer) ---
         
@@ -1968,7 +1969,7 @@ class SocialService:
             for msg in messages:
                 chat_text += f"{msg.sender_name}: {msg.content}\n"
                 
-            prompt = mdp.render("services/social/reporting/memory_segment_summarizer", {
+            prompt = mdp.render("social/reporting/memory_segment_summarizer", {
                 "session_type": session.session_type,
                 "session_name": session.session_name,
                 "chat_text": chat_text
@@ -2213,11 +2214,11 @@ class SocialService:
     async def send_group_msg(self, group_id: int, message: str):
         # Preprocess stickers
         final_message = self._process_stickers(message)
-        logger.info(f"[Social] 准备发送群消息给 {group_id}: {final_message}")
+        logger.debug(f"[Social] 准备发送群消息给 {group_id}: {final_message}")
         # Use _send_api_and_wait to ensure delivery and catch errors (e.g. muted, group not found)
         try:
             await self._send_api_and_wait("send_group_msg", {"group_id": group_id, "message": final_message})
-            logger.info(f"[Social] 群消息发送成功 (Group: {group_id})")
+            logger.debug(f"[Social] 群消息发送成功 (Group: {group_id})")
         except Exception as e:
             logger.error(f"[Social] Failed to send group message to {group_id}: {e}")
             raise e

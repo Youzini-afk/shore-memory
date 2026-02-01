@@ -70,7 +70,7 @@ class PromptManager:
         # [轻量级模式覆盖]
         if is_lightweight and not is_social_mode:
             # 简化 NIT 能力（移除 ReAct 流程/逻辑）
-            nit_prompt = self.mdp.get_prompt("core/abilities/ability_nit")
+            nit_prompt = self.mdp.get_prompt("components/abilities/nit")
             if nit_prompt:
                 content = nit_prompt.content
                 # 移除 "### 3. 执行逻辑与思考" 部分及其内容
@@ -86,49 +86,50 @@ class PromptManager:
             # 视觉
             if enable_vision:
                 # 检查提示是否存在以避免错误，如果需要则回退
-                prompt = self.mdp.get_prompt("core/abilities/ability_vision")
+                prompt = self.mdp.get_prompt("components/abilities/vision")
                 if prompt:
                     abilities_parts.append(prompt.content)
             else:
-                prompt = self.mdp.get_prompt("core/abilities/ability_vision_placeholder")
+                prompt = self.mdp.get_prompt("components/abilities/vision_placeholder")
                 if prompt:
                     abilities_parts.append(prompt.content)
 
             # 语音
             if enable_voice:
-                prompt = self.mdp.get_prompt("core/abilities/ability_voice")
+                prompt = self.mdp.get_prompt("components/abilities/voice")
                 if prompt:
                     abilities_parts.append(prompt.content)
             else:
-                prompt = self.mdp.get_prompt("core/abilities/ability_voice_placeholder")
+                # Note: voice_placeholder might not exist in components yet if it wasn't in core/abilities
+                prompt = self.mdp.get_prompt("components/abilities/voice_placeholder")
                 if prompt:
                     abilities_parts.append(prompt.content)
 
             # 视频
             if enable_video:
-                prompt = self.mdp.get_prompt("core/abilities/ability_video")
+                prompt = self.mdp.get_prompt("components/abilities/video")
                 if prompt:
                     abilities_parts.append(prompt.content)
         
         variables["ability_sensory"] = "\n".join(abilities_parts)
 
         # [Core Abilities Loading]
-        # 显式加载 ability 和 ability_nit，以支持新版目录结构 (core/abilities/...)
+        # 显式加载 ability 和 ability_nit，以支持新版目录结构 (components/abilities/...)
         if "ability" not in variables:
-            prompt = self.mdp.get_prompt("core/abilities/ability")
+            prompt = self.mdp.get_prompt("components/abilities/workspace")
             variables["ability"] = prompt.content if prompt else ""
             
         if "ability_nit" not in variables:
-            prompt = self.mdp.get_prompt("core/abilities/ability_nit")
+            prompt = self.mdp.get_prompt("components/abilities/nit")
             variables["ability_nit"] = prompt.content if prompt else ""
 
         # [Core Rules Loading]
         if "system_core" not in variables:
-            prompt = self.mdp.get_prompt("core/rules/system_core")
+            prompt = self.mdp.get_prompt("components/rules/system_core")
             variables["system_core"] = prompt.content if prompt else ""
 
         if "output_constraint" not in variables:
-            prompt = self.mdp.get_prompt("core/rules/output_constraint")
+            prompt = self.mdp.get_prompt("components/output/output_constraint")
             variables["output_constraint"] = prompt.content if prompt else ""
         
         # [Social Identity Injection]
@@ -176,7 +177,7 @@ class PromptManager:
 
         # 注入链逻辑（思维链）
         chain_name = variables.get("chain_name", "default")
-        chain_prompt = self.mdp.get_prompt(f"chains/{chain_name}")
+        chain_prompt = self.mdp.get_prompt(f"components/chains/{chain_name}")
         variables["chain_logic"] = chain_prompt.content if chain_prompt else ""
         
         # 2. 默认值
@@ -209,7 +210,7 @@ class PromptManager:
                 logger.error(f"加载工作工具错误: {e}")
 
             # 2. 简化 Ability NIT (移除 ReAct 思考步骤，同轻量模式)
-            nit_prompt = self.mdp.get_prompt("core/abilities/ability_nit")
+            nit_prompt = self.mdp.get_prompt("components/abilities/nit")
             if nit_prompt:
                 content = nit_prompt.content
                 content = re.sub(r'### 3\. 执行逻辑与思考[\s\S]*?(?=### 4\.|$)', '', content)
@@ -217,10 +218,14 @@ class PromptManager:
                 variables["ability_nit"] = content
             
             # 4. 渲染工作模式专用模板
-            return self.mdp.render("core/templates/system_work", variables)
+            return self.mdp.render("templates/work", variables)
+
+        # [社交模式专用构建]
+        if is_social_mode:
+            return self.mdp.render("templates/social", variables)
 
         # 1. 渲染模板
-        final_prompt = self.mdp.render("core/templates/system_template", variables)
+        final_prompt = self.mdp.render("templates/system", variables)
         
         # [轻量级模式提醒]
         config = get_config_manager()
@@ -237,16 +242,16 @@ class PromptManager:
         通常放在消息列表的最后，作为 System Message 提醒模型
         """
         # [工作模式]
-        # 工作模式通常在 system_work 中包含了必要的指令，或者需要专门的 instruction_work
-        # 目前暂不追加 instruction_work，以免重复
+        # 使用 templates/work 注入到 Context 末尾 (Recency Effect)
         if is_work_mode:
-            return ""
+             blocks = self.mdp.render_blocks("templates/work", variables)
+             return blocks.get("footer", "")
             
         # [主程序模式] (非社交, 非工作)
-        # 渲染 core/templates/instruction_default
-        # 包含: ability, ability_nit, output_constraint
+        # 使用 templates/system 注入到 Context 末尾 (Recency Effect)
         if not is_social_mode:
-            return self.mdp.render("core/templates/instruction_default", variables)
+            blocks = self.mdp.render_blocks("templates/system", variables)
+            return blocks.get("footer", "")
             
         # [社交模式]
         # 社交模式目前暂不追加额外的指令，以免引入不必要的复杂性 (如 Thinking/Monologue 可能不适合 QQ)
@@ -335,42 +340,51 @@ class PromptManager:
         # [Social Mode MDP Route]
         if is_social_mode:
             # 社交模式使用独立的 MDP 模板
-            base_prompt = self.mdp.render("core/templates/system_social", variables)
+            # [Fix] Use render_blocks to split header (Context) and footer (Instruction)
+            # allowing instructions to be placed AFTER the context.
+            blocks = self.mdp.render_blocks("templates/social", variables)
+            base_prompt = blocks.get("header", "")
+            instruction_prompt = blocks.get("footer", "")
             
-            # 社交模式下，Instruction 通常已经包含在 system_social 模板中（通过 social_rules 等变量）
-            # 或者通过 variables["instruction_prompt"] 传递
-            # 因此这里不需要额外构建 instruction_prompt，也不需要 cleaned_history（因为已经在 xml_context 中了）
-            
+            # Fallback if blocks not defined (legacy template)
+            if not base_prompt and not instruction_prompt:
+                 base_prompt = self.mdp.render("templates/social", variables)
+
             messages = [{"role": "system", "content": base_prompt}]
             
-            # 如果 history 中包含了用户传来的非 XML 消息（例如图片或其他临时消息），可以追加
-            # 但目前 SocialService 将所有内容都打包进了 xml_context 变量中
-            # 除了可能的最后一条用户消息（如果是纯文本交互）
-            # 但 SocialService 的设计是完全通过 System Prompt 传递上下文。
-            # 为了兼容性，如果 history 不为空，我们追加它（通常是空的，因为 Preprocessor 把它清空了）
             if history:
                  messages.extend(history)
+            
+            # Append instruction footer after history
+            if instruction_prompt.strip():
+                messages.append({"role": "system", "content": instruction_prompt})
                  
             return messages
 
-        # 2. 构建基础 System Prompt (Identity, Context)
-        base_prompt = ""
+        # 2. 构建基础 System Prompt (Identity, Context) 和 指令 Prompt (Instruction)
+        # 使用 Block 渲染: Header (System) + Footer (Instruction)
+        
+        template_key = "templates/system"
         if is_work_mode:
-            base_prompt = self.mdp.render("core/templates/system_work", variables)
-        else:
-            base_prompt = self.mdp.render("core/templates/system_template", variables)
+            template_key = "templates/work"
             
-        # 3. 构建指令 Prompt (Rules, Tools, COT)
-        instruction_prompt = self.build_instruction_prompt(variables, is_social_mode, is_work_mode)
+        # 渲染 blocks
+        blocks = self.mdp.render_blocks(template_key, variables)
+        base_prompt = blocks.get("header", "")
+        instruction_prompt = blocks.get("footer", "")
+        
+        # 兼容性处理：如果 render_blocks 返回空 header，尝试旧逻辑（不应该发生）
+        if not base_prompt:
+             base_prompt = self.mdp.render(template_key, variables)
 
+        # 3. 语音模式附加提醒 (追加到 Instruction)
         if is_voice_mode:
-            # 在语音模式下，增加关于语音输入的提醒
             enable_voice = variables.get("enable_voice", False)
             if enable_voice:
                 voice_reminder = "\n\n【系统提醒: 当前主人正在使用原生语音进行交流。你已获得主人的原生音频输入（Multimodal Audio），这能让你感受到主人的语气、情感和环境背景。请优先基于你听到的音频内容进行回复。】"
             else:
                 voice_reminder = "\n\n【系统提醒: 当前主人正在使用语音输入，但你目前只能接收到 ASR (自动语音识别) 转录后的文本。由于 ASR 可能存在同音错别字，请你结合上下文进行合理推测，并以可爱的语气给予回应。】"
-            # 语音提醒附在指令之后
+            
             instruction_prompt += voice_reminder
         
         # 对历史记录进行清洗
@@ -381,7 +395,11 @@ class PromptManager:
                 cleaned_msg["content"] = self.clean_history_for_api(msg.get("content", ""))
             cleaned_history.append(cleaned_msg)
             
-        # 组装：[System(Base)] + History + [System(Instruction)]
-        messages = [{"role": "system", "content": base_prompt}] + cleaned_history + [{"role": "system", "content": instruction_prompt}]
+        # 组装：[System(Header)] + History + [System(Instruction/Footer)]
+        messages = [{"role": "system", "content": base_prompt}] + cleaned_history
+        
+        # 只有当 Instruction 非空时才添加
+        if instruction_prompt.strip():
+            messages.append({"role": "system", "content": instruction_prompt})
         
         return messages

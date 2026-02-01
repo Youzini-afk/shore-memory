@@ -213,14 +213,14 @@ class SocialSessionManager:
         """
         从独立数据库获取最近的消息作为上下文。
         """
-        logger.info(f"[{session_id}] 调用 get_recent_messages。类型: {session_type}, 限制: {limit}")
+        logger.debug(f"[{session_id}] 调用 get_recent_messages。类型: {session_type}, 限制: {limit}")
         try:
             from .database import get_social_db_session
             from .models_db import QQMessage
             from sqlmodel import select
             
             messages = []
-            logger.info(f"[{session_id}] 正在请求数据库会话...")
+            logger.debug(f"[{session_id}] 正在请求数据库会话...")
             
             # [Critical Fix] Use run_in_executor to avoid blocking the event loop with synchronous DB calls
             # Even though db_session.exec is awaitable, the underlying aiosqlite/sqlite driver might be blocking the GIL or thread
@@ -236,7 +236,7 @@ class SocialSessionManager:
                  pass
 
             async for db_session in get_social_db_session():
-                logger.info(f"[{session_id}] 已获取数据库会话。正在执行查询...")
+                logger.debug(f"[{session_id}] 已获取数据库会话。正在执行查询...")
                 
                 try:
                     # [Critical Debug] Add a sleep to ensure loop is yielding
@@ -248,12 +248,12 @@ class SocialSessionManager:
                     ).order_by(QQMessage.timestamp.desc()).limit(limit)
                     
                     # [Fix] Wrap execution in a shield or check if it's truly awaited
-                    logger.info(f"[{session_id}] 正在等待 db_session.exec...")
+                    logger.debug(f"[{session_id}] 正在等待 db_session.exec...")
                     result = await asyncio.wait_for(db_session.exec(statement), timeout=3.0)
-                    logger.info(f"[{session_id}] db_session.exec 返回。正在获取所有结果...")
+                    logger.debug(f"[{session_id}] db_session.exec 返回。正在获取所有结果...")
                     results = result.all()
                     
-                    logger.info(f"[{session_id}] 查询返回了 {len(results)} 行。")
+                    logger.debug(f"[{session_id}] 查询返回了 {len(results)} 行。")
                     
                     # 转换回 SocialMessage（或类似的字典）并反转顺序
                     for row in reversed(results):
@@ -275,7 +275,7 @@ class SocialSessionManager:
                     logger.error(f"[{session_id}] 查询执行错误: {query_e}")
                     raise query_e
                 
-            logger.info(f"[{session_id}] get_recent_messages 完成。返回 {len(messages)} 条消息。")
+            logger.debug(f"[{session_id}] get_recent_messages 完成。返回 {len(messages)} 条消息。")
             return messages
             
         except Exception as e:
@@ -399,7 +399,7 @@ class SocialSessionManager:
                 # 设置为 2-4 分钟后
                 next_scan = datetime.now() + timedelta(seconds=random.randint(120, 240))
                 session.next_scan_time = next_scan
-                logger.info(f"[{session_id}] 私聊活跃，下次主动审视时间重置为: {next_scan.strftime('%H:%M:%S')}")
+                logger.debug(f"[{session_id}] 私聊活跃，下次主动审视时间重置为: {next_scan.strftime('%H:%M:%S')}")
             
             # [Persistence] Save user message immediately
             await self._persist_message(session, msg, "user")
@@ -523,7 +523,7 @@ class SocialSessionManager:
         if not session.buffer:
             return
 
-        logger.info(f"[{session.session_id}] 正在刷新缓冲区。原因: {reason}。消息数: {len(session.buffer)}")
+        logger.debug(f"[{session.session_id}] 正在刷新缓冲区。原因: {reason}。消息数: {len(session.buffer)}")
         
         # Call the callback (SocialService logic)
         try:

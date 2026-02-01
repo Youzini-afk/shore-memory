@@ -56,6 +56,7 @@ class HistoryPreprocessor(BasePreprocessor):
         source = context.get("source", "desktop")
         session_id = context.get("session_id", "default")
         current_messages = context.get("messages", [])
+        agent_id = context.get("agent_id", "pero")
 
         # [Configurable Preprocessor] Check if history fetch is disabled via config
         # Default to True unless explicitly disabled
@@ -84,7 +85,10 @@ class HistoryPreprocessor(BasePreprocessor):
             # 策略调整：先拉取足够多的日志 (例如 200 条)，然后基于 Token 进行截断
             limit = 200 if is_work_context else 40
             
-            history_logs = await memory_service.get_recent_logs(session, source, session_id, limit=limit)
+            # [Feature] Preview Prompt (History Cutoff)
+            before_id = variables.get("history_before_id")
+            
+            history_logs = await memory_service.get_recent_logs(session, source, session_id, limit=limit, agent_id=agent_id, before_id=before_id)
         except Exception as e:
             print(f"[HistoryPreprocessor] 获取历史日志失败: {e}")
             history_logs = []
@@ -101,6 +105,10 @@ class HistoryPreprocessor(BasePreprocessor):
                 
                 content = re.sub(r'<!-- PERO_RAG_BLOCK_START.*?-->', '', content, flags=re.S)
                 content = re.sub(r'<!-- PERO_RAG_BLOCK_END -->', '', content, flags=re.S)
+
+                # Filter Thinking and Monologue blocks from history context
+                # 过滤掉 Thinking 和 Monologue 块，避免污染上下文
+                content = re.sub(r'【\s*(?:Thinking|Monologue)\s*:.*?】', '', content, flags=re.S)
 
                 content = re.sub(r'<([A-Z_]+)>.*?</\1>', '', content, flags=re.S)
                 content = re.sub(r'<[^>]+>', '', content)
@@ -593,7 +601,8 @@ class SystemPromptPreprocessor(BasePreprocessor):
         )
         
         # [NIT Security] 将动态握手 ID 注入系统提示词
-        if nit_id and final_messages and final_messages[0]["role"] == "system":
+        # [Fix] Skip NIT injection for Social Mode as it doesn't support tools
+        if nit_id and source != "social" and final_messages and final_messages[0]["role"] == "system":
             from nit_core.security import NITSecurityManager
             security_prompt = NITSecurityManager.get_injection_prompt(nit_id)
             final_messages[0]["content"] += "\n" + security_prompt

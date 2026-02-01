@@ -363,11 +363,11 @@ class CompanionService:
             system_prompt = (await self.prompt_manager.get_rendered_system_prompt(session)).replace("{current_time}", datetime.now().strftime("%Y-%m-%d %H:%M"))
             
             # 使用 MDPManager 渲染陪伴指令
-            companion_instruction = self.mdp.render("services/perception/screen_observe_system", {"agent_name": bot_name})
+            companion_instruction = self.mdp.render("tasks/perception/screen_observe_system", {"agent_name": bot_name})
             system_prompt += f"\n\n{companion_instruction}"
 
             # 使用 MDPManager 渲染系统注入消息
-            user_injection = self.mdp.render("services/perception/screen_observe_user_injection", {"agent_name": bot_name})
+            user_injection = self.mdp.render("tasks/perception/screen_observe_user_injection", {"agent_name": bot_name})
             
             content_list = [{"type": "text", "text": user_injection}]
             for i, img in enumerate(base64_imgs):

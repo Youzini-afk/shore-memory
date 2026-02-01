@@ -1,7 +1,10 @@
-from fastapi import APIRouter, HTTPException, Body
+from fastapi import APIRouter, HTTPException, Body, Depends
 from typing import List, Dict, Any
 from services.agent_manager import get_agent_manager
 from pydantic import BaseModel
+from sqlmodel.ext.asyncio.session import AsyncSession
+from database import get_session
+from services.agent_service import AgentService
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 
@@ -17,6 +20,11 @@ class EnabledAgentsRequest(BaseModel):
 
 class ActiveAgentRequest(BaseModel):
     agent_id: str
+
+class PromptPreviewRequest(BaseModel):
+    session_id: str
+    source: str
+    log_id: int
 
 @router.get("", response_model=List[AgentInfo])
 async def list_agents():
@@ -60,3 +68,9 @@ async def set_active_agent(request: ActiveAgentRequest):
         raise HTTPException(status_code=400, detail=f"Agent '{request.agent_id}' not found or cannot be activated")
     
     return {"status": "ok", "active_agent": request.agent_id}
+
+@router.post("/preview_prompt")
+async def preview_prompt(request: PromptPreviewRequest, session: AsyncSession = Depends(get_session)):
+    """Preview the full prompt for a given log."""
+    service = AgentService(session)
+    return await service.preview_prompt(request.session_id, request.source, request.log_id)

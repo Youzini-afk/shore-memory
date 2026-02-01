@@ -175,7 +175,8 @@ export class GatewayClient {
         };
 
         this.ws.onerror = (error) => {
-        logToMain('WebSocket Error', error);
+        // Only log error if not in reconnect loop to avoid spam
+        // logToMain('WebSocket Error', error);
         this.ws?.close();
         };
     } catch (e) {

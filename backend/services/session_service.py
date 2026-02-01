@@ -197,7 +197,7 @@ async def exit_work_mode() -> str:
         log_text = "\n".join([f"{log.role}: {log.content}" for log in logs])
         
         from services.mdp.manager import mdp
-        prompt = mdp.render("core/abilities/work_log", {
+        prompt = mdp.render("components/artifacts/work_log", {
             "agent_name": bot_name,
             "task_name": task_name,
             "log_text": log_text

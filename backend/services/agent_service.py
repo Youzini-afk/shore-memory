@@ -142,9 +142,9 @@ class AgentService:
             preview_files = file_results[:50] 
             files_text = "\n".join(preview_files)
             
-            system_prompt = self.mdp.render("services/analysis/file_analysis")
+            system_prompt = self.mdp.render("tasks/analysis/file_analysis")
             
-            user_prompt = self.mdp.render("services/analysis/file_analysis_user_input", {
+            user_prompt = self.mdp.render("tasks/analysis/file_analysis_user_input", {
                 "user_query": user_query,
                 "preview_count": len(preview_files),
                 "files_text": files_text
@@ -168,7 +168,8 @@ class AgentService:
             aux_llm = LLMService(
                 api_key=aux_api_key,
                 api_base=aux_api_base,
-                model=aux_model_config.model_id
+                model=aux_model_config.model_id,
+                provider=aux_model_config.provider or "openai"
             )
 
             # 调用 chat 方法
@@ -245,7 +246,8 @@ class AgentService:
         llm = LLMService(
             api_key=config.get("api_key"),
             api_base=config.get("api_base"),
-            model=config.get("model")
+            model=config.get("model"),
+            provider=config.get("provider", "openai")
         )
         
         # 根据视觉能力状态动态调整 Prompt
@@ -292,7 +294,7 @@ class AgentService:
                 desc = tool_def.get("description", "无描述")
                 tools_list_str += f"- {name}: {desc}\n"
 
-        system_prompt = self.mdp.render("services/memory/reflection/reflection_ui", {
+        system_prompt = self.mdp.render("tasks/memory/reflection/reflection_ui", {
             "tools_list_str": tools_list_str,
             "tools_count": len(tools_list_str),
             "vision_instruction": vision_instruction_block
@@ -366,6 +368,7 @@ class AgentService:
             "api_key": final_api_key,
             "api_base": final_api_base,
             "model": model_config.model_id,
+            "provider": model_config.provider, # Added provider
             "temperature": model_config.temperature,
             "enable_vision": model_config.enable_vision
         }
@@ -399,7 +402,7 @@ class AgentService:
         print(f"[Agent] 收到主动观察结果: {intent_description} (评分: {score:.4f})")
         
         # 2. Construct an internal sensing prompt
-        internal_prompt = self.mdp.render("services/perception/proactive_internal_sense", {
+        internal_promptuser_prompt = self.mdp.render("tasks/perception/proactive_internal_sense", {
             "intent_description": intent_description,
             "score": f"{score:.4f}"
         })
@@ -538,6 +541,75 @@ class AgentService:
             print(f"_save_parsed_metadata 出错: {e}")
             return []
 
+    async def preview_prompt(self, session_id: str, source: str, log_id: int) -> Dict[str, Any]:
+        """
+        Preview the full prompt (system + history + user) for a specific conversation log.
+        Used for debugging/dashboard inspection.
+        """
+        # 1. Fetch the target log
+        log = await self.session.get(ConversationLog, log_id)
+        if not log:
+            return {"error": "Log not found"}
+            
+        # 2. Identify "Current Message" and "History Cutoff"
+        current_msg_log = None
+        history_before_id = None
+        
+        if log.role == "assistant":
+            # Find the user message immediately preceding this one
+            stmt = select(ConversationLog).where(ConversationLog.session_id == session_id)\
+                .where(ConversationLog.source == source)\
+                .where(ConversationLog.id < log_id)\
+                .where(ConversationLog.role == "user")\
+                .order_by(desc(ConversationLog.id))\
+                .limit(1)
+            current_msg_log = (await self.session.exec(stmt)).first()
+            
+            if current_msg_log:
+                history_before_id = current_msg_log.id
+            else:
+                # Fallback: just history up to log_id
+                history_before_id = log.id
+                
+        else:
+            # User log selected
+            current_msg_log = log
+            history_before_id = log.id
+            
+        # 3. Construct Context
+        messages = []
+        if current_msg_log:
+            messages.append({"role": "user", "content": current_msg_log.content})
+            
+        # 4. Run Preprocessor Pipeline (Dry Run)
+        agent_id = log.agent_id or "pero"
+        
+        context = {
+            "messages": messages,
+            "source": source,
+            "session_id": session_id,
+            "session": self.session,
+            "memory_service": self.memory_service,
+            "prompt_manager": self.prompt_manager,
+            "agent_service": self,
+            "agent_id": agent_id,
+            "variables": {
+                "history_before_id": history_before_id,
+                "is_preview": True 
+            },
+            "skip_system_prompt": False
+        }
+        
+        # Run pipeline
+        context = await self.preprocessor_manager.process(context)
+        
+        # 5. Extract Final Messages
+        final_messages = context.get("final_messages", [])
+        
+        return {
+            "messages": final_messages
+        }
+
     async def social_chat(self, messages: List[Dict[str, Any]], session_id: str) -> str:
         """
         [DEPRECATED] Specialized chat mode for Social Interactions (QQ/OneBot).
@@ -582,7 +654,8 @@ class AgentService:
         llm = LLMService(
             api_key=config.get("api_key"),
             api_base=config.get("api_base"),
-            model=config.get("model")
+            model=config.get("model"),
+            provider=config.get("provider", "openai")
         )
         
         # We use a simplified loop for social mode (no complex reflection/vision for now)
@@ -590,9 +663,10 @@ class AgentService:
             import asyncio
             async def _chat_with_retry(msgs, tools_list=None):
                 retry_count = 1
+                current_temp = config.get("temperature", 0.7)
                 for i in range(retry_count + 1):
                     try:
-                        return await llm.chat(msgs, temperature=0.7, tools=tools_list)
+                        return await llm.chat(msgs, temperature=current_temp, tools=tools_list)
                     except Exception as err:
                         if i == retry_count:
                             raise err
@@ -690,7 +764,7 @@ class AgentService:
             async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             async with async_session() as session:
                 scorer = ScorerService(session)
-                await scorer.process_interaction(user_msg, assistant_msg, source, pair_id=pair_id)
+                await scorer.process_interaction(user_msg, assistant_msg, source, pair_id=pair_id, agent_id=agent_id)
         except Exception as e:
             print(f"[Agent] 后台秘书服务失败: {e}")
 
@@ -833,7 +907,7 @@ class AgentService:
 
         # [Feature] Mobile Source Awareness
         if source == "mobile":
-            mobile_instruction = self.mdp.render("core/context/mobile_mode")
+            mobile_instruction = self.mdp.render("components/context/mobile")
             final_messages.append({
                 "role": "system",
                 "content": mobile_instruction
@@ -852,7 +926,7 @@ class AgentService:
                     if len(active_windows) > 20:
                         window_list_str += f"\n... ({len(active_windows) - 20} more)"
                     
-                    state_msg = self.mdp.render("core/context/active_windows", {
+                    state_msg = self.mdp.render("components/context/active_windows", {
                         "window_list_str": window_list_str
                     })
                     
@@ -873,7 +947,8 @@ class AgentService:
         llm = LLMService(
             api_key=config.get("api_key"),
             api_base=config.get("api_base"),
-            model=config.get("model")
+            model=config.get("model"),
+            provider=config.get("provider", "openai")
         )
         temperature = config.get("temperature", 0.7)
         

@@ -523,6 +523,26 @@ class LLMService:
         model_id = model_config.model_id if model_config else self.model
         provider = model_config.provider if hasattr(model_config, 'provider') else self.provider
         
+        # [Debug] Print Payload for Stream Mode (Fix missing logs)
+        debug_payload = {
+            "model": model_id,
+            "messages": messages,
+            "temperature": temperature,
+            "stream": stream
+        }
+        if tools:
+            debug_payload["tools"] = tools
+        
+        # Temporarily swap provider for logging if it differs
+        original_provider = self.provider
+        if provider != self.provider:
+            self.provider = provider
+            
+        self._debug_print_payload(debug_payload)
+        
+        # Restore provider
+        self.provider = original_provider
+
         # 动态更新 api_base 如果需要默认值
         if not api_base and provider in DEFAULT_API_BASES:
             api_base = DEFAULT_API_BASES[provider]
