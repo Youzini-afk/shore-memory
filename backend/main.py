@@ -741,6 +741,15 @@ async def seed_voice_configs():
         if not new_dynamic_token:
             new_dynamic_token = secrets.token_urlsafe(32)
             print(f"[Main] 警告: 未找到 Gateway 令牌文件。已生成本地回退令牌。")
+            
+            # [Fix] Write fallback token to file so Frontend can read it via IPC
+            try:
+                os.makedirs(os.path.dirname(token_path), exist_ok=True)
+                with open(token_path, "w", encoding="utf-8") as f:
+                    json.dump({"token": new_dynamic_token}, f)
+                print(f"[Main] 已将回退令牌写入: {token_path}")
+            except Exception as e:
+                print(f"[Main] 写入回退令牌失败: {e}")
         
         token_stmt = select(Config).where(Config.key == "frontend_access_token")
         token_result = await session.exec(token_stmt)
@@ -1818,23 +1827,32 @@ async def chat(
 async def reset_system(session: AsyncSession = Depends(get_session)):
     """一键恢复出厂设置：清理所有记忆、对话记录、状态和任务，但保留模型配置"""
     try:
-        # 1. 清理记忆
-        await session.exec(delete(Memory))
-        # 2. 清理对话记录
+        # 1. 清理记忆关联 (FK to Memory)
+        await session.exec(delete(MemoryRelation))
+        # 2. 清理对话记录 (FK to Memory)
         await session.exec(delete(ConversationLog))
         # 3. 清理任务
         await session.exec(delete(ScheduledTask))
-        # 4. 重置宠物状态
+        # 4. 清理记忆 (现在可以安全删除)
+        await session.exec(delete(Memory))
+        # 5. 重置宠物状态
         await session.exec(delete(PetState))
-        # 5. 清理配置 (保留模型配置相关的 key)
+        # 6. 清理配置 (保留模型配置相关的 key 和前端 Token)
         # 常见的需要保留的配置：current_model_id, reflection_model_id, reflection_enabled
         # 需要清理的配置：owner_name, user_persona, last_maintenance_log_count 等
-        keep_configs = ["current_model_id", "reflection_model_id", "reflection_enabled", "global_llm_api_key", "global_llm_api_base"]
+        keep_configs = [
+            "current_model_id", 
+            "reflection_model_id", 
+            "reflection_enabled", 
+            "global_llm_api_key", 
+            "global_llm_api_base",
+            "frontend_access_token" # 必须保留，否则前端无法认证
+        ]
         await session.exec(
             delete(Config).where(Config.key.not_in(keep_configs))
         )
         
-        # 6. 初始化一个新的默认状态
+        # 7. 初始化一个新的默认状态
         default_state = PetState()
         session.add(default_state)
         

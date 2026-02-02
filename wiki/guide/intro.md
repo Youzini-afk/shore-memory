@@ -14,7 +14,7 @@
 
 ## 技术架构 (Architecture)
 
-PeroCore 采用现代化的 **Electron + Python** 双进程架构，巧妙地平衡了 Web 开发的极致体验与 AI 算法的深厚底蕴。通过 Go Gateway 实现多端同步，并利用 Rust 重构核心算子，确保每一声“问候”都能毫秒级响应。
+PeroCore 采用现代化的 **Electron + Python** 架构。通过 Go Gateway 实现多端同步，并使用 Rust 搭建了核心的高性能计算层。
 
 ### 前端 (Frontend / Electron)
 

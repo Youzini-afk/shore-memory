@@ -634,10 +634,12 @@ const handleVoiceUpdateRequest = (req) => {
     } else if (type === 'transcription') {
         console.log('用户说:', content)
     } else if (type === 'text_response') {
-        currentText.value = content
-        isThinking.value = false
-        thinkingMessage.value = '努力思考中...'
-        bubbleKey.value++;
+        if (content) {
+            currentText.value = content
+            isThinking.value = false
+            thinkingMessage.value = '努力思考中...'
+            bubbleKey.value++;
+        }
     } else if (type === 'error') {
         console.error('语音错误:', content)
         currentText.value = `(错误: ${content})`
@@ -1339,11 +1341,12 @@ onMounted(async () => {
         const params = data.params || data;
         const content = params.content;
         
-        currentText.value = content;
-        isThinking.value = false;
-        // Fix: isBubbleExpanded is true only if content is not empty
-        isBubbleExpanded.value = !!content;
-        bubbleKey.value++;
+        if (content) {
+            currentText.value = content;
+            isThinking.value = false;
+            isBubbleExpanded.value = true;
+            bubbleKey.value++;
+        }
     });
     
     // 监听状态更新
