@@ -26,35 +26,36 @@ func generateAndSaveToken() {
 		authToken = envToken
 		log.Printf("🔑 Using Fixed Gateway Token from ENV: %s", authToken)
 	} else {
+		// Define path to save token: defaults to data/gateway_token.json (Docker/Local relative)
+		// Can be overridden by env var for legacy dev support
+		path := os.Getenv("GATEWAY_TOKEN_PATH")
+		if path == "" {
+			path = filepath.Join("data", "gateway_token.json")
+		}
+
 		// Generate random token
+		// 生成随机令牌
 		b := make([]byte, 32)
 		_, err := rand.Read(b)
 		if err != nil {
 			log.Fatal("Failed to generate token:", err)
 		}
 		authToken = base64.URLEncoding.EncodeToString(b)
-		log.Printf("🔑 Gateway Access Token: %s", authToken)
-	}
+		log.Printf("🔑 Generated New Gateway Access Token: %s", authToken)
 
-	// Define path to save token: defaults to data/gateway_token.json (Docker/Local relative)
-	// Can be overridden by env var for legacy dev support
-	path := os.Getenv("GATEWAY_TOKEN_PATH")
-	if path == "" {
-		path = filepath.Join("data", "gateway_token.json")
-	}
+		// Ensure directory exists
+		dir := filepath.Dir(path)
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			log.Printf("Warning: Could not create data directory: %v", err)
+		}
 
-	// Ensure directory exists
-	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
-		log.Printf("Warning: Could not create data directory: %v", err)
-	}
-
-	data := map[string]string{
-		"token": authToken,
-	}
-	fileData, _ := json.MarshalIndent(data, "", "  ")
-	if err := os.WriteFile(path, fileData, 0644); err != nil {
-		log.Printf("Warning: Could not save token to file %s: %v", path, err)
+		data := map[string]string{
+			"token": authToken,
+		}
+		fileData, _ := json.MarshalIndent(data, "", "  ")
+		if err := os.WriteFile(path, fileData, 0644); err != nil {
+			log.Printf("Warning: Could not save token to file %s: %v", path, err)
+		}
 	}
 }
 

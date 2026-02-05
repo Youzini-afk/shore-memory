@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs-extra'
 import { isPackaged, paths } from '../utils/env'
 import { WindowLike } from '../types'
+import { logger } from '../utils/logger'
 
 let gatewayProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -63,58 +64,113 @@ export async function startGateway(window: WindowLike) {
         
         if (!found) {
             const error = `Gateway 可执行文件未找到: ${gatewayPath}`
-            console.error(error)
+            logger.error('Gateway', error)
             try { if (!window.isDestroyed()) window.webContents.send('system-error', error) } catch(e){}
             throw new Error(error)
         }
     }
 
-    console.log(`正在从以下路径启动 Gateway: ${gatewayPath}`)
+    logger.info('Gateway', `正在从以下路径启动 Gateway: ${gatewayPath}`)
+
+    // Define token path explicitly to ensure consistency
+    const tokenPath = isPackaged 
+        ? path.join(paths.userData, 'data/gateway_token.json')
+        : path.join(process.cwd(), 'data/gateway_token.json')
+
+    // Ensure directory exists
+    await fs.ensureDir(path.dirname(tokenPath))
+
+    // Remove old token file if exists to ensure we don't read stale token
+    // 删除旧的令牌文件（如果存在），以确保我们不会读取过时的令牌
+    try {
+        if (await fs.pathExists(tokenPath)) {
+            await fs.remove(tokenPath)
+        }
+    } catch (e) {
+        logger.warn('Gateway', `Failed to remove old token file: ${e}`)
+    }
+    logger.info('Gateway', `Gateway Token Path: ${tokenPath}`)
 
     // Spawn Gateway
     gatewayProcess = spawn(gatewayPath, [], {
         stdio: ['ignore', 'pipe', 'pipe'],
         detached: false,
-        windowsHide: true
+        windowsHide: true,
+        env: {
+            ...process.env,
+            GATEWAY_TOKEN_PATH: tokenPath
+        }
     })
 
+    // Wait for token file to be created
+    // 等待令牌文件创建
+    let retries = 0
+    let tokenCreated = false
+    while (retries < 50) { // Wait up to 5 seconds
+        if (await fs.pathExists(tokenPath)) {
+            // Give it a tiny bit more time to ensure write is complete
+            await new Promise(r => setTimeout(r, 100))
+            tokenCreated = true
+            break
+        }
+        await new Promise(r => setTimeout(r, 100))
+        retries++
+    }
+
+    if (!tokenCreated) {
+        const error = `Gateway 启动超时或失败: 无法生成令牌文件 (${tokenPath})`
+        logger.error('Gateway', error)
+        // Check if process exited
+        if (gatewayProcess.exitCode !== null) {
+            logger.error('Gateway', `Gateway process exited with code ${gatewayProcess.exitCode}`)
+        }
+        throw new Error(error)
+    }
+
     gatewayProcess.stdout?.on('data', (data) => {
-        const line = data.toString().trim()
-        console.log(`[网关] ${line}`)
-        // Optional: send to frontend if needed
-        // window.webContents.send('gateway-log', line)
-        
-        if (logHistory.length >= MAX_LOGS) logHistory.shift()
-        logHistory.push(line)
+        const lines = data.toString().split('\n')
+        lines.forEach((line: string) => {
+            const trimmed = line.trim()
+            if (!trimmed) return
+            
+            logger.info('Gateway', trimmed)
+            // Optional: send to frontend if needed
+            // window.webContents.send('gateway-log', line)
+            
+            if (logHistory.length >= MAX_LOGS) logHistory.shift()
+            logHistory.push(trimmed)
+        })
     })
 
     gatewayProcess.stderr?.on('data', (data) => {
-        const line = data.toString().trim()
-        // Go log.Println outputs to stderr by default. We need to distinguish actual errors from logs.
-        // Heuristic: Check for common error keywords.
-        const lowerLine = line.toLowerCase()
-        const isError = lowerLine.includes('error') || 
-                       lowerLine.includes('panic') || 
-                       lowerLine.includes('fail') || 
-                       lowerLine.includes('fatal') ||
-                       lowerLine.includes('exception') ||
-                       lowerLine.includes('invalid') // Token errors often have 'invalid'
+        const lines = data.toString().split('\n')
+        lines.forEach((line: string) => {
+            const trimmed = line.trim()
+            if (!trimmed) return
 
-        const prefix = isError ? '[网关错误]' : '[网关日志]'
-        const logPrefix = isError ? '[错误]' : '[网关]'
+            // Go log.Println outputs to stderr by default. We need to distinguish actual errors from logs.
+            // Heuristic: Check for common error keywords.
+            const lowerLine = trimmed.toLowerCase()
+            const isError = lowerLine.includes('error') || 
+                           lowerLine.includes('panic') || 
+                           lowerLine.includes('fail') || 
+                           lowerLine.includes('fatal') ||
+                           lowerLine.includes('exception') ||
+                           lowerLine.includes('invalid') // Token errors often have 'invalid'
 
-        if (isError) {
-            console.error(`${prefix} ${line}`)
-        } else {
-            console.log(`${prefix} ${line}`)
-        }
-        
-        if (logHistory.length >= MAX_LOGS) logHistory.shift()
-        logHistory.push(`${logPrefix} ${line}`)
+            if (isError) {
+                logger.error('Gateway', trimmed)
+            } else {
+                logger.info('Gateway', trimmed)
+            }
+            
+            if (logHistory.length >= MAX_LOGS) logHistory.shift()
+            logHistory.push(trimmed)
+        })
     })
 
     gatewayProcess.on('close', (code) => {
-        console.log(`Gateway 已退出，退出码: ${code}`)
+        logger.info('Gateway', `Gateway 已退出，退出码: ${code}`)
         gatewayProcess = null
     })
     
@@ -126,10 +182,10 @@ import treeKill from 'tree-kill'
 
 export function stopGateway() {
     if (gatewayProcess) {
-        console.log('Stopping Gateway...')
+        logger.info('Gateway', 'Stopping Gateway...')
         if (gatewayProcess.pid) {
              treeKill(gatewayProcess.pid, 'SIGKILL', (err) => {
-                if (err) console.error('Error killing gateway process tree:', err)
+                if (err) logger.error('Gateway', `Error killing gateway process tree: ${err}`)
              })
         } else {
              gatewayProcess.kill()

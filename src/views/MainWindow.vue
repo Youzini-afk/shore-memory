@@ -37,8 +37,6 @@
 <script setup>
 import { ref, computed, watch, defineAsyncComponent, onMounted } from 'vue'
 import { listen, invoke, emit } from '@/utils/ipcAdapter'
-// import { listen } from '@tauri-apps/api/event'
-// import { getCurrentWindow } from '@tauri-apps/api/window'
 import { APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import CustomDialog from '../components/ui/CustomDialog.vue'

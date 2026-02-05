@@ -3,6 +3,8 @@ export default {
   content: [
     "./index.html",
     "./src/**/*.{vue,js,ts,jsx,tsx}",
+    "!./src/api/**/*.{js,ts}",
+    "!**/node_modules/**",
   ],
   theme: {
     extend: {

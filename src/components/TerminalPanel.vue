@@ -31,10 +31,8 @@
 import { ref, shallowRef, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { Monitor, Delete } from '@element-plus/icons-vue'
 import { listen } from '@/utils/ipcAdapter'
-// import { listen } from '@tauri-apps/api/event'
 // 引入调用函数
 import { invoke } from '@/utils/ipcAdapter'
-// import { invoke } from '@tauri-apps/api/core'
 
 const logs = shallowRef([])
 const logContainer = ref(null)
@@ -186,6 +184,22 @@ onMounted(async () => {
       }
       addLog('backend', type, msg)
     })
+
+    // 监听批量日志 (优化版)
+    const unlistenBatch = await listen('backend-log-batch', (event) => {
+      const logs = event.payload || []
+      if (Array.isArray(logs)) {
+        logs.forEach(msg => {
+            let type = 'info'
+            if (msg.toLowerCase().includes('[err]') || msg.toLowerCase().includes('error')) {
+                type = 'error'
+            } else if (msg.toLowerCase().includes('warn')) {
+                type = 'warn'
+            }
+            addLog('backend', type, msg)
+        })
+      }
+    })
     
     // 监听其他系统级日志 (如果需要)
     const unlistenTerminal = await listen('terminal-log', (event) => {
@@ -197,6 +211,7 @@ onMounted(async () => {
     const originalUnlisten = unlistenFn
     unlistenFn = () => {
       originalUnlisten()
+      unlistenBatch()
       unlistenTerminal()
     }
   } catch (e) {

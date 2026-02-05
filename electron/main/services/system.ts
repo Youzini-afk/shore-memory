@@ -62,10 +62,18 @@ export function saveConfig(config: any) {
 
 export function getGatewayToken(): string {
     // Development path
-    const devPath = path.join(process.cwd(), 'backend/data/gateway_token.json')
+    const devPath = path.join(process.cwd(), 'data/gateway_token.json')
     // Production path (next to exe or in userData)
     const prodPath = path.join(paths.userData, 'data/gateway_token.json')
     
+    // Check ENV first (set by startGateway if in same process, but unlikely here)
+    if (process.env.GATEWAY_TOKEN_PATH && fs.existsSync(process.env.GATEWAY_TOKEN_PATH)) {
+        try {
+            const data = fs.readJsonSync(process.env.GATEWAY_TOKEN_PATH)
+            return data.token || ''
+        } catch (e) { }
+    }
+
     const tokenPath = fs.existsSync(devPath) ? devPath : prodPath
     
     if (fs.existsSync(tokenPath)) {

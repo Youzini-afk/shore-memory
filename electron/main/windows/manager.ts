@@ -2,6 +2,7 @@ import { BrowserWindow, app, shell, screen } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { is } from '@electron-toolkit/utils'
+import { logger } from '../utils/logger'
 
 export class WindowManager {
   private static instance: WindowManager
@@ -94,15 +95,15 @@ export class WindowManager {
     }
 
     this.launcherWin.loadURL(this.getPageUrl('/launcher'))
-    console.log(`[WindowManager] Loading URL: ${this.getPageUrl('/launcher')}`)
+    logger.info('Main', `Loading URL: ${this.getPageUrl('/launcher')}`)
 
     this.launcherWin.on('ready-to-show', () => {
-      console.log('[WindowManager] Window ready-to-show event fired')
+      logger.info('Main', 'Window ready-to-show event fired')
       this.launcherWin?.show()
     })
 
     this.launcherWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        console.error(`[WindowManager] Failed to load: ${errorDescription} (${errorCode})`)
+        logger.error('Main', `Failed to load: ${errorDescription} (${errorCode})`)
     })
 
     // Handle external links
@@ -225,7 +226,7 @@ export class WindowManager {
         // 发送到渲染进程
         this.petWin.webContents.send('global-mouse-move', { x: relativeX, y: relativeY });
       } catch (e) {
-        console.error('鼠标追踪错误:', e)
+        logger.error('Main', `鼠标追踪错误: ${e}`)
       }
     }, 33)
   }
@@ -272,9 +273,23 @@ export class WindowManager {
     }
 
     this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
+    logger.info('Main', `Dashboard loading URL: ${this.getPageUrl('/dashboard')}`)
     
     this.dashboardWin.on('ready-to-show', () => {
+        logger.info('Main', 'Dashboard ready-to-show')
         this.dashboardWin?.show()
+    })
+
+    // Force show if ready-to-show doesn't fire (e.g. renderer crash or slow load)
+    setTimeout(() => {
+        if (this.dashboardWin && !this.dashboardWin.isDestroyed() && !this.dashboardWin.isVisible()) {
+             logger.info('Main', 'Force showing Dashboard (timeout)')
+             this.dashboardWin.show()
+        }
+    }, 2000)
+
+    this.dashboardWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+        logger.error('Main', `Dashboard failed to load: ${errorDescription} (${errorCode})`)
     })
 
     // Handle external links

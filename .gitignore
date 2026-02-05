@@ -66,6 +66,7 @@ target/
 Cargo.lock
 
 # Data & Databases (Ignore local data)
+data/
 backend/data/
 !backend/data/.gitkeep
 backend/rust_db/

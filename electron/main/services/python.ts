@@ -3,6 +3,7 @@ import path from 'path'
 import fs from 'fs-extra'
 import { getDiagnostics } from './diagnostics'
 import { WindowLike } from '../types'
+import { logger } from '../utils/logger'
 
 let backendProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -72,13 +73,46 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     })
 
     child.on('error', (err) => {
-        console.error(`[Backend Spawn Error] Failed to spawn python process: ${err.message}`)
+        logger.error('Backend', `Failed to spawn python process: ${err.message}`)
         try {
             if (window && !window.isDestroyed()) {
                 window.webContents.send('system-error', `后端启动失败 (Spawn Error): ${err.message}`)
             }
         } catch (e) {}
     })
+
+    // Batch log sender to prevent IPC flooding
+    // 批量日志发送器以防止 IPC 洪水
+    let logBatch: string[] = []
+    let batchTimer: NodeJS.Timeout | null = null
+    const BATCH_INTERVAL = 100 // 100ms
+    const MAX_BATCH_SIZE = 100 // Max 100 lines per batch
+
+    const sendBatch = () => {
+        if (logBatch.length === 0) return
+        
+        try {
+            if (window && !window.isDestroyed()) {
+                // Send as array to reduce IPC overhead
+                // 作为数组发送以减少 IPC 开销
+                window.webContents.send('backend-log-batch', [...logBatch])
+            }
+        } catch (e) {
+            // Ignore
+        }
+        logBatch = []
+        batchTimer = null
+    }
+
+    const queueLog = (msg: string) => {
+        logBatch.push(msg)
+        if (logBatch.length >= MAX_BATCH_SIZE) {
+            if (batchTimer) clearTimeout(batchTimer)
+            sendBatch()
+        } else if (!batchTimer) {
+            batchTimer = setTimeout(sendBatch, BATCH_INTERVAL)
+        }
+    }
 
     child.stdout?.on('data', (data) => {
         const content = data.toString()
@@ -91,14 +125,28 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
             const trimmedLine = line.trim()
             if (trimmedLine.length === 0 && line.length === 0) return; // Skip completely empty trailing lines
 
-            console.log(`[后端] ${line}`)
-            try {
-                if (window && !window.isDestroyed()) {
-                    window.webContents.send('backend-log', line)
-                }
-            } catch (e) {
-                // Ignore send error
+            // Try to parse Python log format: [YYYY-MM-DD HH:MM:SS] [LEVEL] [logger] Message
+            // Example: [2026-02-05 22:33:56] [INFO] [services.mdp.manager] ...
+            const pyLogRegex = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[(INFO|WARNING|ERROR|DEBUG)\] (.*)/
+            const match = line.match(pyLogRegex)
+
+            if (match) {
+                const levelStr = match[1]
+                const msg = match[2]
+                let level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' = 'INFO'
+                
+                if (levelStr === 'WARNING') level = 'WARN'
+                else if (levelStr === 'ERROR') level = 'ERROR'
+                else if (levelStr === 'DEBUG') level = 'DEBUG'
+                
+                logger.log('Backend', level, msg)
+            } else {
+                // Raw line (e.g. Logo, or print output)
+                logger.info('Backend', line)
             }
+
+            // Queue for batch sending
+            queueLog(line)
             
             if (logHistory.length >= MAX_LOGS) logHistory.shift()
             logHistory.push(line)
@@ -112,14 +160,10 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
         lines.forEach((line: string) => {
             if (line.trim().length === 0 && line.length === 0) return;
 
-            console.error(`[后端错误] ${line}`)
-            try {
-                if (window && !window.isDestroyed()) {
-                    window.webContents.send('backend-log', `[ERROR] ${line}`)
-                }
-            } catch (e) {
-                // Ignore send error
-            }
+            logger.error('Backend', line)
+            
+            // Queue error for batch sending (prefixed)
+            queueLog(`[ERROR] ${line}`)
             
             if (logHistory.length >= MAX_LOGS) logHistory.shift()
             logHistory.push(`[ERROR] ${line}`)
@@ -137,7 +181,7 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     })
 
     child.on('close', (code) => {
-        console.log(`后端已退出，退出码: ${code}`)
+        logger.info('Backend', `后端已退出，退出码: ${code}`)
         backendProcess = null
     })
 
@@ -148,10 +192,10 @@ import treeKill from 'tree-kill'
 
 export function stopBackend() {
     if (backendProcess) {
-        console.log('Stopping Backend...')
+        logger.info('Backend', 'Stopping Backend...')
         if (backendProcess.pid) {
              treeKill(backendProcess.pid, 'SIGKILL', (err) => {
-                if (err) console.error('Error killing backend process tree:', err)
+                if (err) logger.error('Backend', `Error killing backend process tree: ${err}`)
              })
         } else {
              backendProcess.kill()

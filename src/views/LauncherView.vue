@@ -715,9 +715,6 @@ import { useRouter } from 'vue-router'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
-// import { invoke } from '@tauri-apps/api/core'
-// import { listen } from '@tauri-apps/api/event'
-// import { getAllWebviewWindows, getCurrentWebviewWindow } from '@tauri-apps/api/webviewWindow'
 import {
   Sparkles, Home, Settings, FolderOpen,
   Cpu, Database, Activity, Power, ShieldCheck,
@@ -1151,7 +1148,7 @@ const saveAgentConfig = async () => {
   const activeId = activeAgent ? activeAgent.id : (enabledIds.length > 0 ? enabledIds[0] : 'pero')
 
   try {
-    await invoke('save_agent_launch_config', {
+    await invoke('save_global_launch_config', {
       enabledAgents: enabledIds,
       activeAgent: activeId
     })

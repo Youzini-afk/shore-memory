@@ -58,7 +58,6 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-// import { getCurrentWindow } from '@tauri-apps/api/window'
 import { invoke } from '../../utils/ipcAdapter'
 import { Minus, Square, Copy, X, Briefcase, MessageSquare } from 'lucide-vue-next'
 import { APP_TITLE } from '../../config'
@@ -83,7 +82,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['toggle-mode'])
 
-// const appWindow = getCurrentWindow()
 const isMaximized = ref(false)
 
 const minimize = () => invoke('window-minimize')

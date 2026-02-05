@@ -579,38 +579,61 @@ class LLMService:
             payload["tools"] = tools
 
         async with httpx.AsyncClient(timeout=60.0) as client:
-            try:
-                if not stream:
-                    # 非流式回退
-                    response = await client.post(url, headers=headers, json=payload)
-                    if response.status_code != 200:
-                        yield {"content": f"错误: {response.status_code} - {response.text}"}
+            max_retries = 3
+            retry_count = 0
+            
+            while retry_count < max_retries:
+                try:
+                    if not stream:
+                        # 非流式回退
+                        response = await client.post(url, headers=headers, json=payload)
+                        if response.status_code != 200:
+                            # 5xx 错误尝试重试
+                            if response.status_code >= 500:
+                                raise httpx.ConnectError(f"Server Error {response.status_code}")
+                            
+                            yield {"content": f"错误: {response.status_code} - {response.text}"}
+                            return
+                        data = response.json()
+                        if data.get("choices"):
+                             yield {"content": data["choices"][0]["message"].get("content", "")}
                         return
-                    data = response.json()
-                    if data.get("choices"):
-                         yield {"content": data["choices"][0]["message"].get("content", "")}
+
+                    async with client.stream("POST", url, headers=headers, json=payload) as response:
+                        if response.status_code != 200:
+                            # 5xx 错误尝试重试
+                            if response.status_code >= 500:
+                                raise httpx.ConnectError(f"Server Error {response.status_code}")
+                            
+                            yield {"content": f"错误: {response.status_code} - {await response.aread()}"}
+                            return
+
+                        async for line in response.aiter_lines():
+                            if line.startswith("data: "):
+                                data_str = line[6:].strip()
+                                if data_str == "[DONE]":
+                                    break
+                                try:
+                                    data = json.loads(data_str)
+                                    if data.get("choices"):
+                                        delta = data["choices"][0].get("delta", {})
+                                        yield delta
+                                except:
+                                    continue
+                    return # 成功结束
+
+                except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.PoolTimeout) as e:
+                    retry_count += 1
+                    print(f"[LLM Stream] 连接尝试失败 ({retry_count}/{max_retries}): {e}")
+                    if retry_count >= max_retries:
+                         print(f"[LLM Stream] Error: All connection attempts failed after {max_retries} tries.")
+                         yield {"content": f"\n[网络错误: 连接失败 ({max_retries}次尝试): {str(e)}]"}
+                         return
+                    await asyncio.sleep(1 * retry_count) # 线性退避
+                except Exception as e:
+                    print(f"[LLM Stream] Error: {e}")
+                    yield {"content": f"\n[Error: {str(e)}]"}
                     return
-
-                async with client.stream("POST", url, headers=headers, json=payload) as response:
-                    if response.status_code != 200:
-                        yield {"content": f"错误: {response.status_code} - {await response.aread()}"}
-                        return
-
-                    async for line in response.aiter_lines():
-                        if line.startswith("data: "):
-                            data_str = line[6:].strip()
-                            if data_str == "[DONE]":
-                                break
-                            try:
-                                data = json.loads(data_str)
-                                if data.get("choices"):
-                                    delta = data["choices"][0].get("delta", {})
-                                    yield delta
-                            except:
-                                continue
-            except Exception as e:
-                print(f"[LLM Stream] Error: {e}")
-                yield {"content": f"\n[Error: {str(e)}]"}
 
     async def _chat_gemini_stream(self, messages: List[Dict[str, Any]], temperature: float, model_id: str, api_key: str, tools: List[Dict] = None) -> AsyncIterable[Dict[str, Any]]:
         """Gemini 原生 API 流式调用"""

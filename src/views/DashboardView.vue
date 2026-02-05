@@ -1333,8 +1333,6 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { listen, invoke } from '@/utils/ipcAdapter'
-// import { listen, emit } from '@tauri-apps/api/event'
-// import { getAllWebviewWindows } from '@tauri-apps/api/webviewWindow'
 import VoiceConfigPanel from './VoiceConfigPanel.vue'
 import AsyncMarkdown from '../components/AsyncMarkdown.vue'
 import { marked } from 'marked'
@@ -1994,7 +1992,7 @@ const switchAgent = async (agentId) => {
         // Get current enabled list
         // 获取当前已启用的列表
         const enabled = availableAgents.value.filter(a => a.is_enabled).map(a => a.id)
-        invoke('save_agent_launch_config', { 
+        invoke('save_global_launch_config', { 
             enabledAgents: enabled,
             activeAgent: agentId 
         }).catch(e => console.error('保存启动配置失败:', e))

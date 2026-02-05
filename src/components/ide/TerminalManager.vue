@@ -126,7 +126,6 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue';
 import { listen } from '@/utils/ipcAdapter'
-// import { listen } from '@tauri-apps/api/event';
 import { Terminal, ChevronDown, ChevronUp, Square } from 'lucide-vue-next';
 
 const isCollapsed = ref(true); // Default collapsed // 默认折叠

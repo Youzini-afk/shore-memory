@@ -476,7 +476,6 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue';
 import { listen, emit } from '@/utils/ipcAdapter';
-// import { emit, listen } from '@tauri-apps/api/event';
 import { Brain, MessageSquareQuote, Terminal, Play, Pause, Square, Clock, Edit2, Trash2, Check, X, Volume2, AlertTriangle, Image as ImageIcon, XCircle } from 'lucide-vue-next';
 import AsyncMarkdown from '../AsyncMarkdown.vue';
 import CustomDialog from '../ui/CustomDialog.vue';

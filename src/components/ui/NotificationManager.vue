@@ -25,7 +25,6 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue';
 import { listen } from '@/utils/ipcAdapter'
-// import { listen } from '@tauri-apps/api/event';
 
 const notifications = ref([]);
 let nextId = 0;

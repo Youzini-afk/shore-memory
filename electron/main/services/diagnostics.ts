@@ -5,6 +5,7 @@ import winreg from 'winreg'
 import which from 'which'
 import { checkNapCatInstalled } from './napcat.js'
 import { isDev, paths, isElectron } from '../utils/env'
+import { logger } from '../utils/logger'
 
 export interface DiagnosticReport {
     python_exists: boolean
@@ -43,8 +44,8 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     const errors: string[] = []
     const resourceDir = getResourceDir()
     
-    console.log(`[诊断] 工作区: ${workspaceRoot}`)
-    console.log(`[诊断] 资源目录: ${resourceDir}`)
+    logger.info('Main', `[诊断] 工作区: ${workspaceRoot}`)
+    logger.info('Main', `[诊断] 资源目录: ${resourceDir}`)
 
     // 1. Python Path
     // 1. Python 路径
@@ -65,7 +66,6 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         const trials = [
             path.join(resourceDir, 'python/python.exe'),
             path.join(resourceDir, '_up_/python/python.exe'),
-            path.join(resourceDir, 'src-tauri/python/python.exe'), // Legacy
         ]
 
         for (const trial of trials) {
@@ -105,13 +105,13 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     let coreAvailable = false
     
     if (pythonExists) {
-        console.log(`[Diagnostics] Python found at: ${pythonPath}`)
+        logger.info('Main', `[Diagnostics] Python found at: ${pythonPath}`)
         try {
             const versionOutput = execSync(`"${pythonPath}" --version`, { encoding: 'utf8', stdio: 'pipe' }).trim()
             pythonVersion = versionOutput
-            console.log(`[Diagnostics] Python Version: ${pythonVersion}`)
+            logger.info('Main', `[Diagnostics] Python Version: ${pythonVersion}`)
         } catch (e: any) {
-            console.error(`[Diagnostics] Python version check failed: ${e.message}`)
+            logger.error('Main', `[Diagnostics] Python version check failed: ${e.message}`)
             errors.push('Python 解释器无法运行，可能缺少系统组件 (如 VCRUNTIME140.dll)')
         }
 
@@ -120,15 +120,15 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
             if (coreCheck.includes('OK')) {
                 coreAvailable = true
             } else {
-                console.warn(`[Diagnostics] pero_memory_core import failed: output did not contain OK`)
+                logger.warn('Main', `[Diagnostics] pero_memory_core import failed: output did not contain OK`)
                 // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // Don't block startup // 不阻塞启动 // 不阻塞启动
             }
         } catch (e: any) {
-             console.warn(`[Diagnostics] pero_memory_core check failed: ${e.message}`)
+             logger.warn('Main', `[Diagnostics] pero_memory_core check failed: ${e.message}`)
             // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // Don't block startup
         }
     } else {
-        console.error(`[Diagnostics] No Python found.`)
+        logger.error('Main', `[Diagnostics] No Python found.`)
         errors.push(`Python 解释器未找到。探测路径: ${pythonPath}`)
     }
 
@@ -140,6 +140,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         path.join(resourceDir, 'backend/main.py'),
         path.join(resourceDir, 'main.py'),
         path.join(resourceDir, '_up_/backend/main.py'),
+        path.join(process.resourcesPath, 'backend/main.py'), // Add explicit resourcesPath check for packaged app
     ]
 
     for (const trial of scriptTrials) {
@@ -202,7 +203,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
             errors.push('关键系统组件缺失: VCRUNTIME140.dll。请安装 Visual C++ Redistributable。')
         }
         if (!vcRedist1Installed) {
-            console.warn('[Diagnostics] vcruntime140_1.dll not found in System32')
+            logger.warn('Main', '[Diagnostics] vcruntime140_1.dll not found in System32')
             errors.push('关键系统组件缺失: VCRUNTIME140_1.dll。请安装最新版 Visual C++ Redistributable。')
         }
     }
@@ -252,9 +253,9 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     let napcatInstalled = false
     try {
         napcatInstalled = checkNapCatInstalled()
-        console.log(`[Diagnostics] checkNapCatInstalled result: ${napcatInstalled}`)
+        logger.info('Main', `[Diagnostics] checkNapCatInstalled result: ${napcatInstalled}`)
     } catch (e) {
-        console.error(`[Diagnostics] checkNapCatInstalled error: ${e}`)
+        logger.error('Main', `[Diagnostics] checkNapCatInstalled error: ${e}`)
     }
 
     return {
