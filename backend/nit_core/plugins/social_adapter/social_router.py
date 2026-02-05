@@ -6,6 +6,15 @@ import json
 router = APIRouter(prefix="/api/social", tags=["social"])
 logger = logging.getLogger(__name__)
 
+@router.get("/status")
+async def get_social_status():
+    service = get_social_service()
+    if not service.enabled:
+        return {"enabled": False}
+    
+    status = await service.get_connection_status()
+    return {"enabled": True, **status}
+
 @router.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

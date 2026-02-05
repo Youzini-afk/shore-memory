@@ -292,6 +292,37 @@ class SocialService:
         except Exception as e:
             logger.error(f"[Social] 启动检查失败: {e}")
 
+    async def get_connection_status(self) -> Dict[str, Any]:
+        """
+        获取 NapCat 连接状态 (双向检查)
+        """
+        status = {
+            "ws_connected": False,
+            "api_responsive": False,
+            "bot_info": self.bot_info,
+            "latency_ms": -1
+        }
+        
+        if self.active_ws:
+            status["ws_connected"] = True
+            
+            # 测试 API 响应
+            start_time = datetime.now()
+            try:
+                # 使用 get_version_info 作为心跳检测
+                # timeout 设置短一点，以免阻塞 UI 轮询
+                resp = await self._send_api_and_wait("get_version_info", {}, timeout=2)
+                if resp and resp.get("status") == "ok":
+                    status["api_responsive"] = True
+                    # 计算延迟
+                    latency = (datetime.now() - start_time).total_seconds() * 1000
+                    status["latency_ms"] = int(latency)
+            except Exception as e:
+                # logger.warning(f"[Social] Status check failed: {e}")
+                pass
+                
+        return status
+
     async def _revive_sessions_from_db(self):
         """
         [Cold Start] 从数据库恢复最近活跃的会话到内存中。
@@ -433,7 +464,13 @@ class SocialService:
                 
                 # 决定下一次检查时间
                 if spoke:
-                    interval = 120
+                    if is_active:
+                        # 互动中的正常回复，保持高频检查
+                        interval = 120
+                    else:
+                        # [Fix] 主动冒泡（秘书插话）后，直接进入贤者模式（长潜水）
+                        # 避免 Bot 因为自己说话了就觉得很热闹，导致循环触发
+                        interval = random.randint(1800, 3600) 
                 elif is_active:
                     interval = 60
                 else:
@@ -2094,6 +2131,13 @@ class SocialService:
         """
         通用发送消息助手
         """
+        # [Deduplication] 简单的重复检测，避免短时间内发送完全相同的内容
+        # 检查最近 10 条消息（无论谁发的，因为有时候会重复别人的话，或者重复自己的）
+        recent_contents = [m.content for m in session.buffer[-10:]]
+        if message in recent_contents:
+            logger.warning(f"检测到重复消息发送，已拦截: {message[:20]}...")
+            return
+
         try:
             if session.session_type == "group":
                 await self.send_group_msg(int(session.session_id), message)

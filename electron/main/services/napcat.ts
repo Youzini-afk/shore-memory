@@ -1,21 +1,20 @@
-import { app, BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs-extra'
 import { spawn, ChildProcess } from 'child_process'
 import winreg from 'winreg'
 import AdmZip from 'adm-zip'
 import axios from 'axios'
+import { paths, isDev } from '../utils/env'
+import { WindowLike } from '../types'
 
 let napcatProcess: ChildProcess | null = null
 const napcatLogs: string[] = []
-
-const isDev = !app.isPackaged
 
 function getRootPath() {
     if (isDev) {
         return path.resolve(__dirname, '../../..')
     } else {
-        return process.resourcesPath
+        return paths.resources
     }
 }
 
@@ -42,6 +41,8 @@ function getNapCatDir() {
 }
 
 async function getQQPath(): Promise<string> {
+    if (process.platform !== 'win32') return "" // Skip registry check on non-Windows
+    
     const regKeys = [
         '\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\QQ',
         '\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\QQ'
@@ -90,7 +91,7 @@ async function getQQPath(): Promise<string> {
     return ""
 }
 
-export async function startNapCat(window: BrowserWindow) {
+export async function startNapCat(window: WindowLike) {
     if (napcatProcess) return
 
     const napcatDir = getNapCatDir()
@@ -223,7 +224,7 @@ export function checkNapCatInstalled() {
     return fs.existsSync(shellExe) || fs.existsSync(mjs) || fs.existsSync(indexJs)
 }
 
-export async function installNapCat(window: BrowserWindow) {
+export async function installNapCat(window: WindowLike) {
     const dir = getNapCatDir()
     const emit = (msg: string) => {
         console.log(`[NapCat 安装程序] ${msg}`)
@@ -245,10 +246,9 @@ export async function installNapCat(window: BrowserWindow) {
     
     // List of mirrors to try
     const mirrors = [
-        `https://mirror.ghproxy.com/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
         `https://gh-proxy.com/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
+        `https://mirror.ghproxy.com/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
         `https://github.moeyy.xyz/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
-        `https://hub.gitmirror.com/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
         `https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`
     ]
     
@@ -260,6 +260,20 @@ export async function installNapCat(window: BrowserWindow) {
             timeout: 60000, // Increased timeout to 60s // 增加超时至 60s
             headers: {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            },
+            onDownloadProgress: (progressEvent) => {
+                if (progressEvent.total) {
+                    const percent = Math.round((progressEvent.loaded / progressEvent.total) * 100)
+                    try { 
+                        if (!window.isDestroyed()) {
+                            window.webContents.send('napcat-download-progress', {
+                                percent,
+                                status: `Downloading... ${percent}%`,
+                                url: downloadUrl
+                            })
+                        }
+                    } catch(e){}
+                }
             }
         })
         return response.data
@@ -270,6 +284,9 @@ export async function installNapCat(window: BrowserWindow) {
     for (const url of mirrors) {
         try {
             emit(`尝试下载: ${url}`)
+            // Reset progress
+            try { if (!window.isDestroyed()) window.webContents.send('napcat-download-progress', { percent: 0, status: 'Connecting...', url }) } catch(e){}
+            
             zipBuffer = await download(url)
             if (zipBuffer) break
         } catch (e: any) {
@@ -280,10 +297,13 @@ export async function installNapCat(window: BrowserWindow) {
 
     if (!zipBuffer) {
         emit("所有镜像下载失败。")
+        // Emit failure
+        try { if (!window.isDestroyed()) window.webContents.send('napcat-download-progress', { percent: 0, status: 'Download Failed', error: true }) } catch(e){}
         throw new Error("所有镜像下载失败。")
     }
 
     emit("下载完成。正在解压...")
+    try { if (!window.isDestroyed()) window.webContents.send('napcat-download-progress', { percent: 100, status: 'Unzipping...', processing: true }) } catch(e){}
     
     try {
         const zip = new AdmZip(zipBuffer)
@@ -314,9 +334,11 @@ export async function installNapCat(window: BrowserWindow) {
         }
 
         emit("安装完成。")
+        try { if (!window.isDestroyed()) window.webContents.send('napcat-download-progress', { percent: 100, status: 'Installed', completed: true }) } catch(e){}
         return true
     } catch (e: any) {
         emit(`安装失败: ${e.message}`)
+        try { if (!window.isDestroyed()) window.webContents.send('napcat-download-progress', { percent: 0, status: 'Install Failed', error: true }) } catch(e){}
         return false
     }
 }

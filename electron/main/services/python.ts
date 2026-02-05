@@ -1,8 +1,8 @@
-import { BrowserWindow, ipcMain } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs-extra'
 import { getDiagnostics } from './diagnostics'
+import { WindowLike } from '../types'
 
 let backendProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -12,7 +12,7 @@ export function getBackendLogs() {
     return [...logHistory]
 }
 
-export async function startBackend(window: BrowserWindow, enableSocialMode: boolean) {
+export async function startBackend(window: WindowLike, enableSocialMode: boolean) {
     // 1. Diagnostics
     // 1. 诊断
     const diag = await getDiagnostics()
@@ -46,15 +46,12 @@ export async function startBackend(window: BrowserWindow, enableSocialMode: bool
     // Env setup
     // 环境变量设置
     const pythonPathEnv = process.env.PYTHONPATH 
-        ? `${backendRoot};${process.env.PYTHONPATH}` 
+        ? `${backendRoot}${path.delimiter}${process.env.PYTHONPATH}` 
         : backendRoot
 
     const env = {
         ...process.env,
         PYTHONPATH: pythonPathEnv,
-        PYTHONHOME: path.dirname(pythonPath), // Explicitly set to python dir to avoid picking up system python env
-        PYTHONSTARTUP: undefined,
-        PIP_CONFIG_FILE: undefined,
         PYTHONNOUSERSITE: '1',
         PYTHONUNBUFFERED: '1',
         PORT: '9120',
@@ -84,43 +81,59 @@ export async function startBackend(window: BrowserWindow, enableSocialMode: bool
     })
 
     child.stdout?.on('data', (data) => {
-        const line = data.toString().trim()
-        console.log(`[后端] ${line}`)
-        try {
-            if (window && !window.isDestroyed()) {
-                window.webContents.send('backend-log', line)
-            }
-        } catch (e) {
-            // Ignore send error
-        }
+        const content = data.toString()
+        // Split by newline but keep empty lines to preserve logo formatting
+        const lines = content.split(/\r?\n/)
         
-        if (logHistory.length >= MAX_LOGS) logHistory.shift()
-        logHistory.push(line)
+        lines.forEach((line: string) => {
+            // Only process if the line is not just empty or whitespace (optional)
+            // But for a logo, we usually want to keep the structure.
+            const trimmedLine = line.trim()
+            if (trimmedLine.length === 0 && line.length === 0) return; // Skip completely empty trailing lines
+
+            console.log(`[后端] ${line}`)
+            try {
+                if (window && !window.isDestroyed()) {
+                    window.webContents.send('backend-log', line)
+                }
+            } catch (e) {
+                // Ignore send error
+            }
+            
+            if (logHistory.length >= MAX_LOGS) logHistory.shift()
+            logHistory.push(line)
+        })
     })
 
     child.stderr?.on('data', (data) => {
-        const line = data.toString().trim()
-        console.error(`[后端错误] ${line}`)
-        try {
-            if (window && !window.isDestroyed()) {
-                window.webContents.send('backend-log', `[错误] ${line}`)
-            }
-        } catch (e) {
-            // Ignore
-        }
+        const content = data.toString()
+        const lines = content.split(/\r?\n/)
         
-        if (logHistory.length >= MAX_LOGS) logHistory.shift()
-        logHistory.push(`[错误] ${line}`)
-        
-        if (line.includes('Error') || line.includes('Exception') || line.includes('Traceback')) {
+        lines.forEach((line: string) => {
+            if (line.trim().length === 0 && line.length === 0) return;
+
+            console.error(`[后端错误] ${line}`)
             try {
                 if (window && !window.isDestroyed()) {
-                    window.webContents.send('system-error', `后端错误: ${line}`)
+                    window.webContents.send('backend-log', `[ERROR] ${line}`)
                 }
             } catch (e) {
-                // Ignore
+                // Ignore send error
             }
-        }
+            
+            if (logHistory.length >= MAX_LOGS) logHistory.shift()
+            logHistory.push(`[ERROR] ${line}`)
+            
+            if (line.includes('Error') || line.includes('Exception') || line.includes('Traceback')) {
+                try {
+                    if (window && !window.isDestroyed()) {
+                        window.webContents.send('system-error', `后端错误: ${line}`)
+                    }
+                } catch (e) {
+                    // Ignore
+                }
+            }
+        })
     })
 
     child.on('close', (code) => {

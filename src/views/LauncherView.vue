@@ -688,6 +688,23 @@
           <span>© 2026 PEROFAMILY</span>
         </div>
       </footer>
+
+      <!-- Global Download Progress Overlay -->
+      <div v-if="downloadProgress.active" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-96 glass-effect p-4 rounded-xl border border-emerald-500/30 shadow-2xl flex flex-col gap-2 animate-bounce-in">
+          <div class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-emerald-400">
+              <span class="flex items-center gap-2">
+                  <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
+                  {{ downloadProgress.status }}
+              </span>
+              <span>{{ downloadProgress.percent }}%</span>
+          </div>
+          <div class="w-full bg-slate-800/50 h-1.5 rounded-full overflow-hidden">
+              <div class="bg-gradient-to-r from-emerald-500 to-cyan-500 h-full rounded-full transition-all duration-300 relative overflow-hidden" 
+                   :style="{ width: `${downloadProgress.percent}%` }">
+                   <div class="absolute inset-0 bg-white/20 shimmer-effect w-full h-full"></div>
+              </div>
+          </div>
+      </div>
     </div>
   </div>
 </template>
@@ -732,6 +749,13 @@ const plugins = ref([])
 const isInstallingES = ref(false)
 const appConfig = ref({})
 const isSocialEnabled = ref(true)
+const downloadProgress = ref({
+    active: false,
+    percent: 0,
+    status: '',
+    error: false,
+    completed: false
+})
 
 const cpuUsage = ref(0)
 const memoryUsed = ref(0)
@@ -827,6 +851,29 @@ onMounted(async () => {
     })
     
     if (napcatLogs.value.length > 500) napcatLogs.value.shift()
+  })
+
+  // Listen for download progress
+  await listen('napcat-download-progress', (payload) => {
+      downloadProgress.value = {
+          active: true,
+          percent: payload.percent,
+          status: payload.status,
+          error: payload.error || false,
+          completed: payload.completed || false
+      }
+      
+      if (payload.error) {
+          if (window.$notify) {
+              window.$notify(`NapCat 安装失败: ${payload.status}`, "error", "组件安装错误")
+          }
+      }
+      
+      if (payload.completed || payload.error) {
+          setTimeout(() => {
+              downloadProgress.value.active = false
+          }, 5000)
+      }
   })
 
   // Load plugins
@@ -1126,4 +1173,23 @@ watch(activeTab, (val) => {
 
 <style>
 /* 继承全局样式中的 glass-effect */
+
+@keyframes shimmer {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+.shimmer-effect {
+  animation: shimmer 1.5s infinite linear;
+}
+
+@keyframes bounce-in {
+  0% { transform: translate(-50%, 100%); opacity: 0; }
+  60% { transform: translate(-50%, -10%); opacity: 1; }
+  100% { transform: translate(-50%, 0); }
+}
+
+.animate-bounce-in {
+  animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
 </style>

@@ -16,6 +16,7 @@
   },
   "include": [
     "main/**/*.ts",
-    "preload/**/*.ts"
+    "preload/**/*.ts",
+    "cli/**/*.ts"
   ]
 }

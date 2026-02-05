@@ -157,22 +157,39 @@ class SocialSessionManager:
 
     async def persist_outgoing_message(self, session_id: str, session_type: str, content: str, sender_name: str = "Assistant"):
         """
-        将发出的消息（Agent 的回复）持久化到独立社交数据库。
+        将发出的消息（Agent 的回复）持久化到独立社交数据库，并同步更新内存 Buffer。
         """
         try:
             from .database import get_social_db_session
             from .models_db import QQMessage
             import uuid
             
+            msg_id = str(uuid.uuid4())
+            timestamp = datetime.now()
+            
+            # 1. 更新内存 Buffer (Critical for Context Consistency)
+            # 确保 Bot 下一次思考时能看到自己刚刚说的话
+            session = self.get_or_create_session(session_id, session_type)
+            mem_msg = SocialMessage(
+                msg_id=msg_id,
+                sender_id="self",
+                sender_name=sender_name,
+                content=content,
+                timestamp=timestamp,
+                raw_event={}
+            )
+            session.add_message(mem_msg)
+            
+            # 2. 持久化到数据库
             async for db_session in get_social_db_session():
                 new_msg = QQMessage(
-                    msg_id=str(uuid.uuid4()), # 为内部消息生成 ID
+                    msg_id=msg_id, # 为内部消息生成 ID
                     session_id=session_id,
                     session_type=session_type,
                     sender_id="self", # 如果已知，则为 Bot 的 ID
                     sender_name=sender_name,
                     content=content,
-                    timestamp=datetime.now(),
+                    timestamp=timestamp,
                     raw_event_json="{}"
                 )
                 db_session.add(new_msg)

@@ -1,4 +1,5 @@
 import asyncio
+import os
 from typing import List, Optional
 from sqlmodel import select, desc
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -227,6 +228,104 @@ class ReflectionService:
             print(f"[Reflection] 已将 {len(group)} 条记忆整合为 ID {summary_mem.id}: {summary_text[:50]}...")
             
         print("[Reflection] 记忆整合完成。")
+
+    async def generate_desktop_diary(self, agent_id: str = "pero", date_str: str = None) -> Optional[str]:
+        """
+        生成桌宠日记 (Desktop Mode Diary)
+        保存为文件，不入库
+        """
+        print("[Reflection] 开始生成桌宠日记...", flush=True)
+        
+        # 1. 确定日期范围
+        if not date_str:
+            date_str = datetime.now().strftime("%Y-%m-%d")
+        
+        target_date = datetime.strptime(date_str, "%Y-%m-%d")
+        start_of_day = datetime.combine(target_date, datetime.min.time())
+        end_of_day = datetime.combine(target_date, datetime.max.time())
+        
+        # 2. 获取对话记录 (Exclude social)
+        stmt = select(ConversationLog).where(
+            (ConversationLog.timestamp >= start_of_day) &
+            (ConversationLog.timestamp <= end_of_day) &
+            (ConversationLog.source != "social") & 
+            (ConversationLog.agent_id == agent_id)
+        ).order_by(ConversationLog.timestamp)
+        
+        logs = (await self.session.exec(stmt)).all()
+        
+        if not logs:
+            print("[Reflection] 今天没有桌面交互记录，跳过日记生成。")
+            return None
+            
+        # 3. 格式化对话
+        chat_history = ""
+        for log in logs:
+            role_name = "主人" if log.role == "user" else agent_id
+            content = log.content[:200] # Truncate simply
+            chat_history += f"[{log.timestamp.strftime('%H:%M')}] {role_name}: {content}\n"
+            
+        # 4. 准备 Prompt
+        configs = {c.key: c.value for c in (await self.session.exec(select(Config))).all()}
+        owner_name = configs.get("owner_name", "主人")
+        
+        variables = {
+            "agent_name": agent_id,
+            "identity_label": "桌宠助手",
+            "owner_name": owner_name,
+            "personality_tags": "温柔、活泼、粘人",
+            "date_str": date_str,
+            "chat_history": chat_history[:10000] # Token limit safeguard
+        }
+        
+        prompt = mdp.render("tasks/analysis/desktop_diary", variables)
+        
+        # 5. 调用 LLM
+        config = await self._get_reflection_config()
+        # Ensure model is compatible with chat completion
+        llm = LLMService(
+            api_key=config["api_key"],
+            api_base=config["api_base"],
+            model=config["model"]
+        )
+        
+        print("[Reflection] 正在撰写日记...", flush=True)
+        # Use simple chat completion
+        try:
+            res = await llm.chat([{"role": "user", "content": prompt}], temperature=0.7)
+            diary_content = res["choices"][0]["message"]["content"].strip()
+        except Exception as e:
+            print(f"[Reflection] 日记生成失败 (LLM Error): {e}")
+            return None
+            
+        if not diary_content:
+            print("[Reflection] 日记生成失败 (Empty content)。")
+            return None
+            
+        # 6. 保存文件
+        # Path: PeroCore-Electron/pero_workspace/[agent_id]/diaries/YYYY-MM-DD.md
+        # Locate workspace relative to this file or project root
+        # Assuming backend is at PeroCore-Electron/backend
+        # workspace is at PeroCore-Electron/pero_workspace
+        
+        # Robust path finding
+        current_file_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(os.path.dirname(current_file_dir)) # backend/services -> backend -> root
+        workspace_root = os.path.join(project_root, "pero_workspace")
+        
+        diary_dir = os.path.join(workspace_root, agent_id, "diaries")
+        os.makedirs(diary_dir, exist_ok=True)
+        
+        file_path = os.path.join(diary_dir, f"{date_str}.md")
+        
+        try:
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(diary_content)
+            print(f"[Reflection] 日记已保存至: {file_path}")
+            return file_path
+        except Exception as e:
+            print(f"[Reflection] 保存日记文件失败: {e}")
+            return None
 
     async def _generate_summary(self, llm: LLMService, memories: List[Memory], date_str: str, temperature: float = 0.3) -> str:
         mem_text = "\n".join([f"- {m.realTime.split(' ')[1] if m.realTime else ''}: {m.content}" for m in memories])

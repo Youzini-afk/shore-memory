@@ -1,16 +1,14 @@
 import path from 'path'
 import fs from 'fs-extra'
-import { app } from 'electron'
-
-const isDev = !app.isPackaged
+import { isDev, isElectron, paths } from '../utils/env'
 
 function getRootPath() {
-    if (isDev) {
+    if (isDev && isElectron) {
         // Dev: dist-electron/main/services -> PeroCore-Electron
         // 开发环境: dist-electron/main/services -> PeroCore-Electron
         return path.resolve(__dirname, '../../..')
     } else {
-        return process.resourcesPath
+        return paths.resources
     }
 }
 

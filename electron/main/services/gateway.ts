@@ -1,7 +1,8 @@
-import { BrowserWindow, app } from 'electron'
 import { spawn, ChildProcess } from 'child_process'
 import path from 'path'
 import fs from 'fs-extra'
+import { isPackaged, paths } from '../utils/env'
+import { WindowLike } from '../types'
 
 let gatewayProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -11,7 +12,7 @@ export function getGatewayLogs() {
     return [...logHistory]
 }
 
-export async function startGateway(window: BrowserWindow) {
+export async function startGateway(window: WindowLike) {
     if (gatewayProcess) {
         return
     }
@@ -20,9 +21,9 @@ export async function startGateway(window: BrowserWindow) {
     const isWin = process.platform === 'win32'
     const execName = isWin ? 'gateway.exe' : 'gateway'
     
-    if (app.isPackaged) {
+    if (isPackaged) {
         // Production: resources/bin/gateway(.exe)
-        gatewayPath = path.join(process.resourcesPath, 'bin', execName)
+        gatewayPath = path.join(paths.resources, 'bin', execName)
     } else {
         // Development: ../PeroLink/gateway(.exe) or ../../PeroLink/gateway(.exe) or ./gateway/gateway.exe
         // process.cwd() is usually the project root (PeroCore-Electron)

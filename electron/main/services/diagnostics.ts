@@ -1,10 +1,10 @@
-import { app } from 'electron'
 import path from 'path'
 import fs from 'fs-extra'
 import { spawn, execSync } from 'child_process'
 import winreg from 'winreg'
 import which from 'which'
 import { checkNapCatInstalled } from './napcat.js'
+import { isDev, paths, isElectron } from '../utils/env'
 
 export interface DiagnosticReport {
     python_exists: boolean
@@ -25,10 +25,9 @@ export interface DiagnosticReport {
     errors: string[]
 }
 
-const isDev = !app.isPackaged
 const workspaceRoot = isDev 
     ? path.resolve(__dirname, '../../..') // dist-electron/main -> electron -> root
-    : path.dirname(app.getPath('exe'))
+    : (isElectron ? path.dirname(paths.exe) : paths.app)
 
 // Normalize path
 // 规范化路径
@@ -37,7 +36,7 @@ function fixPath(p: string): string {
 }
 
 function getResourceDir(): string {
-    return isDev ? workspaceRoot : process.resourcesPath
+    return isDev ? workspaceRoot : paths.resources
 }
 
 export async function getDiagnostics(): Promise<DiagnosticReport> {
@@ -170,7 +169,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     // 4. 数据目录
     let dataDir = ''
     if (!devVenvPythonExists) {
-        dataDir = path.join(app.getPath('userData'), 'data')
+        dataDir = path.join(paths.userData, 'data')
     } else {
         dataDir = path.join(workspaceRoot, 'backend/data')
     }
@@ -187,28 +186,25 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         errors.push(`数据目录不可写: ${dataDir}`)
     }
 
-    // 5. VC++ Redist
-    // Check C:\Windows\System32\vcruntime140.dll
-    // 5. VC++ Redist
-    // 检查 C:\Windows\System32\vcruntime140.dll
-    const systemRoot = process.env.SystemRoot || 'C:\\Windows'
-    const vcRuntime = path.join(systemRoot, 'System32/vcruntime140.dll')
-    const vcRuntime1 = path.join(systemRoot, 'System32/vcruntime140_1.dll') // Python 3.10+ needs this
-    const sysWow64 = path.join(systemRoot, 'SysWOW64/vcruntime140.dll')
-    
-    let vcRedistInstalled = (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
-    let vcRedist1Installed = (await fs.pathExists(vcRuntime1))
-    
-    if (!vcRedistInstalled) {
-        errors.push('关键系统组件缺失: VCRUNTIME140.dll。请安装 Visual C++ Redistributable。')
-    }
-    if (!vcRedist1Installed) {
-        // Warning but not error, as some systems might have it elsewhere or statically linked (unlikely for python)
-        // 警告但不是错误，因为某些系统可能在其他地方拥有它或静态链接（对于python来说不太可能）
-        console.warn('[Diagnostics] vcruntime140_1.dll not found in System32')
-        // We add it to errors because Python 3.10 WILL fail without it
-        // 我们将其添加到错误中，因为 Python 3.10 如果没有它将会失败
-        errors.push('关键系统组件缺失: VCRUNTIME140_1.dll。请安装最新版 Visual C++ Redistributable。')
+    // 5. VC++ Redist (Windows Only)
+    // 5. VC++ Redist (Windows Only)
+    let vcRedistInstalled = true
+    if (process.platform === 'win32') {
+        const systemRoot = process.env.SystemRoot || 'C:\\Windows'
+        const vcRuntime = path.join(systemRoot, 'System32/vcruntime140.dll')
+        const vcRuntime1 = path.join(systemRoot, 'System32/vcruntime140_1.dll') // Python 3.10+ needs this
+        const sysWow64 = path.join(systemRoot, 'SysWOW64/vcruntime140.dll')
+        
+        vcRedistInstalled = (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
+        const vcRedist1Installed = (await fs.pathExists(vcRuntime1))
+        
+        if (!vcRedistInstalled) {
+            errors.push('关键系统组件缺失: VCRUNTIME140.dll。请安装 Visual C++ Redistributable。')
+        }
+        if (!vcRedist1Installed) {
+            console.warn('[Diagnostics] vcruntime140_1.dll not found in System32')
+            errors.push('关键系统组件缺失: VCRUNTIME140_1.dll。请安装最新版 Visual C++ Redistributable。')
+        }
     }
 
     // 6. Node.js Check

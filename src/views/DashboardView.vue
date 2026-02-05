@@ -18,7 +18,10 @@
           </div>
           <div class="brand-text">
             <h1>PeroCore</h1>
-            <span class="version-tag">v1.0.0</span>
+            <div style="display: flex; align-items: center; gap: 5px;">
+              <span class="version-tag" style="cursor: pointer" @click="checkForUpdates" title="点击检查更新">v{{ appVersion }}</span>
+              <el-icon v-if="isCheckingUpdate" class="is-loading" color="#409eff"><Refresh /></el-icon>
+            </div>
           </div>
         </div>
         
@@ -119,6 +122,9 @@
                       <div class="stat-info">
                         <h3>核心记忆</h3>
                         <div class="number">{{ stats.total_memories || memories.length }}</div>
+                        <el-button type="primary" link size="small" @click="showImportStoryDialog = true" style="margin-top: 5px;">
+                          <el-icon><Upload /></el-icon> 导入故事
+                        </el-button>
                       </div>
                     </div>
                   </el-card>
@@ -153,8 +159,16 @@
                     <template #header>
                       <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
                         <span>当前状态</span>
-                        <div style="display: flex; align-items: center; gap: 10px;">
-                           <span style="font-size: 12px; color: #909399;">Active Agent:</span>
+                        <div style="display: flex; align-items: center; gap: 15px;">
+                           <!-- NapCat Status Indicator -->
+                           <div v-if="!napCatStatus.disabled" class="status-badge" :title="napCatStatus.ws_connected ? (napCatStatus.api_responsive ? 'NapCat 双向连接正常 (' + napCatStatus.latency_ms + 'ms)' : 'NapCat API 无响应 (仅 WS 连接)') : 'NapCat 未连接'">
+                              <span style="font-size: 12px; color: #909399; margin-right: 5px;">NapCat:</span>
+                              <div :class="['status-dot', napCatStatus.ws_connected && napCatStatus.api_responsive ? 'online' : (napCatStatus.ws_connected ? 'warning' : 'offline')]"></div>
+                              <span v-if="napCatStatus.ws_connected && napCatStatus.api_responsive" style="font-size: 10px; color: #67C23A; margin-left: 2px;">{{ napCatStatus.latency_ms }}ms</span>
+                           </div>
+
+                           <div style="display: flex; align-items: center; gap: 10px;">
+                              <span style="font-size: 12px; color: #909399;">Active Agent:</span>
                            <el-dropdown @command="switchAgent" trigger="click" :disabled="isSwitchingAgent">
                               <span class="el-dropdown-link" style="cursor: pointer; display: flex; align-items: center; gap: 5px; color: #409EFF; font-weight: bold;">
                                  {{ activeAgent?.name || 'Unknown' }}
@@ -178,7 +192,8 @@
                            </el-dropdown>
                         </div>
                       </div>
-                    </template>
+                    </div>
+                  </template>
                     <el-row :gutter="20">
                       <el-col :span="8">
                         <div class="state-box">
@@ -985,6 +1000,29 @@
   </el-container>
 
     <!-- Dialogs -->
+    <!-- Story Import Dialog -->
+    <el-dialog v-model="showImportStoryDialog" title="导入故事生成记忆" width="600px">
+      <div style="margin-bottom: 15px; color: #909399; line-height: 1.5;">
+        <p>你可以将小说设定、人物背景、日记或长篇回忆录粘贴在这里。</p>
+        <p>Pero 将会阅读这些内容，并将其拆解为一系列关键记忆节点存入数据库，作为它的“长期记忆”。</p>
+        <p>⚠️ 注意：这是一个耗时操作，且会消耗较多 Token。</p>
+      </div>
+      <el-input
+        v-model="importStoryText"
+        type="textarea"
+        :rows="10"
+        placeholder="在此粘贴长文本..."
+      />
+      <template #footer>
+        <span class="dialog-footer">
+          <el-button @click="showImportStoryDialog = false">取消</el-button>
+          <el-button type="primary" @click="handleImportStory" :loading="isImportingStory">
+            开始生成
+          </el-button>
+        </span>
+      </template>
+    </el-dialog>
+
     <!-- 弹窗 -->
     <el-dialog v-model="showGlobalSettings" title="全局服务商配置" width="500px" center>
       <el-form label-position="top">
@@ -1329,7 +1367,8 @@ import {
   Aim,
   Picture,
   ArrowDown,
-  Document
+  Document,
+  Upload
 } from '@element-plus/icons-vue'
 import TerminalPanel from '../components/TerminalPanel.vue'
 import NapCatTerminal from '../components/NapCatTerminal.vue'
@@ -1370,6 +1409,111 @@ const showPromptDialog = ref(false)
 const currentPromptMessages = ref([])
 const isLoadingPrompt = ref(false)
 
+// --- Story Import ---
+const showImportStoryDialog = ref(false)
+const importStoryText = ref('')
+const isImportingStory = ref(false)
+
+const handleImportStory = async () => {
+  if (!importStoryText.value.trim()) {
+    ElMessage.warning('请输入内容')
+    return
+  }
+  
+  isImportingStory.value = true
+  try {
+    const response = await fetch(`${API_BASE}/api/memory/import_story`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        story: importStoryText.value,
+        agent_id: activeAgent.value?.id || 'pero'
+      })
+    })
+    
+    if (!response.ok) {
+        const errData = await response.json()
+        throw new Error(errData.detail || 'Import failed')
+    }
+    
+    const result = await response.json()
+    ElMessage.success(`导入成功！共生成 ${result.count} 条记忆。`)
+    showImportStoryDialog.value = false
+    importStoryText.value = ''
+    // Refresh memories if function exists
+    if (typeof fetchMemories === 'function') {
+        fetchMemories()
+    } else {
+        // Fallback: fetch all data
+        fetchAllData()
+    }
+  } catch (error) {
+    ElMessage.error(`导入失败: ${error.message}`)
+  } finally {
+    isImportingStory.value = false
+  }
+}
+
+// --- Auto Updater ---
+const appVersion = ref('0.5.4')
+const updateStatus = ref({ type: 'idle' })
+const isCheckingUpdate = ref(false)
+
+const checkForUpdates = async () => {
+    if (isCheckingUpdate.value) return
+    isCheckingUpdate.value = true
+    try {
+        await invoke('check_update')
+    } catch (e) {
+        ElMessage.error('检查更新失败')
+        isCheckingUpdate.value = false
+    }
+}
+
+const handleUpdateMessage = (data) => {
+    console.log('Update Status:', data)
+    updateStatus.value = data
+    
+    switch (data.type) {
+        case 'checking':
+            isCheckingUpdate.value = true
+            break
+        case 'available':
+            isCheckingUpdate.value = false
+            ElMessageBox.confirm(
+                `检测到新版本 v${data.info.version}，是否立即更新？`,
+                '发现新版本',
+                { confirmButtonText: '下载更新', cancelButtonText: '稍后' }
+            ).then(() => {
+                invoke('download_update')
+            }).catch(() => {})
+            break
+        case 'not-available':
+            isCheckingUpdate.value = false
+            ElMessage.success('当前已是最新版本')
+            break
+        case 'error':
+            isCheckingUpdate.value = false
+            ElMessage.error(`更新错误: ${data.error}`)
+            break
+        case 'progress':
+            // Can show progress notification or toast
+            break
+        case 'downloaded':
+            ElMessageBox.confirm(
+                '更新已下载完毕，是否立即重启以安装？',
+                '更新就绪',
+                { confirmButtonText: '立即重启', cancelButtonText: '稍后' }
+            ).then(() => {
+                invoke('quit_and_install')
+            }).catch(() => {})
+            break
+    }
+}
+
+
 // --- API 交互 ---
 const API_BASE = (window.electron) ? 'http://localhost:9120/api' : '/api'
 
@@ -1386,12 +1530,60 @@ const fetchWithTimeout = async (url, options = {}, timeout = 5000) => {
     return response
   } catch (error) {
     clearTimeout(id)
-    // 只有当错误不是 AbortError 且未开启 silent 模式时才打印
-    if (error.name !== 'AbortError' && !options.silent) {
-      console.warn(`[Fetch] 请求失败 ${url}:`, error.message)
+    
+    let errorMsg = error.message
+    
+    // [增强] 错误信息本地化与提示
+    if (error.name === 'AbortError') {
+       errorMsg = `请求超时 (${timeout}ms)`
+    } else if (error.message === 'Failed to fetch') {
+       errorMsg = '无法连接到后端服务。请检查后端是否已启动 (Failed to fetch)'
+    } else if (error.message.includes('NetworkError')) {
+       errorMsg = '网络连接错误'
     }
+
+    // 只有未开启 silent 模式时才弹窗提示
+    if (!options.silent) {
+       ElMessage.error(errorMsg)
+       
+       if (error.name !== 'AbortError') {
+         console.warn(`[Fetch] 请求失败 ${url}:`, error.message)
+       }
+    }
+    
     throw error
   }
+}
+
+// [增强] LLM 错误信息格式化助手
+const formatLLMError = (error) => {
+  if (error.name === 'AbortError') return '请求超时 (Timeout)'
+
+  const msg = error.message || error.toString()
+  
+  if (msg.includes('401') || msg.includes('invalid_api_key') || msg.includes('Incorrect API key')) {
+    return 'API Key 无效，请检查配置 (401 Unauthorized)'
+  }
+  if (msg.includes('404') || msg.includes('model_not_found')) {
+    return '请求的模型不存在或端点错误 (404 Not Found)'
+  }
+  if (msg.includes('429') || msg.includes('rate_limit') || msg.includes('insufficient_quota')) {
+    return '请求过于频繁或余额不足 (429 Rate Limit)'
+  }
+  if (msg.includes('500') || msg.includes('internal_server_error')) {
+    return '服务商服务器内部错误 (500 Internal Server Error)'
+  }
+  if (msg.includes('503') || msg.includes('service_unavailable')) {
+    return '服务暂时不可用 (503 Service Unavailable)'
+  }
+  if (msg.includes('timeout') || msg.includes('timed out')) {
+    return '请求超时，请检查网络或代理设置'
+  }
+  if (msg.includes('Failed to fetch')) {
+    return '无法连接到服务器，请检查网络 (Failed to fetch)'
+  }
+  
+  return msg // 返回原始错误作为兜底
 }
 
 // 模型配置相关
@@ -1433,6 +1625,12 @@ const auxModelId = ref(null)
 const availableAgents = ref([])
 const activeAgent = ref(null)
 const isSwitchingAgent = ref(false)
+const napCatStatus = ref({
+  ws_connected: false,
+  api_responsive: false,
+  latency_ms: -1,
+  disabled: false
+})
 
 const openDebugDialog = (log) => {
   currentDebugLog.value = log
@@ -1453,7 +1651,8 @@ const openPromptDialog = async (log) => {
            session_id: log.session_id || selectedSessionId.value || 'default',
            source: log.source || selectedSource.value || 'desktop',
            log_id: log.id
-        })
+        }),
+        silent: true
      }, 10000)
      
      if (res.ok) {
@@ -1461,10 +1660,10 @@ const openPromptDialog = async (log) => {
         currentPromptMessages.value = data.messages
      } else {
         const err = await res.json()
-        ElMessage.error('获取提示词失败: ' + (err.detail || '未知错误'))
+        throw new Error(err.detail || '获取提示词失败')
      }
   } catch (e) {
-     ElMessage.error('获取提示词请求异常: ' + e.message)
+     ElMessage.error(formatLLMError(e))
   } finally {
      isLoadingPrompt.value = false
   }
@@ -1812,10 +2011,35 @@ const switchAgent = async (agentId) => {
 const checkBackendStatus = async () => {
   // 简单的单次检查，用于UI状态指示
   try {
-    await fetchWithTimeout(`${API_BASE}/pet/state`, {}, 2000)
+    await fetchWithTimeout(`${API_BASE}/pet/state`, { silent: true }, 2000)
     isBackendOnline.value = true
+    
+    // Check NapCat Status as well
+    await checkNapCatStatus()
   } catch (e) {
     isBackendOnline.value = false
+  }
+}
+
+const checkNapCatStatus = async () => {
+  try {
+    const res = await fetchWithTimeout(`${API_BASE}/social/status`, { silent: true }, 2000)
+    if (res.ok) {
+      const data = await res.json()
+      if (data.enabled) {
+        napCatStatus.value = {
+           ws_connected: data.ws_connected,
+           api_responsive: data.api_responsive,
+           latency_ms: data.latency_ms,
+           disabled: false
+        }
+      } else {
+        napCatStatus.value = { ...napCatStatus.value, disabled: true }
+      }
+    }
+  } catch (e) {
+    console.warn("NapCat status check failed", e)
+    // Keep default or set error state
   }
 }
 
@@ -2610,7 +2834,10 @@ const fetchTasks = async () => {
 
 const fetchConfig = async () => {
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/configs`, {}, 5000)
+    const res = await fetchWithTimeout(`${API_BASE}/configs`, { silent: true }, 5000)
+    if (!res.ok) {
+       throw new Error(`Status ${res.status}: ${res.statusText}`)
+    }
     const data = await res.json()
     globalConfig.value.global_llm_api_key = data.global_llm_api_key || ''
     globalConfig.value.global_llm_api_base = data.global_llm_api_base || 'https://api.openai.com'
@@ -2652,17 +2879,24 @@ const fetchConfig = async () => {
         // 如果后端是默认值，我们可以清除跟踪，以便再次切换到工作模式时进行同步
         lastSyncedSessionId.value = null
     }
-  } catch (e) { console.error(e) }
+  } catch (e) { 
+    console.error(e)
+    ElMessage.error('获取配置失败: ' + formatLLMError(e))
+  }
 }
 
 const fetchModels = async () => {
   if (fetchModels.isLoading) return
   fetchModels.isLoading = true
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/models`, {}, 5000)
+    const res = await fetchWithTimeout(`${API_BASE}/models`, { silent: true }, 5000)
+    if (!res.ok) {
+       throw new Error(`Status ${res.status}: ${res.statusText}`)
+    }
     models.value = await res.json()
   } catch (e) { 
     console.error(e) 
+    ElMessage.error('获取模型列表失败: ' + formatLLMError(e))
   } finally {
     fetchModels.isLoading = false
   }
@@ -2674,16 +2908,20 @@ const saveGlobalSettings = async () => {
   if (isSaving.value) return
   try {
     isSaving.value = true
-    await fetchWithTimeout(`${API_BASE}/configs`, {
+    const res = await fetchWithTimeout(`${API_BASE}/configs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(globalConfig.value)
+      body: JSON.stringify(globalConfig.value),
+      silent: true
     }, 5000)
+    
+    if (!res.ok) throw new Error('保存配置失败')
+    
     showGlobalSettings.value = false
     ElMessage.success('全局配置已保存')
     await fetchConfig()
   } catch (e) {
-    ElMessage.error(e.message)
+    ElMessage.error(formatLLMError(e))
   } finally {
     isSaving.value = false
   }
@@ -2920,9 +3158,19 @@ const fetchRemoteModels = async () => {
         api_key: apiKey, 
         api_base: apiBase,
         provider: currentEditingModel.value.provider || 'openai'
-      })
+      }),
+      silent: true
     }, 10000)
     
+    if (!res.ok) {
+       let errorDetail = ''
+       try {
+         const errData = await res.json()
+         errorDetail = errData.detail || errData.message || JSON.stringify(errData)
+       } catch (ignore) {}
+       throw new Error(errorDetail || `Status ${res.status}`)
+    }
+
     const data = await res.json()
     if (data.models?.length) {
       remoteModels.value = data.models
@@ -2931,7 +3179,7 @@ const fetchRemoteModels = async () => {
       ElMessage.warning('未找到模型或 API 不支持')
     }
   } catch (e) {
-    ElMessage.error(e.message)
+    ElMessage.error(formatLLMError(e))
   } finally {
     isFetchingRemote.value = false
   }
@@ -2948,7 +3196,8 @@ const saveModel = async () => {
     const res = await fetchWithTimeout(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(model)
+      body: JSON.stringify(model),
+      silent: true
     }, 5000)
     
     if (!res.ok) throw new Error('保存失败')
@@ -2957,7 +3206,7 @@ const saveModel = async () => {
     await fetchModels()
     ElMessage.success('模型已保存')
   } catch (e) {
-    ElMessage.error(e.message)
+    ElMessage.error(formatLLMError(e))
   } finally {
     isSaving.value = false
   }
@@ -3006,11 +3255,14 @@ const activateModel = async (id, configKey) => {
       payload['aux_model_enabled'] = id ? 'true' : 'false'
     }
 
-    await fetchWithTimeout(`${API_BASE}/configs`, {
+    const res = await fetchWithTimeout(`${API_BASE}/configs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      silent: true
     }, 5000)
+    
+    if (!res.ok) throw new Error('设置更新失败')
     
     if (configKey === 'current_model_id') currentActiveModelId.value = id
     else if (configKey === 'scorer_model_id') secretaryModelId.value = id
@@ -3019,7 +3271,7 @@ const activateModel = async (id, configKey) => {
     
     ElMessage.success('设置已更新')
   } catch (e) {
-    ElMessage.error(e.message)
+    ElMessage.error(formatLLMError(e))
   }
 }
 
@@ -3353,7 +3605,8 @@ const retryLogAnalysis = async (log) => {
     
     const res = await fetchWithTimeout(url, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' }
+      headers: { 'Content-Type': 'application/json' },
+      silent: true
     }, 10000) // Increase timeout to 10s
     
     if (res.ok) {
@@ -3363,14 +3616,12 @@ const retryLogAnalysis = async (log) => {
       setTimeout(() => fetchLogs(), 2000)
     } else {
       const err = await res.json()
-      ElMessage.error(err.detail || '重试请求失败')
-      updateLogStatus(log.id, originalStatus) // Revert
+      throw new Error(err.detail || '重试请求失败')
     }
   } catch (e) {
     console.error('Retry failed:', e)
     // 详细输出错误信息以便排查
-    const errorMsg = e instanceof Error ? `${e.name}: ${e.message}` : JSON.stringify(e)
-    ElMessage.error(`重试失败: ${errorMsg}`)
+    ElMessage.error(formatLLMError(e))
     updateLogStatus(log.id, 'failed')
   }
 }
@@ -3473,9 +3724,20 @@ const handleLogUpdate = (payload) => {
   }
 }
 
-onMounted(() => {
+onMounted(async () => {
   waitForBackend()
   
+  // Listen for auto-update messages
+  await listenSafe('update-message', handleUpdateMessage)
+  
+  // Fetch app version
+  try {
+      const v = await invoke('get_app_version')
+      if (v) appVersion.value = v
+  } catch(e) {
+      console.warn('Failed to get app version', e)
+  }
+
   // Listen for real-time updates
   gatewayClient.on('action:state_update', handleStateUpdate)
   gatewayClient.on('action:schedule_update', handleScheduleUpdate)
@@ -4496,6 +4758,44 @@ onUnmounted(() => {
   border-radius: 12px;
   position: relative;
   overflow: hidden;
+}
+
+.status-badge {
+  display: flex;
+  align-items: center;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 4px 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  transition: all 0.3s;
+  cursor: help;
+}
+
+.status-badge:hover {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background-color: #909399; /* Offline */
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
+  transition: all 0.3s;
+}
+
+.status-dot.online {
+  background-color: #67C23A;
+  box-shadow: 0 0 4px #67C23A;
+}
+
+.status-dot.warning {
+  background-color: #E6A23C;
+}
+
+.status-dot.offline {
+  background-color: #F56C6C;
 }
 
 .model-config-card.active-main { border: 2px solid #ff88aa; }

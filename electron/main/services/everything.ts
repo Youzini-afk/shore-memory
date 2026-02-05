@@ -1,9 +1,10 @@
-import { BrowserWindow } from 'electron'
 import path from 'path'
 import fs from 'fs-extra'
 import AdmZip from 'adm-zip'
 import axios from 'axios'
 import { join } from 'path'
+import { paths } from '../utils/env'
+import { WindowLike } from '../types'
 
 const ES_URL = "https://www.voidtools.com/ES-1.1.0.27.x64.zip"
 
@@ -20,7 +21,7 @@ export function getEsDir() {
     
     // 2. Prod (resources)
     // 2. 生产环境 (resources)
-    const resourcePath = process.resourcesPath
+    const resourcePath = paths.resources
     const pkgPath = join(resourcePath, 'backend/nit_core/tools/core/FileSearch')
     if (fs.existsSync(pkgPath)) return pkgPath
     
@@ -35,7 +36,7 @@ export function checkEsInstalled() {
     return fs.existsSync(exe)
 }
 
-export async function installEs(window: BrowserWindow) {
+export async function installEs(window: WindowLike) {
     const dir = getEsDir()
     const emit = (msg: string) => {
         try { if (!window.isDestroyed()) window.webContents.send('es-log', msg) } catch(e){}

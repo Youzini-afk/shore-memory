@@ -1,4 +1,4 @@
-import { ipcMain, app } from 'electron'
+import { paths } from '../utils/env'
 import si from 'systeminformation'
 import fs from 'fs-extra'
 import path from 'path'
@@ -43,7 +43,7 @@ export function getBackendLogs(): string[] {
 }
 
 export function getConfig(): any {
-    const configPath = path.join(app.getPath('userData'), 'data/config.json')
+    const configPath = path.join(paths.userData, 'data/config.json')
     if (fs.existsSync(configPath)) {
         try {
             return fs.readJsonSync(configPath)
@@ -55,7 +55,7 @@ export function getConfig(): any {
 export function saveConfig(config: any) {
     // Save configuration to file
     // 将配置保存到文件
-    const dataDir = path.join(app.getPath('userData'), 'data')
+    const dataDir = path.join(paths.userData, 'data')
     fs.ensureDirSync(dataDir)
     fs.writeJsonSync(path.join(dataDir, 'config.json'), config, { spaces: 2 })
 }
@@ -64,7 +64,7 @@ export function getGatewayToken(): string {
     // Development path
     const devPath = path.join(process.cwd(), 'backend/data/gateway_token.json')
     // Production path (next to exe or in userData)
-    const prodPath = path.join(app.getPath('userData'), 'data/gateway_token.json')
+    const prodPath = path.join(paths.userData, 'data/gateway_token.json')
     
     const tokenPath = fs.existsSync(devPath) ? devPath : prodPath
     

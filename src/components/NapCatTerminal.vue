@@ -12,6 +12,22 @@
     </div>
     
     <div class="terminal-content" ref="logContainer">
+      <!-- Download Progress Bar -->
+      <div v-if="downloadProgress.active" class="download-progress-bar">
+        <div class="progress-info">
+          <span>{{ downloadProgress.status }}</span>
+          <span>{{ downloadProgress.percent }}%</span>
+        </div>
+        <el-progress 
+          :percentage="downloadProgress.percent" 
+          :status="downloadProgress.error ? 'exception' : (downloadProgress.completed ? 'success' : '')"
+          :stroke-width="12"
+          :text-inside="true"
+          striped
+          striped-flow
+        />
+      </div>
+
       <div v-for="log in logs" :key="log.id" class="log-line">
         <span class="timestamp">[{{ log.time }}]</span>
         <span class="message" v-html="ansiToHtml(log.content)"></span>
@@ -47,7 +63,15 @@ import { listen, invoke } from '@/utils/ipcAdapter'
 const logs = ref([])
 const inputValue = ref('')
 const logContainer = ref(null)
+const downloadProgress = ref({
+    active: false,
+    percent: 0,
+    status: '',
+    error: false,
+    completed: false
+})
 let unlistenFn = null
+let unlistenProgressFn = null
 
 // Actions
 // 操作
@@ -154,6 +178,28 @@ onMounted(async () => {
         
         if (logs.value.length > 500) logs.value.shift()
       })
+
+      // 3. Listen for download progress
+      unlistenProgressFn = await listen('napcat-download-progress', (payload) => {
+          // payload: { percent, status, url, error, completed }
+          downloadProgress.value = {
+              active: true,
+              percent: payload.percent,
+              status: payload.status,
+              error: payload.error || false,
+              completed: payload.completed || false
+          }
+          
+          if (payload.error) {
+              ElMessage.error(`NapCat 安装失败: ${payload.status}`)
+          }
+          
+          if (payload.completed || payload.error) {
+              setTimeout(() => {
+                  downloadProgress.value.active = false
+              }, 5000)
+          }
+      })
   } catch (e) {
     console.error('初始化 NapCat 日志失败', e)
   }
@@ -162,6 +208,9 @@ onMounted(async () => {
 onUnmounted(() => {
   if (unlistenFn) {
     unlistenFn()
+  }
+  if (unlistenProgressFn) {
+    unlistenProgressFn()
   }
 })
 </script>
@@ -176,6 +225,20 @@ onUnmounted(() => {
   overflow: hidden;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
   user-select: text;
+}
+
+.download-progress-bar {
+  padding: 10px 16px;
+  background-color: #252526;
+  border-bottom: 1px solid #3d3d3d;
+}
+
+.progress-info {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 5px;
+  font-size: 12px;
+  color: #ccc;
 }
 
 .terminal-header {

@@ -98,6 +98,7 @@ from core.config_manager import get_config_manager
 from core.nit_manager import get_nit_manager
 from nit_core.dispatcher import XMLStreamFilter
 from routers.ide_router import router as ide_router
+from routers.memory_router import router as memory_router
 from routers.agent_router import router as agent_router
 from routers.group_chat_router import router as group_chat_router
 from routers.scheduler_router import router as scheduler_router
@@ -613,6 +614,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="PeroCore Backend", description="AI Agent powered backend for Pero", lifespan=lifespan)
 app.include_router(ide_router)
+app.include_router(memory_router)
 app.include_router(agent_router)
 app.include_router(group_chat_router)
 
