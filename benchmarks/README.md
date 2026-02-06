@@ -1,6 +1,6 @@
 # 🚀 PeroCore Core Benchmark Suite
 
-本项目包含 PeroCore 认知引擎（KDN）的精简版核心性能测试与逻辑验证脚本。我们遵循“无偏见、去硬编码”的原则，通过合成复杂拓扑结构与大规模数据流，客观验证引擎在边缘侧的性能上限。
+本项目包含 PeroCore 图扩散引擎的精简版核心性能测试与逻辑验证脚本。我们遵循“无偏见、去硬编码”的原则，通过合成复杂拓扑结构与大规模数据流，客观验证引擎在边缘侧的性能上限。
 
 ## 📊 三大核心基准测试 (Core Three)
 
@@ -9,7 +9,7 @@
 | 脚本名称 | 核心关注点 | 验证目标 |
 | :--- | :--- | :--- |
 | [`benchmark_1_massive_scale.py`](./benchmark_1_massive_scale.py) | **极速吞吐与内存效率** | 验证亿级关联下的写入速度（Million edges/sec）与 CSR 变体结构的内存压缩比。 |
-| [`benchmark_2_multi_hop_reasoning.py`](./benchmark_2_multi_hop_reasoning.py) | **多跳逻辑穿透 (Anti-Bias)** | 在数十万随机噪音中隐藏长链逻辑，验证 KDN 扩散模型是否能精准捕捉非邻域逻辑目标。 |
+| [`benchmark_2_multi_hop_reasoning.py`](./benchmark_2_multi_hop_reasoning.py) | **多跳逻辑穿透 (Anti-Bias)** | 在数十万随机噪音中隐藏长链逻辑，验证图扩散模型是否能精准捕捉非邻域逻辑目标。 |
 | [`benchmark_3_real_world_integration.py`](./benchmark_3_real_world_integration.py) | **非线性知识网集成** | 模拟真实世界“幂律分布”的复杂知识图谱，验证在 Hub-and-Spoke 拓扑下的联想稳定性。 |
 
 ## 🛠️ 内部系统测试 (Internal Tests)
@@ -37,11 +37,11 @@ python benchmark_1_massive_scale.py 10000000  # 指定千万级规模
 ## 📜 实验设计原则
 
 1.  **去硬编码 (Zero Hardcoding)**：所有测试 ID、节点关系与噪音数据均通过随机算法生成，确保测试结果不依赖于特定的预设路径。
-2.  **拓扑驱动 (Topology Driven)**：不再依赖特定的语义字符串（如 HotpotQA 文本），而是直接在拓扑结构上验证 KDN 能量扩散算法的收敛性与准确性。
+2.  **拓扑驱动 (Topology Driven)**：不再依赖特定的语义字符串（如 HotpotQA 文本），而是直接在拓扑结构上验证图扩散算法的收敛性与准确性。
 3.  **边缘侧友好 (Edge-Native)**：所有指标（延迟、内存、吞吐）均针对家用级 PC 或边缘计算设备进行优化与衡量。
 
 ## 📜 实验报告
 
 详细的实验数据与数学证明请参阅 [reports](./reports) 目录：
-- [KDN 数学收敛性证明](./reports/KDN_mathematical_proof.md)
+- [图扩散数学收敛性证明](./reports/KDN_mathematical_proof.md)
 - [核心基准测试综合报告](./reports/CONSOLIDATED_BENCHMARK_REPORT.md)

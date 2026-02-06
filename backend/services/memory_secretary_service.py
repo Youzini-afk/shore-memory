@@ -478,9 +478,16 @@ class MemorySecretaryService:
             if not current_texts:
                 try:
                     import os
-                    # 假设相对路径或绝对路径
-                    # [Fix] 指向 PeroCore 自己的台词文件，而不是 Peroperochat-PE 的
-                    static_path = r"c:\Users\Administrator\Desktop\Perofamily\PeroCore\public\live2d-widget\waifu-texts.json"
+                    # 1. 优先尝试从 Agent 自身的目录读取 (backend/services/mdp/agents/{agent_id}/waifu_texts.json)
+                    base_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+                    agent_path = os.path.join(base_dir, "backend", "services", "mdp", "agents", agent_id, "waifu_texts.json")
+                    
+                    if os.path.exists(agent_path):
+                        static_path = agent_path
+                    else:
+                        # 2. 回退到公共的 public/waifu-texts.json
+                        static_path = os.path.join(base_dir, "public", "waifu-texts.json")
+                    
                     if os.path.exists(static_path):
                         with open(static_path, "r", encoding="utf-8") as f:
                             current_texts = json.load(f)

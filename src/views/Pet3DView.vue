@@ -1224,7 +1224,7 @@ const toggleAppearanceMenu = () => {
 
 const loadLocalTexts = async () => {
   try {
-    const response = await fetch('live2d-widget/waifu-texts.json');
+    const response = await fetch('waifu-texts.json');
     const baseTexts = await response.json();
     const storageKey = `ppc.waifu.texts.${currentAgentName.value || 'default'}`; 
     let dynamicTexts = {};

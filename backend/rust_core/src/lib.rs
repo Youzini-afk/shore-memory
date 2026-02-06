@@ -1,21 +1,15 @@
 //! Pero Rust Core
 //!
-//! 高性能意图-记忆扩散引擎
+//! 高性能向量检索与图遍历引擎
 //!
 //! 主要模块:
 //! - `intent_engine`: SIMD 加速的意图锚点搜索 (向量数据库)
-//! - `cognitive_graph`: 基于 PEDSA 算法的认知图谱扩散激活
+//! - `cognitive_graph`: 基于 PEDSA 算法的图遍历引擎
 //!
 //! 版本: 0.2.1
-//! 架构: 专注于记忆存储与激活，视觉推理已分离至 `vision_core`
+//! 架构: 专注于记忆存储与检索，视觉推理已分离至 `vision_core`
 
 use ahash::AHashMap;
-/*
- * Copyright (c) 2026 YoKONCy. All rights reserved.
- * This software is licensed under the GNU General Public License v3.0.
- * Any unauthorized commercial use or closed-source redistribution is a direct violation of the GPL-3.0 license.
- * Original Repository: https://github.com/YoKONCy/PeroCore
- */
 
 use pyo3::prelude::*;
 use rayon::prelude::*;
@@ -32,7 +26,6 @@ pub use intent_engine::{IntentAnchor, IntentEngine};
 // === 常量与元数据 ===
 const MAX_INPUT_LENGTH: usize = 100_000;
 const CORE_VERSION: &str = "0.2.1-stable";
-const ENGINE_FINGERPRINT: &str = "PERO-CORE-KDN-SIMD-PRO-v2-2026";
 
 /// 引擎元数据信息
 #[pyclass]
@@ -40,8 +33,6 @@ const ENGINE_FINGERPRINT: &str = "PERO-CORE-KDN-SIMD-PRO-v2-2026";
 struct EngineManifest {
     #[pyo3(get)]
     version: String,
-    #[pyo3(get)]
-    fingerprint: String,
     #[pyo3(get)]
     simd_support: String,
     #[pyo3(get)]
@@ -129,11 +120,11 @@ struct GraphEdge {
 }
 
 // ============================================================================
-// 认知图谱引擎 (动态类 CSR 模拟优化版)
+// 图遍历引擎 (动态类 CSR 模拟优化版)
 // 基于 PEDSA (Parallel Energy-Decay Spreading Activation) 算法
 // ============================================================================
 
-/// 认知图谱引擎 (动态类 CSR 模拟优化版)
+/// 图遍历引擎 (动态类 CSR 模拟优化版)
 /// 
 /// 该引擎目前采用动态邻接表模拟 CSR (Simulated CSR) 结构，以平衡“实时写入灵活性”与“图遍历性能”。
 /// 标准的静态 CSR 矩阵在写入新关联时需要重建整个索引，而此模拟版本支持 O(1) 的动态关联添加。
@@ -213,7 +204,6 @@ impl CognitiveGraphEngine {
 
         EngineManifest {
             version: CORE_VERSION.to_string(),
-            fingerprint: ENGINE_FINGERPRINT.to_string(),
             simd_support: simd_info,
             memory_layout: "Simulated CSR (Quantized u16)".to_string(),
             optimization_level: if cfg!(debug_assertions) { "Debug" } else { "Release (Full O3)" }.to_string(),
@@ -224,11 +214,11 @@ impl CognitiveGraphEngine {
         self.dynamic_map.clear();
     }
 
-    /// 执行激活扩散计算 (带稳定性剪枝和并行优化)
+    /// 执行加权图遍历 (带稳定性剪枝和并行优化)
     /// 
     /// 优化策略：
-    /// 1. 动态阈值截断 (Dynamic Pruning): 每轮扩散仅保留能量最高的 Top-N 节点
-    /// 2. 能量衰减 (Decay): 防止能量无限发散
+    /// 1. 动态阈值截断 (Dynamic Pruning): 每轮传播仅保留分数最高的 Top-N 节点
+    /// 2. 权重衰减 (Decay): 防止分数无限发散
     /// 3. 并行计算: 利用 Rayon 进行并行规约
     #[pyo3(text_signature = "($self, initial_scores, steps=1, decay=0.5, min_threshold=0.01, max_active_nodes_per_layer=10000)")]
     fn propagate_activation(

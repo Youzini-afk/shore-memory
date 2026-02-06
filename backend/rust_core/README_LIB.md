@@ -1,8 +1,8 @@
-# Pero-Memory-Core (KDN Engine)
+# Pero-Memory-Core (Graph Diffusion Engine)
 
 > **"Stop Vector Search, Start Knowledge Diffusion."**
 
-🚀 **Pero-Memory-Core** 是一个基于认知神经科学原理构建的、理论上可支撑万亿级的语义记忆引擎。其核心 **KDN (Knowledge Diffusion Network)** 是一个**纯粹的拓扑计算算子**。
+🚀 **Pero-Memory-Core** 是一个基于认知神经科学原理构建的、理论上可支撑万亿级的语义记忆引擎。
 
 该算子在理论上源自认知科学中经典的**扩散激活 (Spreading Activation)** 模型。它摒弃了传统向量数据库（Vector DB）死板的 Top-K 检索模式，通过高性能的 Rust 工程实现，完成了类脑化的关联联想与逻辑回溯。
 
@@ -11,7 +11,7 @@
 
 ---
 
-## 🧠 为什么是 KDN 而不是 RAG？
+## 🧠 为什么是图扩散而不是 RAG？
 
 传统的 RAG (Retrieval-Augmented Generation) 依赖向量相似度，存在三大致命缺陷：
 1. **孤岛效应**：只能找到“长得像”的片段，无法理解知识点之间的深层逻辑链条。
@@ -26,7 +26,7 @@
 
 在 1,000,000 条干扰噪音（Noise Edges）的严苛测试下，PeroCore 与传统 RAG 方案的性能对比：
 
-| 指标 | 传统 RAG (Top-K + Rerank) | PeroCore (KDN Engine) | 提升幅度 |
+| 指标 | 传统 RAG (Top-K + Rerank) | PeroCore (Graph Diffusion Engine) | 提升幅度 |
 | :--- | :--- | :--- | :--- |
 | **单步检索延迟** | ~1,545.00 ms | **2.95 ms** | **523x** 🚀 |
 | **11步逻辑链穿透** | 无法完成 (超时) | **2.95 ms** | **∞** |

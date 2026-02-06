@@ -12,7 +12,7 @@ export interface SystemStats {
 // 缓存上一次的 CPU 负载，因为 systeminformation 获取 CPU 需要时间计算
 let lastCpuLoad = 0
 
-// 定期更新 CPU 负载 (每 2 秒)
+// 定期更新 CPU 负载 (每 5 秒，降低频率以减少开销)
 setInterval(async () => {
     try {
         const load = await si.currentLoad()
@@ -21,7 +21,7 @@ setInterval(async () => {
         // ignore
         // 忽略
     }
-}, 2000)
+}, 5000)
 
 export async function getSystemStats(): Promise<SystemStats> {
     try {

@@ -1,8 +1,3 @@
-# Copyright (c) 2026 YoKONCy. All rights reserved.
-# This component (Memory Service) is protected under GNU GPL-3.0.
-# Any use in proprietary/closed-source software is strictly prohibited.
-# Fingerprint: PERO_CORE_MEM_SYS_v0.1_YK
-
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 from sqlmodel import select, delete, desc, and_
@@ -16,9 +11,9 @@ import json
 # -------------------------------------------------------------------------
 # 工程说明：
 # 为什么不用标准的图数据库（如 Neo4j）？
-# 1. 延迟：Neo4j 的 Cypher 查询在处理这种“无限扩散”时会产生大量随机 IO，导致 10 步以上的扩散延迟超过 500ms。
+# 1. 延迟：Neo4j 的 Cypher 查询在处理这种“多跳关联”时会产生大量随机 IO，导致 10 步以上的遍历延迟超过 500ms。
 # 2. 内存：我们需要在边缘侧（用户 PC）运行。通过 Rust 实现的类 CSR (Simulated CSR) 稀疏矩阵，我们将 100 亿个关联的内存占用压到了 2GB 以内。
-# 3. 实时性：PEDSA 需要在每一帧视觉输入时进行能量更新，这是传统事务数据库无法满足的吞吐量。
+# 3. 实时性：PEDSA 需要在每一帧视觉输入时进行分数更新，这是传统事务数据库无法满足的吞吐量。
 # -------------------------------------------------------------------------
 _rust_engine = None
 
@@ -31,8 +26,8 @@ async def get_rust_engine(session: AsyncSession):
         from pero_memory_core import CognitiveGraphEngine
         # 技术防御说明：
         # 1. 采用类 CSR (Simulated CSR) 稀疏矩阵存储亿级关联，内存占用极低。
-        # 2. 扩散算子满足收敛性证明 (详见 benchmarks/KDN_mathematical_proof.md)，防止激活爆炸。
-        print("[Memory] 正在初始化 PEDSA 认知引擎 (Rust Core)...", flush=True)
+        # 2. 遍历算子满足收敛性证明 (详见 benchmarks/KDN_mathematical_proof.md)，防止计算爆炸。
+        print("[Memory] 正在初始化图遍历引擎 (Rust Core)...", flush=True)
         _rust_engine = CognitiveGraphEngine()
         _rust_engine.configure(max_active_nodes=10000, max_fan_out=20)
         
@@ -511,20 +506,20 @@ class MemoryService:
             anchor_ids = [res["id"] for res in vector_results]
             sim_map = {res["id"]: res["score"] for res in vector_results}
 
-            # 2. 扩散激活 (Spreading Activation)
+            # 2. 关联检索 (Spreading Activation)
             activation_scores = {aid: sim_map.get(aid, 0.5) for aid in anchor_ids}
             
             engine = await get_rust_engine(session)
             if engine:
-                # 扩散 2 步，扩大联想范围
-                print(f"[Memory] 正在从锚点扩散激活: {anchor_ids}")
+                # 遍历 2 步，扩大关联范围
+                print(f"[Memory] 正在从锚点开始遍历: {anchor_ids}")
                 flashback_scores = engine.propagate_activation(
                     activation_scores,
                     steps=2,
                     decay=0.7,
                     min_threshold=0.05
                 )
-                print(f"[Memory] 扩散结果数量: {len(flashback_scores)}")
+                print(f"[Memory] 遍历结果数量: {len(flashback_scores)}")
             else:
                 print("[Memory] Rust 引擎不可用，仅使用锚点")
                 flashback_scores = activation_scores
@@ -582,7 +577,7 @@ class MemoryService:
         """
         [链网检索 V3] (启用 VectorDB + 簇软加权)
         1. 嵌入搜索 (VectorDB)
-        2. 扩散激活 (链)
+        2. 图遍历 (链)
         3. 簇软加权重排序
         """
         from services.embedding_service import embedding_service
@@ -673,12 +668,12 @@ class MemoryService:
                 await MemoryService.mark_memories_accessed(session, fallback_res)
             return fallback_res
         
-        # 3. 扩散激活 (Spreading Activation)
-        # 初始激活值 = VectorDB Similarity
+        # 3. 关联检索 (Graph Traversal)
+        # 初始分值 = VectorDB Similarity
         activation_scores = {m.id: sim_map.get(m.id, 0.0) for m in valid_memories}
         
         # 获取所有关联 (一次性拉取，避免 N+1)
-        # 简单起见，这里只对 Top N 的 Anchor 进行扩散
+        # 简单起见，这里只对 Top N 的 Anchor 进行遍历
         # 选出 Top 20 Anchors (这里 valid_memories 已经是 Top N 了)
         anchors = valid_memories
         anchor_ids = [m.id for m in anchors]
@@ -710,7 +705,7 @@ class MemoryService:
             # Fix: get_rust_engine only takes session as argument
             engine = await get_rust_engine(session)
             if engine:
-                # 执行扩散：引入动态阈值 min_threshold
+                # 执行遍历：引入动态阈值 min_threshold
                 # 如果是重要查询，可以调低阈值以获取更多联想；否则保持 0.01 保证性能
                 new_scores = engine.propagate_activation(
                     activation_scores, 
@@ -737,13 +732,13 @@ class MemoryService:
                 base_score = activation_scores[anchor.id]
                 if base_score < 0.3: continue
 
-                # A. 时间轴扩散 (Prev/Next)
+                # A. 时间轴遍历 (Prev/Next)
                 if anchor.prev_id and anchor.prev_id in activation_scores:
                     activation_scores[anchor.prev_id] += base_score * 0.2
                 if anchor.next_id and anchor.next_id in activation_scores:
                     activation_scores[anchor.next_id] += base_score * 0.2
 
-                # B. 关系网扩散
+                # B. 关系网遍历
                 relations = relation_map.get(anchor.id, [])
                 for rel in relations:
                     target_id = rel.target_id if rel.source_id == anchor.id else rel.source_id

@@ -7,7 +7,7 @@
 
   <CustomTitleBar :transparent="true" />
   
-  <div class="flex h-screen w-screen overflow-hidden bg-slate-950/80 text-slate-200 font-sans select-text pt-8">
+  <div class="flex h-screen w-screen overflow-hidden bg-slate-950/95 text-slate-200 font-sans select-text pt-8">
     <!-- Sidebar Navigation -->
     <!-- 侧边导航栏 -->
     <aside :class="[

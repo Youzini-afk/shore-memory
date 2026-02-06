@@ -83,12 +83,20 @@ class Logger {
   }
 
   private shouldHide(message: string): boolean {
+    // Fast path: Check length or common prefixes first
+    if (message.length > 500) return false; // Don't filter long messages (likely important)
+    if (message.startsWith('[vite]')) return true;
+    
     return this.hiddenPattern.test(message)
   }
 
   private translate(message: string): string {
     // Fast path: if message is very short, skip translation
     if (message.length < 2) return message
+    
+    // Fast path: skip translation for known log formats to save CPU
+    // e.g. [2026-...] [INFO] ...
+    if (message.startsWith('[') && message.includes('] [')) return message;
     
     let translated = message
     // Most translations are specific phrases. We can check if the message *contains* key words first?

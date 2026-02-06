@@ -8,7 +8,7 @@
 
 ## 核心愿景 (Vision)
 
--   **从“搜索”到“联想”**：基于自研的 KDN 算子，PeroCore 能够像人脑一样实现逻辑联想，而非死板的向量检索。
+-   **从“搜索”到“联想”**：基于自研的图扩散算子，PeroCore 能够像人脑一样实现逻辑联想，而非死板的向量检索。
 -   **从“被动”到“主动”**：通过 AuraVision 视觉引擎，它能感知你的桌面状态，在你需要时递上一句鼓励或安慰。
 -   **从“工具”到“羁绊”**：通过 NIT 协议，它在与你的互动中不断进化，学习如何成为更懂你的那个“人”。
 
@@ -32,7 +32,7 @@ PeroCore 采用现代化的 **Electron + Python** 架构。通过 Go Gateway 实
 
 ![Rust](https://img.shields.io/badge/Rust-000000?style=for-the-badge&logo=rust&logoColor=white) ![WebAssembly](https://img.shields.io/badge/WebAssembly-654FF0?style=for-the-badge&logo=webassembly&logoColor=white)
 
--   **Rust Core**: 提供毫秒级响应的 KDN 记忆算子，通过 SIMD 加速让“联想”瞬间发生。
+-   **Rust Core**: 提供毫秒级响应的图扩散记忆算子，通过 SIMD 加速让“联想”瞬间发生。
 -   **NIT Runtime**: 为 AI 打造的指令解释器，让 Agent 调用工具像呼吸一样自然。
 -   **Terminal Auditor**: 安全沙箱，保护系统安全的同时赋予 AI 操作终端的能力。
 

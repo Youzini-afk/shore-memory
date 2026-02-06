@@ -38,10 +38,12 @@ if (args.cliMode) {
     // Standard flags for transparency support
     // 透明支持的标准标志
     app.commandLine.appendSwitch('disable-renderer-backgrounding')
-    // [Fix] Resolve black background issue on some systems (e.g. multi-GPU or special hardware)
-    // [修复] 解决某些系统（如多显卡或特殊硬件）上的黑背景问题
-    app.commandLine.appendSwitch('disable-software-rasterizer')
-    app.commandLine.appendSwitch('disable-gpu-compositing') 
+    
+    // [Updated] Removed aggressive GPU disabling flags that caused opacity issues on AMD cards (e.g. 6800XT)
+    // [已更新] 移除了导致 AMD 显卡（如 6800XT）不透明问题的激进 GPU 禁用标志
+    // app.commandLine.appendSwitch('disable-software-rasterizer')
+    // app.commandLine.appendSwitch('disable-gpu-compositing') 
+    
     // Disable Autofill to prevent DevTools errors
     // 禁用自动填充以防止 DevTools 错误
     app.commandLine.appendSwitch('disable-features', 'Autofill')

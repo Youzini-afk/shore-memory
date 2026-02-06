@@ -78,7 +78,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from pydantic import BaseModel, Field
 import subprocess
 
-from models import Memory, Config, PetState, ScheduledTask, AIModelConfig, MCPConfig, VoiceConfig, ConversationLog, MaintenanceRecord, AgentProfile
+from models import Memory, Config, PetState, ScheduledTask, AIModelConfig, MCPConfig, VoiceConfig, ConversationLog, MaintenanceRecord, AgentProfile, MemoryRelation
 from database import init_db, get_session
 from services.agent_service import AgentService
 from services.memory_service import MemoryService
@@ -106,7 +106,7 @@ from routers.scheduler_router import router as scheduler_router
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup Technical Fingerprint
+    # Startup Logo
     print(r"""
 ██████╗ ███████╗██████╗  ██████╗  ██████╗ ██████╗ ██████╗ ███████╗
 ██╔══██╗██╔════╝██╔══██╗██╔═══██╗██╔════╝██╔═══██╗██╔══██╗██╔════╝
@@ -151,12 +151,14 @@ async def lifespan(app: FastAPI):
     await companion_service.start()
     screenshot_manager.start_background_task()
     
+    # [Optimization] Disabled aggressive warm-up to improve startup performance and reduce lag
+    # [优化] 禁用了激进的预热以提高启动性能并减少卡顿
     # 异步预热 Embedding 模型
-    asyncio.create_task(asyncio.to_thread(embedding_service.warm_up))
+    # asyncio.create_task(asyncio.to_thread(embedding_service.warm_up))
     
     # 异步预热 ASR 模型
-    asr_service = get_asr_service()
-    asyncio.create_task(asyncio.to_thread(asr_service.warm_up))
+    # asr_service = get_asr_service()
+    # asyncio.create_task(asyncio.to_thread(asr_service.warm_up))
     
     # Start Social Service (if enabled)
     social_service = get_social_service()
