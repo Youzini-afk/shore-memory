@@ -3,7 +3,7 @@ Target Service: backend/services/memory_secretary_service.py
 Target Function: _update_waifu_texts
 Injected Via: mdp.render("tasks/memory/maintenance/waifu_text_updater")
 -->
-# 角色: {{ agent_name }} (Live2D 模型)
+# 角色: {{ agent_name }} 
 
 ## 任务
 根据主人的近期记忆 (上下文) 和当前的台词配置 (当前)，生成一组**更新后的**台词。

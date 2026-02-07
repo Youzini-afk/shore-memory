@@ -88,7 +88,6 @@
             </p>
           </div>
           
-          <!-- Actions -->
           <!-- 操作按钮 -->
           <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700">
             <button 
@@ -175,7 +174,6 @@
                <span class="text-xs font-bold" :class="workMode ? 'text-indigo-300' : 'text-slate-500'">{{ (msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user') ? msg.senderId : AGENT_NAME }}</span>
                <span class="text-[10px] text-slate-400">{{ formatTime(msg.timestamp) }}</span>
                
-               <!-- Actions -->
                <!-- 操作按钮 -->
                <div class="flex gap-2 ml-2" v-if="!editingMsgId">
                   <button 
@@ -213,7 +211,7 @@
                     <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
                     <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
                     <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
-                    <span class="text-xs text-slate-400 ml-2 font-medium">{{ AGENT_NAME }} 正在思考...</span>
+                    <span class="text-xs text-slate-400 ml-2 font-medium">{{ agentName }} 正在思考...</span>
                  </div>
               </template>
               <template v-else v-for="(segment, sIdx) in parseMessage(msg.content)" :key="sIdx">
@@ -499,25 +497,53 @@ onMounted(async () => {
   fetchHistory(true);
   
   // 1. Listen for WebSocket messages forwarded from parent or global bus (via Gateway)
-  gatewayClient.on('action:new_message', (payload) => {
+  gatewayClient.on('action:new_message', (data) => {
+    const payload = data.params || data;
     // Append new message if it belongs to current session or is relevant
     // We assume default session for now or check payload.session_id
     console.log('[ChatInterface] Received new message via Gateway:', payload);
     
     // Check duplication
+    // 1. Check exact ID match
     const exists = messages.value.some(m => m.id == payload.id);
-    if (!exists) {
-        messages.value.push({
-            id: payload.id,
-            role: payload.role,
-            content: payload.content,
-            timestamp: payload.timestamp,
-            senderId: payload.agent_id || 'pero',
-            images: [], // Images handled separately or via metadata
-            metadata: JSON.parse(payload.metadata || '{}')
-        });
+    
+    // 2. Check for pending assistant message (no ID) that matches this content
+    // This handles the transition from "Streamed/Pending" -> "Persisted"
+    let pendingMatchIndex = -1;
+    if (!exists && payload.role === 'assistant') {
+        const lastMsgIndex = messages.value.length - 1;
+        const lastMsg = messages.value[lastMsgIndex];
         
-        scrollToBottom();
+        // If last message is assistant, has no ID, and content is similar or it's just the last one
+        if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.id) {
+            // We assume this is the persisted version of the stream
+            pendingMatchIndex = lastMsgIndex;
+        }
+    }
+
+    if (!exists) {
+        if (pendingMatchIndex !== -1) {
+            // Update the pending message with real ID and final content
+            const msg = messages.value[pendingMatchIndex];
+            msg.id = payload.id;
+            msg.content = payload.content; // Use final content (cleaned or full)
+            msg.timestamp = payload.timestamp;
+            msg.senderId = payload.agent_id || 'pero';
+            msg.metadata = JSON.parse(payload.metadata || '{}');
+            // Images usually handled separately, but if payload has them, update
+        } else {
+            // Add as new message
+            messages.value.push({
+                id: payload.id,
+                role: payload.role,
+                content: payload.content,
+                timestamp: payload.timestamp,
+                senderId: payload.agent_id || 'pero',
+                images: [], // Images handled separately or via metadata
+                metadata: JSON.parse(payload.metadata || '{}')
+            });
+            scrollToBottom();
+        }
     }
   });
 
@@ -801,16 +827,20 @@ const parseMessage = (content) => {
     lastIndex = regex.lastIndex;
   }
   
-  // Add remaining text
-  if (lastIndex < content.length) {
-    const text = content.slice(lastIndex);
-    if (text.trim()) {
-      segments.push({ type: 'text', content: text });
-    }
-  }
-  
-  return segments.length > 0 ? segments : [{ type: 'text', content: content }];
-};
+      // Add remaining text
+      if (lastIndex < content.length) {
+        let text = content.slice(lastIndex);
+        
+        // Remove NIT data lines completely
+        text = text.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1');
+
+        if (text.trim()) {
+           segments.push({ type: 'text', content: text });
+        }
+      }
+      
+      return segments.length > 0 ? segments : [{ type: 'text', content: content.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1') }];
+    };
 
 
 
@@ -924,10 +954,25 @@ const handleTextStream = (data) => {
   const params = data.params || data;
   if (params.target === 'pet_view_only') return;
 
-  if (!isSending.value) {
-    messages.value.push({ role: 'assistant', content: params.content, timestamp: new Date().toISOString() });
-    scrollToBottom();
+  // Ignore stream updates if we are actively sending (handled by fetch)
+  if (isSending.value) return;
+
+  // Smart Append for Passive Updates
+  const lastMsg = messages.value[messages.value.length - 1];
+  if (lastMsg && lastMsg.role === 'assistant') {
+      // If content is just being extended, update it
+      // Simple heuristic: if new content starts with old content
+      if (params.content.startsWith(lastMsg.content)) {
+          lastMsg.content = params.content;
+          scrollToBottom();
+          return;
+      }
+      // If new content is a delta (how to know?), append?
+      // For now, assuming full content replacement if not matched.
   }
+
+  messages.value.push({ role: 'assistant', content: params.content, timestamp: new Date().toISOString() });
+  scrollToBottom();
 };
 
 const handleTranscription = (data) => {
@@ -1036,7 +1081,12 @@ const fetchHistory = async (append = false) => {
         if (append) { hasMore.value = false; return; } // Group chat pagination not supported yet
         res = await fetch(`${API_BASE}/api/groupchat/rooms/${props.targetId}/history?limit=${HISTORY_LIMIT}`);
     } else {
-        res = await fetch(`${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`);
+        let url = `${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`;
+        // Pass agent_id for direct mode (targetId acts as agentId)
+        if (props.targetId) {
+            url += `&agent_id=${props.targetId}`;
+        }
+        res = await fetch(url);
     }
 
     if (res.ok) {
@@ -1121,6 +1171,34 @@ const loadMore = async () => {
   await fetchHistory(true);
 };
 
+let groupPollingInterval = null;
+
+const startGroupPolling = () => {
+  if (props.mode !== 'group' || !props.targetId) return;
+  stopGroupPolling();
+  
+  groupPollingInterval = setInterval(async () => {
+      if (document.hidden) return; // Optimization
+      try {
+          // Use fetchHistory with append=true to get new messages? 
+          // Actually fetchHistory implementation for group chat might need adjustment or we use a separate endpoint.
+          // For now, let's reuse fetchHistory but we need to handle duplication carefully.
+          // Or better, just fetch latest messages.
+          // Let's stick to simple polling for now.
+          await fetchHistory(true); 
+      } catch (e) {
+          console.error("Group polling failed", e);
+      }
+  }, 3000);
+};
+
+const stopGroupPolling = () => {
+  if (groupPollingInterval) {
+      clearInterval(groupPollingInterval);
+      groupPollingInterval = null;
+  }
+};
+
 let unlistenSync = null;
 let unlistenDelete = null;
 let visionCheckInterval = null;
@@ -1134,6 +1212,7 @@ onMounted(async () => {
   gatewayClient.on('action:mode_update', handleModeUpdate);
 
   fetchHistory();
+  startGroupPolling();
   checkVisionCapability();
   // Poll for vision capability changes (e.g. model switch)
   visionCheckInterval = setInterval(checkVisionCapability, 5000);
@@ -1152,11 +1231,38 @@ onMounted(async () => {
     unlistenSync = await listen('sync-chat-to-ide', (event) => {
       const { role, content, timestamp } = event.payload;
       
-      // 避免重复添加
-      // Since Newest is at Bottom (Index N)
+      // Helper to normalize content for comparison (strip NIT data and whitespace)
+      const normalize = (str) => {
+          return (str || '').replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '').trim();
+      };
+      
+      const incomingNorm = normalize(content);
+
+      // 避免重复添加 (Enhanced Dedup Logic)
+      // 1. Check exact match at the end (Normalized)
       const lastMsg = messages.value[messages.value.length - 1];
-      if (lastMsg && lastMsg.role === role && lastMsg.content === content) {
-        return;
+      if (lastMsg && lastMsg.role === role) {
+          const lastNorm = normalize(lastMsg.content);
+          // If content is identical or incoming is a subset (e.g. streaming artifact), skip
+          if (lastNorm === incomingNorm || (incomingNorm.length > 0 && lastNorm.includes(incomingNorm))) {
+              return;
+          }
+      }
+      
+      // 2. Check user message sent optimistically (no ID, same content, recent)
+      if (role === 'user') {
+          // Look backwards for a pending user message
+          for (let i = messages.value.length - 1; i >= 0; i--) {
+              const m = messages.value[i];
+              const mNorm = normalize(m.content);
+              
+              // If we find a user message without ID (optimistic) and same content
+              if (m.role === 'user' && !m.id && mNorm === incomingNorm) {
+                  return;
+              }
+              // If we find a user message WITH ID, we probably passed the optimistic zone
+              if (m.role === 'user' && m.id) break;
+          }
       }
       
       messages.value.push({ role, content, timestamp: timestamp || new Date().toISOString() });

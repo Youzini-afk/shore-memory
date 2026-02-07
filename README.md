@@ -350,7 +350,7 @@ python main.py  # 启动后端服务
 # 3. 前端启动 (Node.js 18+)
 # 新开一个终端
 npm install
-npm run dev     # 启动 Electron 开发模式
+npm run dev:electron     # 启动 Electron 开发模式
 ```
 
 <br/>

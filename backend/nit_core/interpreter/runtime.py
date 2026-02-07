@@ -20,6 +20,15 @@ except ImportError:
     from backend.services.mdp.manager import MDPManager
 import json
 
+# Try import AgentManager for multi-agent support
+try:
+    from services.agent_manager import get_agent_manager
+except ImportError:
+    try:
+        from backend.services.agent_manager import get_agent_manager
+    except ImportError:
+        get_agent_manager = None
+
 # 全局变量，用于保存会话引用 (由 AgentService 注入)
 # 这有点 hacky，但对于 tool-to-service 通信是有效的
 _CURRENT_SESSION_CONTEXT = {}
@@ -135,6 +144,13 @@ async def exit_work_mode() -> str:
         summary = await llm.chat([{"role": "user", "content": prompt}])
         summary_content = summary["choices"][0]["message"]["content"]
         
+        # Get active agent
+        agent_id = "pero"
+        if get_agent_manager:
+            try:
+                agent_id = get_agent_manager().active_agent_id
+            except: pass
+
         # 4. 保存到记忆 (长期)
         await MemoryService.save_memory(
             session=session,
@@ -143,7 +159,8 @@ async def exit_work_mode() -> str:
             clusters="[工作记录]",
             importance=8,
             memory_type="work_log",
-            source="system"
+            source="system",
+            agent_id=agent_id
         )
         return f"Exited Work Mode. \n\n[Summary Generated]:\n{summary_content}\n\n(Saved to Long-term Memory)"
         

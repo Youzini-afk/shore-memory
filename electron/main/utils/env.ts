@@ -29,7 +29,7 @@ if (isElectron) {
             fs.mkdirSync(appUserData, { recursive: true })
         }
     } catch (e) {
-        console.warn('[Env] Failed to create user data dir:', e)
+        console.warn('[Env] 创建用户数据目录失败:', e)
     }
 }
 

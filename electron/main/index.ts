@@ -31,22 +31,19 @@ if (args.cliMode) {
 } else {
     // GUI Mode (Original Logic)
 
-    // Disable GPU Acceleration for Windows 7
     // 禁用 Windows 7 的 GPU 加速
     if (release().startsWith('6.1')) app.disableHardwareAcceleration()
 
-    // Standard flags for transparency support
     // 透明支持的标准标志
     app.commandLine.appendSwitch('disable-renderer-backgrounding')
     
-    // [Updated] Removed aggressive GPU disabling flags that caused opacity issues on AMD cards (e.g. 6800XT)
-    // [已更新] 移除了导致 AMD 显卡（如 6800XT）不透明问题的激进 GPU 禁用标志
+    // 移除了导致 AMD 显卡不透明问题的激进 GPU 禁用标志
     // app.commandLine.appendSwitch('disable-software-rasterizer')
     // app.commandLine.appendSwitch('disable-gpu-compositing') 
     
-    // Disable Autofill to prevent DevTools errors
-    // 禁用自动填充以防止 DevTools 错误
+    // 禁用自动填充和原生窗口遮挡计算
     app.commandLine.appendSwitch('disable-features', 'Autofill')
+    app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
     // Set application name for Windows 10+ notifications
     // 设置 Windows 10+ 通知的应用程序名称
@@ -126,10 +123,9 @@ if (args.cliMode) {
         if (win) {
             logger.info('Main', `IPC: Resizing window to ${width}x${height}`)
             try {
-                // Temporary allow resize to ensure OS accepts the change (especially on Windows with transparent windows)
                 // 临时允许调整大小以确保操作系统接受更改 (特别是在具有透明窗口的 Windows 上)
                 win.setResizable(true)
-                win.setMinimumSize(200, 200) // Reset limits // 重置限制
+                win.setMinimumSize(200, 200) // 重置限制
                 
                 // Use setBounds for better atomic update
                 // 使用 setBounds 进行更好的原子更新
@@ -214,6 +210,7 @@ if (args.cliMode) {
 
     ipcMain.handle('stop_backend', async () => {
         stopBackend()
+        stopGateway()
     })
 
     ipcMain.handle('quit_app', () => {
@@ -289,6 +286,14 @@ if (args.cliMode) {
         }
 
         throw new Error('Invalid arguments for save_agent_launch_config')
+    })
+
+    // [Fix] Add missing handler for save_global_launch_config called by LauncherView
+    ipcMain.handle('save_global_launch_config', async (_, args) => {
+        if (args && Array.isArray(args.enabledAgents) && typeof args.activeAgent === 'string') {
+            return await saveGlobalLaunchConfig(args.enabledAgents, args.activeAgent)
+        }
+        throw new Error('Invalid arguments for save_global_launch_config')
     })
 
     ipcMain.handle('install_es', async () => {

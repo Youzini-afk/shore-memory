@@ -17,8 +17,9 @@ import json
 # This is a bit hacky but works for tool-to-service communication
 _CURRENT_SESSION_CONTEXT = {}
 
-def set_current_session_context(session):
+def set_current_session_context(session, agent_id: str = "pero"):
     _CURRENT_SESSION_CONTEXT["db_session"] = session
+    _CURRENT_SESSION_CONTEXT["agent_id"] = agent_id
 
 async def enter_work_mode(task_name: str = "未知任务") -> str:
     """

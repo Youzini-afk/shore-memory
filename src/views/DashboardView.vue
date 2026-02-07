@@ -223,7 +223,6 @@
 
 
 
-              <!-- NIT Status Card -->
               <!-- NIT 协议状态卡片 -->
               <el-row :gutter="20" style="margin-top: 20px;" v-if="nitStatus">
                 <el-col :span="24">
@@ -376,12 +375,14 @@
                   </el-form-item>
                   <el-form-item label="来源">
                     <el-select v-model="selectedSource" @change="fetchLogs" style="width: 120px">
+                      <el-option label="全部来源 (All)" value="all" />
                       <el-option label="Desktop" value="desktop" />
                       <el-option label="Mobile" value="mobile" />
                     </el-select>
                   </el-form-item>
                   <el-form-item label="会话">
                     <el-select v-model="selectedSessionId" @change="fetchLogs" style="width: 160px" allow-create filterable default-first-option placeholder="选择或输入ID">
+                      <el-option label="全部会话 (All)" value="all" />
                       <el-option label="默认会话 (Text)" value="default" />
                       <el-option label="语音会话 (Voice)" value="voice_session" />
                     </el-select>
@@ -511,8 +512,7 @@
               </div>
             </div>
 
-            <!-- 3. 核心记忆 (Refactored) -->
-            <!-- 3. 核心记忆 (重构版) -->
+              <!-- 3. 核心记忆 (重构版) -->
             <div v-else-if="currentTab === 'memories'" key="memories" class="view-container">
               <div class="toolbar memory-toolbar">
                  <h3 class="section-title">长期记忆库</h3>
@@ -641,7 +641,6 @@
                   </div>
               </div>
 
-              <!-- List Mode -->
               <!-- 列表模式 -->
               <div v-show="memoryViewMode === 'list'" class="memory-waterfall">
                 <div v-for="m in memories" :key="m.id" class="memory-item">
@@ -985,7 +984,6 @@
                </el-card>
             </div>
 
-            <!-- 11. System Terminal -->
             <!-- 11. 系统终端 -->
             <div v-else-if="currentTab === 'terminal'" key="terminal" class="view-container" style="height:100%;">
                 <el-card shadow="never" class="glass-card" :body-style="{ padding: '0', height: '100%' }" style="height: 100%; display: flex; flex-direction: column;">
@@ -1765,8 +1763,8 @@ const userSettings = ref({
 })
 
 // 筛选条件
-const selectedSource = ref('desktop')
-const selectedSessionId = ref('') 
+const selectedSource = ref('all')
+const selectedSessionId = ref('all') 
 const lastSyncedSessionId = ref(null) // Track last synced session from backend to prevent UI fighting
 const selectedDate = ref('')
 const selectedSort = ref('desc')
@@ -2074,6 +2072,19 @@ const waitForBackend = async () => {
 // [Feature] Listen for new messages via Gateway
 
 onMounted(() => {
+    // [Fix] Listen for agent changes to refresh all data
+    gatewayClient.on('action:agent_changed', (payload) => {
+        const agentId = payload.agent_id || (payload.params && payload.params.agent_id);
+        if (agentId) {
+            console.log('[Dashboard] Detected agent change:', agentId);
+            // Refresh active agent info first
+            fetchActiveAgent().then(() => {
+                // Then refresh all data dependent on agent
+                fetchAllData();
+            });
+        }
+    });
+
     gatewayClient.on('action:new_message', (payload) => {
         // Only update if logs tab is active or we want to update stats
         if (currentTab.value === 'logs') {
@@ -2700,7 +2711,11 @@ const fetchPetState = async () => {
   try {
     if (!isBackendOnline.value) return;
     fetchPetState.isPolling = true
-    const res = await fetchWithTimeout(`${API_BASE}/pet/state`, {}, 2000)
+    let url = `${API_BASE}/pet/state`
+    if (activeAgent.value) {
+        url += `?agent_id=${activeAgent.value.id}`
+    }
+    const res = await fetchWithTimeout(url, {}, 2000)
     if (res.ok) {
         petState.value = await res.json()
     }
@@ -3710,7 +3725,8 @@ const handleAgentChanged = (payload) => {
 }
 
 // Handler for log updates via Gateway
-const handleLogUpdate = (payload) => {
+const handleLogUpdate = (data) => {
+  const payload = data.params || data;
   if (currentTab.value === 'logs') {
      // If it's a delete, we can remove locally to be snappier
      if (payload.operation === 'delete') {

@@ -48,14 +48,9 @@ const showErrorDialog = ref(false)
 const isSessionReady = ref(false)
 const errorMessage = ref('')
 
-// In Electron, window management is handled by the main process via IPC
-// We don't need to intercept close requests here like in Tauri.
-// Instead, the main process (windows/manager.ts) should handle 'close' events to hide the window.
 // 在 Electron 中，窗口管理通过 IPC 由主进程处理
-// 我们不需要像在 Tauri 中那样在此处拦截关闭请求。
-// 相反，主进程 (windows/manager.ts) 应该处理 'close' 事件以隐藏窗口。
+// 主进程 (windows/manager.ts) 应该处理 'close' 事件以隐藏窗口
 onMounted(async () => {
-  // Optional: Notify main process that frontend is ready
   // 可选：通知主进程前端已准备就绪
   // await invoke('main_window_ready')
 })
@@ -63,7 +58,6 @@ onMounted(async () => {
 const currentView = computed(() => isWorkMode.value ? WorkModeView : ChatModeView)
 
 const toggleMode = async () => {
-  // Check if we are trying to enter work mode
   // 检查我们是否试图进入工作模式
   if (!isWorkMode.value) {
      try {
@@ -85,7 +79,6 @@ const toggleMode = async () => {
   isWorkMode.value = !isWorkMode.value
 }
 
-// Watch mode changes and broadcast to system (e.g. for PetView isolation)
 // 监听模式变化并广播到系统 (例如用于 PetView 隔离)
 watch(isWorkMode, async (newVal) => {
   await emit('work-mode-changed', { is_work_mode: newVal })
@@ -104,7 +97,6 @@ watch(isWorkMode, async (newVal) => {
        const data = await res.json()
        
        if (data.message && data.message.startsWith("Error")) {
-          // Blocked by backend check
           // 被后端检查阻止
           console.warn("[工作模式] 被阻止:", data.message)
           errorMessage.value = data.message.replace("Error: ", "")
@@ -114,16 +106,14 @@ watch(isWorkMode, async (newVal) => {
        }
 
        console.log("[工作模式] 已进入:", data.message)
-       // Add small delay for smooth UI transition
        // 添加少量延迟以保证 UI 过渡平滑
        setTimeout(() => {
           isSessionReady.value = true
        }, 500)
     } catch (e) {
        console.error("[工作模式] 进入会话失败:", e)
-       // 可选：通过对话框显示错误或仅回退
-       isSessionReady.value = true // Allow UI to show anyway? Or error state?
        // 理想情况下应该在 WorkModeView 中显示错误，但现在先让它渲染
+       isSessionReady.value = true 
     }
   } else {
     // 退出工作模式 - 会话清理已由 handleWorkExit 或 Abort 处理

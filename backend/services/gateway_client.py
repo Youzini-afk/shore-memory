@@ -46,10 +46,10 @@ class GatewayClient:
         # Run in background loop to avoid blocking startup if connection fails immediately
         while self.running:
             try:
-                logger.info(f"正在连接到 Gateway {self.uri}...")
+                logger.debug(f"正在连接到 Gateway {self.uri}...")
                 async with websockets.connect(self.uri) as websocket:
                     self.websocket = websocket
-                    logger.info("已连接到 Gateway")
+                    logger.debug("已连接到 Gateway")
                     self.emit("connect")
                     
                     await self.send_hello()
@@ -111,7 +111,7 @@ class GatewayClient:
         envelope.trace_id = "TEST-BROADCAST"
         envelope.request.action_name = "ping"
         
-        logger.info(f"正在发送广播 Ping，来自 {self.device_id}")
+        logger.debug(f"正在发送广播 Ping，来自 {self.device_id}")
         await self.send(envelope)
 
     async def broadcast_pet_state(self, state_dict: dict):
@@ -134,7 +134,7 @@ class GatewayClient:
                     envelope.request.params[k] = str(v)
             
             await self.send(envelope)
-            logger.info(f"广播 PetState 更新: {state_dict.get('mood')}")
+            logger.debug(f"广播 PetState 更新: {state_dict.get('mood')}")
         except Exception as e:
             logger.error(f"广播 PetState 失败: {e}")
 
@@ -159,9 +159,34 @@ class GatewayClient:
             # However, we must ensure content is not empty if we want to show bubble.
             
             await self.send(envelope)
-            logger.info(f"Broadcasted text_response: {content[:30]}...")
+            logger.debug(f"Broadcasted text_response: {content[:30]}...")
         except Exception as e:
             logger.error(f"广播文本响应失败: {e}")
+
+    async def broadcast_error(self, message: str, title: str = "错误", error_type: str = "error"):
+        """Broadcast error notification to frontend."""
+        if not self.websocket or not self.running:
+            return
+
+        try:
+            envelope = perolink_pb2.Envelope()
+            envelope.id = str(uuid.uuid4())
+            envelope.source_id = self.device_id
+            envelope.target_id = "broadcast"
+            envelope.timestamp = int(time.time() * 1000)
+            
+            envelope.request.action_name = "system_error"
+            # 前端 ipcAdapter 接收到的 payload 可能是整个 params 字典，或者经过 Main Process 处理后的内容
+            # 这里我们尽量多传点信息
+            envelope.request.params["payload"] = message # 兼容前端 event.payload
+            envelope.request.params["message"] = message
+            envelope.request.params["title"] = title
+            envelope.request.params["type"] = error_type
+            
+            await self.send(envelope)
+            logger.debug(f"广播错误通知: {title} - {message}")
+        except Exception as e:
+            logger.error(f"广播错误失败: {e}")
 
     async def heartbeat_loop(self):
         seq = 0
@@ -200,7 +225,7 @@ class GatewayClient:
 
     async def handle_request(self, envelope):
         req = envelope.request
-        logger.info(f"处理请求: {req.action_name} 参数={req.params}")
+        logger.debug(f"处理请求: {req.action_name} 参数={req.params}")
         
         # Emit generic request event
         self.emit("request", envelope)

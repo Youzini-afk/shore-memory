@@ -42,9 +42,10 @@ async def qq_handle_friend_request(flag: str, approve: bool, remark: str = ""):
         await service.handle_friend_request(flag, approve, remark)
         return f"好友请求已处理 (同意={approve})"
     except Exception as e:
+        logger.error(f"[SocialAdapter] 处理好友请求失败: {e}")
         return f"处理好友请求失败: {e}"
 
-async def qq_delete_friend(user_id: int, reason: str = "") -> str:
+async def qq_delete_friend(user_id: str, reason: str = "") -> str:
     """
     Delete a friend from QQ friend list.
     """
@@ -53,9 +54,10 @@ async def qq_delete_friend(user_id: int, reason: str = "") -> str:
         return "社交模式未启用。"
         
     try:
-        logger.info(f"[SocialAdapter] 正在删除好友 {user_id}。原因: {reason}")
-        await service.delete_friend(user_id)
-        return f"好友 {user_id} 已删除。原因: {reason}"
+        uid = int(user_id)
+        logger.info(f"[SocialAdapter] 正在删除好友 {uid}。原因: {reason}")
+        await service.delete_friend(uid)
+        return f"好友 {uid} 已删除。原因: {reason}"
     except Exception as e:
         logger.error(f"[SocialAdapter] 删除好友失败: {e}")
         return f"删除好友失败: {e}"

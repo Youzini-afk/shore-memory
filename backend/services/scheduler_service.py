@@ -50,12 +50,13 @@ class SchedulerService:
         self.scheduler.start()
         logger.info("调度服务已初始化并启动。")
 
-    def add_reminder(self, trigger_time: datetime, content: str, repeat: str = None):
+    def add_reminder(self, trigger_time: datetime, content: str, repeat: str = None, agent_id: str = None):
         """
         添加提醒任务。
         :param trigger_time: 触发时间
         :param content: 提醒内容
         :param repeat: 重复规则 ('daily', 'weekly', 或 'cron: * * * * *')
+        :param agent_id: 归属的 Agent ID (可选，默认为全局)
         """
         trigger = None
         
@@ -78,21 +79,31 @@ class SchedulerService:
         job = self.scheduler.add_job(
             SchedulerService._trigger_reminder,
             trigger=trigger,
-            args=[content],
+            args=[content, agent_id],
             name=f"提醒: {content[:20]}",
             replace_existing=False
         )
-        logger.info(f"已添加提醒任务 {job.id} 于 {trigger_time} (重复: {repeat})")
+        logger.info(f"已添加提醒任务 {job.id} 于 {trigger_time} (重复: {repeat}, Agent: {agent_id})")
         
         # Broadcast update
-        self._broadcast_update("add", {"id": job.id, "content": content, "next_run_time": str(job.next_run_time)})
+        self._broadcast_update("add", {"id": job.id, "content": content, "next_run_time": str(job.next_run_time), "agent_id": agent_id})
         
         return job.id
 
-    def list_jobs(self):
-        """列出所有活动任务"""
+    def list_jobs(self, agent_id: str = None):
+        """列出所有活动任务，支持按 Agent ID 过滤"""
         if not self.scheduler: return []
-        return self.scheduler.get_jobs()
+        all_jobs = self.scheduler.get_jobs()
+        
+        if agent_id:
+            filtered_jobs = []
+            for job in all_jobs:
+                # job.args format: [content, agent_id]
+                if len(job.args) >= 2 and job.args[1] == agent_id:
+                    filtered_jobs.append(job)
+            return filtered_jobs
+            
+        return all_jobs
 
     def remove_job(self, job_id: str):
         """根据 ID 移除任务"""
@@ -140,12 +151,12 @@ class SchedulerService:
             logger.error(f"广播调度更新失败: {e}")
 
     @staticmethod
-    async def _trigger_reminder(content: str):
+    async def _trigger_reminder(content: str, agent_id: str = None):
         """
         提醒触发时的回调。
         向网关广播 'action:reminder_trigger'。
         """
-        logger.info(f"触发提醒: {content}")
+        logger.info(f"触发提醒: {content} (Agent: {agent_id})")
         
         from services.gateway_client import gateway_client
         from peroproto import perolink_pb2
@@ -162,6 +173,8 @@ class SchedulerService:
         envelope.request.action_name = "reminder_trigger"
         envelope.request.params["content"] = content
         envelope.request.params["timestamp"] = datetime.now().isoformat()
+        if agent_id:
+            envelope.request.params["agent_id"] = agent_id
         
         await gateway_client.send(envelope)
 

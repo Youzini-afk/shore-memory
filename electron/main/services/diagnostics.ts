@@ -19,7 +19,7 @@ export interface DiagnosticReport {
     core_available: boolean
     vc_redist_installed: boolean
     napcat_installed: boolean
-    webview2_installed: boolean // Less relevant for Electron but kept for compatibility // 对 Electron 关联性较小，但为了兼容性保留
+    webview2_installed: boolean // 兼容性保留字段
     node_exists: boolean
     node_path: string
     node_version: string
@@ -30,7 +30,6 @@ const workspaceRoot = isDev
     ? path.resolve(__dirname, '../../..') // dist-electron/main -> electron -> root
     : (isElectron ? path.dirname(paths.exe) : paths.app)
 
-// Normalize path
 // 规范化路径
 function fixPath(p: string): string {
     return path.normalize(p)
@@ -47,13 +46,11 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     logger.info('Main', `[诊断] 工作区: ${workspaceRoot}`)
     logger.info('Main', `[诊断] 资源目录: ${resourceDir}`)
 
-    // 1. Python Path
     // 1. Python 路径
     let pythonPath = ''
     let pythonExists = false
     let devVenvPythonExists = false
     
-    // Check Dev Venv
     // 检查开发环境虚拟环境
     const devVenvPython = path.join(workspaceRoot, 'backend/venv/Scripts/python.exe')
     if (await fs.pathExists(devVenvPython)) {
@@ -61,7 +58,6 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         pythonPath = devVenvPython
         pythonExists = true
     } else {
-        // Check Release resources (multiple locations)
         // 检查发布资源（多个位置）
         const trials = [
             path.join(resourceDir, 'python/python.exe'),
@@ -99,7 +95,6 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
 
     pythonPath = fixPath(pythonPath)
 
-    // Check Python Version & Core
     // 检查 Python 版本和核心
     let pythonVersion = 'Unknown'
     let coreAvailable = false
@@ -121,7 +116,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
                 coreAvailable = true
             } else {
                 logger.warn('Main', `[Diagnostics] pero_memory_core import failed: output did not contain OK`)
-                // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // Don't block startup // 不阻塞启动 // 不阻塞启动
+                // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // 不阻塞启动
             }
         } catch (e: any) {
              logger.warn('Main', `[Diagnostics] pero_memory_core check failed: ${e.message}`)
@@ -187,7 +182,6 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         errors.push(`数据目录不可写: ${dataDir}`)
     }
 
-    // 5. VC++ Redist (Windows Only)
     // 5. VC++ Redist (Windows Only)
     let vcRedistInstalled = true
     if (process.platform === 'win32') {

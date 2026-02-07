@@ -87,11 +87,13 @@ async def update_character_status(
 
         # --- Database Update Logic ---
         session = _CURRENT_SESSION_CONTEXT.get("db_session")
+        agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
+        
         if session:
             # Get or Create PetState
-            pet_state = (await session.exec(select(PetState).limit(1))).first()
+            pet_state = (await session.exec(select(PetState).where(PetState.agent_id == agent_id).limit(1))).first()
             if not pet_state:
-                pet_state = PetState()
+                pet_state = PetState(agent_id=agent_id)
                 session.add(pet_state)
             
             # Update Fields

@@ -92,12 +92,12 @@ class ReflectionService:
         await self.session.commit()
         print(f"[Reflection] 已回填 {len(failed_tasks)} 个失败的 Scorer 任务。")
 
-    async def consolidate_memories(self, lookback_days: int = 3, importance_threshold: int = 4):
+    async def consolidate_memories(self, lookback_days: int = 3, importance_threshold: int = 4, agent_id: str = "pero"):
         """
         [Memory Consolidation]
         压缩低重要性、陈旧的记忆为陈述性总结。
         """
-        print(f"[Reflection] 开始记忆整合 (超过 {lookback_days} 天，重要性 < {importance_threshold})...", flush=True)
+        print(f"[Reflection] 开始记忆整合 (超过 {lookback_days} 天，重要性 < {importance_threshold}, agent_id={agent_id})...", flush=True)
         
         # 1. 查找候选记忆
         cutoff_time = datetime.now() - timedelta(days=lookback_days)
@@ -106,7 +106,8 @@ class ReflectionService:
         statement = select(Memory).where(
             (Memory.type == "event") & 
             (Memory.timestamp < cutoff_timestamp) & 
-            (Memory.importance < importance_threshold)
+            (Memory.importance < importance_threshold) &
+            (Memory.agent_id == agent_id)
         ).order_by(Memory.timestamp)
         
         candidates = (await self.session.exec(statement)).all()
@@ -179,7 +180,8 @@ class ReflectionService:
                 realTime=first_mem.realTime,
                 source="system",
                 type="summary",
-                embedding_json=embedding_json
+                embedding_json=embedding_json,
+                agent_id=agent_id
             )
             self.session.add(summary_mem)
             await self.session.flush() # 获取 ID
@@ -342,7 +344,7 @@ class ReflectionService:
             print(f"生成总结失败: {e}")
             return None
 
-    async def dream_and_associate(self, limit: int = 10) -> dict:
+    async def dream_and_associate(self, limit: int = 10, agent_id: str = "pero") -> dict:
         """
         [梦境机制]
         扫描最近的无关联记忆，尝试发现它们之间的联系。
@@ -350,10 +352,10 @@ class ReflectionService:
         """
         from services.memory_service import MemoryService
         
-        print("[Reflection] 进入梦境模式 (扫描关联)...", flush=True)
+        print(f"[Reflection] 进入梦境模式 (扫描关联, agent_id={agent_id})...", flush=True)
         
         # 1. 获取最近的 N 条记忆 (Event 类型) 作为"梦境锚点"
-        statement = select(Memory).where(Memory.type == "event").order_by(desc(Memory.timestamp)).limit(limit)
+        statement = select(Memory).where(Memory.type == "event").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
         anchors = (await self.session.exec(statement)).all()
         
         if len(anchors) < 1:
@@ -384,7 +386,8 @@ class ReflectionService:
             candidates = await MemoryService.get_relevant_memories(
                 self.session, 
                 target_memory.content, 
-                limit=5
+                limit=5,
+                agent_id=agent_id
             )
             
             for candidate in candidates:
@@ -417,7 +420,8 @@ class ReflectionService:
                         target_id=candidate.id,
                         relation_type=relation["type"],
                         strength=relation["strength"],
-                        description=relation["description"]
+                        description=relation["description"],
+                        agent_id=agent_id
                     )
                     self.session.add(new_relation)
                     await self.session.commit() # 发现一个关联就提交一个，避免长事务
@@ -427,46 +431,48 @@ class ReflectionService:
         print("[Reflection] 梦境循环完成。")
         return {"status": "success", "new_relations": new_relations_count, "anchors_processed": len(anchors)}
 
-    async def scan_lonely_memories(self, limit: int = 5) -> dict:
+    async def scan_lonely_memories(self, limit: int = 5, agent_id: str = "pero") -> dict:
         """
         [孤独记忆扫描器]
         寻找那些没有关联 (MemoryRelation) 的孤立记忆，并尝试将它们织入关系网。
         """
         from services.memory_service import MemoryService
         
-        print("[Reflection] 正在扫描孤独记忆...", flush=True)
+        print(f"[Reflection] 正在扫描孤独记忆 (agent_id={agent_id})...", flush=True)
         
         # 1. 查找孤立记忆 (没有作为 source 或 target 出现在 Relation 表中)
         # 优化: 使用 SQL 过滤而非 Python 内存过滤，避免全量加载 Memory 表导致阻塞
         
-        # 获取所有有关系的 ID
-        rel_statement = select(MemoryRelation.source_id, MemoryRelation.target_id)
+        # 获取所有有关系的 ID (仅限当前 Agent)
+        rel_statement = select(MemoryRelation.source_id, MemoryRelation.target_id).where(MemoryRelation.agent_id == agent_id)
         relations = (await self.session.exec(rel_statement)).all()
         connected_ids = set()
         for src, tgt in relations:
             connected_ids.add(src)
             connected_ids.add(tgt)
             
-        # 查找不在 connected_ids 中的 Event 记忆
-        # 优先处理最近的孤独记忆
-        statement = select(Memory).where(Memory.type == "event")
+        # 查找不在 connected_ids 中的最近记忆
+        # SQLModel/SQLAlchemy 不直接支持 "NOT IN" 大集合的高效查询，
+        # 我们使用 LEFT OUTER JOIN 或者 NOT EXISTS 子查询会更好。
+        # 但为了简单，我们先获取一批最近的记忆，然后在内存中过滤 (因为 limit 很小)
         
-        if connected_ids:
-            # 过滤掉已有关系的记忆
-            statement = statement.where(Memory.id.notin_(list(connected_ids)))
-            
-        statement = statement.order_by(desc(Memory.timestamp)).limit(limit)
+        # 获取最近 100 条 event 记忆
+        mem_statement = select(Memory).where(Memory.type == "event").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(100)
+        recent_memories = (await self.session.exec(mem_statement)).all()
         
-        lonely_memories = (await self.session.exec(statement)).all()
+        lonely_memories = []
+        for mem in recent_memories:
+            if mem.id not in connected_ids:
+                lonely_memories.append(mem)
+                if len(lonely_memories) >= limit:
+                    break
         
         if not lonely_memories:
-            print("[Reflection] 未发现孤独记忆。")
-            return {"status": "skipped", "reason": "未发现孤独记忆"}
+            return {"status": "skipped", "reason": "No lonely memories found"}
 
         config = await self._get_reflection_config()
         if not config["api_key"]:
-            print("[Reflection] 未配置 API Key，跳过。")
-            return {"status": "skipped", "reason": "未配置 API Key"}
+            return {"status": "skipped", "reason": "No API Key"}
 
         llm = LLMService(
             api_key=config["api_key"],
@@ -474,54 +480,51 @@ class ReflectionService:
             model=config["model"]
         )
 
-        connections_found = 0
-
-        # 2. 为每个孤独记忆寻找归宿
-        for lonely_mem in lonely_memories:
-            print(f"[Reflection] 尝试连接孤独记忆: {lonely_mem.content[:30]}...")
+        new_relations_count = 0
+        
+        for target_memory in lonely_memories:
+            # 尝试为孤独记忆寻找家
+            print(f"[Reflection] 尝试挽救孤独记忆: {target_memory.content[:30]}...")
             
-            # 使用向量检索寻找相似记忆
             candidates = await MemoryService.get_relevant_memories(
                 self.session, 
-                lonely_mem.content, 
-                limit=5
+                target_memory.content, 
+                limit=5,
+                agent_id=agent_id
             )
             
             for candidate in candidates:
-                if candidate.id == lonely_mem.id:
+                if candidate.id == target_memory.id:
                     continue
                 
-                # 双重检查是否已存在关联 (虽然前面过滤了，但为了并发安全)
+                # Check duplication
                 existing = await self.session.exec(
                     select(MemoryRelation).where(
-                        ((MemoryRelation.source_id == lonely_mem.id) & (MemoryRelation.target_id == candidate.id)) |
-                        ((MemoryRelation.source_id == candidate.id) & (MemoryRelation.target_id == lonely_mem.id))
+                        ((MemoryRelation.source_id == target_memory.id) & (MemoryRelation.target_id == candidate.id)) |
+                        ((MemoryRelation.source_id == candidate.id) & (MemoryRelation.target_id == target_memory.id))
                     )
                 )
                 if existing.first():
                     continue
 
-                # 分析关联
-                relation = await self._analyze_relation(llm, lonely_mem, candidate)
+                relation = await self._analyze_relation(llm, target_memory, candidate)
                 
                 if relation:
                     new_relation = MemoryRelation(
-                        source_id=lonely_mem.id,
+                        source_id=target_memory.id,
                         target_id=candidate.id,
                         relation_type=relation["type"],
                         strength=relation["strength"],
-                        description=relation["description"]
+                        description=relation["description"],
+                        agent_id=agent_id
                     )
                     self.session.add(new_relation)
                     await self.session.commit()
-                    print(f"[Reflection] 已连接孤独记忆! {relation['description']}")
-                    connections_found += 1
-                    # 找到一个关联就跳出当前候选循环，继续下一个孤独记忆 (避免过度连接)
-                    # 或者也可以继续找，看策略。这里选择继续找，织网越密越好。
+                    print(f"[Reflection] 孤独记忆已连接: {relation['description']}")
+                    new_relations_count += 1
+                    break # 找到一个连接就够了，脱离孤独状态
         
-        await self.session.commit()
-        print(f"[Reflection] 孤独记忆扫描完成。处理了 {len(lonely_memories)} 条项目。")
-        return {"status": "success", "processed_count": len(lonely_memories), "connections_found": connections_found}
+        return {"status": "success", "new_relations": new_relations_count}
 
     async def _analyze_relation(self, llm: LLMService, m1: Memory, m2: Memory) -> Optional[dict]:
         """让 LLM 分析两条记忆的关系"""

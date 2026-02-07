@@ -56,6 +56,7 @@ export class WindowManager {
 
   public createLauncherWindow(): BrowserWindow {
     if (this.launcherWin && !this.launcherWin.isDestroyed()) {
+      if (!this.launcherWin.isVisible()) this.launcherWin.show()
       if (this.launcherWin.isMinimized()) this.launcherWin.restore()
       this.launcherWin.focus()
       return this.launcherWin
@@ -66,30 +67,27 @@ export class WindowManager {
       icon: this.getIconPath(),
       width: 900,
       height: 600,
-      // Wait for ready-to-show
-    // 等待 ready-to-show
-    show: false,
-    frame: false,
-    center: true,
-    transparent: true,
-    hasShadow: true,
-    // Allow acrylic to show through
-    // 允许亚克力透出
-    backgroundColor: '#00000000',
+      // 等待 ready-to-show
+      show: false,
+      frame: false,
+      center: true,
+      transparent: true,
+      hasShadow: true,
+      // 允许亚克力透出
+      backgroundColor: '#00000000',
       webPreferences: {
         preload: this.getPreloadPath(),
         nodeIntegration: true,
         contextIsolation: true,
+        backgroundThrottling: false
       }
     })
 
-    // Acrylic effect
     // 亚克力效果
     if (process.platform === 'win32') {
       try {
         this.launcherWin.setBackgroundMaterial('acrylic')
       } catch (e) {
-        // Ignore errors
         // 忽略错误
       }
     }
@@ -118,6 +116,7 @@ export class WindowManager {
 
   public createPetWindow(): BrowserWindow {
     if (this.petWin && !this.petWin.isDestroyed()) {
+      if (!this.petWin.isVisible()) this.petWin.show()
       if (this.petWin.isMinimized()) this.petWin.restore()
       this.petWin.focus()
       return this.petWin
@@ -136,15 +135,14 @@ export class WindowManager {
       height: 800,
       x: width - 850,
       y: height - 850,
-      // type: 'toolbar', // Removed: 'toolbar' can cause visibility issues on some Windows versions
       // type: 'toolbar', // 已移除: 'toolbar' 可能在某些 Windows 版本上导致可见性问题
       frame: false,
-      transparent: true, // Revert to transparent // 恢复透明
-      backgroundColor: '#00000000', // Explicitly set ARGB transparent // 显式设置 ARGB 透明
+      transparent: true, // 恢复透明
+      backgroundColor: '#00000000', // 显式设置 ARGB 透明
       alwaysOnTop: true,
       skipTaskbar: true,
       hasShadow: false,
-      resizable: false, // Revert to non-resizable // 恢复不可调整大小
+      resizable: false, // 恢复不可调整大小
       webPreferences: {
         preload: this.getPreloadPath(),
         nodeIntegration: true,
@@ -154,38 +152,24 @@ export class WindowManager {
       }
     })
 
-    // Load Pet3DView as default per user request
     // 根据用户请求，默认加载 Pet3DView
     this.petWin.loadURL(this.getPageUrl('/pet-3d'))
 
-    // Open DevTools to debug renderer crash/errors
     // 打开 DevTools 以调试渲染器崩溃/错误
     // this.petWin.webContents.openDevTools({ mode: 'detach' })
 
     this.petWin.setAlwaysOnTop(true, 'screen-saver')
     
-    // Ignore mouse events for transparency click-through
-    // Default: ignore all, let specific elements capture via IPC
-    // OR: start with capturing all, let CSS pointer-events handle it?
-    // Electron setIgnoreMouseEvents(true) makes the window transparent to clicks.
-    // setIgnoreMouseEvents(true, { forward: true }) lets us forward to elements underneath?
-    // Common pattern: Renderer sends IPC to set ignore status based on hover/click.
     // 忽略鼠标事件以实现透明点击穿透
     // 默认: 忽略所有，让特定元素通过 IPC 捕获
-    // 或者: 开始捕获所有，让 CSS pointer-events 处理？
-    // Electron setIgnoreMouseEvents(true) 使窗口对点击透明。
-    // setIgnoreMouseEvents(true, { forward: true }) 允许我们转发给下方的元素？
     // 常用模式: 渲染器根据悬停/点击发送 IPC 来设置忽略状态。
     
-    // Initial state: Interactive
     // 初始状态: 可交互
     this.petWin.setIgnoreMouseEvents(false)
     
-    // Force show
     // 强制显示
     this.petWin.show()
     
-    // Fix visibility issues on some systems
     // 修复某些系统上的可见性问题
     this.petWin.on('ready-to-show', () => {
         this.petWin?.show()
@@ -260,6 +244,7 @@ export class WindowManager {
             preload: this.getPreloadPath(),
             nodeIntegration: true,
             contextIsolation: true,
+            backgroundThrottling: false
         }
     })
 
@@ -323,6 +308,7 @@ export class WindowManager {
             preload: this.getPreloadPath(),
             nodeIntegration: true,
             contextIsolation: true,
+            backgroundThrottling: false
         }
     })
 

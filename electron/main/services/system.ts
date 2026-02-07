@@ -9,17 +9,15 @@ export interface SystemStats {
     memory_total: number
 }
 
-// 缓存上一次的 CPU 负载，因为 systeminformation 获取 CPU 需要时间计算
+// 缓存 CPU 负载 (定期更新以降低开销)
 let lastCpuLoad = 0
 
-// 定期更新 CPU 负载 (每 5 秒，降低频率以减少开销)
 setInterval(async () => {
     try {
         const load = await si.currentLoad()
         lastCpuLoad = load.currentLoad
     } catch (e) {
         // ignore
-        // 忽略
     }
 }, 5000)
 
@@ -37,7 +35,6 @@ export async function getSystemStats(): Promise<SystemStats> {
 }
 
 export function getBackendLogs(): string[] {
-    // Return empty for now (todo: implement log store)
     // 目前返回空 (待办: 实现日志存储)
     return []
 }

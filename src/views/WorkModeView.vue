@@ -155,7 +155,7 @@
 
           <!-- 聊天区域 (悬浮侧边栏) -->
           <div class="w-[400px] flex flex-col bg-[#1e293b]/80 backdrop-blur-md border border-white/5 rounded-2xl shadow-2xl overflow-hidden transition-all duration-500">
-             <ChatInterface :work-mode="true" :disabled="!isReady" class="flex-1" />
+             <ChatInterface :work-mode="true" :disabled="!isReady" class="flex-1" :target-id="agentId" :agent-name="agentName" :key="agentId" />
           </div>
 
         </div>
@@ -178,7 +178,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onErrorCaptured, computed, reactive } from 'vue';
+import { ref, onMounted, onActivated, onErrorCaptured, computed, reactive } from 'vue';
 import { 
   Files as FilesIcon, 
   CheckCircle as CheckCircleIcon,
@@ -246,6 +246,7 @@ onErrorCaptured((err) => {
 // 状态
 const isReady = ref(false);
 const agentName = ref('Pero');
+const agentId = ref('pero');
 
 const fetchActiveAgent = async () => {
   try {
@@ -253,7 +254,10 @@ const fetchActiveAgent = async () => {
     if (res.ok) {
       const agents = await res.json();
       const active = agents.find(a => a.is_active);
-      if (active) agentName.value = active.name;
+      if (active) {
+          agentName.value = active.name;
+          agentId.value = active.id;
+      }
     }
   } catch (e) { console.error(e); }
 };
@@ -265,9 +269,15 @@ const dirtyFiles = ref(new Set());
 
 onMounted(() => {
   console.log("WorkModeView Mounted");
+  fetchActiveAgent();
   // Instant ready for smoother transition since parent handles overlap
   // 立即就绪，以便更平滑的过渡，因为父级处理重叠
   isReady.value = true;
+});
+
+onActivated(() => {
+  console.log("WorkModeView Activated");
+  fetchActiveAgent();
 });
 
 // 文件处理

@@ -1,6 +1,5 @@
 <template>
   <div class="pet-3d-container">
-    <!-- 3D Avatar Component -->
     <!-- 3D 角色组件 -->
     <BedrockAvatar 
       ref="avatarRef" 
@@ -10,10 +9,11 @@
       @hover-end="onHoverEnd"
     />
     
-    <!-- UI Overlay -->
     <!-- UI 覆盖层 -->
     <div class="ui-overlay" @mouseenter="onUIEnter" @mouseleave="onUILeave">
-      <!-- Status Tags (Top Left) -->
+      <!-- Notification Manager -->
+      <PetNotificationManager />
+      
       <!-- 状态标签 (左上角) -->
       <transition name="fade">
         <div class="status-tags" v-show="showInput" :style="{ transform: `scale(${uiScale})`, transformOrigin: 'top left' }">
@@ -24,7 +24,6 @@
       </transition>
 
       <div class="ui-scalable-wrapper" :style="{ transform: `scale(${uiScale})` }">
-      <!-- Floating Trigger (Light Orb) -->
       <!-- 悬浮触发器 (光球) -->
       <div 
         class="floating-trigger" 
@@ -40,7 +39,6 @@
         </div>
       </div>
 
-      <!-- Input Overlay -->
       <!-- 输入覆盖层 -->
       <div class="input-overlay" v-show="showInput" @mouseenter="onUIEnter">
         <input 
@@ -94,7 +92,6 @@
         </div>
       </transition>
 
-      <!-- Appearance Menu (Voxel Style) -->
       <!-- 外观菜单 (体素风格) -->
       <transition name="fade">
         <div class="appearance-menu" v-if="showAppearanceMenu && showInput" @mouseenter="onUIEnter">
@@ -185,6 +182,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue';
 import BedrockAvatar from '../components/avatar/BedrockAvatar.vue';
+import PetNotificationManager from '@/components/ui/PetNotificationManager.vue';
 import FileSearchModal from '../components/FileSearchModal.vue';
 import { invoke, listen } from '@/utils/ipcAdapter';
 import { API_BASE } from '../config';
@@ -318,14 +316,11 @@ watch(parsedBubbleContent, async () => {
   
     // 只有在非思考状态且有文字时，才启动自动消失定时器
     if (newText && !newThinking) {
-      // 检查是否是长文本（例如 LLM 回复），长文本停留更久
       const isLongText = newText.length > 50;
-      // 根据文字长度调整停留时间，最少 5 秒，最多 30 秒 (之前是 15s，对于长回复太短了)
+      // 根据文字长度调整停留时间 (5s - 30s)
       const duration = Math.min(Math.max(5000, newText.length * 200), 30000);
       
       bubbleTimer = setTimeout(() => {
-        // [Modified] 不再完全清空，而是收起气泡？或者保留最后一句？
-        // 为了用户体验，自动消失是合理的，但时间要够长。
         currentText.value = '';
         isBubbleExpanded.value = false;
         bubbleTimer = null;
@@ -610,9 +605,10 @@ const encodeWAV = (samples, sampleRate) => {
 
 // Handler for Voice Update Requests (Status, Text, etc.)
 const handleVoiceUpdateRequest = (req) => {
-    const type = req.params.type;
-    const content = req.params.content;
-    const message = req.params.message;
+    const params = req.params || {};
+    const type = params.type;
+    const content = params.content;
+    const message = params.message;
     
     if (type === 'status') {
         if (content === 'listening') {
@@ -697,19 +693,16 @@ const startLipSync = (analyserNode) => {
         const dataArray = new Uint8Array(analyserNode.frequencyBinCount);
         analyserNode.getByteFrequencyData(dataArray);
 
-        // Calculate average volume from relevant bins (voice range)
         // 计算相关频段（人声范围）的平均音量
         let sum = 0;
         const startBin = 2; // Skip very low rumble
-        const endBin = 32;  // Focus on voice frequencies (approx 0-2.7kHz with 256 FFT/44.1k)
+        const endBin = 32;  // Approx 0-2.7kHz
         for (let i = startBin; i < endBin; i++) {
             sum += dataArray[i];
         }
         const average = sum / (endBin - startBin);
         
-        // Normalize (0-255 -> 0-1) and apply gain
         // 归一化 (0-255 -> 0-1) 并应用增益
-        // Multiply by 3.0 to make the mouth open more for normal speech
         const volume = Math.min(1.0, (average / 255) * 3.0);
 
         if (avatarRef.value && avatarRef.value.setLipSync) {
@@ -740,7 +733,6 @@ const processAudioQueue = async () => {
 
     isAudioPlaying.value = true
     const audioData = audioQueue.value.shift()
-
     isSpeaking.value = true
     
     let ctx = audioContext.value
@@ -761,7 +753,7 @@ const processAudioQueue = async () => {
     try {
         let arrayBuffer;
         if (typeof audioData === 'string') {
-             // Fallback for base64 string if any legacy path remains
+             // Fallback for base64 string
              const binaryString = window.atob(audioData)
              const len = binaryString.length
              const bytes = new Uint8Array(len)
@@ -770,11 +762,7 @@ const processAudioQueue = async () => {
              }
              arrayBuffer = bytes.buffer;
         } else if (audioData instanceof Uint8Array) {
-             // New path: Uint8Array from Protobuf
-             // Need to copy to ArrayBuffer because decodeAudioData detaches it? 
-             // Or just use .buffer. 
-             // Note: Uint8Array.buffer might be the whole buffer of the message if it's a slice.
-             // Safe way: new Uint8Array(audioData).buffer
+             // Uint8Array from Protobuf
              arrayBuffer = new Uint8Array(audioData).buffer;
         } else {
              throw new Error("未知音频数据类型");
@@ -787,7 +775,6 @@ const processAudioQueue = async () => {
         currentAudioSource.value = source
         
         // Create Analyser for Lip Sync
-        // 创建分析器用于口型同步
         const analyserNode = ctx.createAnalyser()
         analyserNode.fftSize = 256
         analyser.value = analyserNode
@@ -848,7 +835,6 @@ const fetchActiveAgent = async () => {
             const active = agents.find(a => a.is_active);
             if (active) {
                 currentAgentName.value = active.name;
-                // TODO: Trigger model reload if needed
             }
         }
     } catch (e) { console.error('获取活跃 Agent 失败:', e); }
@@ -878,7 +864,6 @@ const onUIEnter = () => {
 }
 
 const onUILeave = () => {
-    // Only set to true if not hovering character and not dragging
     if (!isDragging.value) {
         setIgnoreMouse(true);
     }
@@ -890,7 +875,6 @@ let startY = 0;
 const isDragging = ref(false);
 
 const onMouseDown = (e) => {
-    // Only start drag logic if left click
     if (e.button !== 0) return;
     
     startX = e.screenX;
@@ -927,21 +911,13 @@ const onMouseDown = (e) => {
                 invoke('window-drag-end').catch(() => {});
             }
 
-            // Reset transparency check
-            setIgnoreMouse(false); // Keep false for a moment to prevent flicker? Or re-evaluate.
-            // Actually if we are over the character, it should stay false.
-            // If we dragged off, it might need to go true.
-            // But BedrockAvatar will emit hover-end if we move off.
+            setIgnoreMouse(false); 
         }
     }
     
     window.addEventListener('mousemove', onMouseMove);
     window.addEventListener('mouseup', onMouseUp);
 }
-
-// Attach drag listener to container (captures events from BedrockAvatar too)
-// BedrockAvatar uses Three.js, so we might need to handle mousedown there.
-// But we can listen on the window or container 'mousedown.capture'
 
 onMounted(async () => {
   fetchActiveAgent();
@@ -950,11 +926,7 @@ onMounted(async () => {
   // Initial Fetch of Pet State (Sync with Backend)
   const fetchPetState = async () => {
     try {
-        // Use a simple fetch to get current state from backend
-        // Assuming backend is on port 9120 or gateway default
-        // We can use gatewayClient to request state if available, or fetch HTTP
-        // Let's use fetch for simplicity as in Dashboard
-        const API_BASE = "http://localhost:9120/api"; // [Fix] Added /api suffix to match backend router
+        const API_BASE = "http://localhost:9120/api";
         const res = await fetch(`${API_BASE}/pet/state`);
         if (res.ok) {
             const state = await res.json();
@@ -1068,6 +1040,33 @@ onMounted(async () => {
   unlistenFunctions.push(unlistenSearch);
 
   // Status Updates (from Gateway)
+  gatewayClient.on('action:agent_changed', async (data) => {
+    console.log('[Pet3DView] Detected agent change, refreshing state...');
+    
+    // 1. Refresh Active Agent Name
+    await fetchActiveAgent();
+    
+    // 2. Refresh Pet State (Mood, Vibe, Mind)
+    await fetchPetState();
+    
+    // 3. Reload Interaction Texts
+    await loadLocalTexts();
+    
+    // 4. Notify User
+    currentText.value = `(已切换为 ${currentAgentName.value})`;
+    isThinking.value = false;
+    isBubbleExpanded.value = true;
+    bubbleKey.value++;
+    
+    // Auto hide bubble after short delay
+    setTimeout(() => {
+        if (currentText.value.includes('(已切换为')) {
+            currentText.value = '';
+            isBubbleExpanded.value = false;
+        }
+    }, 3000);
+  });
+
   gatewayClient.on('action:state_update', (data) => {
     // The gateway emits the full ActionRequest object, so the actual data is in 'params'
     // GatewayClient emits: this.emit(`action:${envelope.request.actionName}`, envelope.request);

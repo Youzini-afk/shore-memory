@@ -57,7 +57,7 @@ class EmbeddingService:
             if default_st_cache not in search_dirs:
                 search_dirs.append(default_st_cache)
 
-            print(f"[Embedding] 调试: 正在目录中搜索模型 '{model_name}': {search_dirs}", flush=True)
+            # print(f"[Embedding] 调试: 正在目录中搜索模型 '{model_name}': {search_dirs}", flush=True)
 
             repo_id = "models--" + model_name.replace("/", "--")
             
@@ -87,7 +87,7 @@ class EmbeddingService:
                             # 验证 snapshot 是否包含 config.json
                             config_path = os.path.join(snapshot_path, "config.json")
                             if os.path.isdir(snapshot_path) and os.path.exists(config_path):
-                                print(f"[Embedding] 调试: 发现有效配置于 {config_path}", flush=True)
+                                # print(f"[Embedding] 调试: 发现有效配置于 {config_path}", flush=True)
                                 return snapshot_path
                             # else:
                                 # print(f"[Embedding] Debug: Config not found at {config_path}", flush=True)
@@ -120,7 +120,7 @@ class EmbeddingService:
             local_path = self._resolve_local_path(model_name)
             if local_path:
                 try:
-                    print(f"[Embedding] 发现本地缓存路径: {local_path}，尝试直接加载...", flush=True)
+                    # print(f"[Embedding] 发现本地缓存路径: {local_path}，尝试直接加载...", flush=True)
                     self._model = SentenceTransformer(local_path)
                     print("[Embedding] 已从本地缓存路径加载模型。", flush=True)
                     return
@@ -156,7 +156,7 @@ class EmbeddingService:
             local_path = self._resolve_local_path(model_name)
             if local_path:
                 try:
-                    print(f"[Embedding] 发现本地缓存路径: {local_path}，尝试直接加载...", flush=True)
+                    # print(f"[Embedding] 发现本地缓存路径: {local_path}，尝试直接加载...", flush=True)
                     self._cross_encoder = CrossEncoder(local_path)
                     print("[Embedding] 已从本地缓存路径加载重排序模型。", flush=True)
                     return

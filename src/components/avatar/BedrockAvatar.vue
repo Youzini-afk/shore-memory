@@ -119,12 +119,10 @@ defineExpose({
     const rawX = (x - centerX) / (rect.width / 2);
     const rawY = (y - centerY) / (rect.height / 2);
     
-    // Allow slightly wider range for global tracking? Or keep clamped?
     // 允许稍宽的全局追踪范围？还是保持限制？
     mouseInputX = Math.max(-1, Math.min(1, rawX));
     mouseInputY = Math.max(-1, Math.min(1, rawY));
     
-    // Update NDC for raycaster with RAW values
     // 使用原始值更新 Raycaster 的 NDC
     mouseNDC.set(rawX, -rawY);
   },
@@ -220,24 +218,18 @@ function initThree() {
   // 重置角色引用，因为我们要创建一个新场景
   characterModel = null;
 
-  // 1. Scene
   // 1. 场景
   const s = new THREE.Scene();
   scene.value = s;
 
-  // 2. Camera
   // 2. 相机
-  // Use narrower FOV for 2D look (30-45)
   // 使用较窄的 FOV 以获得 2D 外观 (30-45)
   const c = new THREE.PerspectiveCamera(40, container.value.clientWidth / container.value.clientHeight, 0.1, 1000);
-  // Default View: Height 20, Dist 70, Target Y 21
   // 默认视图：高度 20，距离 70，目标 Y 21
-  // Increased Z to 90 to zoom out (make model smaller)
   // 增加 Z 到 90 以缩小（使模型更小）
   c.position.set(0, 20, 90); 
   camera.value = c;
 
-  // 3. Renderer
   // 3. 渲染器
   const r = new THREE.WebGLRenderer({ alpha: true, antialias: true });
   r.setSize(container.value.clientWidth, container.value.clientHeight);
@@ -247,8 +239,7 @@ function initThree() {
   canvasContainer.value.appendChild(r.domElement);
   renderer.value = r;
 
-  // 4. Controls (Right click to rotate, as per doc)
-  // 4. 控制器（右键旋转，根据文档）
+  // 4. 控制器（右键旋转）
   const ctrl = new OrbitControls(c, r.domElement);
   ctrl.target.set(0, 21, 0); // Look at Chest/Neck (Y=21)
   ctrl.enableDamping = true;
@@ -274,19 +265,15 @@ function initThree() {
   }
   controls.value = ctrl;
 
-  // 5. Realistic Lighting Setup
   // 5. 逼真的灯光设置
-  // Ambient Light (Moderate intensity)
   // 环境光（中等强度）
   const ambient = new THREE.AmbientLight(0xffffff, 0.6);
   s.add(ambient);
 
-  // Hemisphere Light (Natural sky/ground variation)
   // 半球光（自然天空/地面变化）
   const hemi = new THREE.HemisphereLight(0xddeeff, 0x202020, 0.5); // Sky blue to dark gray
   s.add(hemi);
 
-  // Main Directional Light (Sun)
   // 主定向光（太阳）
   const dirLight = new THREE.DirectionalLight(0xffffff, 1.5);
   dirLight.position.set(20, 50, 30); // Higher angle for better shadows
@@ -297,20 +284,17 @@ function initThree() {
   dirLight.shadow.normalBias = 0.05; // Reduces shadow acne
   s.add(dirLight);
 
-  // Fill Light (Softens harsh shadows)
   // 补光灯（柔化刺眼的阴影）
   const fillLight = new THREE.DirectionalLight(0xffeedd, 0.5); // Warm fill
   fillLight.position.set(-20, 20, 20);
   s.add(fillLight);
 
-  // Rim Light (Backlight for separation)
   // 轮廓光（背光用于分离）
   const rimLight = new THREE.SpotLight(0xffffff, 1.0);
   rimLight.position.set(0, 40, -30);
   rimLight.lookAt(0, 10, 0);
   s.add(rimLight);
   
-  // Ground (Shadow Catcher - Invisible but receives shadow)
   // 地面（阴影捕捉器 - 不可见但接收阴影）
   const groundGeo = new THREE.PlaneGeometry(100, 100);
   const groundMat = new THREE.ShadowMaterial({ opacity: 0.3 });
@@ -325,7 +309,6 @@ async function loadRossi() {
   if (!scene.value) return;
 
   try {
-    // Detect environment to set correct path prefix
     // 检测环境以设置正确的路径前缀
     const isElectron = (window as any).electron !== undefined;
     const prefix = isElectron ? 'assets/' : '/assets/';
@@ -344,11 +327,8 @@ async function loadRossi() {
       animation_controllers: `${prefix}3d/Rossi/controller/controller.json`
     };
     
-    // NOTE: Paths must be correct relative to 'public'
-    // I copied PeroCore/View3D/assets/Rossi to public/assets/3d/Rossi
     // 注意：路径必须相对于 'public' 是正确的
     
-    // Clear existing scene objects to prevent duplication
     // 清除现有的场景对象以防止重复
     if (characterModel && scene.value) {
         scene.value.remove(characterModel);
@@ -358,7 +338,6 @@ async function loadRossi() {
     const rootGroup = await loader.load(config, animManager);
     characterModel = rootGroup;
 
-    // Cache Bones for Procedural Animation
     // 缓存骨骼用于程序化动画
     mouthBone = rootGroup.getObjectByName('Mouth') || null;
     const eyeBrow = rootGroup.getObjectByName('EyeBrow');
@@ -368,26 +347,21 @@ async function loadRossi() {
 
     scene.value.add(rootGroup);
     
-    // Populate animation list for debug
     // 填充调试用的动画列表
     animList.value = Object.keys(animManager.animations).sort();
     
-    // Only auto-select idle if NO controllers are loaded (Legacy Mode)
     // 仅当未加载控制器时才自动选择 idle (传统模式)
     if (animManager.controllers.length === 0) {
-        // Auto-select 'idle' or 'tac:idle' if available
         // 如果可用，自动选择 'idle' 或 'tac:idle'
         const idleAnim = animList.value.find(n => n === 'idle') || animList.value.find(n => n === 'tac:idle');
         if (idleAnim) {
           selectedAnim.value = idleAnim;
         }
     } else {
-        // If controllers exist, clear selectedAnim to avoid forcing debug mode
         // 如果控制器存在，清除 selectedAnim 以避免强制调试模式
         selectedAnim.value = '';
     }
 
-    // Initial clothing update (hide censored parts)
     // 初始服装更新（隐藏审查部分）
     setTimeout(() => {
       updateClothing();
@@ -407,24 +381,19 @@ let isInteracting = false;
 function animate() {
   animationFrameId = requestAnimationFrame(animate);
   
-  // Auto-reset camera if not interacting
   // 如果没有交互，自动重置相机
   if (!isInteracting && controls.value && camera.value) {
-    // Current offset from target
     // 当前偏离目标的偏移量
     const currentOffset = new THREE.Vector3().copy(camera.value.position).sub(controls.value.target);
     const spherical = new THREE.Spherical().setFromVector3(currentOffset);
     
-    // Default orientation (Front View)
     // 默认方向（前视图）
     // Relative to target (0,21,0), default pos was (0,20,70) -> offset (0, -1, 70)
     // We want to reset rotation to this direction, but keep current RADIUS (zoom).
     const defaultOffset = new THREE.Vector3(0, -1, 70);
     const defaultSpherical = new THREE.Spherical().setFromVector3(defaultOffset);
     
-    // Lerp Angles (Theta/Phi) but keep Radius
     // 插值角度 (Theta/Phi) 但保持半径
-    // Handle Theta wrapping for shortest path
     // 处理 Theta 环绕以获得最短路径
     let diff = defaultSpherical.theta - spherical.theta;
     if (diff > Math.PI) diff -= 2 * Math.PI;
@@ -433,26 +402,21 @@ function animate() {
     spherical.theta += diff * 0.05;
     spherical.phi += (defaultSpherical.phi - spherical.phi) * 0.05;
     
-    // Set back to camera position
     // 设置回相机位置
     // Note: radius in 'spherical' is already the current radius, untouched.
     const newOffset = new THREE.Vector3().setFromSpherical(spherical);
     camera.value.position.copy(controls.value.target).add(newOffset);
     
-    // Also reset target to center if it drifted
     // 如果目标漂移，也重置目标到中心
     const defaultTarget = new THREE.Vector3(0, 21, 0);
     controls.value.target.lerp(defaultTarget, 0.05);
   }
 
-  // Calculate Target Head Rotation based on Camera Position + Mouse Input
   // 根据相机位置 + 鼠标输入计算目标头部旋转
   if (camera.value && scene.value) {
-    // Check Raycast for Hover
     // 检查射线检测以进行悬停
     if (characterModel) {
       raycaster.setFromCamera(mouseNDC, camera.value);
-      // Recursive check against character model
       // 针对角色模型的递归检查
       const intersects = raycaster.intersectObject(characterModel, true);
       const wasHovering = isHovering;
@@ -465,53 +429,42 @@ function animate() {
       }
     }
 
-    // --- Head Tracking Logic ---
     // --- 头部追踪逻辑 ---
     const headBone = scene.value.getObjectByName('Head');
-    // Default head position if bone not found (approximate height)
     // 如果未找到骨骼，则使用默认头部位置（近似高度）
     const headPos = headBone ? headBone.getWorldPosition(new THREE.Vector3()) : new THREE.Vector3(0, 24, 0);
     const camPos = camera.value.position;
     
-    // Vector from Head to Camera
     // 从头部到相机的向量
     const dx = camPos.x - headPos.x;
     const dy = camPos.y - headPos.y;
     const dz = camPos.z - headPos.z;
     
-    // Calculate Yaw (Y-axis rotation)
     // 计算偏航角 (Y 轴旋转)
     let camYaw = Math.atan2(dx, dz) * (180 / Math.PI);
     
-    // Calculate Pitch (X-axis rotation)
     // 计算俯仰角 (X 轴旋转)
     const hDist = Math.sqrt(dx*dx + dz*dz);
     let camPitch = -Math.atan2(dy, hDist) * (180 / Math.PI);
     
-    // Add Mouse Offset
     // 添加鼠标偏移
     const maxMouseAngle = 15; 
     const maxHeadAngle = 45;  
     
-    // Apply Hover Logic: If hovering, cancel mouse influence
     // 应用悬停逻辑：如果悬停，取消鼠标影响
     const effectiveMouseX = isHovering ? 0 : mouseInputX;
     const effectiveMouseY = isHovering ? 0 : mouseInputY;
     
-    // Combine Camera Angle and Mouse Offset
     // 结合相机角度和鼠标偏移
     let totalYaw = -camYaw + (effectiveMouseX * maxMouseAngle * -1); 
     let totalPitch = camPitch + (effectiveMouseY * maxMouseAngle);
     
-    // Clamp to max limits
     // 限制到最大限制
     targetHeadY = Math.max(-maxHeadAngle, Math.min(maxHeadAngle, totalYaw));
     targetHeadX = Math.max(-maxHeadAngle, Math.min(maxHeadAngle, totalPitch));
   }
 
-  // Update Head Tracking (Lerp)
   // 更新头部追踪 (插值)
-  // Smoothly interpolate current towards target
   // 平滑地将当前值插值向目标值
   const lerpFactor = 0.1; 
   currentHeadX += (targetHeadX - currentHeadX) * lerpFactor;
@@ -523,23 +476,19 @@ function animate() {
   if (controls.value) controls.value.update();
   animManager.update();
   
-  // Apply Procedural Animation Overrides (Post-Update)
   // 应用程序化动画覆盖 (更新后)
   if (scene.value) {
-      // --- Dragging / Lifted Physics ---
-      // 拖拽/被拎起物理效果
+      // --- 拖拽/被拎起物理效果 ---
       // Smoothly transition dragInfluence (0.0 to 1.0)
       const targetInfluence = props.isDragging ? 1.0 : 0.0;
-      // Use 'dragInfluence' stored in outer scope or ref (defined below)
       // 使用存储在外部作用域或 ref 中的 'dragInfluence' (定义在下面)
       dragInfluence += (targetInfluence - dragInfluence) * 0.1;
 
       if (dragInfluence > 0.01) {
           const time = Date.now() * 0.008;
-          const swingX = Math.sin(time) * 0.1; // Gentle swing / 轻微摆动
+          const swingX = Math.sin(time) * 0.1; // 轻微摆动
           const swingZ = Math.cos(time * 0.8) * 0.05; 
           
-          // Use CORRECT bone names from main.json
           // 使用 main.json 中的正确骨骼名称
           
           const body = scene.value.getObjectByName('AllBody') || scene.value.getObjectByName('Body');
@@ -553,12 +502,9 @@ function animate() {
           
           const head = scene.value.getObjectByName('Head');
 
-          // Helper: Lerp current rotation towards target rotation
           // 辅助函数：将当前旋转插值到目标旋转
-          // We add the target offset multiplied by dragInfluence
           // 我们加上乘以 dragInfluence 的目标偏移量
           
-          // Body: Tilt forward slightly (gravity) and swing
           // 身体：轻微前倾（重力）并摆动
           if (body) {
               const targetRotX = THREE.MathUtils.degToRad(15) + swingX * 0.5;
@@ -572,7 +518,6 @@ function animate() {
               upperBody.rotation.z = THREE.MathUtils.lerp(upperBody.rotation.z, targetRotZ, dragInfluence);
           }
           
-          // Arms: Dangle loosely
           // 手臂：松散下垂
           if (armL) {
               const targetRotZ = THREE.MathUtils.degToRad(20); 
@@ -587,7 +532,6 @@ function animate() {
               armR.rotation.x = THREE.MathUtils.lerp(armR.rotation.x, targetRotX, dragInfluence);
           }
           
-          // Legs: Dangle vertically
           // 腿部：垂直下垂
           if (legL) {
               const targetRotX = THREE.MathUtils.degToRad(15) + swingX * 1.5; 
@@ -602,22 +546,16 @@ function animate() {
               legR.rotation.z = THREE.MathUtils.lerp(legR.rotation.z, targetRotZ, dragInfluence);
           }
           
-          // Head: Look up/around (trying to see who grabbed her)
           // 头部：向上看/环顾四周（试图看谁抓住了她）
           if (head) {
              const targetRotX = THREE.MathUtils.degToRad(-45);
              const targetRotZ = swingZ * 0.5;
              
-             // Blend head tracking out as drag influence increases
              // 随着拖拽影响增加，淡出头部追踪
-             // But here we are applying on top of animation manager updates.
              // 但这里我们是在动画管理器更新之上应用的。
-             // Since AnimationManager resets bones or applies animation, we are overriding.
              // 由于 AnimationManager 重置骨骼或应用动画，我们正在覆盖。
              
-             // To blend properly, we need to know the 'original' rotation from animation.
              // 为了正确混合，我们需要知道来自动画的“原始”旋转。
-             // AnimationManager.update() has already run. So head.rotation contains anim + head tracking.
              // AnimationManager.update() 已经运行。所以 head.rotation 包含动画 + 头部追踪。
              
              head.rotation.x = THREE.MathUtils.lerp(head.rotation.x, targetRotX, dragInfluence);
@@ -629,9 +567,6 @@ function animate() {
       const rightEyelid = scene.value.getObjectByName('RightEyelid');
       const eyeBrow = scene.value.getObjectByName('EyeBrow');
       
-      // Target scale: 0.1 (Squint) when petting, 1.0 (Open) when not
-      // If shy, use a partial squint (e.g. 0.8) for a "shy/embarrassed" look
-      // If dragging, eyes wide open (Surprised)
       // 目标缩放：抚摸时 0.1 (眯眼)，否则 1.0 (睁眼)
       // 如果害羞，使用部分眯眼 (例如 0.8) 表现“害羞/尴尬”的样子
       // 如果拖拽中，睁大眼睛（惊讶）
@@ -643,27 +578,21 @@ function animate() {
       if (leftEyelid) leftEyelid.scale.y = currentSquint;
       if (rightEyelid) rightEyelid.scale.y = currentSquint;
 
-      // Eyebrow Animation (Pull down when petting)
       // 眉毛动画 (抚摸时下拉)
       if (eyeBrow) {
-          // Petting priority over shy
           // 抚摸优先级高于害羞
           const targetOffset = isPetting ? -1.5 : (isShy.value ? 0.5 : 0);
           currentEyebrowOffset += (targetOffset - currentEyebrowOffset) * 0.2;
           
-          // Use stored initial Y to avoid drifting
           // 使用存储的初始 Y 以避免漂移
           eyeBrow.position.y = initialEyebrowY + currentEyebrowOffset;
       }
 
-      // Lip Sync (Jaw Flap)
       // 口型同步 (下巴开合)
       if (mouthBone) {
-          // Smoothly interpolate current towards target
           // 平滑地将当前值插值向目标值
           currentLipSync.value += (lipSyncTarget.value - currentLipSync.value) * 0.3;
           
-          // Map 0-1 to Rotation Angle (e.g., 0 to 30 degrees)
           // 映射 0-1 到旋转角度 (例如 0 到 30 度)
           const maxOpenAngle = THREE.MathUtils.degToRad(30); 
           mouthBone.rotation.x = currentLipSync.value * maxOpenAngle;

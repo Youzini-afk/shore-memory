@@ -1,5 +1,4 @@
 <template>
-  <!-- Global Decorative Elements -->
   <!-- 全局装饰元素 -->
   <div class="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-emerald-500/0 z-50 pointer-events-none"></div>
   <div class="fixed -top-24 -right-24 w-96 h-96 bg-emerald-500/5 blur-[120px] rounded-full pointer-events-none"></div>
@@ -8,7 +7,6 @@
   <CustomTitleBar :transparent="true" />
   
   <div class="flex h-screen w-screen overflow-hidden bg-slate-950/95 text-slate-200 font-sans select-text pt-8">
-    <!-- Sidebar Navigation -->
     <!-- 侧边导航栏 -->
     <aside :class="[
       'glass-effect border-r border-slate-800/30 flex flex-col transition-all duration-300 relative z-20 select-none backdrop-blur-md',
@@ -51,14 +49,11 @@
 
     </aside>
 
-    <!-- Main Content -->
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col relative overflow-hidden bg-transparent">
-      <!-- Background Glow (Subtler) -->
       <!-- 背景光晕 (更柔和) -->
       <div class="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 blur-[150px] rounded-full pointer-events-none"></div>
       
-      <!-- Top Header -->
       <!-- 顶部标题栏 -->
       <header class="h-20 flex items-center justify-between px-10 border-b border-slate-800/30 backdrop-blur-sm z-10 select-none">
         <div>
@@ -86,11 +81,9 @@
         </div>
       </header>
 
-      <!-- Content Area -->
       <!-- 内容区域 -->
       <main class="flex-1 overflow-hidden p-8">
         <div v-if="activeTab === 'home'" class="h-full flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar">
-          <!-- Status Cards -->
           <!-- 状态卡片 -->
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 shrink-0">
             <div class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-emerald-500/30 transition-colors group">
@@ -133,10 +126,8 @@
             </div>
           </div>
 
-          <!-- Main Launch Section -->
           <!-- 主要启动区域 -->
           <div class="flex-1 min-h-[300px] flex flex-col items-center justify-center gap-8 glass-effect rounded-3xl border border-slate-800/50 relative overflow-hidden">
-             <!-- Background pattern -->
              <!-- 背景图案 -->
              <div class="absolute inset-0 opacity-[0.03] pointer-events-none" style="background-image: radial-gradient(#fff 1px, transparent 1px); background-size: 24px 24px;"></div>
              
@@ -183,7 +174,6 @@
           </div>
         </div>
 
-        <!-- Agents Tab -->
         <!-- 角色标签页 -->
         <div v-if="activeTab === 'agents'" class="h-full flex flex-col gap-6">
           <div class="flex items-center justify-between">
@@ -220,7 +210,6 @@
                   class="glass-effect rounded-2xl p-5 border border-slate-800/50 transition-all duration-300 group relative overflow-hidden"
                   :class="agent.is_enabled ? 'hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/10' : 'opacity-60 grayscale hover:opacity-80'"
              >
-                <!-- Background Gradient -->
                 <!-- 背景渐变 -->
                 <div v-if="agent.is_active" class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none"></div>
 
@@ -256,7 +245,6 @@
                       {{ agent.is_active ? 'Active Agent' : (agent.is_enabled ? 'Ready' : 'Disabled') }}
                    </span>
                    
-                   <!-- Only show "Set Active" if enabled but not active -->
                    <!-- 仅在已启用但未活跃时显示“设为活跃” -->
                    <button v-if="agent.is_enabled && !agent.is_active" 
                            @click="setAsActive(agent)"
@@ -269,7 +257,6 @@
           </div>
         </div>
 
-        <!-- Plugins Tab -->
         <!-- 插件标签页 -->
         <div v-if="activeTab === 'plugins'" class="h-full flex flex-col gap-6">
           <div class="flex items-center justify-between">
@@ -320,7 +307,6 @@
           </div>
         </div>
 
-        <!-- Environment Tab -->
         <!-- 环境标签页 -->
         <div v-if="activeTab === 'environment'" class="h-full flex flex-col gap-6">
           <div class="flex items-center justify-between">
@@ -344,7 +330,6 @@
           </div>
 
           <div v-if="envReport" class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
-             <!-- Critical Components -->
              <!-- 关键组件 -->
              <div class="space-y-4">
                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -352,7 +337,6 @@
                </h3>
                
                <div class="grid grid-cols-1 gap-3">
-                 <!-- Python -->
                  <!-- Python 环境 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -375,7 +359,6 @@
                    </div>
                  </div>
 
-                 <!-- Backend Script -->
                  <!-- 后端脚本 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -395,7 +378,6 @@
                    </div>
                  </div>
 
-                 <!-- VC++ Redist -->
                  <!-- VC++ 运行库 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -418,7 +400,6 @@
                    </div>
                  </div>
                  
-                 <!-- Data Dir -->
                  <!-- 数据目录 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -440,7 +421,6 @@
                </div>
              </div>
 
-             <!-- Optional Components -->
              <!-- 可选组件 -->
              <div class="space-y-4">
                <h3 class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2">
@@ -448,7 +428,6 @@
                </h3>
                
                <div class="grid grid-cols-1 gap-3">
-                 <!-- WebView2 -->
                  <!-- WebView2 组件 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -468,7 +447,6 @@
                    </div>
                  </div>
 
-                 <!-- Node.js -->
                  <!-- Node.js 环境 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -491,7 +469,6 @@
                    </div>
                  </div>
 
-                 <!-- NapCat -->
                  <!-- NapCat 组件 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -515,7 +492,6 @@
                    </div>
                  </div>
 
-                 <!-- Port 9120 -->
                  <!-- 9120 端口 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -538,7 +514,6 @@
                    </div>
                  </div>
                  
-                 <!-- Memory Core -->
                  <!-- 记忆核心 -->
                  <div class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors">
                    <div class="flex items-center gap-4">
@@ -560,7 +535,6 @@
                </div>
              </div>
              
-             <!-- Error Log -->
              <!-- 错误日志 -->
              <div v-if="envReport.errors && envReport.errors.length > 0" class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20">
                 <h3 class="text-xs font-bold text-rose-500 uppercase tracking-widest mb-2 flex items-center gap-2">
@@ -582,7 +556,6 @@
           </div>
         </div>
 
-        <!-- Tools Tab -->
         <!-- 工具标签页 -->
         <div v-if="activeTab === 'tools'" class="h-full flex flex-col gap-6">
           <div class="flex items-center justify-between">
@@ -620,7 +593,6 @@
               </div>
             </div>
 
-            <!-- NapCat Social Adapter -->
             <!-- NapCat 社交适配器 -->
             <div class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-pink-500/30 transition-all group relative overflow-hidden">
               <div class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none">
@@ -658,7 +630,6 @@
               </div>
             </div>
 
-            <!-- Placeholder for future tools -->
             <!-- 未来工具占位符 -->
             <div class="glass-effect rounded-2xl p-6 border border-slate-800/50 border-dashed flex flex-col items-center justify-center text-slate-700 group hover:border-slate-700 transition-colors">
               <Plus :size="32" class="mb-2 opacity-20 group-hover:opacity-40 transition-opacity" />
@@ -668,7 +639,6 @@
         </div>
       </main>
 
-      <!-- Footer / Mini Status -->
       <!-- 底部 / 迷你状态 -->
       <footer class="h-10 px-10 flex items-center justify-between border-t border-slate-800/30 text-[10px] font-mono text-slate-600 select-none">
         <div class="flex items-center gap-6">
@@ -688,6 +658,7 @@
           <span>© 2026 PEROFAMILY</span>
         </div>
       </footer>
+
 
       <!-- Global Download Progress Overlay -->
       <div v-if="downloadProgress.active" class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-96 glass-effect p-4 rounded-xl border border-emerald-500/30 shadow-2xl flex flex-col gap-2 animate-bounce-in">
@@ -725,10 +696,11 @@ import {
 
 const router = useRouter()
 const activeTab = ref('home')
-const napcatLogs = ref([])
+// console.debug("Stats update failed", e) -> removed
+// const napcatLogs = ref([]) -> removed
 
 const envReport = ref(null)
-const envStatus = ref('checking') // checking (检查中), ok (正常), warning (警告), error (错误)
+const envStatus = ref('checking') // checking/ok/warning/error
 
 watch(activeTab, async (val) => {
   if (val === 'environment') {
@@ -766,7 +738,7 @@ const updateStats = async () => {
     memoryUsed.value = stats.memory_used
     memoryTotal.value = stats.memory_total
   } catch (e) {
-    // console.debug("Stats update failed", e)
+    // ignore
   }
 }
 
@@ -774,7 +746,7 @@ const loadConfig = async () => {
   try {
     const config = await invoke('get_config')
     appConfig.value = config
-    // Default to false if missing or undefined
+    // 默认为 false
     isSocialEnabled.value = config.enable_social_mode === true
   } catch (e) {
     console.error("加载配置失败:", e)
@@ -782,26 +754,25 @@ const loadConfig = async () => {
 }
 
 const toggleSocialMode = async () => {
-  // Optimistic update
+  // 乐观更新
   isSocialEnabled.value = !isSocialEnabled.value
   
   try {
     const newConfig = { ...appConfig.value, enable_social_mode: isSocialEnabled.value }
-    // Deep clone to remove Vue Proxies which cause "An object could not be cloned" error in IPC
+    // 深拷贝去除 Vue Proxy 以避免 IPC 序列化错误
     const cleanConfig = JSON.parse(JSON.stringify(newConfig))
     
-    // console.log("Saving config:", cleanConfig)
     await invoke('save_config', { config: cleanConfig })
     appConfig.value = newConfig
     
-    // If disabled, stop NapCat if it's running
+    // 如果禁用，停止 NapCat
     if (!isSocialEnabled.value && napcatStatus.value === 'RUNNING') {
       await invoke('stop_napcat_wrapper')
       napcatStatus.value = 'STOPPED'
     }
   } catch (e) {
     console.error("保存配置失败:", e)
-    // Revert UI on failure
+    // 失败回滚
     isSocialEnabled.value = !isSocialEnabled.value
     
     if (window.$notify) {
@@ -813,14 +784,9 @@ const toggleSocialMode = async () => {
 }
 
 onMounted(async () => {
-  // Show window when ready to avoid white screen
+  // 就绪时显示窗口以避免白屏
   setTimeout(async () => {
     try {
-        // const win = getCurrentWebviewWindow()
-        // if (win) {
-        //     await win.show()
-        //     await win.setFocus()
-        // }
         await invoke('show_window')
     } catch (e) {
         console.warn("窗口控制错误", e)
@@ -829,28 +795,10 @@ onMounted(async () => {
 
   await loadConfig()
 
-  // Listeners
-  // 监听器
-  // 移除这里的 backend-log 监听，因为它会通过 console.log 被 TerminalPanel 错误拦截为 frontend 日志
-  // 现在 TerminalPanel 已经直接监听 backend-log 了
+  // 监听器: es-log
   await listen('es-log', (event) => addLog(`[ES] ${event.payload}`))
   
-  await listen('napcat-log', (event) => {
-    const logLine = event.payload
-    const timestamp = new Date().toLocaleTimeString()
-    
-    // Add to specific NapCat logs
-    // 添加到特定的 NapCat 日志
-    napcatLogs.value.push({
-      time: timestamp,
-      content: logLine,
-      id: Date.now() + Math.random()
-    })
-    
-    if (napcatLogs.value.length > 500) napcatLogs.value.shift()
-  })
-
-  // Listen for download progress
+  // 监听下载进度
   await listen('napcat-download-progress', (payload) => {
       downloadProgress.value = {
           active: true,
@@ -873,7 +821,6 @@ onMounted(async () => {
       }
   })
 
-  // Load plugins
   // 加载插件
   try {
     plugins.value = await invoke('get_plugins')
@@ -882,7 +829,6 @@ onMounted(async () => {
     addLog(`[ERROR] Failed to load plugins: ${e}`)
   }
 
-  // Check ES status
   // 检查 ES 状态
   try {
     const installed = await invoke('check_es')
@@ -891,13 +837,12 @@ onMounted(async () => {
     esStatus.value = 'ERROR'
   }
 
-  // Auto install NapCat if needed
   // 如果需要，自动安装 NapCat
   if (isSocialEnabled.value) {
     invoke('install_napcat').then(async (success) => {
       if (success) {
         addLog("[SYSTEM] NapCat 环境已就绪")
-        // Refresh environment status to update UI
+        // 刷新环境状态
         await checkEnvironment()
       } else {
         addLog("[SYSTEM] NapCat 环境检查/安装失败")
@@ -907,7 +852,6 @@ onMounted(async () => {
     })
   }
 
-  // Start stats polling
   // 开始统计轮询
   updateStats()
   statsInterval = setInterval(updateStats, 2000)

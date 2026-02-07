@@ -105,6 +105,7 @@ class SocialSessionManager:
         """
         self.sessions: Dict[str, SocialSession] = {}
         self.flush_callback = flush_callback
+        self.bot_id: Optional[str] = None  # [Fix] Store global Bot ID for robust filtering
         
         # 配置
         self.BUFFER_TIMEOUT = 20  # 秒
@@ -113,6 +114,11 @@ class SocialSessionManager:
         
         # 图片缓存管理器
         self.image_manager = ImageCacheManager()
+
+    def set_bot_id(self, bot_id: str):
+        """设置全局 Bot ID，用于过滤自己发送的消息"""
+        self.bot_id = str(bot_id)
+        logger.info(f"[SessionManager] Bot ID set to: {self.bot_id}")
 
     def get_or_create_session(self, session_id: str, session_type: str, session_name: str = "") -> SocialSession:
         if session_id not in self.sessions:
@@ -337,26 +343,34 @@ class SocialSessionManager:
             msg_type = event.get("message_type") # group 或 private
             self_id = str(event.get("self_id", ""))
             
+            # [Fix] Robust Self-Message Filtering
+            # OneBot implementations might miss self_id or handle loopback messages differently.
+            # We use both event['self_id'] and our globally stored bot_id.
+            raw_user_id = event.get("user_id")
+            sender_id = str(raw_user_id)
+            
+            is_self = False
+            if sender_id == self_id and self_id:
+                is_self = True
+            elif self.bot_id and sender_id == self.bot_id:
+                is_self = True
+            
+            if is_self:
+                logger.debug(f"[SessionManager] Ignored self message. Sender: {sender_id}, BotID: {self.bot_id}")
+                return
+
             if msg_type == "group":
                 session_id = str(event.get("group_id"))
-                sender_id = str(event.get("user_id"))
+                # sender_id is already parsed above
                 
-                # [Fix] 忽略自己发送的消息，防止活跃状态自递归
-                if sender_id == self_id:
-                    return
-
                 # 理想情况下从事件或 API 获取群名/发送者名称
                 sender_name = event.get("sender", {}).get("nickname", "Unknown")
                 # 群名并不总是在消息事件中，可能需要 API 或缓存
                 session_name = f"Group {session_id}" 
             elif msg_type == "private":
                 session_id = str(event.get("user_id"))
-                sender_id = str(event.get("user_id"))
+                # sender_id is already parsed above
                 
-                # [Fix] 忽略自己发送的消息
-                if sender_id == self_id:
-                    return
-
                 sender_name = event.get("sender", {}).get("nickname", "Unknown")
                 if sender_name == "Unknown":
                     sender_name = f"User{sender_id}"

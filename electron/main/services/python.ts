@@ -14,7 +14,6 @@ export function getBackendLogs() {
 }
 
 export async function startBackend(window: WindowLike, enableSocialMode: boolean) {
-    // 1. Diagnostics
     // 1. 诊断
     const diag = await getDiagnostics()
     if (diag.errors.length > 0) {
@@ -30,21 +29,16 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     const dataDir = diag.data_dir
     const backendRoot = path.dirname(scriptPath)
     
-    // Config paths
     // 配置路径
     const dbPath = path.join(dataDir, 'perocore.db')
     const configPath = path.join(dataDir, 'config.json')
 
-    // Initial config copy if needed
-    // 如果需要，初始配置复制
+    // 初始配置复制（如果需要）
     if (!(await fs.pathExists(configPath))) {
-        // ... resource copy logic similar to Rust
-        // Simplified for now
         // ... 类似于 Rust 的资源复制逻辑
         // 暂时简化
     }
 
-    // Env setup
     // 环境变量设置
     const pythonPathEnv = process.env.PYTHONPATH 
         ? `${backendRoot}${path.delimiter}${process.env.PYTHONPATH}` 
@@ -62,13 +56,12 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
         PERO_CONFIG_PATH: configPath,
     }
 
-    // Spawn
     // 启动子进程
     const child = spawn(pythonPath, ['-u', scriptPath], {
         cwd: backendRoot,
         env: env as any,
         stdio: ['ignore', 'pipe', 'pipe'],
-        detached: false, // Ensure it dies with parent // 确保随父进程退出
+        detached: false, // 确保随父进程退出
         windowsHide: true
     })
 
@@ -81,19 +74,17 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
         } catch (e) {}
     })
 
-    // Batch log sender to prevent IPC flooding
     // 批量日志发送器以防止 IPC 洪水
     let logBatch: string[] = []
     let batchTimer: NodeJS.Timeout | null = null
-    const BATCH_INTERVAL = 300 // 300ms (Increased from 100ms)
-    const MAX_BATCH_SIZE = 500 // Max 500 lines per batch (Increased from 100)
+    const BATCH_INTERVAL = 300 // 300ms
+    const MAX_BATCH_SIZE = 500 // Max 500 lines
 
     const sendBatch = () => {
         if (logBatch.length === 0) return
         
         try {
             if (window && !window.isDestroyed()) {
-                // Send as array to reduce IPC overhead
                 // 作为数组发送以减少 IPC 开销
                 window.webContents.send('backend-log-batch', [...logBatch])
             }
@@ -114,65 +105,76 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
         }
     }
 
-    child.stdout?.on('data', (data) => {
-        const content = data.toString()
-        // Split by newline but keep empty lines to preserve logo formatting
-        const lines = content.split(/\r?\n/)
-        
-        // [Optimization] Limit processing per chunk to avoid blocking main thread
-        // [优化] 限制每个块的处理以避免阻塞主线程
-        const processLines = async () => {
-            const MAX_LINES_PER_TICK = 500
-            
-            for (let i = 0; i < lines.length; i += MAX_LINES_PER_TICK) {
-                const chunk = lines.slice(i, i + MAX_LINES_PER_TICK)
+    // 日志处理队列以防止事件循环阻塞
+    let processingQueue: string[] = []
+    let isProcessingLogs = false
+
+    const processLogQueue = async () => {
+        if (isProcessingLogs) return
+        isProcessingLogs = true
+
+        try {
+            while (processingQueue.length > 0) {
+                // 优化：分块处理
+                const content = processingQueue.shift()
+                if (!content) continue
+
+                const lines = content.split(/\r?\n/)
+                const MAX_LINES_PER_TICK = 200
                 
-                chunk.forEach((line: string) => {
-                    // Only process if the line is not just empty or whitespace (optional)
-                    // But for a logo, we usually want to keep the structure.
-                    const trimmedLine = line.trim()
-                    if (trimmedLine.length === 0 && line.length === 0) return; // Skip completely empty trailing lines
-
-                    // Try to parse Python log format: [YYYY-MM-DD HH:MM:SS] [LEVEL] [logger] Message
-                    // Example: [2026-02-05 22:33:56] [INFO] [services.mdp.manager] ...
+                for (let i = 0; i < lines.length; i += MAX_LINES_PER_TICK) {
+                    const chunk = lines.slice(i, i + MAX_LINES_PER_TICK)
                     
-                    // Optimization: Quick check before regex
-                    let match = null;
-                    if (line.startsWith('[')) {
-                        const pyLogRegex = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[(INFO|WARNING|ERROR|DEBUG)\] (.*)/
-                        match = line.match(pyLogRegex)
-                    }
+                    chunk.forEach((line: string) => {
+                        const trimmedLine = line.trim()
+                        if (trimmedLine.length === 0 && line.length === 0) return
 
-                    if (match) {
-                        const levelStr = match[1]
-                        const msg = match[2]
-                        let level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' = 'INFO'
-                        
-                        if (levelStr === 'WARNING') level = 'WARN'
-                        else if (levelStr === 'ERROR') level = 'ERROR'
-                        else if (levelStr === 'DEBUG') level = 'DEBUG'
-                        
-                        logger.log('Backend', level, msg)
-                    } else {
-                        // Raw line (e.g. Logo, or print output)
-                        logger.info('Backend', line)
-                    }
+                        // 优化：正则前快速检查
+                        let match = null
+                        if (line.startsWith('[')) {
+                            const pyLogRegex = /^\[\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\] \[(INFO|WARNING|ERROR|DEBUG)\] (.*)/
+                            match = line.match(pyLogRegex)
+                        }
 
-                    // Queue for batch sending
-                    queueLog(line)
+                        if (match) {
+                            const levelStr = match[1]
+                            const msg = match[2]
+                            let level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG' = 'INFO'
+                            
+                            if (levelStr === 'WARNING') level = 'WARN'
+                            else if (levelStr === 'ERROR') level = 'ERROR'
+                            else if (levelStr === 'DEBUG') level = 'DEBUG'
+                            
+                            logger.log('Backend', level, msg)
+                        } else {
+                            logger.info('Backend', line)
+                        }
+
+                        queueLog(line)
+                        
+                        if (logHistory.length >= MAX_LOGS) logHistory.shift()
+                        logHistory.push(line)
+                    })
                     
-                    if (logHistory.length >= MAX_LOGS) logHistory.shift()
-                    logHistory.push(line)
-                })
-                
-                // Yield to event loop if there are more lines
-                if (i + MAX_LINES_PER_TICK < lines.length) {
+                    // 关键: 让出事件循环以允许 UI 更新和 IPC
                     await new Promise(resolve => setImmediate(resolve))
                 }
             }
+        } catch (err) {
+            logger.error('Backend', `Log processing error: ${err}`)
+        } finally {
+            isProcessingLogs = false
+            // 检查是否有新日志
+            if (processingQueue.length > 0) {
+                setImmediate(processLogQueue)
+            }
         }
-        
-        processLines().catch(err => logger.error('Backend', `Log processing error: ${err}`))
+    }
+
+    child.stdout?.on('data', (data) => {
+        const content = data.toString()
+        processingQueue.push(content)
+        processLogQueue()
     })
 
     child.stderr?.on('data', (data) => {

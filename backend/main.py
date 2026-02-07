@@ -63,8 +63,8 @@ configure_logging(log_file=log_file)
 logger = logging.getLogger(__name__)
 
 # [DEBUG] Print startup args and env for troubleshooting
-print(f"[启动调试] sys.argv: {sys.argv}")
-print(f"[启动调试] ENABLE_SOCIAL_MODE 环境变量: {os.environ.get('ENABLE_SOCIAL_MODE')}")
+# print(f"[启动调试] sys.argv: {sys.argv}")
+# print(f"[启动调试] ENABLE_SOCIAL_MODE 环境变量: {os.environ.get('ENABLE_SOCIAL_MODE')}")
 
 import uvicorn
 from contextlib import asynccontextmanager
@@ -123,22 +123,22 @@ async def lifespan(app: FastAPI):
     # Check Rust Core
     try:
         from pero_memory_core import SemanticVectorIndex
-        print("🧠 KDN 引擎: [就绪] (pero_memory_core 已加载)")
+        print("🧠 记忆引擎: [就绪] (pero_memory_core 已加载)")
     except ImportError:
-        print("🧠 KDN 引擎: [禁用] (未找到 pero_memory_core)")
+        print("🧠 记忆引擎: [禁用] (未找到 pero_memory_core)")
     
     # Check Vector Store
     from services.vector_store_service import VectorStoreService
     vs = VectorStoreService()
     print(f"📊 记忆节点数: {vs.count_memories() if hasattr(vs, 'count_memories') else 'N/A'}")
     print("="*50)
-
+    
     # Startup
     await init_db()
     
     # Load Config from DB
     await get_config_manager().load_from_db()
-    
+
     # [Debug] Print loaded critical configs
     cm = get_config_manager()
     print(f"🔧 当前配置状态:")
@@ -554,7 +554,7 @@ async def lifespan(app: FastAPI):
                     
                     if due_topics:
                         topic_list_str = "\n".join([f"- {t.content}" for t in due_topics])
-                        print(f"[Main] Triggering Topics: {len(due_topics)} items")
+                        print(f"[Main] 正在触发话题: {len(due_topics)} 项")
                         instruction = f"【管理系统提醒：Pero，以下是你之前想找主人聊的话题（已汇总）：\n{topic_list_str}\n\n请将这些话题自然地融合在一起，作为一次主动的聊天开场。】"
                         
                         for t in due_topics:
@@ -591,6 +591,30 @@ async def lifespan(app: FastAPI):
     # Start Cloud Sync Service
     await sync_service.load_config()
     sync_service.start()
+
+    # [Feature] Auto Warmup Models
+    async def run_warmup():
+        print("[Main] 开始后台模型预热...", flush=True)
+        loop = asyncio.get_event_loop()
+        
+        # 1. Warm up Embedding Service (Embedding + Reranker)
+        try:
+            # Run in thread because it is blocking
+            await loop.run_in_executor(None, embedding_service.warm_up)
+        except Exception as e:
+            print(f"[Main] Embedding Service 预热失败: {e}")
+
+        # 2. Warm up ASR Service (Whisper)
+        try:
+            asr = get_asr_service()
+            # Run in thread
+            await loop.run_in_executor(None, asr.warm_up)
+        except Exception as e:
+            print(f"[Main] ASR Service 预热失败: {e}")
+            
+        print("[Main] 模型预热完成。", flush=True)
+        
+    asyncio.create_task(run_warmup())
 
     yield
     
@@ -728,19 +752,32 @@ async def seed_voice_configs():
             
         # Seed Frontend Access Token (Dynamic Handshake Security)
         # 尝试从 Gateway 生成的令牌文件中读取
-        # 路径: backend/data/gateway_token.json
         token_path = os.path.join(current_dir, "data", "gateway_token.json")
         new_dynamic_token = None
         
-        if os.path.exists(token_path):
-            try:
-                with open(token_path, "r", encoding="utf-8") as f:
-                    data = json.load(f)
-                    new_dynamic_token = data.get("token")
-                    print(f"[Main] 已加载 Gateway 令牌: {new_dynamic_token[:8]}...")
-            except Exception as e:
-                print(f"[Main] 读取 Gateway 令牌失败: {e}")
-
+        # [Optimize] 增加重试机制，等待 Gateway 启动
+        max_retries = 10
+        retry_delay = 0.5 # 秒
+        
+        for attempt in range(max_retries):
+            if os.path.exists(token_path):
+                try:
+                    with open(token_path, "r", encoding="utf-8") as f:
+                        data = json.load(f)
+                        new_dynamic_token = data.get("token")
+                        if new_dynamic_token:
+                            print(f"[Main] 第 {attempt + 1} 次尝试：已成功加载 Gateway 令牌: {new_dynamic_token[:8]}...")
+                            break
+                except Exception as e:
+                    # 如果文件正在被写入，可能会读取失败，这没关系，继续重试
+                    pass
+            
+            if attempt < max_retries - 1:
+                # 只有在前几次尝试失败时才打印重试日志
+                if attempt % 2 == 0:
+                    print(f"[Main] 正在等待 Gateway 令牌生成 (第 {attempt + 1} 次尝试)...")
+                await asyncio.sleep(retry_delay)
+        
         # Fallback if file not found (e.g. Gateway not started)
         if not new_dynamic_token:
             new_dynamic_token = secrets.token_urlsafe(32)
@@ -770,12 +807,12 @@ async def seed_voice_configs():
         # Configure GatewayClient with this token
         gateway_client.set_token(new_dynamic_token)
 
-        print(f"\n" + "="*60)
-        print(f"🛡️  PERO-CORE 安全模式已启动")
-        print(f"🔑 动态访问令牌 (Handshake Token):")
-        print(f"    {new_dynamic_token}")
-        print(f"⚠️  请注意：此令牌由 Gateway 生成 (或本地回退)，用于前后端握手及 HTTP 鉴权。")
-        print(f"="*60 + "\n")
+        # print(f"\n" + "="*60)
+        # print(f"🛡️  PERO-CORE 安全模式已启动")
+        # print(f"🔑 动态访问令牌 (Handshake Token):")
+        # print(f"    {new_dynamic_token}")
+        # print(f"⚠️  请注意：此令牌由 Gateway 生成 (或本地回退)，用于前后端握手及 HTTP 鉴权。")
+        # print(f"="*60 + "\n")
             
         await session.commit()
         break
@@ -1047,7 +1084,7 @@ async def delete_chat_log(log_id: int, session: AsyncSession = Depends(get_sessi
             envelope.request.params["operation"] = "delete"
             await gateway_client.send(envelope)
         except Exception as e:
-            print(f"Broadcast delete failed: {e}")
+            print(f"广播删除失败: {e}")
 
         return {"status": "success"}
     except Exception as e:
@@ -1080,7 +1117,7 @@ async def update_chat_log(log_id: int, payload: Dict[str, Any] = Body(...), sess
             envelope.request.params["operation"] = "update"
             await gateway_client.send(envelope)
         except Exception as e:
-             print(f"Broadcast update failed: {e}")
+             print(f"广播更新失败: {e}")
 
         return log
     except Exception as e:
@@ -1174,9 +1211,9 @@ async def toggle_social(enabled: bool = Body(..., embed=True), session: AsyncSes
         from nit_core.dispatcher import get_dispatcher
         dispatcher = get_dispatcher()
         dispatcher.reload_tools()
-        print(f"[Main] NIT Tools reloaded after social mode toggle (Enabled: {enabled})")
+        print(f"[Main] 社交模式切换后 NIT 工具已重载 (启用: {enabled})")
     except Exception as e:
-        print(f"[Main] Failed to reload NIT tools: {e}")
+        print(f"[Main] 重载 NIT 工具失败: {e}")
     
     if enabled:
         await social_service.start()
@@ -1265,7 +1302,7 @@ async def update_config(configs: Dict[str, str], session: AsyncSession = Depends
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[Config] Work Mode check failed: {e}")
+        print(f"[Config] 工作模式检查失败: {e}")
 
     for key, value in configs.items():
         config_obj = await session.get(Config, key)
@@ -1462,7 +1499,7 @@ async def create_voice_config(config_data: Dict[str, Any] = Body(...), session: 
         raise
     except Exception as e:
         import traceback
-        print(f"Error creating voice config: {traceback.format_exc()}")
+        print(f"创建语音配置时出错: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"创建失败: {str(e)}")
 
 @app.put("/api/voice-configs/{config_id}", response_model=VoiceConfig)
@@ -1507,7 +1544,7 @@ async def update_voice_config(config_id: int, config_data: Dict[str, Any] = Body
         raise
     except Exception as e:
         import traceback
-        print(f"Error updating voice config: {traceback.format_exc()}")
+        print(f"更新语音配置时出错: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
 
 @app.delete("/api/voice-configs/{config_id}")
@@ -1527,7 +1564,7 @@ async def delete_voice_config(config_id: int, session: AsyncSession = Depends(ge
         raise
     except Exception as e:
         import traceback
-        print(f"Error deleting voice config: {traceback.format_exc()}")
+        print(f"删除语音配置时出错: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
 
 @app.post("/api/chat")
@@ -1544,7 +1581,7 @@ async def chat(
     # 严格校验 source
     valid_sources = ["desktop", "mobile", "system_trigger", "ide", "qq"]
     if source not in valid_sources:
-        print(f"[Security] Invalid source detected: {source}. Resetting to desktop.")
+        print(f"[安全] 检测到无效来源: {source}。正在重置为 desktop。")
         source = "desktop"
     
     agent = AgentService(session)
@@ -1617,7 +1654,7 @@ async def chat(
                                 
                             return audio_data
                 except Exception as e:
-                    print(f"TTS Chunk Error: {e}")
+                    print(f"TTS 分块错误: {e}")
                 return None
 
             # TTS Queue
@@ -1727,7 +1764,7 @@ async def chat(
                                 # 将剩余不完整的文本留到下一次处理
                                 tts_buffer = parts[-1]
                 except Exception as e:
-                    print(f"TTS Worker Error: {e}")
+                    print(f"TTS 工作线程错误: {e}")
                 finally:
                     # Signal done to the main queue
                     await queue.put({"type": "done"})
@@ -1810,7 +1847,7 @@ async def chat(
             
             yield "data: [DONE]\n\n"
         except Exception as e:
-            print(f"Chat error: {e}")
+            print(f"对话错误: {e}")
             import traceback
             traceback.print_exc()
             error_chunk = {
@@ -1865,7 +1902,7 @@ async def reset_system(session: AsyncSession = Depends(get_session)):
     except Exception as e:
         await session.rollback()
         import traceback
-        print(f"Error resetting system: {traceback.format_exc()}")
+        print(f"重置系统时出错: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"恢复出厂设置失败: {str(e)}")
 
 @app.get("/health")
@@ -1907,7 +1944,7 @@ async def open_path(payload: Dict[str, str] = Body(...)):
              try:
                 os.startfile(path)
              except Exception as inner_e:
-                print(f"Error opening path {path}: {inner_e}")
+                print(f"打开路径 {path} 时出错: {inner_e}")
                 raise HTTPException(status_code=500, detail=str(inner_e))
     else:
         # Non-Windows fallback (though Pero is Windows focused)
@@ -2032,7 +2069,7 @@ async def get_waifu_texts(session: AsyncSession = Depends(get_session)):
                 with open(texts_path, "r", encoding="utf-8") as f:
                     return json.load(f)
             except Exception as e:
-                print(f"[Main] Failed to load waifu_texts for agent {agent_id}: {e}")
+                print(f"[Main] 加载代理 {agent_id} 的 waifu_texts 失败: {e}")
         
         # 3. 如果没找到，尝试回退到 Config (旧版逻辑)
         config = await session.get(Config, "waifu_dynamic_texts")

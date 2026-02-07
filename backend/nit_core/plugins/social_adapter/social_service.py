@@ -68,7 +68,7 @@ class SocialService:
         try:
             from .database import init_social_db
             await init_social_db()
-            logger.info("[Social] 独立社交数据库已初始化。")
+            logger.debug("[Social] 独立社交数据库已初始化。")
         except Exception as e:
             logger.error(f"[Social] 初始化社交数据库失败: {e}")
         
@@ -160,9 +160,9 @@ class SocialService:
 
     async def _startup_check_worker(self):
         """
-        等待 WS 连接，然后执行启动检查：
-        1. 检查待处理的好友请求。
-        2. 复活历史会话 (Cold Start)。
+        等待 WS 连接，执行启动检查：
+        1. 检查待处理的好友请求
+        2. 复活历史会话 (Cold Start)
         """
         # 等待 WS 连接最多 60 秒
         for _ in range(12):
@@ -177,52 +177,46 @@ class SocialService:
         logger.info("[Social] 正在执行启动检查...")
         await asyncio.sleep(5) # 等待系统稳定
         
+        # 0. 获取 Bot 信息 (Critical for filtering self-messages)
+        try:
+            await self.get_bot_info()
+        except Exception as e:
+            logger.warning(f"[Social] 启动时获取 Bot 信息失败: {e}")
+        
         # 1. 复活历史会话 (确保主动搭话功能可用)
         await self._revive_sessions_from_db()
         
         try:
             # [Optimization] 检测 OneBot 实现类型
             # NapCat 等现代实现通常不支持拉取历史系统消息，而是完全依赖事件推送。
-            # 为了避免超时和报错，我们可以检测实现并跳过不必要的检查。
             version_resp = await self._send_api_and_wait("get_version_info", {}, timeout=5)
             if version_resp and version_resp.get("status") == "ok":
                 data = version_resp.get("data", {})
                 app_name = data.get("app_name", "").lower()
-                logger.info(f"[Social] Bot 实现: {data.get('app_name')} {data.get('app_version')}")
+                logger.debug(f"[Social] Bot 实现: {data.get('app_name')} {data.get('app_version')}")
                 
                 if "napcat" in app_name:
-                    logger.info("[Social] 检测到 NapCat。跳过轮询待处理系统消息（事件驱动模式）。")
+                    logger.debug("[Social] 检测到 NapCat。跳过轮询待处理系统消息（事件驱动模式）。")
                     return
 
-            # NapCat/OneBot 并不总是具有用于*待处理*请求的 'get_system_msg_new' 或类似的标准化 API
-            # 标准 OneBot v11 具有 'get_system_msg' 或 'get_friend_system_msg'，它返回请求列表。
-            # 让我们先尝试 'get_system_msg'。
-            
             # [Fixed] 尝试多种 API 变体以兼容不同的 OneBot 实现 (NapCat, LLOneBot, Go-CQHTTP)
             resp = None
             api_candidates = ["get_system_msg", "get_friend_system_msg"]
             
             for api_name in api_candidates:
                 try:
-                    # logger.info(f"[Social] Startup check: Trying API '{api_name}'...")
                     candidate_resp = await self._send_api_and_wait(api_name, {}, timeout=5)
                     
-                    # 检查响应状态
                     if candidate_resp and candidate_resp.get("status") == "ok" and candidate_resp.get("retcode") == 0:
                         resp = candidate_resp
-                        logger.info(f"[Social] 成功使用 API '{api_name}'")
+                        logger.debug(f"[Social] 成功使用 API '{api_name}'")
                         break
                     elif candidate_resp and candidate_resp.get("retcode") == 1404:
-                        # API 不存在 (NapCat 等)
-                        # logger.debug(f"[Social] API '{api_name}' not supported (1404).")
+                        # API 不存在
                         pass
                     else:
-                        # 仅在调试时记录，避免刷屏
-                        # logger.debug(f"[Social] API '{api_name}' returned error: {candidate_resp}")
                         pass
                 except Exception as e:
-                    # 超时或其他错误
-                    # logger.warning(f"[Social] API '{api_name}' call failed or timed out: {e}")
                     pass
             
             if not resp:
@@ -230,62 +224,26 @@ class SocialService:
                 return
 
             data = resp.get("data", {})
-            # 我们只关心好友请求
             requests = []
             
             # 处理标准 OneBot 11 格式变体
             if isinstance(data, list):
-                # 某些实现直接返回列表
                 requests = data
             elif isinstance(data, dict):
-                # 其他实现返回带有键的字典
                 requests = data.get("request", []) + data.get("requester", [])
             
             logger.debug(f"[Social] 启动时发现 {len(requests)} 条系统消息。")
             
             for req in requests:
-                # 仅处理未处理的消息？
-                # OneBot 通常返回*最近的*消息，不一定是*待处理的*消息。
-                # 标准 v11 中没有简单的 'status' 字段来查看是否处于待处理状态。
-                # 但是，如果它有 'flag' 并且我们要么没有将其记录为已处理，我们可以尝试处理它。
-                
-                # 检查是否为好友请求
+                # 仅处理好友请求
                 req_type = req.get("request_type")
                 if req_type != "friend":
                     continue
-                    
-                # 检查数据库是否已处理此 flag
-                # (可选优化：我们依赖幂等性或仅重新评估)
-                # 但如果我们昨天拒绝了它，重新评估可能会很烦人。
-                
-                # 对于 MVP：让我们不要在启动时自动处理，以避免垃圾邮件/循环旧请求。
-                # 用户问：“我们要添加此功能吗？”
-                # 回答：是的，我们要添加它。
-                # 策略：仅在 'checked' 为 false 时处理？（某些实现提供此功能）
-                # 如果没有可用状态，也许我们应该只通知主人“我有 X 个待处理请求”？
-                
-                # 让我们尝试使用与实时相同的逻辑来处理它们。
-                # 为了防止重新处理旧请求，我们可以检查 MemoryService 日志中的此 'flag'。
                 
                 flag = req.get("flag")
                 if not flag: continue
                 
-                # 检查数据库
-                # 这需要搜索日志元数据。
-                # 对每个请求执行此操作可能很繁重但很安全。
-                
-                # 我们暂时跳过此数据库检查，并依赖 OneBot 行为：
-                # 通常 get_system_msg 返回最近的消息。
-                # 让我们暂时记录它们或仔细处理它们。
-                
-                # 实际上，让我们直接触发处理逻辑。
-                # 如果我们已经处理了它，OneBot 可能会返回错误或忽略。
-                # 但我们不想发送垃圾通知。
-                
-                # 让我们假设我们仅在最近未在日志中看到此 user_id 时才处理它们？
-                # 或者更好：直接处理它。如果是旧的，也许我们改变了主意？
-                # 但我们应该添加一点延迟。
-                
+                # 直接触发处理逻辑，增加延迟避免并发问题
                 await self._handle_incoming_friend_request(req)
                 await asyncio.sleep(5)
                 
@@ -326,7 +284,6 @@ class SocialService:
     async def _revive_sessions_from_db(self):
         """
         [Cold Start] 从数据库恢复最近活跃的会话到内存中。
-        用于解决重启后内存 Session 丢失导致无法主动搭话的问题。
         """
         logger.info("[Social] 正在从数据库恢复会话...")
         try:
@@ -349,12 +306,10 @@ class SocialService:
                     
                     if msg.session_id not in self.session_manager.sessions:
                         # 恢复会话
-                        # session_name 暂时用 ID 或 Sender Name 填充
                         name = f"Session {msg.session_id}"
                         if msg.session_type == "private":
-                             # [Fix] 如果最后一条消息是自己发的，不要把 Session Name 设为自己
+                             # 排除自己的消息
                              if msg.sender_id == "self" or msg.sender_name == self.config_manager.get("bot_name", "Pero"):
-                                 # 尝试使用 msg.session_id (通常是 QQ 号)
                                  name = str(msg.session_id)
                              else:
                                  name = msg.sender_name
@@ -366,8 +321,11 @@ class SocialService:
                             session_type=msg.session_type,
                             session_name=name
                         )
-                        # 设置最后活跃时间为消息时间
                         session.last_active_time = msg.timestamp
+                        
+                        # [Fix] 复活的会话推迟扫描 (15~45分钟)，防止启动爆发
+                        session.next_scan_time = datetime.now() + timedelta(seconds=random.randint(900, 2700))
+                        
                         revived_count += 1
                         
                         if revived_count >= 10:
@@ -384,9 +342,8 @@ class SocialService:
         """
         [Master Worker] 协调并行的群聊扫描和私聊扫描。
         """
-        logger.info("[Social] 社交观察服务已启动。")
+        logger.debug("[Social] 社交观察服务已启动。")
         
-        # 启动两个并行的循环
         await asyncio.gather(
             self._group_scan_loop(),
             self._private_scan_loop()
@@ -395,87 +352,75 @@ class SocialService:
     async def _group_scan_loop(self):
         """
         [Group] 群聊扫描循环
-        机制：全局单一计时器。到点后，从活跃群聊中随机选一个“看一眼”。
+        全局单一计时器，随机选择活跃群聊进行观察。
         """
-        logger.info("[Social] 群聊扫描线程已启动。")
+        logger.debug("[Social] 群聊扫描线程已启动。")
         while self.running:
             try:
-                # 基础休眠
                 await asyncio.sleep(30)
                 
                 if not self.running or not self.enabled:
                     continue
 
-                # 检查时间限制 (00:00 - 08:00 静音)
+                # 夜间静音 (00:00 - 08:00)
                 now = datetime.now()
                 if 0 <= now.hour < 8:
                     continue
 
-                # 初始化下一次思考时间
                 if not hasattr(self, "_next_group_thought_time"):
-                    self._next_group_thought_time = datetime.now() + timedelta(seconds=random.randint(60, 120))
+                    # 启动后延迟 5~10 分钟
+                    self._next_group_thought_time = datetime.now() + timedelta(seconds=random.randint(300, 600))
                 
                 if now < self._next_group_thought_time:
                     continue
 
-                # 到了思考时间，尝试冒泡
-                # 随机选择一个活跃群聊 (注意：这里现在按 last_message_time 排序，即寻找热闹的群)
+                # 随机选择活跃群聊
                 sessions = self.session_manager.get_active_sessions(limit=5, session_type="group")
                 
-                # [Fix] 如果内存中没有活跃会话（例如刚重启），尝试从数据库复活
+                # 如果内存无会话，尝试从 DB 复活
                 if not sessions:
                     revived = await self._revive_sessions_from_db()
                     if revived > 0:
                         sessions = self.session_manager.get_active_sessions(limit=5, session_type="group")
 
                 if not sessions:
-                    # 没有活跃会话，休眠久一点
+                    # 无活跃会话，休眠较长时间
                     interval = random.randint(600, 1200)
                     self._next_group_thought_time = now + timedelta(seconds=interval)
                     continue
                 
                 target_session = random.choice(sessions)
                 
-                # 检查状态 (Active vs Dive)
-                # 使用 last_active_time 判断 Bot 是否处于活跃互动期
+                # 检查活跃状态 (120s 内互动过)
                 time_since_active = (now - target_session.last_active_time).total_seconds()
                 is_active = time_since_active < 120
                 
-                # 更新 session.state 以便 session_manager 能够感知
                 session_state = "active" if is_active else "observing"
-                target_session.state = session_state # Sync state
+                target_session.state = session_state
                 
-                logger.debug(f"[Social-Group] 触发检查: {target_session.session_name} (状态: {session_state}, 上次互动: {int(time_since_active)}s 前)")
+                logger.debug(f"[Social-Group] 触发检查: {target_session.session_name} (状态: {session_state})")
                 
-                # 尝试说话
                 spoke = False
                 if is_active:
-                     # Active 状态下直接调用 Agent
                      spoke = await self._perform_active_agent_response(target_session, "ACTIVE_OBSERVATION")
                 else:
-                     # DIVE 状态调用秘书
                      spoke = await self._attempt_random_thought(target_session)
                      
-                     # [State Update] 如果秘书决定主动说话，Bot 进入活跃状态
                      if spoke:
                          target_session.last_active_time = datetime.now()
                          target_session.state = "active"
                          logger.info(f"[Social-Group] 主动发言成功，{target_session.session_name} 进入活跃状态。")
                 
-                # 决定下一次检查时间
+                # 决定下次检查时间
                 if spoke:
                     if is_active:
-                        # 互动中的正常回复，保持高频检查
-                        interval = 120
+                        interval = 120 # 互动中保持高频
                     else:
-                        # [Fix] 主动冒泡（秘书插话）后，直接进入贤者模式（长潜水）
-                        # 避免 Bot 因为自己说话了就觉得很热闹，导致循环触发
-                        interval = random.randint(1800, 3600) 
+                        interval = random.randint(1800, 3600) # 主动冒泡后进入贤者模式
                 elif is_active:
                     interval = 60
                 else:
-                    # [Fix] 调大潜水观察间隔，避免过于频繁 (10-20分钟 -> 30-60分钟)
-                    interval = random.randint(1800, 3600) 
+                    interval = random.randint(1800, 3600) # 潜水观察间隔
                     
                 self._next_group_thought_time = now + timedelta(seconds=interval)
                 logger.debug(f"[Social-Group] 下次检查将在 {interval} 秒后。")
@@ -484,21 +429,17 @@ class SocialService:
                 break
             except Exception as e:
                 logger.error(f"[Social-Group] 错误: {e}", exc_info=True)
-                # [Fix] 异常发生后也要更新下次检查时间，防止死循环重试
                 self._next_group_thought_time = datetime.now() + timedelta(seconds=300)
                 await asyncio.sleep(60)
 
     async def _private_scan_loop(self):
         """
         [Private] 私聊扫描循环
-        机制：每个私聊对象有独立的时间表 (next_scan_time)。
-        - 默认潜水周期：20-40分钟。
-        - 激活后周期：2-4分钟（如果最近有对话）。
+        每个私聊对象有独立的时间表 (next_scan_time)。
         """
-        logger.info("[Social] 私聊扫描线程已启动。")
+        logger.debug("[Social] 私聊扫描线程已启动。")
         while self.running:
             try:
-                # 检查频率要高一些，因为每个人的时间点不同
                 await asyncio.sleep(10)
                 
                 if not self.running or not self.enabled:
@@ -508,41 +449,25 @@ class SocialService:
                 if 0 <= now.hour < 8:
                     continue
                 
-                # 获取所有活跃的私聊会话（扩大范围，不仅仅是 Top 5，因为要遍历检查每个人）
-                # 这里我们假设内存中的 session 都是相关的。
-                # 也可以使用 get_active_sessions(limit=100, session_type="private")
+                # 获取前 20 个活跃私聊
                 sessions = self.session_manager.get_active_sessions(limit=20, session_type="private")
                 
                 for session in sessions:
                     if now >= session.next_scan_time:
-                        # 到了该会话的检查点
-                        
-                        # 检查状态
                         time_since_active = (now - session.last_active_time).total_seconds()
                         is_active = time_since_active < 120
                         
-                        # 活跃期跳过（私聊策略：不主动 Double Text）
+                        # 活跃期不主动 Double Text
                         if is_active:
-                            # 仍然在活跃期，推迟检查
                             session.next_scan_time = now + timedelta(seconds=60)
                             continue
                             
-                        # 潜水期检查
                         logger.debug(f"[Social-Private] 触发检查: {session.session_name}")
                         spoke = await self._attempt_random_thought(session)
                         
-                        # 设定下一次检查时间
-                        # 逻辑：无论是否说话，除非用户回复（这会重置为短周期），否则回归长周期
-                        # 用户要求的“后继扫描保持不变” -> 理解为回归常态
-                        # [Adjustment] 私聊长周期大幅拉长到 4~8 小时
-                        next_interval = random.randint(14400, 28800) # 4-8 小时 (14400-28800秒)
+                        # 私聊长周期 (4-8 小时)
+                        next_interval = random.randint(14400, 28800)
                         
-                        if spoke:
-                            # 如果我们也说话了，可能希望稍微快一点再看一眼？
-                            # 但按照“不主动连发”原则，还是保持长周期比较好。
-                            # 等用户回了，handle_message 会把时间改成 2-4分钟。
-                            pass
-                            
                         session.next_scan_time = now + timedelta(seconds=next_interval)
                         logger.debug(f"[Social-Private] {session.session_name} 下次检查在 {next_interval//3600} 小时后。")
 
@@ -556,9 +481,6 @@ class SocialService:
     def _clean_cq_codes(self, content: str) -> str:
         """
         清理消息内容中的 CQ 码，将其转换为人类可读的文本标签。
-        例如: 
-        [CQ:image,...] -> [图片] 或 [摘要]
-        [CQ:file,...] -> [文件: filename]
         """
         if "[CQ:" not in content:
             return content
@@ -568,18 +490,14 @@ class SocialService:
         # --- Helper for Images ---
         def replace_cq_image(match):
             full_tag = match.group(0)
-            # 尝试提取 summary
             summary_match = re.search(r'summary=\[(.*?)\]', full_tag)
-            # 有些实现可能没有 summary 或者格式不同，这里做个简单兼容
             if not summary_match:
                  summary_match = re.search(r'summary=([^,\]]+)', full_tag)
 
             if summary_match:
                 summary_text = summary_match.group(1)
-                # 解码 HTML 实体
                 summary_text = summary_text.replace("&#91;", "[").replace("&#93;", "]").replace("&amp;", "&")
                 
-                # 如果 summary 本身已经包含了 []，就不再包裹
                 if summary_text.startswith("[") and summary_text.endswith("]"):
                     return summary_text
                 return f"[{summary_text}]"
@@ -588,8 +506,6 @@ class SocialService:
         # --- Helper for Files ---
         def replace_cq_file(match):
             full_tag = match.group(0)
-            # 尝试提取文件名
-            # 优先找 name= (NapCat/GoCQ 某些版本) 或 file= (标准)
             
             name_match = re.search(r'name=([^,\]]+)', full_tag)
             file_match = re.search(r'file=([^,\]]+)', full_tag)
@@ -602,7 +518,6 @@ class SocialService:
                 
             return f"[文件: {filename}]"
             
-        # Apply replacements
         content = re.sub(r'\[CQ:image,[^\]]*\]', replace_cq_image, content)
         content = re.sub(r'\[CQ:file,[^\]]*\]', replace_cq_file, content)
         
@@ -610,20 +525,13 @@ class SocialService:
 
     async def _attempt_random_thought(self, target_session: Optional[SocialSession] = None) -> bool:
         """
-        主动消息传递的“大脑”逻辑（秘书层）。
+        主动消息传递逻辑（秘书层）。
         由 _random_thought_worker 调用（随机目标）或 handle_session_flush 调用（指定目标）。
-        
-        Args:
-            target_session: 指定的会话。如果为 None，则随机选择一个活跃会话。
-            
-        Returns:
-            bool: 是否发送了消息
         """
         # 1. 确定目标
         if not target_session:
             sessions = self.session_manager.get_active_sessions(limit=5)
             if not sessions:
-                # logger.debug("[Social] No active sessions to speak to.")
                 return False
             target_session = random.choice(sessions)
         
@@ -635,16 +543,13 @@ class SocialService:
         session_state = "ACTIVE" if time_since_active < 120 else "DIVE"
 
         # 2. 构建提示 (Secretary Persona)
-        # ... (Existing logic refactored) ...
-        
         async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
         async with async_session() as db_session:
-            # Import locally to avoid circular dependency/NameError
+            # Import locally to avoid circular dependency
             from services.agent_manager import AgentManager
             agent_manager = AgentManager()
 
-            # 上下文获取逻辑
-            # [Optimization] Unified context limit to 100 as per user request
+            # 上下文获取逻辑 (limit 100)
             history_limit = 100
             recent_messages = await self.session_manager.get_recent_messages(
                 target_session.session_id, 
@@ -652,57 +557,36 @@ class SocialService:
                 limit=history_limit
             )
             
-            # 如果 DB 为空（回退到 buffer）
             if not recent_messages:
                 recent_messages = target_session.buffer[-5:]
             
             recent_context = ""
             for msg in recent_messages:
-                # [Fix] 明确区分自己和他人，防止精分
                 sender = msg.sender_name
-                # bot_name is defined below, but we need it here. Let's pre-calculate it.
-                # Get Agent Profile for dynamic persona injection
-                # agent_manager initialized at start of block
                 agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
                 current_agent_name = agent_profile.name if agent_profile else self.config_manager.get("bot_name", "Pero")
                 
                 if sender == current_agent_name or sender == "Me" or sender == self.config_manager.get("bot_name", "Pero"):
                     sender = f"Me ({current_agent_name})"
-                # elif target_session.session_type == "private" and sender == target_session.session_name:
-                #     sender = "某人"
                 
-                # [Fix] Clean CQ codes for cleaner context
                 clean_content = self._clean_cq_codes(msg.content)
                 recent_context += f"[{sender}]: {clean_content}\n"
             
             if not recent_context:
                 recent_context = "(本地缓存为空)"
 
-            # 秘书 Prompt (增强版)
-            # 为了保证人设一致性，我们手动注入核心设定，而不是依赖 AgentService 的完整 Prompt
+            # 秘书 Prompt
             owner_qq = self.config_manager.get("owner_qq") or "未知"
-            
-            # [Fix] 明确注入会话类型
             session_type_str = "群聊 (Group)" if target_session.session_type == "group" else "私聊 (Private)"
-            
             bot_name = self.bot_info.get("nickname", self.config_manager.get("bot_name", "Pero"))
             
-            # [Refactor] Split prompts for Group and Private to avoid schizophrenia
             template_name = "social/decisions/secretary_decision_group"
             rules_template_name = "social/decisions/secretary_decision_group_rules"
             if target_session.session_type == "private":
                 template_name = "social/decisions/secretary_decision_private"
                 rules_template_name = "social/decisions/secretary_decision_private_rules"
             
-            # [Fix] Determine correct target name for private chat
             target_name = target_session.session_name
-            # if target_session.session_type == "private":
-            #      # If session name is same as bot (because bot sent last message), fallback to "User"
-            #      if target_name == bot_name or target_name == "Me":
-            #          target_name = "某人"
-                
-            # Get Agent Profile for dynamic persona injection
-            # agent_manager initialized at start of block
             agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
             identity_label = agent_profile.identity_label if agent_profile else "智能助手"
             personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
@@ -723,8 +607,6 @@ class SocialService:
             prompt = mdp.render(template_name, prompt_context)
             rules_prompt = mdp.render(rules_template_name, prompt_context)
 
-            # ... (Tool calling logic reused) ...
-            # 为节省篇幅，复用现有 AgentService 调用逻辑
             from services.agent_service import AgentService
             agent = AgentService(db_session)
             
@@ -736,14 +618,12 @@ class SocialService:
                 model=config.get("model")
             )
             
-            # [Multimodal] 收集最近的图片 (从 Buffer 中获取已下载的本地路径)
+            # [Multimodal] 收集最近的图片
             processed_images = []
             if config.get("enable_vision"):
-                # 倒序检查 Buffer (优先看最新的)
                 for msg in reversed(target_session.buffer):
                     if msg.images:
                         for img_path in msg.images:
-                            # 检查是否为本地路径 (Buffer 在 handle_session_flush 中已被 hydrate)
                             if os.path.exists(img_path):
                                 try:
                                     async with aiofiles.open(img_path, "rb") as f:
@@ -760,7 +640,6 @@ class SocialService:
                                     logger.error(f"[Social] Secretary 读取图片失败: {e}")
                     if len(processed_images) >= 2: break
                 
-                # 翻转回来，保持时间顺序
                 processed_images.reverse()
 
             # 构造消息
@@ -780,13 +659,8 @@ class SocialService:
                 {"role": "system", "content": rules_prompt}
             ]
             
-            # 秘书不需要工具，纯文本判断即可
-            social_tools = []
-
             # 执行 LLM 调用 (纯文本模式)
-            # 我们使用简单的单轮对话，因为秘书不需要使用工具
             try:
-                # 增加重试机制 (复用 AgentService 的逻辑概念，但这里手动实现简单版)
                 import asyncio
                 retry_count = 1
                 response = None
@@ -797,29 +671,20 @@ class SocialService:
                     except Exception as err:
                         if i == retry_count:
                             logger.error(f"[Social] 秘书 LLM 失败: {err}")
-                            return False # 静默失败
+                            return False
                         await asyncio.sleep(1)
 
                 if not response: return False
 
                 response_msg = response["choices"][0]["message"]
-                content = response_msg.get("content", "")
+                content = response_msg.get("content", "").strip()
                 
-                # 秘书不需要处理 Tool Calls，因为它没有工具
-                
-                content = content.strip()
-                
-                # [Robustness] 增强的输出清洗
-                # 1. 去除首尾引号
+                # [Robustness] 输出清洗
                 if (content.startswith('"') and content.endswith('"')) or (content.startswith("'") and content.endswith("'")):
                     content = content[1:-1].strip()
                 
-                # 2. 去除常见前缀
                 import re
-                # bot_name = self.config_manager.get("bot_name", "Pero") 
-                # Use current_agent_name derived above
                 
-                # 动态构建正则以匹配当前 bot_name
                 pattern = r'^(' + re.escape(current_agent_name) + r'|Me|Reply|Answer|Decision):\s*'
                 content = re.sub(pattern, '', content, flags=re.IGNORECASE).strip()
                 
@@ -830,7 +695,7 @@ class SocialService:
                 if not content:
                     return False
 
-                # 3. 再次检查是否包含工具调用代码（幻觉防护）
+                # 幻觉代码抑制
                 if "```" in content or "<tool_code>" in content or "def " in content:
                     logger.warning(f"[Social] 秘书产生幻觉代码/工具，已抑制。内容: {content}")
                     return False
@@ -839,17 +704,10 @@ class SocialService:
                 logger.debug(f"[Social] 秘书决定发言: {content}")
                 await self.send_msg(target_session, content)
                 
-                # 5. 更新状态
-                # [Fix] 移除 Pero 自身发言对活跃时间的重置，防止“自递归”保持活跃
-                # target_session.last_active_time = datetime.now()
-                
-                # 既然已经说话了，推迟下一次随机思考
                 self._next_thought_time = datetime.now() + timedelta(seconds=120)
                 
                 # 持久化
-                # [Fix] 使用动态 Agent Name 而非硬编码 "Pero"
-                # sender_name = self.bot_info.get("nickname", self.config_manager.get("bot_name", "Pero"))
-                sender_name = bot_name # bot_name is already set to active agent name above
+                sender_name = bot_name
                 await self.session_manager.persist_outgoing_message(
                     target_session.session_id,
                     target_session.session_type,
@@ -1179,6 +1037,10 @@ class SocialService:
                     "user_id": str(data.get("user_id", ""))
                 }
                 logger.info(f"[Social] Bot 信息已更新: {self.bot_info}")
+                
+                # [Fix] Sync Bot ID to SessionManager for message filtering
+                if self.bot_info["user_id"]:
+                    self.session_manager.set_bot_id(self.bot_info["user_id"])
         except Exception as e:
             logger.error(f"[Social] 获取 Bot 信息失败: {e}")
             # Clean up if needed, though pop happens in handle_websocket
@@ -1958,7 +1820,7 @@ class SocialService:
 
     async def _check_and_summarize_memory(self, session: SocialSession):
         """
-        检查会话是否满足总结条件 (每 30 条未总结消息触发一次)
+        检查会话是否满足总结条件 (每 200 条未总结消息触发一次)
         """
         try:
             from .database import get_social_db_session
@@ -1966,6 +1828,9 @@ class SocialService:
             from .social_memory_service import SocialMemoryService
             from sqlmodel import select, col, func
             
+            # 定义触发阈值
+            SUMMARY_TRIGGER_COUNT = 200
+
             async for db_session in get_social_db_session():
                 # 统计该会话未总结的消息数量
                 statement = select(func.count(QQMessage.id)).where(
@@ -1975,14 +1840,14 @@ class SocialService:
                 )
                 count = (await db_session.exec(statement)).one()
                 
-                if count >= 30:
+                if count >= SUMMARY_TRIGGER_COUNT:
                     logger.info(f"[{session.session_id}] 触发记忆总结 (未总结数量: {count})")
-                    await self._perform_summarization(session, db_session)
+                    await self._perform_summarization(session, db_session, SUMMARY_TRIGGER_COUNT)
                     
         except Exception as e:
             logger.error(f"_check_and_summarize_memory 错误: {e}")
 
-    async def _perform_summarization(self, session: SocialSession, db_session):
+    async def _perform_summarization(self, session: SocialSession, db_session, limit_count: int = 200):
         """
         执行记忆总结逻辑
         """
@@ -1990,12 +1855,12 @@ class SocialService:
             from .models_db import QQMessage
             from sqlmodel import select, col
             
-            # 1. 获取未总结的 30 条消息 (按时间正序)
+            # 1. 获取未总结的消息 (按时间正序)
             statement = select(QQMessage).where(
                 QQMessage.session_id == session.session_id,
                 QQMessage.session_type == session.session_type,
                 QQMessage.is_summarized == False
-            ).order_by(QQMessage.timestamp.asc()).limit(30)
+            ).order_by(QQMessage.timestamp.asc()).limit(limit_count)
             
             messages = (await db_session.exec(statement)).all()
             if not messages:
@@ -2098,10 +1963,10 @@ class SocialService:
                     
                     # 获取当前 Agent 名称作为 ID (默认 Pero)
                     # agent_id = self.config_manager.get("bot_name", "Pero")
-                    # Use active agent name
+                    # Use active agent ID
                     agent_manager = AgentManager()
                     active_agent = agent_manager.agents.get(agent_manager.active_agent_id)
-                    agent_id = active_agent.name if active_agent else self.config_manager.get("bot_name", "Pero")
+                    agent_id = active_agent.id if active_agent else self.config_manager.get("bot_name", "Pero")
 
                     await mem_service.add_summary(
                         content=summary,

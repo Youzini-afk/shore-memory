@@ -20,8 +20,7 @@ function getRootPath() {
 
 function getNapCatDir() {
     const root = getRootPath()
-    // Try multiple locations similar to Rust logic (PeroLauncher/src/napcat.rs)
-    // 尝试多个位置，类似于 Rust 逻辑 (PeroLauncher/src/napcat.rs)
+    // 尝试多个位置 (Rust PeroLauncher 逻辑一致)
     const trials = [
         path.join(root, 'backend/nit_core/plugins/social_adapter/NapCat'),
         path.join(root, 'nit_core/plugins/social_adapter/NapCat'),
@@ -41,7 +40,7 @@ function getNapCatDir() {
 }
 
 async function getQQPath(): Promise<string> {
-    if (process.platform !== 'win32') return "" // Skip registry check on non-Windows
+    if (process.platform !== 'win32') return "" 
     
     const regKeys = [
         '\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\QQ',
@@ -63,7 +62,7 @@ async function getQQPath(): Promise<string> {
             })
 
             if (item) {
-                const uninstallPath = item.value.replace(/"/g, '') // Remove quotes // 移除引号
+                const uninstallPath = item.value.replace(/"/g, '') // 移除引号
                 const binDir = path.dirname(uninstallPath)
                 const qqInBin = path.join(binDir, 'QQ.exe')
                 const qqInRoot = path.join(binDir, '..', 'QQ.exe')
@@ -72,12 +71,10 @@ async function getQQPath(): Promise<string> {
                 if (await fs.pathExists(qqInRoot)) return path.normalize(qqInRoot)
             }
         } catch (e) {
-            // Ignore registry errors
             // 忽略注册表错误
         }
     }
 
-    // Default paths fallback
     // 默认路径后备
     const possiblePaths = [
         "C:\\Program Files (x86)\\Tencent\\QQ\\Bin\\QQ.exe",
@@ -109,7 +106,6 @@ export async function startNapCat(window: WindowLike) {
         throw new Error('默认路径或注册表中未找到 QQ。')
     }
 
-    // Try NapCat.Shell.exe first
     // 首先尝试 NapCat.Shell.exe
     const shellExe = path.join(napcatDir, 'NapCat.Shell.exe')
     const napcatBat = path.join(napcatDir, 'napcat.bat')
@@ -130,36 +126,23 @@ export async function startNapCat(window: WindowLike) {
         cmd = shellExe
         args = ['-q', qqPath]
     } else if (fs.existsSync(napcatMjs)) {
-        // Prefer direct node execution for napcat.mjs (fixes index.js CJS/ESM conflict)
-        // 优先直接用 node 执行 napcat.mjs (修复 index.js CJS/ESM 冲突)
+        // 优先直接用 node 执行 napcat.mjs (修复 CJS/ESM 冲突)
         cmd = 'node'
-        // [Fix] Remove -q args to match Rust behavior and fix auto-login issue
-        // Rust PeroLauncher does not pass -q for Node versions, allowing NapCat to use its own config/session.
-        // Passing -q forces quick login which might fail if local QQ client state is invalid, ignoring saved session.
+        // 移除 -q 参数以允许使用 NapCat 自身的配置
         args = ['napcat.mjs']
         
-        // Replicate environment variables from index.js
         // 复制 index.js 中的环境变量
         env.NAPCAT_WRAPPER_PATH = path.join(napcatDir, 'wrapper.node')
         env.NAPCAT_QQ_PACKAGE_INFO_PATH = path.join(napcatDir, 'package.json')
         env.NAPCAT_QQ_VERSION_CONFIG_PATH = path.join(napcatDir, 'config.json')
         env.NAPCAT_DISABLE_PIPE = '1'
     } else if (fs.existsSync(napcatBat)) {
-        // If bat exists but mjs was not found by specific name, try to find any mjs or fallback
-        // But since napcat.bat is known broken for v4.12.8, we should avoid it if possible.
-        // Let's check if we can force node execution of index.js as CJS? No, package.json prevents it.
-        // Maybe we can try to run napcat.mjs even if existsSync failed? (Unlikely)
-        // 如果 bat 存在但未找到特定名称的 mjs，尝试查找任何 mjs 或回退
-        // 但由于 napcat.bat 在 v4.12.8+ 中已知已损坏，如果可能应避免使用。
-        // 让我们检查是否可以强制作为 CJS 执行 index.js？不，package.json 阻止了它。
-        // 也许我们可以尝试运行 napcat.mjs 即使 existsSync 失败？(不太可能)
-        
+        // 回退到 bat (v4.12.8+ 可能不稳定)
         console.warn("[NapCat] 正在回退到 napcat.bat，但这可能会在 v4.12.8+ 上失败")
         cmd = 'cmd.exe'
         args = ['/c', 'napcat.bat', '-q', qqPath]
     } else if (fs.existsSync(indexJs)) {
         cmd = 'node'
-        // [Fix] Remove -q args to match Rust behavior
         args = ['index.js']
     } else {
          throw new Error('未找到有效的 NapCat 入口点。')

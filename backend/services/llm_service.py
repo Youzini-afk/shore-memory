@@ -7,6 +7,7 @@ from typing import AsyncIterable, List, Dict, Any, Optional
 from google import genai
 from google.genai import types
 import anthropic
+from services.gateway_client import gateway_client
 
 # 默认 API Base URL 配置 (用户未提供时使用)
 DEFAULT_API_BASES = {
@@ -26,6 +27,19 @@ DEFAULT_API_BASES = {
     "hunyuan": "https://api.hunyuan.cloud.tencent.com/v1",
     "ollama": "http://localhost:11434/v1"
 }
+
+ERROR_MAPPING = {
+    400: "请求参数错误 (400) - 请检查模型配置或输入内容",
+    401: "认证失败 (401) - API Key 无效或过期",
+    403: "禁止访问 (403) - 余额不足或无权限",
+    404: "模型不存在 (404) - URL 错误或模型名称错误",
+    429: "请求过于频繁 (429) - 触发速率限制，请稍后再试",
+    500: "服务商内部错误 (500) - 远程服务崩溃",
+    502: "网关错误 (502) - 网络连接不稳定",
+    503: "服务不可用 (503) - 服务器超载或维护中",
+    504: "网关超时 (504) - 响应时间过长"
+}
+
 
 class LLMService:
     def __init__(self, api_key: str, api_base: str, model: str, provider: str = "openai"):
@@ -117,6 +131,22 @@ class LLMService:
                 return response.json()
             except Exception as e:
                 print(f"[LLM] 请求异常: {e}")
+                
+                # 识别常见连接错误
+                err_msg = str(e)
+                title = "LLM 请求异常"
+                if "ConnectError" in err_msg or "ConnectTimeout" in err_msg:
+                    title = "LLM 连接失败"
+                    err_msg = "无法连接到 API 服务器，请检查网络或 API Base 设置。"
+                elif "ReadTimeout" in err_msg:
+                    title = "LLM 响应超时"
+                    err_msg = "模型响应时间过长，请稍后再试。"
+                
+                asyncio.create_task(gateway_client.broadcast_error(
+                    message=f"{err_msg}",
+                    title=title,
+                    error_type="error"
+                ))
                 raise
 
     def _debug_print_payload(self, payload):
@@ -136,7 +166,19 @@ class LLMService:
             pass
 
     def _handle_http_error(self, response):
-        error_text = response.text
+        try:
+            # 尝试解析 JSON 错误信息
+            data = response.json()
+            if "error" in data:
+                if isinstance(data["error"], dict) and "message" in data["error"]:
+                    error_text = data["error"]["message"]
+                else:
+                    error_text = json.dumps(data["error"], ensure_ascii=False)
+            else:
+                error_text = response.text
+        except:
+            error_text = response.text
+
         # 清洗 HTML 错误
         if "<html" in error_text.lower() or "<!doctype" in error_text.lower():
             import re
@@ -146,6 +188,18 @@ class LLMService:
             else:
                 error_text = f"网络错误 ({response.status_code}): HTML 响应"
         
+        # 中文友好映射
+        friendly_msg = ERROR_MAPPING.get(response.status_code)
+        if friendly_msg:
+             error_text = f"{friendly_msg}\n详细信息: {error_text}"
+             
+        # 广播错误通知
+        asyncio.create_task(gateway_client.broadcast_error(
+            message=error_text[:200] + ("..." if len(error_text) > 200 else ""),
+            title=f"LLM API 错误 ({response.status_code})",
+            error_type="error"
+        ))
+
         print(f"[LLM] 错误响应: {error_text}")
         raise Exception(f"LLM 错误: {response.status_code} - {error_text}")
 
@@ -220,6 +274,11 @@ class LLMService:
             }
         except Exception as e:
             print(f"[Gemini] 错误: {e}")
+            asyncio.create_task(gateway_client.broadcast_error(
+                message=f"Gemini API 调用失败: {str(e)}",
+                title="Gemini 错误",
+                error_type="error"
+            ))
             raise
 
     async def _chat_anthropic(self, messages: List[Dict[str, Any]], temperature: float = 0.7, tools: List[Dict] = None) -> Dict[str, Any]:
@@ -282,6 +341,11 @@ class LLMService:
             
         except Exception as e:
             print(f"[Anthropic] SDK 错误: {e}")
+            asyncio.create_task(gateway_client.broadcast_error(
+                message=f"Anthropic SDK 调用失败: {str(e)}",
+                title="Anthropic 错误",
+                error_type="error"
+            ))
             raise
 
     # ... (Keep helper methods like _convert_to_genai_contents, etc. - will copy them below) ...
@@ -592,7 +656,17 @@ class LLMService:
                             if response.status_code >= 500:
                                 raise httpx.ConnectError(f"Server Error {response.status_code}")
                             
-                            yield {"content": f"错误: {response.status_code} - {response.text}"}
+                            err_msg = f"错误: {response.status_code} - {response.text}"
+                            friendly_msg = ERROR_MAPPING.get(response.status_code)
+                            if friendly_msg:
+                                err_msg = f"{friendly_msg}\n{err_msg}"
+                            
+                            asyncio.create_task(gateway_client.broadcast_error(
+                                message=err_msg[:200],
+                                title=f"LLM 流式错误 ({response.status_code})"
+                            ))
+                            
+                            yield {"content": err_msg}
                             return
                         data = response.json()
                         if data.get("choices"):
@@ -627,11 +701,19 @@ class LLMService:
                     print(f"[LLM Stream] 连接尝试失败 ({retry_count}/{max_retries}): {e}")
                     if retry_count >= max_retries:
                          print(f"[LLM Stream] Error: All connection attempts failed after {max_retries} tries.")
+                         asyncio.create_task(gateway_client.broadcast_error(
+                            message=f"多次尝试连接 API 失败 ({max_retries}次): {str(e)}",
+                            title="LLM 连接耗尽"
+                         ))
                          yield {"content": f"\n[网络错误: 连接失败 ({max_retries}次尝试): {str(e)}]"}
                          return
                     await asyncio.sleep(1 * retry_count) # 线性退避
                 except Exception as e:
                     print(f"[LLM Stream] Error: {e}")
+                    asyncio.create_task(gateway_client.broadcast_error(
+                        message=f"流式请求发生未知错误: {str(e)}",
+                        title="LLM 流式异常"
+                    ))
                     yield {"content": f"\n[Error: {str(e)}]"}
                     return
 
@@ -689,6 +771,10 @@ class LLMService:
                     pass
         except Exception as e:
             print(f"[Gemini Stream] 错误: {e}")
+            asyncio.create_task(gateway_client.broadcast_error(
+                message=f"Gemini 流式错误: {str(e)}",
+                title="Gemini 异常"
+            ))
             yield {"content": f"错误: {str(e)}"}
 
     async def _chat_anthropic_stream(self, messages: List[Dict[str, Any]], temperature: float, model_id: str, api_key: str, tools: List[Dict] = None, api_base: str = None) -> AsyncIterable[Dict[str, Any]]:
@@ -723,4 +809,8 @@ class LLMService:
                     # TODO: Implement full tool stream mapping if needed.
         except Exception as e:
             print(f"[Anthropic Stream] 错误: {e}")
+            asyncio.create_task(gateway_client.broadcast_error(
+                message=f"Anthropic 流式错误: {str(e)}",
+                title="Anthropic 异常"
+            ))
             yield {"content": f"错误: {str(e)}"}

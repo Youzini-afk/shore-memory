@@ -24,7 +24,7 @@ func generateAndSaveToken() {
 	envToken := os.Getenv("GATEWAY_TOKEN")
 	if envToken != "" {
 		authToken = envToken
-		log.Printf("🔑 Using Fixed Gateway Token from ENV: %s", authToken)
+		log.Printf("🔑 使用环境变量中的固定 Gateway 令牌: %s", authToken)
 	} else {
 		// Define path to save token: defaults to data/gateway_token.json (Docker/Local relative)
 		// Can be overridden by env var for legacy dev support
@@ -38,15 +38,15 @@ func generateAndSaveToken() {
 		b := make([]byte, 32)
 		_, err := rand.Read(b)
 		if err != nil {
-			log.Fatal("Failed to generate token:", err)
+			log.Fatal("生成令牌失败:", err)
 		}
 		authToken = base64.URLEncoding.EncodeToString(b)
-		log.Printf("🔑 Generated New Gateway Access Token: %s", authToken)
+		log.Printf("🔑 已生成新的 Gateway 访问令牌: %s", authToken)
 
 		// Ensure directory exists
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			log.Printf("Warning: Could not create data directory: %v", err)
+			log.Printf("警告: 无法创建数据目录: %v", err)
 		}
 
 		data := map[string]string{
@@ -54,7 +54,7 @@ func generateAndSaveToken() {
 		}
 		fileData, _ := json.MarshalIndent(data, "", "  ")
 		if err := os.WriteFile(path, fileData, 0644); err != nil {
-			log.Printf("Warning: Could not save token to file %s: %v", path, err)
+			log.Printf("警告: 无法保存令牌到文件 %s: %v", path, err)
 		}
 	}
 }
@@ -97,16 +97,16 @@ func (h *Hub) removeNodeByConn(conn *websocket.Conn) {
 func main() {
 	generateAndSaveToken()
 	http.HandleFunc("/ws", handleWebSocket)
-	log.Println("PeroGateway started on :14747")
+	log.Println("PeroGateway 已启动，端口 :14747")
 	if err := http.ListenAndServe(":14747", nil); err != nil {
-		log.Fatal("ListenAndServe:", err)
+		log.Fatal("监听服务失败 (ListenAndServe):", err)
 	}
 }
 
 func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
-		log.Println("upgrade:", err)
+		log.Println("WebSocket 升级失败 (upgrade):", err)
 		return
 	}
 	defer conn.Close()
@@ -117,19 +117,19 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		messageType, p, err := conn.ReadMessage()
 		if err != nil {
-			log.Println("read:", err)
+			log.Println("读取消息失败 (read):", err)
 			break
 		}
 
 		if messageType != websocket.BinaryMessage {
-			log.Println("Expected binary message (Protobuf)")
+			log.Println("期待二进制消息 (Protobuf)")
 			continue
 		}
 
 		// Decode Envelope
 		var envelope perolink.Envelope
 		if err := goproto.Unmarshal(p, &envelope); err != nil {
-			log.Println("unmarshal:", err)
+			log.Println("反序列化失败 (unmarshal):", err)
 			continue
 		}
 
@@ -166,7 +166,7 @@ func broadcastMessage(envelope *perolink.Envelope) {
 
 	data, err := goproto.Marshal(envelope)
 	if err != nil {
-		log.Println("marshal error:", err)
+		log.Println("序列化错误 (marshal error):", err)
 		return
 	}
 
@@ -177,7 +177,7 @@ func broadcastMessage(envelope *perolink.Envelope) {
 
 		err := node.Conn.WriteMessage(websocket.BinaryMessage, data)
 		if err != nil {
-			log.Printf("error sending to %s: %v\n", id, err)
+			log.Printf("发送至 %s 错误: %v\n", id, err)
 			// TODO: Handle disconnection
 		}
 	}
@@ -189,19 +189,19 @@ func unicastMessage(envelope *perolink.Envelope) {
 
 	node, ok := hub.nodes[envelope.TargetId]
 	if !ok {
-		log.Printf("Target node %s not found\n", envelope.TargetId)
+		log.Printf("目标节点 %s 未找到\n", envelope.TargetId)
 		return
 	}
 
 	data, err := goproto.Marshal(envelope)
 	if err != nil {
-		log.Println("marshal error:", err)
+		log.Println("序列化错误 (marshal error):", err)
 		return
 	}
 
 	err = node.Conn.WriteMessage(websocket.BinaryMessage, data)
 	if err != nil {
-		log.Printf("error sending to %s: %v\n", envelope.TargetId, err)
+		log.Printf("发送至 %s 错误: %v\n", envelope.TargetId, err)
 	}
 }
 
@@ -210,7 +210,7 @@ func handleHello(conn *websocket.Conn, sourceID string, hello *perolink.Hello) {
 
 	// Verify Token
 	if hello.Token != authToken {
-		log.Printf("⚠️  Invalid token from %s: %s (Expected: %s)", sourceID, hello.Token, authToken)
+		log.Printf("⚠️  来自 %s 的令牌无效: %s (预期: %s)", sourceID, hello.Token, authToken)
 		// log.Println("⚠️  Authentication failed (Continuing for migration...)")
 	} else {
 		// log.Println("✅ Authentication successful")

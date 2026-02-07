@@ -1,15 +1,10 @@
 """
-[关于为什么不使用标准 Function Calling 的架构决策说明]
-
-1. 异步并发支持的稀缺性：
-   "Function Calling 调个 API 就行了，谁不会写？" —— 但问题在于，目前市面上（尤其是国内大模型生态中）
-   能够原生且稳定支持异步 Function Calling 的模型屈指可数。
-   对于 PeroCore 这样追求高并发、低延迟响应的系统而言，依赖同步阻塞的 API 并不是可行的方案。
-
-2. NIT 协议的工程价值：
-   NIT (Non-invasive Integration Tools) 协议并非为了“重复造轮子”，而是在深入权衡了兼容性、安全性与可维护性后的最优工程解之一。
-   它天然支持基于事件驱动的异步并发执行，解耦了具体的模型实现与业务逻辑。
-   这不仅是一种协议，更是针对具体应用场景（高频交互、复杂意图编排）量身定制的解决方案。
+[NIT 协议架构说明]
+NIT (Non-invasive Integration Tools) 协议通过 XML 标签实现非侵入式工具调用。
+相比原生 Function Calling，NIT 支持：
+1. 真正的异步并发执行 (Event-Driven)
+2. 跨模型兼容性 (通用 Prompt 协议)
+3. 复杂意图编排与脚本化能力
 """
 
 import asyncio
@@ -47,19 +42,13 @@ def remove_nit_tags(text: str) -> str:
 
 class NITStreamFilter:
     """
-    NIT 流式过滤器
-    用于在流式输出过程中拦截并隐藏 NIT 调用块 (1.0 和 2.0)
+    NIT 流式过滤器：拦截并隐藏 NIT 调用块 (1.0 和 2.0)
     """
     def __init__(self):
         self.buffer = ""
         self.in_nit_block = False
-        
-        # NIT 1.0 Markers
         self.m1_start = "[[[NIT_CALL]]]"
         self.m1_end = "[[[NIT_END]]]"
-        
-        # NIT 2.0 Regex (used for state detection)
-        # Since streaming is chunk-by-chunk, we use a simple state machine for the tags
         self.tag_pattern = re.compile(r'<(nit(?:-[0-9a-fA-F]{4})?)>', re.IGNORECASE)
         self.end_tag_pattern = re.compile(r'</(nit(?:-[0-9a-fA-F]{4})?)>', re.IGNORECASE)
 
@@ -69,18 +58,13 @@ class NITStreamFilter:
 
         while self.buffer:
             if not self.in_nit_block:
-                # Look for NIT 1.0 or NIT 2.0 start
                 idx1 = self.buffer.find(self.m1_start)
-                
-                # Check for NIT 2.0 start tag
                 match2 = self.tag_pattern.search(self.buffer)
                 idx2 = match2.start() if match2 else -1
                 
-                # Find the earliest start
                 starts = [i for i in [idx1, idx2] if i != -1]
                 if not starts:
-                    # No start marker found, but we might have a partial marker at the end
-                    # We keep a small buffer to avoid splitting markers
+                    # 保留缓冲区末尾以防分割
                     safe_len = len(self.buffer) - len(self.m1_start) - 10 
                     if safe_len > 0:
                         output += self.buffer[:safe_len]
@@ -88,28 +72,21 @@ class NITStreamFilter:
                     return output
                 
                 first_start = min(starts)
-                # Output everything before the marker
                 output += self.buffer[:first_start]
                 self.buffer = self.buffer[first_start:]
                 self.in_nit_block = True
             else:
-                # Look for NIT 1.0 or NIT 2.0 end
                 idx1_end = self.buffer.find(self.m1_end)
-                
-                # Check for NIT 2.0 end tag
                 match2_end = self.end_tag_pattern.search(self.buffer)
                 idx2_end = match2_end.end() if match2_end else -1
                 
                 if idx1_end != -1 and (idx2_end == -1 or idx1_end < idx2_end):
-                    # NIT 1.0 end found
                     self.buffer = self.buffer[idx1_end + len(self.m1_end):]
                     self.in_nit_block = False
                 elif idx2_end != -1:
-                    # NIT 2.0 end found
                     self.buffer = self.buffer[idx2_end:]
                     self.in_nit_block = False
                 else:
-                    # No end marker found yet
                     return output
         
         return output
@@ -180,24 +157,19 @@ class XMLStreamFilter:
 
 class ThinkingBlockStreamFilter:
     """
-    思考块流式过滤器
-    用于在流式输出过程中拦截并隐藏 Thinking/Monologue 块
-    支持 【Thinking...】, [Thinking...], (Thinking...) 等格式
+    思考块过滤器：隐藏 Thinking/Monologue 块
     """
     def __init__(self, tag_names: List[str] = None):
         if tag_names is None:
-            # 这些是我们要过滤的标签关键词
             self.tag_names = ["Thinking", "Monologue"]
         
-        # 预编译正则，用于快速检测起始标记
         # 匹配 【Thinking, [Thinking, (Thinking
-        # 使用 re.IGNORECASE
         pattern_str = r'(?:【|\[|\()(?:' + '|'.join(self.tag_names) + r')'
         self.start_pattern = re.compile(pattern_str, re.IGNORECASE)
         
         self.buffer = ""
         self.in_block = False
-        self.current_closer = "" # 当前块对应的结束符号
+        self.current_closer = ""
 
     def filter(self, chunk: str) -> str:
         self.buffer += chunk
@@ -205,45 +177,31 @@ class ThinkingBlockStreamFilter:
 
         while self.buffer:
             if not self.in_block:
-                # 查找起始标记
                 match = self.start_pattern.search(self.buffer)
                 if not match:
-                    # 没有找到起始标记，输出缓冲区的大部分（保留末尾一小段以防标记被截断）
-                    # 最长可能的标记是 【Thinking (9 chars)
                     safe_len = max(0, len(self.buffer) - 15)
                     output += self.buffer[:safe_len]
                     self.buffer = self.buffer[safe_len:]
                     return output
                 
-                # 找到起始标记
                 start_idx = match.start()
+                opener = match.group(0)[0]
+                if opener == '【': self.current_closer = '】'
+                elif opener == '[': self.current_closer = ']'
+                elif opener == '(': self.current_closer = ')'
+                else: self.current_closer = '】'
                 
-                # 确定结束符号
-                opener = match.group(0)[0] # '【', '[', '('
-                if opener == '【':
-                    self.current_closer = '】'
-                elif opener == '[':
-                    self.current_closer = ']'
-                elif opener == '(':
-                    self.current_closer = ')'
-                else:
-                    self.current_closer = '】' # Default fallback
-                
-                # 输出起始标记之前的内容
                 output += self.buffer[:start_idx]
                 self.buffer = self.buffer[start_idx:]
                 self.in_block = True
             
             else:
-                # 正在块内，寻找结束符号
                 closer_idx = self.buffer.find(self.current_closer)
                 if closer_idx != -1:
-                    # 找到结束符号，丢弃块内容
                     self.buffer = self.buffer[closer_idx + len(self.current_closer):]
                     self.in_block = False
                     self.current_closer = ""
                 else:
-                    # 还没结束，保留缓冲区继续等待
                     return output
         
         return output
@@ -554,91 +512,72 @@ class NITDispatcher:
         """执行单个插件"""
         start_time = time.perf_counter()
         
-        # [Fix for Path Hallucination]
-        # If plugin_name looks like a file path (e.g. "PeroCore\backend\...\ToolName"), strip it to just the name.
+        # [Fix] 移除路径幻觉
         if '\\' in plugin_name or '/' in plugin_name:
             original_path = plugin_name
             plugin_name = os.path.basename(plugin_name.replace('\\', '/').rstrip('/'))
-            logger.warning(f"已从工具名中移除路径: '{original_path}' -> '{plugin_name}'")
+            logger.warning(f"移除路径前缀: '{original_path}' -> '{plugin_name}'")
 
-        # Log Start
-        # Truncate params for display
+        # 日志参数截断
         params_str = json.dumps(params, ensure_ascii=False)
         if len(params_str) > 200:
             params_str = params_str[:200] + "..."
         logger.info(f"▶ 工具调用: {plugin_name} | 参数: {params_str}")
 
-        # 归一化插件名以匹配注册表
         norm_name = normalize_nit_key(plugin_name)
         
-        # 检查 NITManager 状态
+        # 状态与权限检查
         manifest = self.tool_to_manifest.get(norm_name)
         if manifest:
             plugin_id = manifest.get("name")
             category = manifest.get("_category", "core")
             
-            # Lightweight Mode Execution Check
+            # 轻量模式检查
             config = get_config_manager()
             if config.get("lightweight_mode", False):
                 if plugin_id not in ["ScreenVision", "CharacterOps", "MemoryOps"]:
-                    logger.warning(f"执行被拦截: 轻量模式已激活。工具 '{plugin_name}' (插件: {plugin_id}) 受限。")
-                    return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。仅 ScreenVision, CharacterOps 和 MemoryOps 可用。"
+                    logger.warning(f"轻量模式拦截: {plugin_name}")
+                    return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。"
 
             if not self.nm.is_category_enabled(category):
-                logger.warning(f"执行被拦截: 类别 '{category}' 已禁用。")
-                return f"错误: 工具 '{plugin_name}' 属于类别 '{category}'，该类别当前已禁用。"
+                return f"错误: 类别 '{category}' 已禁用。"
             if not self.nm.is_plugin_enabled(plugin_id):
-                logger.warning(f"执行被拦截: 插件 '{plugin_id}' 已禁用。")
-                return f"错误: 工具 '{plugin_name}' (插件: {plugin_id}) 当前已禁用。"
+                return f"错误: 插件 '{plugin_id}' 已禁用。"
 
-        # 优先检查 extra_plugins
+        # 查找 Handler (Extra -> Global -> Auto-Route)
         handler = None
         if extra_plugins:
-            # 尝试直接匹配
-            handler = extra_plugins.get(norm_name)
-            # 如果没找到，尝试在 extra_plugins 中查找归一化后的 key
-            if not handler:
-                for k, v in extra_plugins.items():
-                    if normalize_nit_key(k) == norm_name:
-                        handler = v
-                        break
+            handler = extra_plugins.get(norm_name) or next((v for k, v in extra_plugins.items() if normalize_nit_key(k) == norm_name), None)
         
-        # 如果 extra_plugins 中没有，查全局注册表
         if not handler:
             handler = PLUGIN_REGISTRY.get(norm_name)
 
-        # [NIT 2.1 Auto-Routing] 如果找不到 handler，尝试检测是否是 "PluginName" + "command" 参数模式
+        # 自动路由 (PluginName.CommandName)
         if not handler:
-            # 检查是否有潜在的 command 参数
             routing_keys = ['command', 'commandidentifier', 'action', 'tool']
             potential_cmds = [(k, params.get(k)) for k in routing_keys if params.get(k)]
             
             for key, cmd in potential_cmds:
-                # 尝试构造 PluginName.CommandName
                 namespaced_key = normalize_nit_key(f"{plugin_name}.{cmd}")
                 handler = PLUGIN_REGISTRY.get(namespaced_key)
                 if handler:
-                    logger.info(f"自动路由 '{plugin_name}' + cmd='{cmd}' -> {namespaced_key}")
-                    # Remove the routing key from params to avoid TypeError
+                    logger.info(f"自动路由: {plugin_name} + {cmd} -> {namespaced_key}")
                     params.pop(key, None)
                     break
                 
-                # 尝试直接查找 CommandName (如果 PluginName 只是误写)
                 cmd_key = normalize_nit_key(cmd)
                 handler = PLUGIN_REGISTRY.get(cmd_key)
                 if handler:
-                    logger.info(f"自动路由 '{plugin_name}' + cmd='{cmd}' -> {cmd_key}")
-                    # Remove the routing key from params to avoid TypeError
+                    logger.info(f"自动路由: {plugin_name} + {cmd} -> {cmd_key}")
                     params.pop(key, None)
                     break
 
         if not handler:
-            # Check if it's a category and provide helpful hint
             if norm_name in self.category_map:
                 tools = self.category_map[norm_name]
-                return f"错误: '{plugin_name}' 是一个插件类别，不是工具。你是想使用这些工具之一吗? {', '.join(tools)}"
+                return f"错误: '{plugin_name}' 是类别而非工具。可用工具: {', '.join(tools)}"
             
-            logger.error(f"未找到插件 '{plugin_name}'。")
+            logger.error(f"未找到插件 '{plugin_name}'")
             return f"错误: 未找到插件 '{plugin_name}' (归一化名: {norm_name})。"
             
         try:
@@ -646,26 +585,21 @@ class NITDispatcher:
             if asyncio.iscoroutinefunction(handler):
                  result = await handler(**params)
             else:
-                # [Optimization] Run blocking sync functions in a thread pool to avoid blocking the event loop
+                # [Async] 在线程池运行同步阻塞函数
                 loop = asyncio.get_running_loop()
                 from functools import partial
                 result = await loop.run_in_executor(None, partial(handler, **params))
             
-            # Log Success
             duration = (time.perf_counter() - start_time) * 1000
             result_str = str(result)
-            if len(result_str) > 100:
-                result_preview = result_str[:100] + "..."
-            else:
-                result_preview = result_str
+            result_preview = result_str[:100] + "..." if len(result_str) > 100 else result_str
                 
-            logger.info(f"✔ 工具完成: {plugin_name} | 耗时: {duration:.2f}ms | 结果: {result_preview}")
+            logger.info(f"✔ 完成: {plugin_name} | {duration:.2f}ms | 结果: {result_preview}")
             return result
             
         except Exception as e:
-            # Log Failure
             duration = (time.perf_counter() - start_time) * 1000
-            logger.error(f"✘ 工具失败: {plugin_name} | 耗时: {duration:.2f}ms | 错误: {e}", exc_info=True)
+            logger.error(f"✘ 失败: {plugin_name} | {duration:.2f}ms | 错误: {e}", exc_info=True)
             raise e
 
 # 全局单例

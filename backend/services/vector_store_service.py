@@ -29,9 +29,14 @@ class VectorStoreService:
     def __init__(self):
         if self._initialized: return
         
-        base_dir = os.environ.get("PERO_DATA_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-        data_dir = os.path.join(base_dir, "data")
-        self.data_dir = os.path.join(data_dir, "rust_db")
+        env_data_dir = os.environ.get("PERO_DATA_DIR")
+        if env_data_dir:
+            self.data_dir = os.path.join(env_data_dir, "rust_db")
+        else:
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            data_dir = os.path.join(base_dir, "data")
+            self.data_dir = os.path.join(data_dir, "rust_db")
+
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir, exist_ok=True)
 
@@ -56,6 +61,7 @@ class VectorStoreService:
         
         self._initialized = True
         self._lazy_loaded = False
+        self.deleted_ids: Dict[str, set] = {} # agent_id -> set of deleted memory_ids
 
     def _get_agent_index_path(self, agent_id: str) -> str:
         """获取指定 Agent 的索引文件路径"""
@@ -146,8 +152,40 @@ class VectorStoreService:
             # Save all loaded agent indices
             for agent_id, index in self.indices.items():
                 path = self._get_agent_index_path(agent_id)
+                
+                # [Optimization] Apply physical deletion before saving
+                pending_deletions = self.deleted_ids.get(agent_id, set())
                 temp_path = path + ".tmp"
-                index.persist_index(temp_path)
+                
+                if pending_deletions:
+                    # 1. Save current state (including logically deleted)
+                    index.persist_index(temp_path)
+                    
+                    # 2. Physically remove from JSON
+                    try:
+                        with open(temp_path, 'r', encoding='utf-8') as f:
+                            data = json.load(f)
+                        
+                        original_len = len(data)
+                        new_data = [item for item in data if item.get('id') not in pending_deletions]
+                        
+                        if len(new_data) < original_len:
+                            with open(temp_path, 'w', encoding='utf-8') as f:
+                                json.dump(new_data, f, ensure_ascii=False)
+                            
+                            # 3. Reload index to sync memory state
+                            # Rust core doesn't support hot-reload, so we create a new instance
+                            new_index = SemanticVectorIndex.load_index(temp_path, self.dimension)
+                            self.indices[agent_id] = new_index
+                            
+                            # Clear pending deletions
+                            self.deleted_ids[agent_id] = set()
+                            print(f"[VectorStore] Agent {agent_id} 物理清理了 {original_len - len(new_data)} 条向量。")
+                    except Exception as e:
+                        print(f"[VectorStore] 物理清理失败: {e}")
+                else:
+                    index.persist_index(temp_path)
+
                 if os.path.exists(path):
                     os.replace(temp_path, path)
                 else:
@@ -209,6 +247,13 @@ class VectorStoreService:
         except Exception as e:
             print(f"[VectorStore] 为 {agent_id} 批量添加失败: {e}")
 
+    def delete_memory(self, memory_id: int, agent_id: str = "pero"):
+        """标记记忆为删除 (将在下次 save() 时物理清理)"""
+        self._ensure_loaded()
+        if agent_id not in self.deleted_ids:
+            self.deleted_ids[agent_id] = set()
+        self.deleted_ids[agent_id].add(memory_id)
+
     def search_memory(self, query_vector: List[float], limit: int = 10, agent_id: str = "pero") -> List[Dict]:
         """
         搜索记忆
@@ -219,9 +264,19 @@ class VectorStoreService:
         if not index: return []
         
         try:
-            results = index.search_similar_vectors(query_vector, limit)
-            # results format: [(id, score), ...]
-            return [{"id": int(r[0]), "score": float(r[1])} for r in results]
+            # Fetch more candidates to account for deleted ones
+            candidates = index.search_similar_vectors(query_vector, limit + len(self.deleted_ids.get(agent_id, set())) + 5)
+            
+            # Filter logically deleted
+            deleted = self.deleted_ids.get(agent_id, set())
+            results = []
+            for r in candidates:
+                mid = int(r[0])
+                if mid not in deleted:
+                    results.append({"id": mid, "score": float(r[1])})
+                    if len(results) >= limit: break
+            
+            return results
         except Exception as e:
             print(f"[VectorStore] 搜索 {agent_id} 失败: {e}")
             return []

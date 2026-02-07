@@ -38,6 +38,15 @@ except ImportError:
         ScheduledTask = None
         MemoryService = None
 
+# Try import AgentManager for multi-agent support
+try:
+    from services.agent_manager import get_agent_manager
+except ImportError:
+    try:
+        from backend.services.agent_manager import get_agent_manager
+    except ImportError:
+        get_agent_manager = None
+
 # 配置日志存储路径 (作为备份/兼容)
 # Assuming file is in backend/nit_core/tools/core/MemoryOps/memory_ops.py
 # Root is backend (4 levels up)
@@ -91,6 +100,13 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
             importance_map = {"info": 3, "warning": 6, "critical": 9}
             imp = importance_map.get(level, 3)
             
+            # Get active agent
+            agent_id = "pero"
+            if get_agent_manager:
+                try:
+                    agent_id = get_agent_manager().active_agent_id
+                except: pass
+
             await MemoryService.save_memory(
                 session=session,
                 content=f"[{category}] {content}",
@@ -100,7 +116,8 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
                 base_importance=float(imp),
                 memory_type="reflection",
                 source="MemoryOps",
-                sentiment="neutral" # Reflection is usually neutral/objective
+                sentiment="neutral", # Reflection is usually neutral/objective
+                agent_id=agent_id
             )
             db_status = "(已同步至记忆数据库)"
         except Exception as e:
@@ -143,7 +160,14 @@ async def read_reflections(limit: int = 5) -> str:
     # Try DB first
     if session and Memory:
         try:
-            statement = select(Memory).where(Memory.type == "reflection").order_by(desc(Memory.timestamp)).limit(limit)
+            # Get active agent
+            agent_id = "pero"
+            if get_agent_manager:
+                try:
+                    agent_id = get_agent_manager().active_agent_id
+                except: pass
+
+            statement = select(Memory).where(Memory.type == "reflection").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
             memories = (await session.exec(statement)).all()
             
             if memories:
@@ -190,7 +214,14 @@ async def read_diary(limit: int = 5) -> str:
 
     try:
         # source='secretary_merge' 是我们在 memory_secretary_service.py 中看到的
-        statement = select(Memory).where(Memory.source == "secretary_merge").order_by(desc(Memory.timestamp)).limit(limit)
+        # Get active agent
+        agent_id = "pero"
+        if get_agent_manager:
+            try:
+                agent_id = get_agent_manager().active_agent_id
+            except: pass
+
+        statement = select(Memory).where(Memory.source == "secretary_merge").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
         memories = (await session.exec(statement)).all()
         
         if not memories:
@@ -253,7 +284,14 @@ async def read_memory_by_cluster(cluster_name: str, limit: int = 10) -> str:
 
     try:
         # 使用 contains 来匹配，因为 clusters 可能是逗号分隔的字符串
-        statement = select(Memory).where(Memory.clusters.contains(cluster_name)).order_by(desc(Memory.timestamp)).limit(limit)
+        # Get active agent
+        agent_id = "pero"
+        if get_agent_manager:
+            try:
+                agent_id = get_agent_manager().active_agent_id
+            except: pass
+
+        statement = select(Memory).where(Memory.clusters.contains(cluster_name)).where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
         memories = (await session.exec(statement)).all()
         
         if not memories:

@@ -1,17 +1,3 @@
-# Copyright (c) 2026 YoKONCy. All rights reserved.
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#     http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# Original Repository: https://github.com/YoKONCy/PeroCore
-
 import json
 import re
 import os
@@ -54,33 +40,42 @@ from services.task_manager import task_manager
 class AgentService:
     def __init__(self, session: AsyncSession):
         self.session = session
-        set_current_session_context(session) # Inject session for tool ops
+        
+        # Inject session and agent_id for tool ops
+        from services.agent_manager import get_agent_manager
+        agent_id = "pero"
+        try:
+            agent_id = get_agent_manager().active_agent_id
+        except:
+            pass
+            
+        set_current_session_context(session, agent_id) 
         self.memory_service = MemoryService()
         self.scorer_service = ScorerService(session)
         self.prompt_manager = PromptManager()
         
-        # Initialize Helper MDP (using centralized MDP)
+        # 初始化辅助 MDP (使用集中式 MDP)
         self.mdp = self.prompt_manager.mdp
         
-        # Initialize Preprocessor Pipeline
+        # 初始化预处理器管道
         self.preprocessor_manager = PreprocessorManager()
         self.preprocessor_manager.register(UserInputPreprocessor())
         self.preprocessor_manager.register(HistoryPreprocessor())
-        # self.preprocessor_manager.register(WeeklyReportPreprocessor()) # Disabled as per user request (Documents are static files now)
+        # self.preprocessor_manager.register(WeeklyReportPreprocessor()) # 根据用户请求禁用 (文档现在是静态文件)
         self.preprocessor_manager.register(RAGPreprocessor())
         self.preprocessor_manager.register(GraphFlashbackPreprocessor())
         self.preprocessor_manager.register(ConfigPreprocessor())
-        self.preprocessor_manager.register(PerceptionPreprocessor()) # Added: Injects silent perception logs
+        self.preprocessor_manager.register(PerceptionPreprocessor()) # 新增: 注入静默感知日志
         self.preprocessor_manager.register(SystemPromptPreprocessor())
 
-        # Initialize Postprocessor Pipeline
+        # 初始化后处理器管道
         self.postprocessor_manager = PostprocessorManager()
         self.postprocessor_manager.register(NITFilterPostprocessor())
         self.postprocessor_manager.register(ThinkingFilterPostprocessor())
 
     def _log_to_file(self, msg: str):
         try:
-            # Use absolute path to ensure log file is created in backend directory
+            # 使用绝对路径以确保日志文件在 backend 目录下创建
             data_dir = os.environ.get("PERO_DATA_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
             log_path = os.path.join(data_dir, "debug_vision.log")
             with open(log_path, "a", encoding="utf-8") as f:
@@ -374,7 +369,7 @@ class AgentService:
         }
 
     async def _get_pet_state(self) -> PetState:
-        # [Multi-Agent] Filter PetState by active agent
+        # [多 Agent] 按活跃 Agent 过滤 PetState
         from services.agent_manager import get_agent_manager
         agent_manager = get_agent_manager()
         active_agent_id = agent_manager.active_agent_id
@@ -395,21 +390,21 @@ class AgentService:
 
     async def handle_proactive_observation(self, intent_description: str, score: float):
         """
-        Handle a proactive visual observation from AuraVision.
+        处理来自 AuraVision 的主动视觉观察结果。
         """
-        # 1. Check if we should talk now
-        # TODO: Implement more complex gating (e.g. check last talk time)
+        # 1. 检查现在是否应该说话
+        # TODO: 实现更复杂的门控逻辑 (例如检查上次说话时间)
         print(f"[Agent] 收到主动观察结果: {intent_description} (评分: {score:.4f})")
         
-        # 2. Construct an internal sensing prompt
+        # 2. 构造内部感知 Prompt
         internal_promptuser_prompt = self.mdp.render("tasks/perception/proactive_internal_sense", {
             "intent_description": intent_description,
             "score": f"{score:.4f}"
         })
 
-        # 3. Trigger a special session
-        # This would involve calling self.process_request with a pseudo-user message
-        # but marked as an internal trigger.
+        # 3. 触发特殊会话
+        # 这将涉及调用 self.process_request 并带有一个伪造的用户消息
+        # 但标记为内部触发。
         pass
 
     async def _get_mcp_clients(self) -> List[McpClient]:
@@ -451,50 +446,50 @@ class AgentService:
 
         # 只有当新表完全没数据时，才尝试获取旧版配置作为回退
         # 2. 尝试获取完整 JSON 配置
-            try:
-                json_config = (await self.session.exec(select(Config).where(Config.key == "mcp_config_json"))).first()
-                
-                if json_config and json_config.value:
-                    try:
-                        config_data = json.loads(json_config.value)
-                        if "mcpServers" in config_data:
-                            for name, server_config in config_data["mcpServers"].items():
-                                # 检查是否启用 (默认为 True)
-                                if not server_config.get("enabled", True):
-                                    print(f"[AgentService] 跳过已禁用的 MCP JSON 配置: {name}")
-                                    continue
-                                    
-                                print(f"[AgentService] 找到 MCP JSON 配置: {name}")
-                                # 确保配置中有名字
-                                if "name" not in server_config:
-                                    server_config["name"] = name
-                                clients.append(McpClient(config=server_config))
-                        else:
-                            print(f"[AgentService] 找到直接 MCP JSON 配置")
-                            clients.append(McpClient(config=config_data))
-                    except Exception as e:
-                        print(f"[AgentService] 加载 MCP JSON 配置失败: {e}")
-            except Exception as e:
-                print(f"[AgentService] 查询 mcp_config_json 错误: {e}")
-
-            # 3. 回退到旧的 URL/Key 配置 (仅当仍没有客户端时)
-            if not clients:
+        try:
+            json_config = (await self.session.exec(select(Config).where(Config.key == "mcp_config_json"))).first()
+            
+            if json_config and json_config.value:
                 try:
-                    url_config = (await self.session.exec(select(Config).where(Config.key == "mcp_server_url"))).first()
-                    
-                    if url_config and url_config.value:
-                        key_config = (await self.session.exec(select(Config).where(Config.key == "mcp_api_key"))).first()
-                        api_key = key_config.value if key_config else None
-                        
-                        print(f"[AgentService] 回退到旧版 MCP URL 配置: {url_config.value}")
-                        clients.append(McpClient(config={
-                            "type": "sse",
-                            "url": url_config.value,
-                            "api_key": api_key,
-                            "name": "Legacy-MCP"
-                        }))
+                    config_data = json.loads(json_config.value)
+                    if "mcpServers" in config_data:
+                        for name, server_config in config_data["mcpServers"].items():
+                            # 检查是否启用 (默认为 True)
+                            if not server_config.get("enabled", True):
+                                print(f"[AgentService] 跳过已禁用的 MCP JSON 配置: {name}")
+                                continue
+                                
+                            print(f"[AgentService] 找到 MCP JSON 配置: {name}")
+                            # 确保配置中有名字
+                            if "name" not in server_config:
+                                server_config["name"] = name
+                            clients.append(McpClient(config=server_config))
+                    else:
+                        print(f"[AgentService] 找到直接 MCP JSON 配置")
+                        clients.append(McpClient(config=config_data))
                 except Exception as e:
-                    print(f"[AgentService] 查询 mcp_server_url 错误: {e}")
+                    print(f"[AgentService] 加载 MCP JSON 配置失败: {e}")
+        except Exception as e:
+            print(f"[AgentService] 查询 mcp_config_json 错误: {e}")
+
+        # 3. 回退到旧的 URL/Key 配置 (仅当仍没有客户端时)
+        if not clients:
+            try:
+                url_config = (await self.session.exec(select(Config).where(Config.key == "mcp_server_url"))).first()
+                
+                if url_config and url_config.value:
+                    key_config = (await self.session.exec(select(Config).where(Config.key == "mcp_api_key"))).first()
+                    api_key = key_config.value if key_config else None
+                    
+                    print(f"[AgentService] 回退到旧版 MCP URL 配置: {url_config.value}")
+                    clients.append(McpClient(config={
+                        "type": "sse",
+                        "url": url_config.value,
+                        "api_key": api_key,
+                        "name": "Legacy-MCP"
+                    }))
+            except Exception as e:
+                print(f"[AgentService] 查询 mcp_server_url 错误: {e}")
 
         return clients
 
@@ -504,7 +499,7 @@ class AgentService:
             # 1. 处理 NIT 工具调用 (核心逻辑)
             nit_results = []
             if execute_nit:
-                # --- [Security Gate] 针对手机端的 NIT 脚本硬隔离 ---
+                # --- [安全门控] 针对手机端的 NIT 脚本硬隔离 ---
                 if source == "mobile":
                     sensitive_tool_keywords = ["screenshot", "screen", "windows", "shell", "cmd", "file", "app", "browser", "exec", "write"]
                     # 检查 text 中是否包含 <nit> 且内容涉及敏感词
@@ -543,20 +538,20 @@ class AgentService:
 
     async def preview_prompt(self, session_id: str, source: str, log_id: int) -> Dict[str, Any]:
         """
-        Preview the full prompt (system + history + user) for a specific conversation log.
-        Used for debugging/dashboard inspection.
+        预览特定对话日志的完整 Prompt (系统 + 历史 + 用户)。
+        用于调试/仪表盘检查。
         """
-        # 1. Fetch the target log
+        # 1. 获取目标日志
         log = await self.session.get(ConversationLog, log_id)
         if not log:
             return {"error": "Log not found"}
             
-        # 2. Identify "Current Message" and "History Cutoff"
+        # 2. 识别“当前消息”和“历史截止点”
         current_msg_log = None
         history_before_id = None
         
         if log.role == "assistant":
-            # Find the user message immediately preceding this one
+            # 查找此消息之前的最近一条用户消息
             stmt = select(ConversationLog).where(ConversationLog.session_id == session_id)\
                 .where(ConversationLog.source == source)\
                 .where(ConversationLog.id < log_id)\
@@ -568,20 +563,20 @@ class AgentService:
             if current_msg_log:
                 history_before_id = current_msg_log.id
             else:
-                # Fallback: just history up to log_id
+                # 回退：仅使用 log_id 之前的历史
                 history_before_id = log.id
                 
         else:
-            # User log selected
+            # 用户日志已选中
             current_msg_log = log
             history_before_id = log.id
             
-        # 3. Construct Context
+        # 3. 构造上下文
         messages = []
         if current_msg_log:
             messages.append({"role": "user", "content": current_msg_log.content})
             
-        # 4. Run Preprocessor Pipeline (Dry Run)
+        # 4. 运行预处理器管道 (空跑)
         agent_id = log.agent_id or "pero"
         
         context = {
@@ -600,10 +595,10 @@ class AgentService:
             "skip_system_prompt": False
         }
         
-        # Run pipeline
+        # 运行管道
         context = await self.preprocessor_manager.process(context)
         
-        # 5. Extract Final Messages
+        # 5. 提取最终消息
         final_messages = context.get("final_messages", [])
         
         return {
@@ -612,26 +607,26 @@ class AgentService:
 
     async def social_chat(self, messages: List[Dict[str, Any]], session_id: str) -> str:
         """
-        [DEPRECATED] Specialized chat mode for Social Interactions (QQ/OneBot).
-        Please use `chat(..., source='social', capabilities=['social'])` instead.
+        [已弃用] 社交互动 (QQ/OneBot) 的专用聊天模式。
+        请改用 `chat(..., source='social', capabilities=['social'])`。
         
-        - Uses isolated session history.
-        - Restricted toolset (Safe tools only).
-        - Returns the final response text directly.
+        - 使用隔离的会话历史。
+        - 受限工具集 (仅安全工具)。
+        - 直接返回最终响应文本。
         """
         print(f"[SocialAgent] 处理会话的社交聊天: {session_id}")
         
-        # 1. Get Config (Use global config or specific social model)
+        # 1. 获取配置 (使用全局配置或特定社交模型)
         config = await self._get_llm_config()
         
-        # 2. Prepare Tools (Whitelist Strategy)
+        # 2. 准备工具 (白名单策略)
         social_tools = []
         try:
-            # We want to filter tools that are specifically for social mode.
-            # Assuming PluginManager has loaded them and they are available in plugin_manager.
+            # 我们只想过滤社交模式专用的工具。
+            # 假设 PluginManager 已加载它们并在 plugin_manager 中可用。
             all_tools = plugin_manager.get_all_definitions()
             
-            # Whitelist of safe prefixes/names
+            # 安全前缀/名称白名单
             safe_prefixes = ["qq_"]
             safe_names = ["read_social_memory", "read_agent_memory", "qq_notify_master"]
             
@@ -650,7 +645,7 @@ class AgentService:
             print(f"[SocialAgent] 加载工具出错: {e}")
             social_tools = []
 
-        # 3. Call LLM
+        # 3. 调用 LLM
         llm = LLMService(
             api_key=config.get("api_key"),
             api_base=config.get("api_base"),
@@ -658,7 +653,7 @@ class AgentService:
             provider=config.get("provider", "openai")
         )
         
-        # We use a simplified loop for social mode (no complex reflection/vision for now)
+        # 我们对社交模式使用简化的循环 (暂时没有复杂的反思/视觉)
         try:
             import asyncio
             async def _chat_with_retry(msgs, tools_list=None):
@@ -673,7 +668,7 @@ class AgentService:
                         print(f"[SocialAgent] LLM 连接失败 (尝试 {i+1}/{retry_count+1}): {err}. 1秒后重试...")
                         await asyncio.sleep(1)
 
-            # Non-streaming call for simplicity in Phase 2 MVP
+            # 阶段2 MVP 简单起见使用非流式调用
             response = await _chat_with_retry(messages, social_tools if social_tools else None)
             
             response_msg = response["choices"][0]["message"]
@@ -684,13 +679,13 @@ class AgentService:
             if content is None:
                 content = ""
             
-            # 4. Handle Tool Calls (Simple Loop)
-            # If tool calls exist, execute them and recurse (limit 3 turns)
-            # For MVP Phase 2, let's just execute and return the result or confirmation.
+            # 4. 处理工具调用 (简单循环)
+            # 如果存在工具调用，执行它们并递归 (限制3轮)
+            # 对于 MVP 阶段2，我们只需执行并返回结果或确认。
             
             if tool_calls:
                 print(f"[SocialAgent] LLM 请求了 {len(tool_calls)} 个工具调用。")
-                # Append assistant message with tool calls
+                # 追加带有工具调用的助手消息
                 messages.append(response_msg)
                 
                 for tc in tool_calls:
@@ -700,23 +695,12 @@ class AgentService:
                     
                     print(f"[SocialAgent] 执行工具: {func_name}")
                     
-                    # Execute via NIT Dispatcher
+                    # 通过 NIT Dispatcher 执行
                     from nit_core.dispatcher import get_dispatcher
                     dispatcher = get_dispatcher()
                     
-                    # We need to construct the command string for dispatcher or call function directly
-                    # Since dispatcher parses text, we might need to find the function in plugin_manager map
-                    # Let's try to use plugin_manager directly or execute the python function if we can find it.
-                    # Actually, AgentService._save_parsed_metadata uses dispatcher.dispatch(text).
-                    # But here we have structured tool calls.
-                    
-                    # Quick fix: Use the tools_map in plugin_manager if available, or just use dispatcher's execute_tool if exposed.
-                    # Looking at AgentService, it seems standard tool execution is manual in the loop.
-                    
-                    # Let's verify if we can just invoke the function from the tools definitions?
-                    # No, definitions are JSON.
-                    
-                    # Let's use the PluginManager's tools_map which maps name -> callable
+                    # 直接通过 PluginManager 获取函数引用并执行
+                    # 因为这里是结构化的工具调用，不需要 Dispatcher 的文本解析能力
                     func = plugin_manager.tools_map.get(func_name)
                     tool_result = ""
                     
@@ -733,7 +717,7 @@ class AgentService:
                     else:
                         tool_result = f"未找到工具 {func_name}。"
                         
-                    # Append Tool Result
+                    # 追加工具结果
                     messages.append({
                         "tool_call_id": call_id,
                         "role": "tool",
@@ -741,8 +725,8 @@ class AgentService:
                         "content": str(tool_result)
                     })
                     
-                # Recursive call (Second turn)
-                # For safety, just one recursion depth for now
+                # 递归调用 (第二轮)
+                # 为了安全，目前仅限一层递归深度
                 print("[SocialAgent] 发送工具结果回 LLM...")
                 response_2 = await _chat_with_retry(messages, social_tools)
                 content = response_2["choices"][0]["message"].get("content", "")
@@ -751,7 +735,7 @@ class AgentService:
 
         except Exception as e:
             print(f"[SocialAgent] 错误: {e}")
-            # Suppress error message to avoid sending system errors to chat
+            # 抑制错误消息，避免将系统错误发送到聊天
             return None
 
     async def _run_scorer_background(self, user_msg: str, assistant_msg: str, source: str, pair_id: str = None, agent_id: str = "pero"):
@@ -768,7 +752,7 @@ class AgentService:
         except Exception as e:
             print(f"[Agent] 后台秘书服务失败: {e}")
 
-    async def _trigger_dream(self):
+    async def _trigger_dream(self, agent_id: str = "pero"):
         """后台触发梦境机制"""
         try:
             from services.reflection_service import ReflectionService
@@ -777,14 +761,25 @@ class AgentService:
             from sqlalchemy.orm import sessionmaker
             import random
             
-            print("[Agent] 启动后台梦境任务...", flush=True)
+            print(f"[Agent] 启动后台梦境任务 (agent_id={agent_id})...", flush=True)
             async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
             async with async_session() as session:
                 # Update last trigger time in Config
+                # [Note] Config is global, but maybe we should key it by agent_id too?
+                # For now, let's keep it global or key it if we want per-agent scheduling.
+                # Given user request is about memory isolation, scheduling isolation is less critical 
+                # but good to have. Let's use a suffixed key.
+                
+                config_key = f"last_dream_trigger_time_{agent_id}"
                 now_str = datetime.now().isoformat()
-                config_last_dream = await session.get(Config, "last_dream_trigger_time")
+                config_last_dream = await session.get(Config, config_key)
+                
+                # Fallback to global key for backward compatibility or if first run
+                if not config_last_dream and agent_id == "pero":
+                     config_last_dream = await session.get(Config, "last_dream_trigger_time")
+                
                 if not config_last_dream:
-                    config_last_dream = Config(key="last_dream_trigger_time", value=now_str)
+                    config_last_dream = Config(key=config_key, value=now_str)
                     session.add(config_last_dream)
                 else:
                     config_last_dream.value = now_str
@@ -794,30 +789,35 @@ class AgentService:
                 service = ReflectionService(session)
 
                 # 1. 补录记忆 (Priority: Fix failures first)
+                # Scorer tasks are agent-agnostic in lookup but agent-specific in processing.
+                # However, backfill_failed_scorer_tasks iterates over logs which HAVE agent_id.
+                # Ideally we should filter tasks by agent_id too.
+                # But ReflectionService.backfill_failed_scorer_tasks doesn't support filtering yet.
+                # It's safe to run globally as it respects log.agent_id.
                 await service.backfill_failed_scorer_tasks()
         
                 # 2. 孤独记忆扫描 (New Feature: Fix isolated memories)
                 # 每次梦境周期扫描 3 个孤独记忆
-                await service.scan_lonely_memories(limit=3)
+                await service.scan_lonely_memories(limit=3, agent_id=agent_id)
 
                 # 3. 关联挖掘 (High Priority)
-                await service.dream_and_associate(limit=10)
+                await service.dream_and_associate(limit=10, agent_id=agent_id)
                 
                 # 3. 记忆压缩 (Low Priority, 10% chance)
                 if random.random() < 0.1:
                     # 默认配置: 压缩3天前的低价值记忆
-                    await service.consolidate_memories(lookback_days=3, importance_threshold=4)
+                    await service.consolidate_memories(lookback_days=3, importance_threshold=4, agent_id=agent_id)
 
         except Exception as e:
             print(f"[Agent] 后台梦境失败: {e}")
 
     async def chat(self, messages: List[Dict[str, Any]], source: str = "desktop", session_id: str = "default", on_status: Optional[Any] = None, is_voice_mode: bool = False, user_text_override: str = None, skip_save: bool = False, system_trigger_instruction: str = None, agent_id_override: str = None, capabilities: List[str] = None, skip_system_prompt: bool = False, initial_variables: Dict[str, Any] = None) -> AsyncIterable[str]:
-        # [NIT Security] Generate ID for this request context
+        # [NIT 安全] 为此请求上下文生成 ID
         current_nit_id = NITSecurityManager.generate_random_id()
         
-        # Notify CompanionService of user activity to prevent interruption
+        # 通知 CompanionService 用户活动以防止中断
         try:
-            # [Fix] Skip companion update for social/mobile
+            # [Fix] 跳过 social/mobile 的陪伴更新
             if source not in ["social", "mobile"]:
                 from services.companion_service import companion_service
                 companion_service.update_activity()
@@ -826,14 +826,14 @@ class AgentService:
         except Exception as e:
             print(f"[Agent] 更新陪伴活动失败: {e}")
             
-        # Cancel any pending 'reaction' tasks because user is interacting
+        # 取消任何待处理的“反应”任务，因为用户正在交互
         if not system_trigger_instruction:
             try:
-                # [Multi-Agent] Only cancel tasks for the current agent
+                # [Multi-Agent] 仅取消当前 Agent 的任务
                 from services.agent_manager import get_agent_manager
                 current_agent_id = agent_id_override or get_agent_manager().active_agent_id
                 
-                # Assuming 'reaction' type tasks are those that should be cancelled on interaction
+                # 假设“反应”类型的任务是那些应该在交互时取消的任务
                 statement = select(ScheduledTask).where(ScheduledTask.type == "reaction").where(ScheduledTask.is_triggered == False).where(ScheduledTask.agent_id == current_agent_id)
                 tasks_to_cancel = (await self.session.exec(statement)).all()
                 if tasks_to_cancel:
@@ -859,17 +859,17 @@ class AgentService:
 
         print(f"[Agent] 收到聊天请求。来源: {source}, 消息数: {len(messages)}, 语音: {is_voice_mode}")
         
-        # [Feature] Multi-Agent Support
-        # Extract agent_id from AgentManager (Standardized)
+        # [功能] 多 Agent 支持
+        # 从 AgentManager 提取 agent_id (标准化)
         from services.agent_manager import get_agent_manager
         agent_manager = get_agent_manager()
         current_agent_id = agent_id_override or agent_manager.active_agent_id
         
-        # Fallback to "pero" if not set (though AgentManager should handle this)
+        # 如果未设置，回退到 "pero" (尽管 AgentManager 应该处理这个问题)
         if not current_agent_id:
             current_agent_id = "pero"
 
-        # 1. Initialize Context
+        # 1. 初始化上下文
         context = {
             "messages": messages,
             "source": source,
@@ -880,22 +880,22 @@ class AgentService:
             "user_text_override": user_text_override,
             "is_voice_mode": is_voice_mode,
             "agent_service": self,
-            "agent_id": current_agent_id, # Add explicit agent_id to context
+            "agent_id": current_agent_id, # 将显式 agent_id 添加到上下文
             "variables": initial_variables if initial_variables else {},
             "nit_id": current_nit_id,
-            "skip_system_prompt": skip_system_prompt, # Pass skip flag to preprocessors
+            "skip_system_prompt": skip_system_prompt, # 将跳过标志传递给预处理器
         }
         
-        # 2. Run Preprocessor Pipeline
+        # 2. 运行预处理器管道
         if on_status: await on_status("thinking", "正在整理记忆和思绪...")
         context = await self.preprocessor_manager.process(context)
         
-        # 3. Extract Results
+        # 3. 提取结果
         user_message = context.get("user_message", "")
         final_messages = context.get("final_messages", [])
         config = context.get("llm_config", {})
         
-        # [Feature] System Trigger Instruction
+        # [功能] 系统触发指令
         if system_trigger_instruction:
             print(f"[Agent] 追加系统触发指令: {system_trigger_instruction}")
             final_messages.append({
@@ -905,7 +905,7 @@ class AgentService:
             if not user_message:
                 user_message = f"【系统触发】{system_trigger_instruction}"
 
-        # [Feature] Mobile Source Awareness
+        # [功能] 移动端来源感知
         if source == "mobile":
             mobile_instruction = self.mdp.render("components/context/mobile")
             final_messages.append({
@@ -914,14 +914,14 @@ class AgentService:
             })
             print("[Agent] 已注入移动端来源感知。")
 
-        # [Feature] Active Window Injection
+        # [功能] 活跃窗口注入
         # 注入当前活跃窗口列表，防止 AI 幻觉（以为应用已打开）
         # [Fix] Social/Mobile 模式下不注入 PC 窗口信息，防止上下文混淆
         if source not in ["social", "mobile"]:
             try:
                 active_windows = get_active_windows()
                 if isinstance(active_windows, list) and active_windows:
-                    # Limit to avoid token explosion
+                    # 限制数量以避免 Token 爆炸
                     window_list_str = "\n".join(active_windows[:20]) 
                     if len(active_windows) > 20:
                         window_list_str += f"\n... ({len(active_windows) - 20} more)"
@@ -930,7 +930,7 @@ class AgentService:
                         "window_list_str": window_list_str
                     })
                     
-                    # Append to messages (System role)
+                    # 追加到消息 (System role)
                     final_messages.append({
                         "role": "system",
                         "content": state_msg
@@ -938,7 +938,7 @@ class AgentService:
             except Exception as e:
                 print(f"[Agent] 注入活跃窗口失败: {e}")
         
-        # Fallback if config is missing (should not happen if ConfigPreprocessor runs)
+        # 如果配置缺失，回退 (如果 ConfigPreprocessor 运行则不应发生)
         if not config:
             config = await self._get_llm_config()
 
@@ -981,16 +981,16 @@ class AgentService:
             if enable_vision and tool_name == "screen_ocr":
                 continue
             
-            # [Stage 3] Dynamic Capability Filtering
-            # If capabilities are specified (e.g. social), filter tools
+            # [Stage 3] 动态能力过滤
+            # 如果指定了 capabilities（例如 social），则过滤工具
             if capabilities:
-                # 1. Check metadata (required_capability)
-                # Note: Currently tools might not have this metadata, so we default to "core"
+                # 1. 检查 metadata (required_capability)
+                # 注意：目前工具可能没有此元数据，默认为 "core"
                 req_cap = tool_def.get("required_capability", "core")
                 
-                # 2. Check whitelist/blacklist based on source/capability
+                # 2. 检查白名单/黑名单
                 if "social" in capabilities:
-                    # Social Mode Whitelist Logic
+                    # 社交模式白名单逻辑
                     safe_prefixes = ["qq_"]
                     safe_names = ["read_social_memory", "read_agent_memory", "qq_notify_master", "add_reminder", "list_reminders", "delete_reminder"]
                     
@@ -1006,7 +1006,7 @@ class AgentService:
             if tool_name == "take_screenshot" or tool_name == "see_screen":
                 if not enable_vision:
                     new_tool_def["function"]["description"] = "获取当前屏幕的视觉分析报告。系统将调用视觉 MCP 服务器分析屏幕内容并返回详细的文字描述。当你需要了解屏幕上的视觉信息、或出于好奇想看看主人在做什么但无法直接看到图片时，请使用此工具。"
-                    # 非多模态模式下，count 参数可能没意义，或者我们只支持 1
+                    # 非多模态模式下，建议 count 设为 1
                     new_tool_def["function"]["parameters"]["properties"]["count"]["description"] = "获取截图并分析的数量。在非多模态模式下，建议设为 1。"
             dynamic_tools.append(new_tool_def)
         
@@ -1203,6 +1203,45 @@ class AgentService:
                             for res in nit_results:
                                 icon = "✅" if res['status'] == 'success' else "❌"
                                 out_str = str(res['output'])
+
+                                # [Feature] Real-time Status Sync for NIT
+                                # Check if the result contains state triggers (JSON)
+                                try:
+                                    if "triggers" in out_str or "\"mood\"" in out_str:
+                                        import json
+                                        # Try to parse the output as JSON
+                                        # It might be wrapped in text, but if it's a direct return from tool it's usually JSON string
+                                        # We look for a JSON object structure
+                                        start_idx = out_str.find("{")
+                                        end_idx = out_str.rfind("}")
+                                        if start_idx != -1 and end_idx != -1:
+                                            json_str = out_str[start_idx:end_idx+1]
+                                            data = json.loads(json_str)
+                                            
+                                            # If it has 'state' or 'triggers', broadcast it
+                                            triggers = None
+                                            if "triggers" in data:
+                                                triggers = data["triggers"]
+                                            elif "state" in data:
+                                                triggers = data["state"]
+                                            elif "mood" in data: # Direct state object
+                                                triggers = data
+                                            
+                                            if triggers:
+                                                print(f"[Agent] Detected state update in NIT result: {triggers}")
+                                                # 1. Push SSE
+                                                sse_payload = json.dumps({"triggers": triggers}, ensure_ascii=False)
+                                                yield f"data: {sse_payload}\n\n"
+                                                
+                                                # 2. Broadcast via RealtimeSessionManager
+                                                try:
+                                                    from services.realtime_session_manager import realtime_session_manager
+                                                    await realtime_session_manager.broadcast({"type": "triggers", "data": triggers})
+                                                except:
+                                                    pass
+                                except Exception as e:
+                                    print(f"[Agent] Failed to parse state update from NIT result: {e}")
+
                                 if len(out_str) > 2000: out_str = out_str[:2000] + "...(truncated)"
                                 obs_text += f"{icon} 工具 [{res['plugin']}] 执行完成。\n结果:\n{out_str}\n\n"
                                 
@@ -1705,7 +1744,8 @@ class AgentService:
                         print(f"[Agent] 后处理器失败: {pp_e}。使用原始文本。")
 
                 # Broadcast LLM response to frontend via Gateway
-                if not is_voice_mode and source == "desktop":
+                # [Modified] Allow 'ide' source to also broadcast to Pet (Desktop Pet should react to IDE chat)
+                if not is_voice_mode and source in ["desktop", "ide"]:
                     from services.gateway_client import gateway_client
                     await gateway_client.broadcast_text_response(full_response_text)
                     
@@ -1791,7 +1831,7 @@ class AgentService:
                     print(f"[Agent] 图片处理错误: {e}")
 
                 should_save = not skip_save and user_message and full_response_text
-                print(f"[Agent] 日志保存检查: 是否保存={should_save} (skip_save={skip_save}, has_user_msg={bool(user_message)}, resp_len={len(full_response_text) if full_response_text else 0})")
+                print(f"[Agent] 日志保存检查: 是否保存={should_save} (跳过保存={skip_save}, 有用户消息={bool(user_message)}, 响应长度={len(full_response_text) if full_response_text else 0})")
                 
                 if should_save:
                     # 如果有覆盖文本，优先使用覆盖文本（确保音频输入时也能存下文本）
@@ -1813,7 +1853,7 @@ class AgentService:
                          print(f"[Agent] 保存日志对失败: {e}")
                 else:
                      if not skip_save:
-                         print(f"[Agent] 跳过保存。原因: user_msg={bool(user_message)}, resp_valid={bool(full_response_text and not full_response_text.startswith('Error:'))}")
+                         print(f"[Agent] 跳过保存。原因: 有用户消息={bool(user_message)}, 响应有效={bool(full_response_text and not full_response_text.startswith('Error:'))}")
                 
                 if full_response_text:
                     await self._save_parsed_metadata(full_response_text, source, mcp_clients if 'mcp_clients' in locals() else None, execute_nit=False)
@@ -1835,7 +1875,7 @@ class AgentService:
                         final_user_msg = user_text_override if user_text_override else user_message
                         if len(full_response_text) > 5:
                             # 使用 background_task 包装以确保独立 Session
-                            asyncio.create_task(self._run_scorer_background(final_user_msg, full_response_text, source, pair_id=pair_id))
+                            asyncio.create_task(self._run_scorer_background(final_user_msg, full_response_text, source, pair_id=pair_id, agent_id=current_agent_id))
 
                 # 显式提交，确保在流式响应的上下文中数据已持久化
                 await self.session.commit()
@@ -1844,7 +1884,7 @@ class AgentService:
                 # [Fix] Disable Dream for social/mobile modes
                 import random
                 if source not in ["social", "mobile"] and random.random() < 0.03:
-                     asyncio.create_task(self._trigger_dream())
+                     asyncio.create_task(self._trigger_dream(agent_id=current_agent_id))
 
             except Exception as log_err:
                 print(f"保存对话日志失败 (成功路径): {log_err}")
@@ -1853,6 +1893,26 @@ class AgentService:
             import traceback
             error_msg = f"Error: {str(e)}"
             print(f"Agent 聊天错误 (内部): {traceback.format_exc()}")
+            
+            # [Optimization] Check for "invalid content" errors and handle gracefully
+            # If error is about API returning no content, broadcast a toast and DO NOT save to DB
+            err_str_lower = str(e).lower()
+            is_empty_content_error = (
+                "no valid content" in err_str_lower or 
+                "invalid api response" in err_str_lower or
+                "choices array is missing" in err_str_lower
+            )
+            
+            if is_empty_content_error:
+                from services.gateway_client import gateway_client
+                asyncio.create_task(gateway_client.broadcast_error(
+                    message="API 未返回有效内容，可能是模型正在思考或被截断，请重试。",
+                    title="无效响应",
+                    error_type="error"
+                ))
+                # Return early, skip saving log
+                return
+
             # [Troubleshooting] Attempt to save log even on error (User request: logs missing)
             try:
                 # Ensure user_message is available
@@ -1864,7 +1924,7 @@ class AgentService:
                 final_response = full_response_text + f"\n\n[System Error]: {error_msg}"
                 
                 if final_u_msg:
-                     await self.memory_service.save_log_pair(
+                    await self.memory_service.save_log_pair(
                         self.session, 
                         source, 
                         session_id, 
@@ -1873,7 +1933,7 @@ class AgentService:
                         pair_id,
                         agent_id=current_agent_id
                     )
-                     print(f"[Agent] 错误日志已保存 (pair_id: {pair_id})")
+                    print(f"[Agent] 错误日志已保存 (pair_id: {pair_id})")
             except Exception as save_err:
                 print(f"[Agent] 保存错误日志失败: {save_err}")
 

@@ -159,11 +159,29 @@ export class GatewayClient {
 
         this.ws.onmessage = (event) => {
         try {
+            if (typeof event.data === 'string') {
+                 // Try to handle text message (maybe legacy JSON?)
+                 // console.warn('Received text frame on Gateway WS:', event.data);
+                 // For now, ignore or try to decode if base64? 
+                 // Usually Gateway sends binary.
+                 logToMain(`Received unexpected text frame: ${event.data.substring(0, 50)}...`);
+                 return;
+            }
+            
             const data = new Uint8Array(event.data as ArrayBuffer);
-            const envelope = Envelope.decode(data);
-            this.handleMessage(envelope);
-        } catch (e) {
-            logToMain('Failed to decode message', e);
+            if (data.length === 0) {
+                logToMain('Received empty binary message');
+                return;
+            }
+
+            try {
+                const envelope = Envelope.decode(data);
+                this.handleMessage(envelope);
+            } catch (decodeErr: any) {
+                logToMain(`Failed to decode Protobuf message (len=${data.length}): ${decodeErr.message || decodeErr}`);
+            }
+        } catch (e: any) {
+            logToMain('Error processing message', e.message || e);
         }
         };
 

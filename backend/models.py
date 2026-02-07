@@ -210,6 +210,7 @@ class MaintenanceRecord(SQLModel, table=True):
     important_tagged: int = 0
     consolidated: int = 0
     cleaned_count: int = 0
+    clustered_count: int = 0
     
     # 变更详情 (JSON 字符串)
     created_ids: str = "[]" # 新生成的记忆 ID 列表

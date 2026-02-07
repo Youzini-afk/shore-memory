@@ -81,11 +81,9 @@
           </div>
        </div>
        
-       <!-- Terminal Viewport -->
        <!-- 终端视口 -->
        <div class="flex-1 bg-[#0f172a] flex flex-col min-w-0">
           <template v-if="activeTerminal">
-             <!-- Viewport Header -->
              <!-- 视口头部 -->
              <div class="h-8 flex items-center justify-between px-4 border-b border-white/5 bg-[#0f172a] sticky top-0 z-10">
                 <div class="flex items-center gap-2 overflow-hidden">
@@ -95,8 +93,6 @@
                 <span class="text-[10px] text-slate-600 font-mono">PID: {{ activeTerminal.pid }}</span>
              </div>
              
-             <!-- Output Area -->
-             <!-- Output Area -->
              <!-- 输出区域 -->
              <div class="flex-1 overflow-y-auto p-4 font-mono text-xs custom-scrollbar" ref="viewport">
                 <div class="whitespace-pre-wrap text-slate-300 leading-relaxed font-ligatures-none">{{ activeTerminal.output }}</div>

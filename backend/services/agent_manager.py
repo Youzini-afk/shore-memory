@@ -42,17 +42,21 @@ class AgentManager:
         if self._initialized:
             return
         
-        # 代理的基础目录: backend/services/mdp/agents
+        # 代理的基础目录 (内置)
         self.agents_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "mdp", "agents"))
+        
+        # 用户自定义代理目录: 优先使用环境变量
+        data_dir = os.environ.get("PERO_DATA_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data")))
+        self.user_agents_dir = os.path.join(data_dir, "agents")
+        
         self.agents: Dict[str, AgentProfile] = {}
         self.active_agent_id: str = "pero" # 默认活跃代理
         self.enabled_agents: set[str] = set() # 已启用代理 ID 集合
         
         self.reload_agents()
         
-        # 从文件加载启动配置 (与前端同步)
+        # 从文件加载启动配置
         try:
-            data_dir = os.environ.get("PERO_DATA_DIR", os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data")))
             config_path = os.path.join(data_dir, "agent_launch_config.json")
             if os.path.exists(config_path):
                 with open(config_path, "r", encoding="utf-8") as f:
@@ -61,7 +65,6 @@ class AgentManager:
                     active = launch_config.get("active_agent")
                     
                     if enabled:
-                        # 验证 ID
                         valid_enabled = [aid for aid in enabled if aid in self.agents]
                         self.enabled_agents = set(valid_enabled)
                         logger.info(f"从启动配置加载已启用的代理: {self.enabled_agents}")
@@ -86,17 +89,33 @@ class AgentManager:
         """扫描代理目录并加载所有配置。"""
         self.agents.clear()
         
+        # 1. 加载内置代理
         if not os.path.exists(self.agents_dir):
-            logger.warning(f"代理目录未找到: {self.agents_dir}")
-            # 如果不存在则创建默认目录
-            try:
-                os.makedirs(self.agents_dir)
-                logger.info(f"已创建代理目录: {self.agents_dir}")
-            except Exception as e:
-                logger.error(f"创建代理目录失败: {e}")
-                return
+            logger.warning(f"内置代理目录未找到: {self.agents_dir}")
+        else:
+            self._scan_and_load_agents(self.agents_dir, is_user_dir=False)
 
-        for entry in os.scandir(self.agents_dir):
+        # 2. 加载用户自定义代理 (可覆盖内置)
+        if not os.path.exists(self.user_agents_dir):
+            try:
+                os.makedirs(self.user_agents_dir)
+                logger.info(f"已初始化用户代理目录: {self.user_agents_dir}")
+            except Exception as e:
+                logger.warning(f"无法创建用户代理目录: {e}")
+        else:
+            self._scan_and_load_agents(self.user_agents_dir, is_user_dir=True)
+
+        if not self.agents:
+            logger.warning("未加载任何代理！请检查 backend/agents 或用户数据目录。")
+        
+        # 确保活跃代理在列表中
+        if self.active_agent_id not in self.agents and self.agents:
+             self.active_agent_id = next(iter(self.agents))
+
+    def _scan_and_load_agents(self, base_dir: str, is_user_dir: bool = False):
+        """扫描指定目录下的代理"""
+        logger.info(f"正在扫描代理目录 ({'User' if is_user_dir else 'Builtin'}): {base_dir}")
+        for entry in os.scandir(base_dir):
             if entry.is_dir():
                 agent_id = entry.name.lower()
                 config_path = os.path.join(entry.path, "config.json")
@@ -106,16 +125,9 @@ class AgentManager:
                     try:
                         profile = self._load_agent_config(agent_id, config_path, prompt_path)
                         self.agents[agent_id] = profile
-                        logger.info(f"已加载代理: {profile.name} ({agent_id})")
+                        logger.info(f"已加载代理: {profile.name} ({agent_id}) [{'User' if is_user_dir else 'Builtin'}]")
                     except Exception as e:
                         logger.error(f"加载代理 {agent_id} 失败: {e}")
-
-        if not self.agents:
-            logger.warning("未加载任何代理！请检查 backend/agents 目录。")
-        
-        # 确保活跃代理在列表中，如果不在，重置为第一个可用的或 'pero'
-        if self.active_agent_id not in self.agents and self.agents:
-             self.active_agent_id = next(iter(self.agents))
 
     def _load_agent_config(self, agent_id: str, config_path: str, prompt_path: str) -> AgentProfile:
         with open(config_path, "r", encoding="utf-8") as f:
@@ -145,7 +157,7 @@ class AgentManager:
         work_persona = load_persona("work", "work_custom_persona")
         social_persona = load_persona("social", "social_custom_persona")
         
-        # 处理特征 (新嵌套结构 vs 旧扁平结构)
+        # 处理特征 (兼容新旧结构)
         traits = config.get("traits", {})
         work_traits = traits.get("work", config.get("work_traits", []))
         social_traits = traits.get("social", config.get("social_traits", []))

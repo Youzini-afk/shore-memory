@@ -1,10 +1,8 @@
 <template>
   <div class="h-full flex flex-col text-slate-400 select-none bg-transparent" @click="closeContextMenu">
     
-    <!-- Toolbar & Search -->
     <!-- 工具栏与搜索 -->
     <div class="flex flex-col border-b border-white/5 bg-black/10">
-        <!-- Actions -->
         <!-- 操作按钮 -->
         <div class="px-3 py-2 flex justify-end items-center gap-1">
             <button class="p-1.5 hover:bg-white/10 rounded-lg hover:text-indigo-400 transition-colors" title="新建文件" @click.stop="createFile(null)">
@@ -18,7 +16,6 @@
             </button>
         </div>
         
-        <!-- Search Input -->
         <!-- 搜索输入框 -->
         <div class="px-3 pb-2">
             <div class="relative group">
@@ -33,7 +30,6 @@
         </div>
     </div>
 
-    <!-- Tree -->
     <!-- 文件树 -->
     <div class="flex-1 overflow-y-auto custom-scrollbar px-2 py-2" @contextmenu.prevent="handleRootContextMenu">
       <div v-if="loading" class="flex flex-col items-center justify-center h-20 gap-2 text-slate-600">
@@ -55,7 +51,6 @@
       </div>
     </div>
 
-    <!-- Context Menu -->
     <!-- 上下文菜单 -->
     <ContextMenu 
       :visible="contextMenu.visible" 

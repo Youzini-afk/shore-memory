@@ -89,7 +89,8 @@ class ConfigManager:
                     
                     self.config[config.key] = self._parse_value(config.value)
                     
-            logger.info(f"配置已从数据库加载。当前配置: {self.config}")
+            # logger.info(f"配置已从数据库加载。当前配置: {self.config}")
+            pass
         except Exception as e:
             logger.error(f"无法从数据库加载配置: {e}")
 

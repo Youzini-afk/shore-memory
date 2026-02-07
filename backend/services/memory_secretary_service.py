@@ -68,6 +68,7 @@ class MemorySecretaryService:
         report = {
             "preferences_extracted": 0,
             "important_tagged": 0,
+            "clustered_count": 0,
             "consolidated": 0,
             "cleaned_count": 0,
             "retired_count": 0,
@@ -97,20 +98,23 @@ class MemorySecretaryService:
                 # 2. 标记重要性
                 report["important_tagged"] += await self._tag_importance(llm, agent_id)
 
-                # 3. 记忆合并
+                # 3. 自动归簇
+                report["clustered_count"] += await self._cluster_memories(llm, agent_id)
+
+                # 4. 记忆合并
                 for _ in range(3):
                     merged_count = await self._consolidate_memories(llm, offset=0, agent_id=agent_id)
                     report["consolidated"] += merged_count
                     if merged_count == 0: break
 
-                # 4. 新增：清理可疑/错误记忆
+                # 5. 新增：清理可疑/错误记忆
                 report["cleaned_count"] += await self._clean_invalid_memories(llm, agent_id)
 
-                # 5. 新增：自动清理重复的社交日报总结
+                # 6. 新增：自动清理重复的社交日报总结
                 report["social_summaries_cleaned"] += await self._clean_duplicate_social_summaries(agent_id)
 
-                # 6. 维护边界处理 (Wait, does this need agent_id? Probably)
-                # report["retired_count"] += await self._handle_maintenance_boundary(agent_id) # Need to check this method
+                # 6. 维护边界处理
+                report["retired_count"] += await self._handle_maintenance_boundary(agent_id)
 
             # 6. 自动更新动态台词 (Welcome & System) - per agent
             report["waifu_texts_updated"] += await self._update_waifu_texts(llm, agent_id)
@@ -119,6 +123,7 @@ class MemorySecretaryService:
             record = MaintenanceRecord(
                 preferences_extracted=report["preferences_extracted"],
                 important_tagged=report["important_tagged"],
+                clustered_count=report["clustered_count"],
                 consolidated=report["consolidated"],
                 cleaned_count=report["cleaned_count"],
                 created_ids=json.dumps(self.created_ids),
@@ -220,6 +225,14 @@ class MemorySecretaryService:
                     if mem:
                         self.deleted_data.append(mem.dict())
                         await self.session.delete(mem)
+                        
+                        # [Fix] 同步删除向量
+                        try:
+                            from services.vector_service import vector_service
+                            vector_service.delete_memory(mem.id, agent_id=agent_id)
+                        except Exception as ve:
+                            print(f"[MemorySecretary] 向量删除失败: {ve}")
+
                         count += 1
                 await self.session.commit()
                 return count
@@ -265,6 +278,84 @@ class MemorySecretaryService:
             print(f"提取偏好时出错: {e}")
         return 0
 
+    async def _cluster_memories(self, llm: LLMService, agent_id: str = "pero") -> int:
+        """为未归类的记忆分配思维簇"""
+        # 查找 clusters 为空或 null 的 event 类型记忆
+        statement = select(Memory).where(
+            Memory.agent_id == agent_id,
+            (Memory.clusters == None) | (Memory.clusters == "")
+        ).order_by(desc(Memory.timestamp)).limit(50)
+        
+        memories = (await self.session.exec(statement)).all()
+        if not memories: return 0
+
+        mem_data = [{"id": m.id, "content": m.content} for m in memories]
+        bot_name = await self._get_bot_name()
+        
+        prompt = self.mdp.render("tasks/memory/maintenance/memory_clusterizer", {
+            "agent_name": bot_name,
+            "memory_data": json.dumps(mem_data, ensure_ascii=False)
+        })
+
+        try:
+            response = await llm.chat([{"role": "user", "content": prompt}], temperature=0.2)
+            content = response.get("choices", [{}])[0].get("message", {}).get("content", "")
+            
+            import re
+            json_match = re.search(r'\{.*\}', content, re.S)
+            if json_match:
+                updates = json.loads(json_match.group(0))
+                count = 0
+                for m in memories:
+                    if str(m.id) in updates:
+                        self.modified_data.append(m.dict())
+                        clusters = updates[str(m.id)]
+                        if isinstance(clusters, list):
+                            m.clusters = ",".join(clusters)
+                        elif isinstance(clusters, str):
+                            m.clusters = clusters
+                        
+                        # [Fix] 簇变更后更新向量元数据
+                        try:
+                            from services.embedding_service import embedding_service
+                            from services.vector_service import vector_service
+                            
+                            enriched = f"{m.tags} {m.tags} {m.content}" if m.tags else m.content
+                            new_vec = embedding_service.encode_one(enriched)
+                            
+                            if new_vec:
+                                metadata_dict = {
+                                    "type": m.type,
+                                    "timestamp": m.timestamp,
+                                    "importance": float(m.importance),
+                                    "tags": m.tags,
+                                    "clusters": m.clusters,
+                                    "agent_id": agent_id
+                                }
+                                
+                                if m.clusters:
+                                    cluster_list = [c.strip() for c in m.clusters.split(',') if c.strip()]
+                                    for c in cluster_list:
+                                        clean_c = c.replace('[', '').replace(']', '')
+                                        if clean_c:
+                                            metadata_dict[f"cluster_{clean_c}"] = True
+
+                                vector_service.add_memory(
+                                    memory_id=m.id,
+                                    embedding=new_vec,
+                                    metadata=metadata_dict
+                                )
+                        except Exception as e:
+                            print(f"[MemorySecretary] 更新簇向量失败: {e}")
+
+                        self.session.add(m)
+                        count += 1
+                await self.session.commit()
+                return count
+        except Exception as e:
+            print(f"归类记忆簇时出错: {e}")
+        return 0
+
     async def _tag_importance(self, llm: LLMService, agent_id: str = "pero") -> int:
         """优化重要性打分逻辑"""
         statement = select(Memory).where(Memory.type == "event").where(Memory.importance == 1).where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(50)
@@ -301,6 +392,28 @@ class MemorySecretaryService:
                             for t in new_tags:
                                 if t: current_tags.add(t)
                             m.tags = ",".join(filter(None, current_tags))
+                            
+                            # [Fix] 标签变更后更新向量
+                            try:
+                                from services.embedding_service import embedding_service
+                                from services.vector_service import vector_service
+                                enriched = f"{m.tags} {m.tags} {m.content}"
+                                new_vec = embedding_service.encode_one(enriched)
+                                if new_vec:
+                                    vector_service.add_memory(
+                                        memory_id=m.id,
+                                        embedding=new_vec,
+                                        metadata={
+                                            "type": m.type,
+                                            "timestamp": m.timestamp,
+                                            "importance": float(m.importance),
+                                            "tags": m.tags,
+                                            "agent_id": agent_id
+                                        }
+                                    )
+                            except Exception as e:
+                                print(f"[MemorySecretary] 更新标签向量失败: {e}")
+
                         self.session.add(m)
                         count += 1
                 await self.session.commit()
@@ -353,11 +466,41 @@ class MemorySecretaryService:
                         importance=merge.get("importance", 3),
                         source="secretary_merge",
                         type="event",
-                        realTime=batch_memories[0].realTime
+                        realTime=batch_memories[0].realTime,
+                        agent_id=agent_id
                     )
                     self.session.add(new_mem)
                     await self.session.flush()
                     self.created_ids.append(new_mem.id)
+
+                    # [Fix] 立即生成并同步向量，确保新节点可被检索
+                    try:
+                        from services.embedding_service import embedding_service
+                        from services.vector_service import vector_service
+                        
+                        # 生成向量
+                        content_vec = embedding_service.encode_one(new_mem.content)
+                        if content_vec:
+                            # 如果有 tags，增强向量权重
+                            final_vec = content_vec
+                            if new_mem.tags:
+                                enriched = f"{new_mem.tags} {new_mem.tags} {new_mem.content}"
+                                final_vec = embedding_service.encode_one(enriched)
+                            
+                            # 写入 VectorDB
+                            vector_service.add_memory(
+                                memory_id=new_mem.id,
+                                embedding=final_vec,
+                                metadata={
+                                    "type": new_mem.type,
+                                    "timestamp": new_mem.timestamp,
+                                    "importance": float(new_mem.importance),
+                                    "tags": new_mem.tags,
+                                    "agent_id": agent_id
+                                }
+                            )
+                    except Exception as ve:
+                        print(f"[MemorySecretary] 警告: 新合并记忆向量生成失败: {ve}")
 
                     # [Enhancement] 关系迁移：将旧节点的连接继承给新节点
                     try:
@@ -408,6 +551,14 @@ class MemorySecretaryService:
                         m_obj = next(m for m in batch_memories if m.id == mid)
                         self.deleted_data.append(m_obj.dict())
                         await self.session.exec(delete(Memory).where(Memory.id == mid))
+                        
+                        # [Fix] 同步删除向量
+                        try:
+                            from services.vector_service import vector_service
+                            vector_service.delete_memory(mid, agent_id=agent_id)
+                        except Exception as ve:
+                            print(f"[MemorySecretary] 向量删除失败: {ve}")
+
                     count += 1
                 await self.session.commit()
                 return count
@@ -448,6 +599,14 @@ class MemorySecretaryService:
                     for mem in to_delete:
                         self.deleted_data.append(mem.dict())
                         await self.session.delete(mem)
+                        
+                        # [Fix] 同步删除向量
+                        try:
+                            from services.vector_service import vector_service
+                            vector_service.delete_memory(mem.id, agent_id=agent_id)
+                        except Exception as ve:
+                            print(f"[MemorySecretary] 向量删除失败: {ve}")
+
                         total_deleted += 1
             
             if total_deleted > 0:
@@ -492,7 +651,7 @@ class MemorySecretaryService:
                         with open(static_path, "r", encoding="utf-8") as f:
                             current_texts = json.load(f)
                 except Exception as e:
-                    print(f"加载静态 Waifu 文本失败: {e}")
+                    print(f"[MemorySecretary] 加载静态 Waifu 文本失败: {e}")
 
             # 2. 获取近期记忆摘要作为上下文 (Filter by agent_id)
             statement = select(Memory).where(Memory.type == "event").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(20)
@@ -618,10 +777,10 @@ class MemorySecretaryService:
             print(f"更新 Waifu 文本时出错: {e!r}")
             return 0
 
-    async def _handle_maintenance_boundary(self) -> int:
+    async def _handle_maintenance_boundary(self, agent_id: str) -> int:
         """处理 1000 条维护边界"""
         try:
-            statement = select(Memory).where(Memory.type == "event").order_by(desc(Memory.timestamp))
+            statement = select(Memory).where(Memory.type == "event").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp))
             all_events = (await self.session.exec(statement)).all()
             if len(all_events) <= 1000: return 0
             

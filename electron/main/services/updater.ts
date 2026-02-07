@@ -49,7 +49,7 @@ export function setupUpdater() {
         try {
             return await autoUpdater.checkForUpdates()
         } catch (e) {
-            console.error('Check update failed:', e)
+            console.error('检查更新失败:', e)
             throw e
         }
     })

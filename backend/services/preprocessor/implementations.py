@@ -360,8 +360,8 @@ class RAGPreprocessor(BasePreprocessor):
                     memory_context = "无相关记忆"
                 
                 # [Reinforcement] 
-                # Note: mark_memories_accessed is now handled inside get_relevant_memories
-                # to ensure consistency across all access paths (including fallback).
+                # 注意：mark_memories_accessed 现已在 get_relevant_memories 内部处理
+                # 以确保所有访问路径（包括回退）的一致性。
 
         except Exception as e:
             print(f"[RAGPreprocessor] 检索记忆失败: {e}")
@@ -416,7 +416,6 @@ class WeeklyReportPreprocessor(BasePreprocessor):
         
         try:
             # 使用 get_relevant_memories 但限制类型为 weekly_report
-            # 注意：我们需要确保 query_vec 是基于 user_message 的
             # 如果 user_message 为空，则取最新的
             
             reports = []
@@ -529,23 +528,23 @@ class SystemPromptPreprocessor(BasePreprocessor):
     """
     @property
     def name(self) -> str:
-        return "SystemPromptBuilder"
+        return "SystemPromptInjector"
 
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
-        # [Feature] Skip System Prompt Generation (e.g. for Social Mode where prompt is manually built)
-        if context.get("skip_system_prompt", False):
-            # Pass through existing messages as final_messages
-            context["final_messages"] = context.get("full_context_messages", [])
+        source = context.get("source", "desktop")
+        
+        # [Fix] Social mode now uses MDP pipeline in AgentService, so we MUST generate system prompt.
+        # Previously this was skipped because social prompt was manually constructed.
+        # if source == "social":
+        #    return context
             
-            # [NIT Security] Still inject ID if needed, assuming the first message IS a system prompt
-            nit_id = context.get("nit_id")
-            final_messages = context["final_messages"]
-            if nit_id and final_messages and final_messages[0]["role"] == "system":
-                from nit_core.security import NITSecurityManager
-                security_prompt = NITSecurityManager.get_injection_prompt(nit_id)
-                final_messages[0]["content"] += "\n" + security_prompt
-            
-            return context
+        session = context["session"]
+        
+        # [NIT Security] 即使是手动构建的 Prompt，也需要注入 NIT ID
+        # 但如果是社交模式，NIT ID 可能已经在 social_service 中处理了
+        # 这里的逻辑主要是针对 IDE/Desktop 模式
+        
+        agent_id = context.get("agent_id", "pero")
 
         prompt_manager = context["prompt_manager"]
         variables = context.get("variables", {})

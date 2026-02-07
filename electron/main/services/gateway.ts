@@ -26,12 +26,12 @@ export async function startGateway(window: WindowLike) {
         // Production: resources/bin/gateway(.exe)
         gatewayPath = path.join(paths.resources, 'bin', execName)
     } else {
-        // Development: ../PeroLink/gateway(.exe) or ../../PeroLink/gateway(.exe) or ./gateway/gateway.exe
-        // process.cwd() is usually the project root (PeroCore-Electron)
+        // Development: 优先查找 ../PeroLink/gateway(.exe)
+        // process.cwd() 通常是项目根目录 (PeroCore-Electron)
         
-        // Priority 1: ../PeroLink/gateway.exe (Original dev structure)
+        // Priority 1: ../PeroLink/gateway.exe
         const path1 = path.join(process.cwd(), '../PeroLink', execName)
-        // Priority 2: ./gateway/gateway.exe (New integrated structure)
+        // Priority 2: ./gateway/gateway.exe
         const path2 = path.join(process.cwd(), 'gateway', execName)
         
         if (await fs.pathExists(path1)) {
@@ -39,14 +39,13 @@ export async function startGateway(window: WindowLike) {
         } else if (await fs.pathExists(path2)) {
             gatewayPath = path2
         } else {
-             gatewayPath = path1 // Default to first logic if neither found, will fail in check below
+             gatewayPath = path1 // 默认回退
         }
     }
 
     // Check if gateway exists
     if (!(await fs.pathExists(gatewayPath))) {
-        // Fallback for dev: try to find it in case cwd is different
-        // Try multiple locations
+        // Dev Fallback: 尝试在其他常见位置查找
         const altPaths = [
             path.join(__dirname, '../../../../PeroLink', execName),
             path.join(__dirname, '../../../../PeroCore-Electron/gateway', execName),
@@ -80,8 +79,7 @@ export async function startGateway(window: WindowLike) {
     // Ensure directory exists
     await fs.ensureDir(path.dirname(tokenPath))
 
-    // Remove old token file if exists to ensure we don't read stale token
-    // 删除旧的令牌文件（如果存在），以确保我们不会读取过时的令牌
+    // 删除旧的令牌文件防止读取过时数据
     try {
         if (await fs.pathExists(tokenPath)) {
             await fs.remove(tokenPath)
@@ -103,7 +101,6 @@ export async function startGateway(window: WindowLike) {
     })
 
     // Wait for token file to be created
-    // 等待令牌文件创建
     let retries = 0
     let tokenCreated = false
     while (retries < 50) { // Wait up to 5 seconds

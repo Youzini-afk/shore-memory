@@ -11,10 +11,9 @@ from sqlalchemy.orm import sessionmaker
 from .database import social_engine, get_social_db_session
 from .models_db import SocialMemory, SocialMemoryRelation, QQMessage, SocialDailyReport
 
-# 独立的 Vector Service (Simplified implementation for Social)
-# 我们将使用 ChromaDB 或 FAISS，但为了保持与 Core 一致性，我们可能复用 embedding_service
-# 并在这里管理独立的索引。
-# 简单起见，我们假设有一个独立的 social_vector_store 目录。
+# 独立的 Vector Service (Social 专用)
+# 暂时复用 embedding_service，未来可迁移至独立索引
+# 假设有一个独立的 social_vector_store 目录
 
 class SocialMemoryService:
     _instance = None
@@ -35,7 +34,6 @@ class SocialMemoryService:
         os.makedirs(self.vector_store_path, exist_ok=True)
         
         # 内存中的关键词索引 (Keyword -> List[MemoryID])
-        # 用于快速串线
         self.keyword_index: Dict[str, Set[int]] = {}
         
     async def initialize(self):
@@ -51,15 +49,17 @@ class SocialMemoryService:
             self._rust_engine = CognitiveGraphEngine()
             self._rust_engine.configure(max_active_nodes=5000, max_fan_out=15)
             
+            total_relations = 0
             # 加载现有关系
             async for session in get_social_db_session():
                 statement = select(SocialMemoryRelation)
                 relations = (await session.exec(statement)).all()
                 if relations:
-                    chunk_relations = [(rel.source_id, rel.target_id, rel.strength) for rel in relations]
+                    total_relations += len(relations)
+                    chunk_relations = [(int(rel.source_id), int(rel.target_id), float(rel.strength)) for rel in relations]
                     self._rust_engine.batch_add_connections(chunk_relations)
             
-            print(f"[SocialMemory] Rust 引擎已初始化，包含 {len(relations) if 'relations' in locals() else 0} 个连接。", flush=True)
+            print(f"[SocialMemory] Rust 引擎已初始化，包含 {total_relations} 个连接。", flush=True)
         except Exception as e:
             print(f"[SocialMemory] 初始化 Rust 引擎失败: {e}")
             self._rust_engine = None
@@ -90,9 +90,7 @@ class SocialMemoryService:
                 from services.embedding_service import embedding_service
                 vec = embedding_service.encode_one(content)
             except Exception as e:
-                # 允许 Embedding 失败，不阻断流程
                 print(f"[SocialMemory] 警告: 生成 Embedding 失败: {e}")
-                vec = []
             
             memory = SocialMemory(
                 content=content,
@@ -109,7 +107,6 @@ class SocialMemoryService:
             await session.refresh(memory)
             
             # 2. 自动串线 (Auto-Linking)
-            # 查找包含相同关键词的旧记忆
             related_ids = set()
             for kw in keywords:
                 kw = kw.strip()
@@ -137,14 +134,12 @@ class SocialMemoryService:
                     source_id=memory.id,
                     target_id=rid,
                     relation_type="thematic",
-                    strength=0.8 # 关键词命中的强度较高
+                    strength=0.8
                 )
                 session.add(rel1)
                 new_relations.append((memory.id, rid, 0.8))
                 
-                # Old -> New (可选，Rust 引擎通常是有向图，但扩散激活可能是双向传播需求)
-                # 为了简化，我们只存一条，但在 Rust 引擎中可能视为无向或双向
-                # 这里的 Rust 引擎是单向的，所以如果需要双向激活，需要加两条
+                # Old -> New
                 rel2 = SocialMemoryRelation(
                     source_id=rid,
                     target_id=memory.id,
@@ -160,24 +155,17 @@ class SocialMemoryService:
             if self._rust_engine and new_relations:
                 self._rust_engine.batch_add_connections(new_relations)
                 
-            # 4. 写入独立 Vector Store (这里简化处理，暂未实现独立 VectorDB 写入，仅依赖 DB 检索或 Keyword)
-            # TODO: Implement independent Chroma/FAISS add
+            # 4. 写入独立 Vector Store (TODO)
             
             return memory
 
     async def retrieve_context(self, query: str, current_session_id: str, agent_id: str = "pero") -> str:
         """
-        检索上下文：
-        1. 关键词/向量检索找到入口节点
-        2. Rust 引擎扩散激活
-        3. 格式化输出
+        检索上下文：关键词/向量检索 -> Rust 引擎扩散激活
         """
         # 简单实现：仅基于关键词匹配 + 扩散
-        # 在实际中，应该先做 embedding search 找到入口
         
-        # 1. 提取 Query 关键词 (Mock，实际应调用 LLM 或分词)
-        # 这里为了演示，我们假设 query 本身可能包含关键词
-        # 或者我们遍历 keyword_index 看看 query 是否包含
+        # 1. 提取 Query 关键词 (Mock)
         entry_points = []
         for kw, mids in self.keyword_index.items():
             if kw in query:
@@ -189,20 +177,13 @@ class SocialMemoryService:
         # 2. 扩散激活
         activated_ids = set(entry_points)
         if self._rust_engine:
-            # 传入入口节点，进行 2 步扩散
-            # rust_engine.spread_activation(start_nodes, steps, decay)
-            # 假设 Rust 接口支持 list input
-            # 注意：Rust 接口可能需要 list[int]
             try:
                 # Rust 引擎返回 dict {id: energy}
-                # 参数: entry_points(List[int]), steps(int), decay(float)
-                # 注意：entry_points 必须是 int 列表
                 entry_point_ids = [int(mid) for mid in entry_points]
                 spread_result = self._rust_engine.spread(entry_point_ids, 2, 0.5)
                 activated_ids = set(spread_result.keys())
             except Exception as e:
                 print(f"[SocialMemory] Rust 引擎扩散激活失败: {e}")
-                # Fallback: 仅使用直接命中的节点
                 pass
         
         # 3. 读取内容
@@ -216,16 +197,15 @@ class SocialMemoryService:
             if not memories:
                 return ""
                 
-            # 过滤：优先显示非当前 Session 的记忆（为了跨会话信息增益），或者很久以前的
+            # 过滤：优先显示非当前 Session 的记忆
             result = "【相关记忆回忆】:\n"
             for mem in memories:
-                # 加上来源标注
                 source_label = "私聊" if mem.source_session_type == 'private' else f"群{mem.source_session_id}"
                 result += f"- [{source_label}] {mem.content}\n"
                 
             return result
 
-    async def generate_daily_report(self, date_str: str = None):
+    async def generate_daily_report(self, date_str: str = None, agent_id: str = "pero"):
         """生成并保存社交日报"""
         if not date_str:
             date_str = datetime.now().strftime("%Y-%m-%d")
@@ -238,10 +218,6 @@ class SocialMemoryService:
                 return existing
 
             # 2. 统计当日消息
-            # 假设 timestamp 是 datetime 对象
-            # SQLite 中可能需要字符串比较或 func.date
-            # 这里简单起见，我们查询所有并过滤（量大时需优化）
-            # 或者使用 between
             start_dt = datetime.strptime(f"{date_str} 00:00:00", "%Y-%m-%d %H:%M:%S")
             end_dt = datetime.strptime(f"{date_str} 23:59:59", "%Y-%m-%d %H:%M:%S")
             
@@ -260,7 +236,7 @@ class SocialMemoryService:
             ).distinct()
             active_groups = (await session.exec(group_stmt)).all()
             
-            # 新加好友 (需要 FriendRequest 表支持，暂时 Mock)
+            # 新加好友 (Mock)
             new_friends = 0
             
             # 3. 汇总当日生成的记忆总结
@@ -275,10 +251,6 @@ class SocialMemoryService:
                 summary_content = "\n".join([f"- {m.content}" for m in daily_memories])
             
             # 4. 生成日报内容 (LLM)
-            # 这里的 agent_name 暂时硬编码为 Pero，或者应该引入 ConfigManager 获取？
-            # 简单起见，这里先默认 Pero，如果需要动态，需要在 SocialMemoryService 初始化时注入 ConfigManager
-            # 鉴于这是一个 Singleton，我们可以尝试 lazy import get_config_manager
-            
             try:
                 from core.config_manager import get_config_manager
                 config = get_config_manager()
@@ -321,6 +293,7 @@ class SocialMemoryService:
             )
             session.add(report)
             await session.commit()
+            await session.refresh(report)
             
             print(f"[SocialMemory] 已生成 {date_str} 的日报")
             return report
