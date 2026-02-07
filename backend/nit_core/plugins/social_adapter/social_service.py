@@ -36,13 +36,20 @@ class SocialService:
     
     def __init__(self):
         self.config_manager = get_config_manager()
-        self.active_ws: Optional[WebSocket] = None
+        # [Refactor] Replace single active_ws with connection pool
+        self.connections: Dict[str, WebSocket] = {} # self_id -> WebSocket
+        self.default_ws: Optional[WebSocket] = None # Fallback for no-ID connections
+        
         self.running = False
         self._enabled = self.config_manager.get("enable_social_mode", False)
         self._thought_task: Optional[asyncio.Task] = None
         
-        # [Social Identity] Bot 信息缓存
-        self.bot_info: Dict[str, Any] = {}
+        # [Social Identity] Bot 信息缓存 (Map: self_id -> Info Dict)
+        self.bot_infos: Dict[str, Dict[str, Any]] = {}
+        
+        # [Agent Mapping] Load agent configs to map QQ -> Agent
+        self.qq_agent_map: Dict[str, str] = {} # qq_id -> agent_id
+        self._load_agent_mappings()
         
         # 初始化会话管理器
         self.session_manager = SocialSessionManager(flush_callback=self.handle_session_flush)
@@ -50,10 +57,56 @@ class SocialService:
         # [修复] 初始化 pending_requests，防止同步 API 调用崩溃
         self.pending_requests: Dict[str, asyncio.Future] = {}
         
-        # 初始化状态机变量
-        # [Refactor] 移除全局状态，改为基于 Session 的状态
-        # self.last_active_time = datetime.now()
-        # self.social_state = "DIVE"
+    def _load_agent_mappings(self):
+        """Load social configurations from all agents"""
+        try:
+            from services.agent_manager import AgentManager
+            # We need a temporary instance to read configs, or use static method if available.
+            # Here we just instantiate AgentManager which loads configs in __init__
+            am = AgentManager() 
+            for agent_id, agent in am.agents.items():
+                if hasattr(agent, 'social_config') and agent.social_config:
+                    if agent.social_config.get('enabled') and agent.social_config.get('qq_id'):
+                        qq_id = str(agent.social_config.get('qq_id'))
+                        self.qq_agent_map[qq_id] = agent_id
+                        logger.info(f"[Social] Loaded mapping: QQ {qq_id} -> Agent {agent_id}")
+        except Exception as e:
+            logger.error(f"[Social] Failed to load agent mappings: {e}")
+
+    def register_connection(self, self_id: Optional[str], websocket: WebSocket):
+        """Register a new WebSocket connection"""
+        if self_id:
+            self.connections[str(self_id)] = websocket
+            # Check if we have an agent mapping for this QQ
+            agent_id = self.qq_agent_map.get(str(self_id))
+            if agent_id:
+                logger.info(f"[Social] Connection registered for Agent {agent_id} (QQ: {self_id})")
+            else:
+                logger.warning(f"[Social] Connection registered for QQ {self_id} but NO AGENT MAPPED!")
+        else:
+            self.default_ws = websocket
+            logger.info("[Social] Default connection registered (No X-Self-ID)")
+            
+    def unregister_connection(self, self_id: Optional[str]):
+        """Unregister a WebSocket connection"""
+        if self_id and str(self_id) in self.connections:
+            del self.connections[str(self_id)]
+            logger.info(f"[Social] Connection unregistered for QQ: {self_id}")
+        elif self.default_ws:
+            self.default_ws = None
+            logger.info("[Social] Default connection unregistered")
+
+    @property
+    def active_ws(self):
+        """Backwards compatibility property - returns first available connection"""
+        if self.default_ws: return self.default_ws
+        if self.connections: return list(self.connections.values())[0]
+        return None
+
+    @active_ws.setter
+    def active_ws(self, ws):
+        """Backwards compatibility setter - sets default connection"""
+        self.default_ws = ws
         
     @property
     def enabled(self):
@@ -136,19 +189,35 @@ class SocialService:
             user_id = str(event.get("user_id"))
             self_id = str(event.get("self_id", ""))
             
-            # 更新 Bot 自身 ID
-            if not self.bot_info and self_id:
-                 self.bot_info["user_id"] = self_id
-                 logger.info(f"[Social] 自动检测到 Bot QQ: {self_id}")
+            # [Multi-Agent] Determine which Agent this message is for
+            agent_id = self.qq_agent_map.get(self_id)
+            if not agent_id:
+                # Fallback: if single connection or default
+                if not self.qq_agent_map:
+                     # Default to active agent or Pero?
+                     # Ideally we shouldn't process if we don't know who it is for in multi-agent mode.
+                     # But for backward compatibility:
+                     agent_id = "pero" # Default
+                else:
+                     # We have mappings but this QQ is not mapped. Ignore?
+                     logger.debug(f"[Social] Ignoring message for unmapped QQ: {self_id}")
+                     return
+
+            # 更新 Bot 自身 ID 信息
+            if self_id not in self.bot_infos:
+                 self.bot_infos[self_id] = {"user_id": self_id}
+                 logger.info(f"[Social] New Bot detected: {self_id} (Agent: {agent_id})")
 
             # 忽略自己发的消息
-            if user_id == str(self.bot_info.get("user_id")):
+            # Check against the specific bot_id for this connection
+            if user_id == self_id:
                 return
 
-            logger.debug(f"[Social] 处理消息事件: type={msg_type}, user={user_id}")
+            logger.debug(f"[Social] 处理消息事件: type={msg_type}, user={user_id} -> Agent: {agent_id}")
 
             # 2. 转交 Session Manager 处理完整逻辑 (Buffer, Persistence, Trigger)
-            await self.session_manager.handle_message(event)
+            # [Multi-Agent] Pass agent_id context
+            await self.session_manager.handle_message(event, agent_id=agent_id)
 
         except Exception as e:
             logger.error(f"[Social] 处理消息失败: {e}", exc_info=True)
@@ -563,7 +632,8 @@ class SocialService:
             recent_context = ""
             for msg in recent_messages:
                 sender = msg.sender_name
-                agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+                # [Fix] Use target_session.agent_id
+                agent_profile = agent_manager.agents.get(target_session.agent_id)
                 current_agent_name = agent_profile.name if agent_profile else self.config_manager.get("bot_name", "Pero")
                 
                 if sender == current_agent_name or sender == "Me" or sender == self.config_manager.get("bot_name", "Pero"):
@@ -587,7 +657,8 @@ class SocialService:
                 rules_template_name = "social/decisions/secretary_decision_private_rules"
             
             target_name = target_session.session_name
-            agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+            # [Fix] Use target_session.agent_id
+            agent_profile = agent_manager.agents.get(target_session.agent_id)
             identity_label = agent_profile.identity_label if agent_profile else "智能助手"
             personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
@@ -712,7 +783,8 @@ class SocialService:
                     target_session.session_id,
                     target_session.session_type,
                     content,
-                    sender_name=sender_name
+                    sender_name=sender_name,
+                    agent_id=target_session.agent_id
                 )
                 return True
             except Exception as e:
@@ -1497,8 +1569,59 @@ class SocialService:
                 owner_qq = self.config_manager.get("owner_qq") or "未知"
                 
                 # Prepare sticker list
-                self._ensure_sticker_map()
-                sticker_list = ", ".join(self._sticker_map.keys())
+                # [Refactor] Load stickers from agent directory based on config
+                sticker_list = ""
+                sticker_expression_prompt = ""
+                
+                # Get Agent Profile
+                agent_manager = AgentManager()
+                # Use session agent_id or fallback to default
+                current_agent_id = session.agent_id or agent_manager.active_agent_id
+                agent_profile = agent_manager.agents.get(current_agent_id)
+                
+                use_stickers = False
+                if agent_profile and agent_profile.use_stickers:
+                     use_stickers = True
+                elif not agent_profile:
+                     # Fallback for legacy single-agent setup
+                     use_stickers = self.config_manager.get("social.use_stickers", False)
+                
+                if use_stickers:
+                     # Try agent-specific directory first
+                     agent_stickers_dir = os.path.join(agent_manager.agents_dir, current_agent_id, "stickers")
+                     
+                     # Fallback to user agents dir if not found in builtin
+                     if not os.path.exists(agent_stickers_dir):
+                          agent_stickers_dir = os.path.join(agent_manager.user_agents_dir, current_agent_id, "stickers")
+                     
+                     # Fallback to legacy global assets (only if not found in agent dir)
+                     if not os.path.exists(agent_stickers_dir):
+                          # Check legacy path
+                          legacy_stickers_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "..", "..", "assets", "stickers"))
+                          if os.path.exists(legacy_stickers_dir):
+                               agent_stickers_dir = legacy_stickers_dir
+                     
+                     if os.path.exists(agent_stickers_dir):
+                          # Scan stickers
+                          stickers = []
+                          try:
+                               for entry in os.scandir(agent_stickers_dir):
+                                    if entry.is_file() and entry.name.lower().endswith(('.jpg', '.png', '.gif', '.jpeg')):
+                                         # Extract name without extension
+                                         name = os.path.splitext(entry.name)[0]
+                                         stickers.append(name)
+                                         # Update internal map for sending
+                                         self._sticker_map[name] = entry.path
+                          except Exception as e:
+                               logger.error(f"扫描表情包目录失败: {e}")
+                          
+                          if stickers:
+                               sticker_list = ", ".join(stickers)
+                               sticker_expression_prompt = mdp.render("social/abilities/sticker_expression", {
+                                    "sticker_list": sticker_list
+                               })
+                               logger.debug(f"[{session.session_id}] 已加载 {len(stickers)} 个表情包。")
+
                 
                 # [Refactor] Inject Decoupled Persona & Traits
                 # [User Request] Temporarily disable multi-agent support in Social Mode.
@@ -1511,17 +1634,16 @@ class SocialService:
                 # 默认值 (Fallback)
                 agent_name = self.config_manager.get("bot_name", "Pero")
                 custom_persona = None
-                traits = ["visual_expression"]
 
                 # Get Agent Profile for dynamic persona injection
                 agent_manager = AgentManager()
-                agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+                # [Fix] Use session agent_id instead of active_agent_id for true multi-agent support
+                agent_profile = agent_manager.agents.get(session.agent_id)
                 
                 # [Enabled] Multi-agent support in Social Mode
                 if agent_profile:
                     agent_name = agent_profile.name
                     custom_persona = agent_profile.social_custom_persona
-                    traits = agent_profile.social_traits
                     logger.debug(f"[{session.session_id}] Using active agent persona: {agent_name}")
 
                 identity_label = agent_profile.identity_label if agent_profile else "智能助手"
@@ -1543,18 +1665,22 @@ class SocialService:
                     except Exception:
                          custom_persona = fallback_persona
                 
-                # 如果从 Config 读取到了 traits，则覆盖 (旧兼容)
-                if self.config_manager.get("social_traits"):
-                    traits = self.config_manager.get("social_traits")
+                # Prepare sticker expression prompt
+
+                # Prepare sticker expression prompt
+                sticker_expression_prompt = ""
+                if use_stickers and sticker_list:
+                     sticker_expression_prompt = mdp.render("social/abilities/sticker_expression", {
+                          "sticker_list": sticker_list
+                     })
 
                 logger.debug(f"[{session.session_id}] 渲染 Social Instructions (Agent: {agent_name})...")
                 social_instructions = mdp.render("social/social_instructions", {
                     "agent_name": agent_name,
                     "current_mode": current_mode,
                     "owner_qq": owner_qq,
-                    "sticker_list": sticker_list,
-                    "custom_persona": custom_persona,
-                    "traits": traits
+                    "sticker_expression": sticker_expression_prompt,
+                    "custom_persona": custom_persona
                 })
                 
                 # [Fix] Inject XML Guide and Time Awareness for Active Initiative
@@ -1836,7 +1962,8 @@ class SocialService:
                 statement = select(func.count(QQMessage.id)).where(
                     QQMessage.session_id == session.session_id,
                     QQMessage.session_type == session.session_type,
-                    QQMessage.is_summarized == False
+                    QQMessage.is_summarized == False,
+                    QQMessage.agent_id == session.agent_id
                 )
                 count = (await db_session.exec(statement)).one()
                 
@@ -1859,7 +1986,8 @@ class SocialService:
             statement = select(QQMessage).where(
                 QQMessage.session_id == session.session_id,
                 QQMessage.session_type == session.session_type,
-                QQMessage.is_summarized == False
+                QQMessage.is_summarized == False,
+                QQMessage.agent_id == session.agent_id
             ).order_by(QQMessage.timestamp.asc()).limit(limit_count)
             
             messages = (await db_session.exec(statement)).all()
@@ -1963,10 +2091,8 @@ class SocialService:
                     
                     # 获取当前 Agent 名称作为 ID (默认 Pero)
                     # agent_id = self.config_manager.get("bot_name", "Pero")
-                    # Use active agent ID
-                    agent_manager = AgentManager()
-                    active_agent = agent_manager.agents.get(agent_manager.active_agent_id)
-                    agent_id = active_agent.id if active_agent else self.config_manager.get("bot_name", "Pero")
+                    # Use session agent ID
+                    agent_id = session.agent_id
 
                     await mem_service.add_summary(
                         content=summary,

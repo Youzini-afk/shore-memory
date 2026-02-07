@@ -1,129 +1,256 @@
 {
-  "name": "social_adapter",
-  "version": "1.0.0",
-  "description": "OneBot 11 (NapCatQQ) 社交适配器。",
+  "name": "SocialAdapter",
+  "description": "提供与 OneBot (QQ) 社交平台交互的能力，包括消息发送、群管理、好友管理以及记忆读取。",
   "pluginType": "python-module",
   "entryPoint": "qq_tools.py",
+  "tags": ["social"],
   "capabilities": {
     "invocationCommands": [
       {
         "commandIdentifier": "qq_send_group_msg",
-        "description": "发送QQ群消息。向指定群聊发送消息。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "group_id": { "type": "string", "description": "目标群号" },
-            "message": { "type": "string", "description": "消息内容" }
-          },
-          "required": ["group_id", "message"]
+        "function": {
+          "name": "qq_send_group_msg",
+          "description": "向指定 QQ 群发送消息。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "description": "目标群号"
+              },
+              "message": {
+                "type": "string",
+                "description": "要发送的消息内容"
+              }
+            },
+            "required": ["group_id", "message"]
+          }
         }
       },
       {
         "commandIdentifier": "qq_send_private_msg",
-        "description": "发送QQ私聊消息。向指定用户发送消息。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "user_id": { "type": "string", "description": "目标QQ号" },
-            "content": { "type": "string", "description": "消息内容" }
-          },
-          "required": ["user_id", "content"]
+        "function": {
+          "name": "qq_send_private_msg",
+          "description": "向指定 QQ 用户发送私聊消息。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "description": "目标用户 QQ 号"
+              },
+              "content": {
+                "type": "string",
+                "description": "要发送的消息内容"
+              }
+            },
+            "required": ["user_id", "content"]
+          }
         }
       },
       {
         "commandIdentifier": "qq_handle_friend_request",
-        "description": "处理好友请求。批准或拒绝好友申请。请在获得主人指示后使用。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "flag": { "type": "string", "description": "请求Flag" },
-            "approve": { "type": "boolean", "description": "是否批准 (True/False)" },
-            "remark": { "type": "string", "description": "好友备注 (可选)" }
-          },
-          "required": ["flag", "approve"]
+        "function": {
+          "name": "qq_handle_friend_request",
+          "description": "处理（同意或拒绝）好友请求。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "flag": {
+                "type": "string",
+                "description": "好友请求的标识 flag"
+              },
+              "approve": {
+                "type": "boolean",
+                "description": "是否同意请求"
+              },
+              "remark": {
+                "type": "string",
+                "description": "好友备注（仅在同意时有效）"
+              }
+            },
+            "required": ["flag", "approve"]
+          }
         }
       },
       {
         "commandIdentifier": "qq_delete_friend",
-        "description": "从好友列表中删除当前对话的那个好友。仅在对方非常讨厌、粗鲁或持续骚扰时使用。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "user_id": {
-              "type": "string",
-              "description": "要删除的QQ号。通常从上下文或会话ID中提取。"
+        "function": {
+          "name": "qq_delete_friend",
+          "description": "删除指定的 QQ 好友。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "description": "要删除的好友 QQ 号"
+              },
+              "reason": {
+                "type": "string",
+                "description": "删除原因（用于记录日志）"
+              }
             },
-            "reason": {
-              "type": "string",
-              "description": "删除原因 (用于记录)。"
-            }
-          },
-          "required": ["user_id"]
+            "required": ["user_id"]
+          }
         }
       },
       {
         "commandIdentifier": "qq_get_friend_list",
-        "description": "获取当前 Agent 的所有好友列表。当你需要知道自己有哪些好友，或者需要查找特定好友的 QQ 号时使用。",
-        "parameters": {
-          "type": "object",
-          "properties": {},
-          "required": []
+        "function": {
+          "name": "qq_get_friend_list",
+          "description": "获取当前的好友列表。",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
         }
       },
       {
         "commandIdentifier": "qq_get_group_list",
-        "description": "获取当前 Agent 加入的所有群聊列表。当你需要知道自己在哪些群，或者查找特定群的群号时使用。",
-        "parameters": {
-          "type": "object",
-          "properties": {},
-          "required": []
+        "function": {
+          "name": "qq_get_group_list",
+          "description": "获取加入的群列表。",
+          "parameters": {
+            "type": "object",
+            "properties": {}
+          }
         }
       },
       {
         "commandIdentifier": "qq_get_stranger_info",
-        "description": "获取陌生人信息。查询指定用户的公开资料。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "user_id": { "type": "string", "description": "目标QQ号" }
-          },
-          "required": ["user_id"]
+        "function": {
+          "name": "qq_get_stranger_info",
+          "description": "获取陌生人公开信息。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "user_id": {
+                "type": "string",
+                "description": "目标用户 QQ 号"
+              }
+            },
+            "required": ["user_id"]
+          }
+        }
+      },
+      {
+        "commandIdentifier": "qq_get_group_info",
+        "function": {
+          "name": "qq_get_group_info",
+          "description": "获取指定群的详细信息。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "description": "群号"
+              }
+            },
+            "required": ["group_id"]
+          }
+        }
+      },
+      {
+        "commandIdentifier": "qq_get_group_member_info",
+        "function": {
+          "name": "qq_get_group_member_info",
+          "description": "获取指定群成员的信息。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "description": "群号"
+              },
+              "user_id": {
+                "type": "string",
+                "description": "成员 QQ 号"
+              }
+            },
+            "required": ["group_id", "user_id"]
+          }
         }
       },
       {
         "commandIdentifier": "qq_get_group_history",
-        "description": "获取群聊历史。获取指定群的最近消息 (默认20条) 以了解上下文。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "group_id": { "type": "string", "description": "目标群号" },
-            "count": { "type": "integer", "description": "获取数量 (默认20)" }
-          },
-          "required": ["group_id"]
+        "function": {
+          "name": "qq_get_group_history",
+          "description": "获取指定群的历史消息。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "group_id": {
+                "type": "string",
+                "description": "群号"
+              },
+              "count": {
+                "type": "integer",
+                "description": "获取的消息数量，默认20",
+                "default": 20
+              }
+            },
+            "required": ["group_id"]
+          }
         }
       },
       {
         "commandIdentifier": "read_social_memory",
-        "description": "读取社交记忆。查阅QQ聊天记录日志。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "query": { "type": "string", "description": "搜索关键词" },
-            "filter": { "type": "string", "description": "可选过滤器" }
-          },
-          "required": ["query"]
+        "function": {
+          "name": "read_social_memory",
+          "description": "读取社交记忆日志（QQ 聊天记录）。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "搜索关键词"
+              },
+              "filter": {
+                "type": "string",
+                "description": "过滤条件（可选）"
+              }
+            },
+            "required": ["query"]
+          }
+        }
+      },
+      {
+        "commandIdentifier": "read_agent_memory",
+        "function": {
+          "name": "read_agent_memory",
+          "description": "读取代理记忆（与主人的交互记录）。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "query": {
+                "type": "string",
+                "description": "搜索关键词"
+              }
+            },
+            "required": ["query"]
+          }
         }
       },
       {
         "commandIdentifier": "qq_notify_master",
-        "description": "向主人汇报。主动向主人报告重要的社交事件。",
-        "parameters": {
-          "type": "object",
-          "properties": {
-            "content": { "type": "string", "description": "汇报内容" },
-            "importance": { "type": "string", "enum": ["low", "medium", "high"], "description": "重要程度" }
-          },
-          "required": ["content"]
+        "function": {
+          "name": "qq_notify_master",
+          "description": "主动通知主人重要社交事件。",
+          "parameters": {
+            "type": "object",
+            "properties": {
+              "content": {
+                "type": "string",
+                "description": "通知内容"
+              },
+              "importance": {
+                "type": "string",
+                "description": "重要程度 (low/medium/high)",
+                "default": "medium"
+              }
+            },
+            "required": ["content"]
+          }
         }
       }
     ]

@@ -6,10 +6,41 @@
     "work": "personas/work.md",
     "social": "personas/social.md"
   },
-  "traits": {
-    "work": ["mode:concise", "mode:immersive"],
-    "social": ["visual_expression"]
-  },
   "identity_label": "雌小鬼AI",
-  "personality_tags": ["雌小鬼", "毒舌", "傲娇", "嘲讽", "杂鱼"]
+  "personality_tags": ["雌小鬼", "毒舌", "傲娇", "嘲讽", "杂鱼"],
+  "social": {
+    "enabled": false,
+    "qq_id": "",
+    "use_stickers": false
+  },
+  "tool_policies": {
+    "social": {
+      "strategy": "whitelist",
+      "allowed_tags": ["social"],
+      "allowed_tools": ["read_social_memory", "read_agent_memory", "qq_notify_master", "add_reminder", "list_reminders", "delete_reminder"]
+    },
+    "work": {
+      "strategy": "whitelist",
+      "allowed_tags": ["core", "work"]
+    },
+    "desktop": {
+      "strategy": "whitelist",
+      "allowed_tags": ["core"],
+      "allowed_tools": ["execute_terminal_command"]
+    },
+    "lightweight": {
+      "strategy": "whitelist",
+      "allowed_tools": [
+        "update_character_status",
+        "take_screenshot",
+        "screen_ocr",
+        "log_reflection",
+        "read_diary",
+        "read_maintenance_reports",
+        "add_schedule_task",
+        "list_pending_tasks",
+        "delete_schedule_task"
+      ]
+    }
+  }
 }

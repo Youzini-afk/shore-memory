@@ -105,7 +105,12 @@ class SocialSessionManager:
         """
         self.sessions: Dict[str, SocialSession] = {}
         self.flush_callback = flush_callback
-        self.bot_id: Optional[str] = None  # [Fix] Store global Bot ID for robust filtering
+        
+        # [Refactor] Store bot_id map for multiple agents if needed
+        # But actually SocialService handles the connection map.
+        # SessionManager needs to know which connection to use for sending.
+        # We can store bot_id in the Session object.
+        self.bot_id: Optional[str] = None  # Legacy global fallback
         
         # 配置
         self.BUFFER_TIMEOUT = 20  # 秒
@@ -116,18 +121,29 @@ class SocialSessionManager:
         self.image_manager = ImageCacheManager()
 
     def set_bot_id(self, bot_id: str):
-        """设置全局 Bot ID，用于过滤自己发送的消息"""
+        """设置全局 Bot ID (Legacy support)"""
         self.bot_id = str(bot_id)
         logger.info(f"[SessionManager] Bot ID set to: {self.bot_id}")
 
-    def get_or_create_session(self, session_id: str, session_type: str, session_name: str = "") -> SocialSession:
-        if session_id not in self.sessions:
-            self.sessions[session_id] = SocialSession(
-                session_id=session_id,
+    def get_or_create_session(self, session_id: str, session_type: str, session_name: str = "", agent_id: str = "pero") -> SocialSession:
+        # [Multi-Agent] Composite key to isolate sessions between agents
+        # Key format: "{agent_id}:{session_id}"
+        # This ensures Nana's memory of Group 123 is separate from Pero's memory of Group 123
+        
+        composite_key = f"{agent_id}:{session_id}"
+        
+        if composite_key not in self.sessions:
+            session = SocialSession(
+                session_id=session_id, # Keep original ID for API calls
                 session_type=session_type,
                 session_name=session_name
             )
-        return self.sessions[session_id]
+            # Inject agent_id into session for context
+            session.agent_id = agent_id 
+            # Also store the composite key if needed, or just use it for lookup map
+            self.sessions[composite_key] = session
+            
+        return self.sessions[composite_key]
 
     async def _persist_message(self, session: SocialSession, msg: SocialMessage, role: str):
         """
@@ -150,7 +166,8 @@ class SocialSessionManager:
                         sender_name=msg.sender_name,
                         content=msg.content,
                         timestamp=msg.timestamp,
-                        raw_event_json=json.dumps(msg.raw_event, default=str)
+                        raw_event_json=json.dumps(msg.raw_event, default=str),
+                        agent_id=session.agent_id
                     )
                     db_session.add(new_msg)
                     await db_session.commit()
@@ -161,7 +178,7 @@ class SocialSessionManager:
         except Exception as e:
             logger.error(f"持久化社交消息到独立数据库失败: {e}")
 
-    async def persist_outgoing_message(self, session_id: str, session_type: str, content: str, sender_name: str = "Assistant"):
+    async def persist_outgoing_message(self, session_id: str, session_type: str, content: str, sender_name: str = "Assistant", agent_id: str = "pero"):
         """
         将发出的消息（Agent 的回复）持久化到独立社交数据库，并同步更新内存 Buffer。
         """
@@ -175,7 +192,7 @@ class SocialSessionManager:
             
             # 1. 更新内存 Buffer (Critical for Context Consistency)
             # 确保 Bot 下一次思考时能看到自己刚刚说的话
-            session = self.get_or_create_session(session_id, session_type)
+            session = self.get_or_create_session(session_id, session_type, agent_id=agent_id)
             mem_msg = SocialMessage(
                 msg_id=msg_id,
                 sender_id="self",
@@ -196,7 +213,8 @@ class SocialSessionManager:
                     sender_name=sender_name,
                     content=content,
                     timestamp=timestamp,
-                    raw_event_json="{}"
+                    raw_event_json="{}",
+                    agent_id=agent_id
                 )
                 db_session.add(new_msg)
                 await db_session.commit()
@@ -334,7 +352,7 @@ class SocialSessionManager:
             logger.error(f"Failed to get latest active group for user {user_id}: {e}")
             return None
 
-    async def handle_message(self, event: dict):
+    async def handle_message(self, event: dict, agent_id: str = "pero"):
         """
         处理传入消息事件的主要入口点。
         """
@@ -414,8 +432,8 @@ class SocialSessionManager:
                 image_tasks=image_tasks
             )
             
-            # Get Session
-            session = self.get_or_create_session(session_id, msg_type, session_name)
+            # Get Session (Multi-Agent: Pass agent_id)
+            session = self.get_or_create_session(session_id, msg_type, session_name, agent_id=agent_id)
             
             # [Preemption] 检查并取消正在进行的秘书/主动搭话任务
             if session.active_response_task and not session.active_response_task.done():

@@ -25,8 +25,17 @@ async def websocket_endpoint(websocket: WebSocket):
         await websocket.close(code=1008, reason="Social mode disabled")
         return
 
-    service.active_ws = websocket
-    logger.info("[Social] WebSocket connected from NapCat.")
+    # [Multi-Agent Support] Extract X-Self-ID from headers
+    # NapCat sends X-Self-ID to indicate which QQ account this connection belongs to.
+    x_self_id = websocket.headers.get("x-self-id")
+    
+    # Register connection
+    service.register_connection(x_self_id, websocket)
+    
+    if x_self_id:
+        logger.info(f"[Social] WebSocket connected for QQ: {x_self_id}")
+    else:
+        logger.info("[Social] WebSocket connected (No X-Self-ID, using as default/fallback).")
     
     try:
         while True:
@@ -43,13 +52,14 @@ async def websocket_endpoint(websocket: WebSocket):
                     logger.debug(f"[Social-WS] 收到数据: {len(data)} chars")
             
             # Dispatch to service for async processing
-            # We assume handle_raw_event is fire-and-forget or returns quickly
             await service.handle_raw_event(data)
             
     except WebSocketDisconnect:
-        logger.info("[Social] WebSocket disconnected.")
-        service.active_ws = None
+        logger.info(f"[Social] WebSocket disconnected (QQ: {x_self_id}).")
+        service.unregister_connection(x_self_id)
     except Exception as e:
         logger.error(f"[Social] WebSocket error: {e}", exc_info=True)
-        if service.active_ws == websocket:
+        if x_self_id:
+            service.unregister_connection(x_self_id)
+        elif service.active_ws == websocket:
             service.active_ws = None

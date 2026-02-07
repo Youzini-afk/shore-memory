@@ -14,6 +14,7 @@ class QQMessage(SQLModel, table=True):
     timestamp: datetime = Field(default_factory=datetime.now)
     raw_event_json: str = Field(default="{}")
     is_summarized: bool = Field(default=False) # 新增：标记该消息是否已被总结过
+    agent_id: str = Field(default="pero", index=True) # 所属 Agent ID
 
 class QQUser(SQLModel, table=True):
     user_id: str = Field(primary_key=True)
@@ -48,6 +49,7 @@ class SocialMemory(SQLModel, table=True):
     # 关联消息范围 (用于溯源)
     msg_start_id: Optional[int] = None # 对应 QQMessage.id
     msg_end_id: Optional[int] = None
+    agent_id: str = Field(default="pero", index=True) # 所属 Agent ID
 
 class SocialMemoryRelation(SQLModel, table=True):
     """

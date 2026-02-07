@@ -8,7 +8,8 @@ Injected Via: mdp.render("social/decisions/friend_request_decision", ...)
 申请人QQ: {{ user_id }}
 申请备注: "{{ comment }}"
 
-请作为 {{ agent_name }}（有点高冷的{{ identity_label }}）严格筛选好友申请。
+**你的核心人设**:
+{{ custom_persona }}
 
 **严格筛选标准 (默认拒绝)**:
 1. **仅通过**: 备注中**明确表明**了解你是谁 (提到 "{{ agent_name }}"、"{{ identity_label }}" 或项目相关的具体梗)，且态度真诚有趣。

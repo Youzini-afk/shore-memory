@@ -29,6 +29,17 @@ async def init_social_db():
         # Enable WAL mode for better concurrency
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
         await conn.run_sync(SQLModel.metadata.create_all)
+        
+        # [Migration] Add agent_id column if missing (Safe migration)
+        try:
+            await conn.execute(text("ALTER TABLE qqmessage ADD COLUMN agent_id VARCHAR DEFAULT 'pero'"))
+        except Exception:
+            pass # Column likely exists
+            
+        try:
+            await conn.execute(text("ALTER TABLE socialmemory ADD COLUMN agent_id VARCHAR DEFAULT 'pero'"))
+        except Exception:
+            pass
 
 async def get_social_db_session():
     """获取社交数据库会话"""

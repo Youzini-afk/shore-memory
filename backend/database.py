@@ -69,6 +69,33 @@ async def init_db():
     async with engine.begin() as conn:
         # 运行同步模式的创建表操作
         await conn.run_sync(SQLModel.metadata.create_all)
+    
+    # [自动迁移逻辑] 检查并修复缺失的列
+    await check_and_migrate_db()
+
+async def check_and_migrate_db():
+    """
+    轻量级自动迁移逻辑，检查并添加缺失的列。
+    避免引入 Alembic 增加打包体积。
+    """
+    async with engine.connect() as conn:
+        def sync_check(sync_conn):
+            cursor = sync_conn.cursor()
+            
+            # 1. 修复 MaintenanceRecord 表缺失 clustered_count 列的问题
+            try:
+                cursor.execute("PRAGMA table_info(maintenancerecord)")
+                columns = [column[1] for column in cursor.fetchall()]
+                if columns and 'clustered_count' not in columns:
+                    print("[Database Migration] Adding 'clustered_count' column to 'maintenancerecord'...")
+                    cursor.execute("ALTER TABLE maintenancerecord ADD COLUMN clustered_count INTEGER DEFAULT 0")
+                    sync_conn.commit()
+            except Exception as e:
+                print(f"[Database Migration] Error migrating maintenancerecord: {e}")
+            
+            cursor.close()
+
+        await conn.run_sync(sync_check)
 
 async def get_session() -> AsyncSession:
     async_session = sessionmaker(

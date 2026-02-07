@@ -493,7 +493,7 @@ class AgentService:
 
         return clients
 
-    async def _save_parsed_metadata(self, text: str, source: str = "desktop", mcp_clients: List[McpClient] = None, execute_nit: bool = True, expected_nit_id: str = None) -> List[Dict[str, Any]]:
+    async def _save_parsed_metadata(self, text: str, source: str = "desktop", mcp_clients: List[McpClient] = None, execute_nit: bool = True, expected_nit_id: str = None, allowed_tools: List[str] = None) -> List[Dict[str, Any]]:
         """解析并保存 LLM 返回的元数据。现在主要负责 NIT 工具调用。"""
         try:
             # 1. 处理 NIT 工具调用 (核心逻辑)
@@ -520,7 +520,7 @@ class AgentService:
                     except Exception as e:
                         print(f"[Agent] 将 MCP 工具桥接到 NIT 失败: {e}")
 
-                nit_results = await nit_dispatcher.dispatch(text, extra_plugins=extra_plugins, expected_nit_id=expected_nit_id)
+                nit_results = await nit_dispatcher.dispatch(text, extra_plugins=extra_plugins, expected_nit_id=expected_nit_id, allowed_tools=allowed_tools)
                 
                 if nit_results:
                     print(f"[Agent] 执行了 {len(nit_results)} 个 NIT 工具调用")
@@ -605,138 +605,8 @@ class AgentService:
             "messages": final_messages
         }
 
-    async def social_chat(self, messages: List[Dict[str, Any]], session_id: str) -> str:
-        """
-        [已弃用] 社交互动 (QQ/OneBot) 的专用聊天模式。
-        请改用 `chat(..., source='social', capabilities=['social'])`。
-        
-        - 使用隔离的会话历史。
-        - 受限工具集 (仅安全工具)。
-        - 直接返回最终响应文本。
-        """
-        print(f"[SocialAgent] 处理会话的社交聊天: {session_id}")
-        
-        # 1. 获取配置 (使用全局配置或特定社交模型)
-        config = await self._get_llm_config()
-        
-        # 2. 准备工具 (白名单策略)
-        social_tools = []
-        try:
-            # 我们只想过滤社交模式专用的工具。
-            # 假设 PluginManager 已加载它们并在 plugin_manager 中可用。
-            all_tools = plugin_manager.get_all_definitions()
-            
-            # 安全前缀/名称白名单
-            safe_prefixes = ["qq_"]
-            safe_names = ["read_social_memory", "read_agent_memory", "qq_notify_master"]
-            
-            for tool_def in all_tools:
-                t_name = ""
-                if "function" in tool_def:
-                    t_name = tool_def["function"].get("name", "")
-                elif "name" in tool_def:
-                    t_name = tool_def.get("name", "")
-                
-                if any(t_name.startswith(p) for p in safe_prefixes) or t_name in safe_names:
-                    social_tools.append(tool_def)
-                    
-            print(f"[SocialAgent] 加载了 {len(social_tools)} 个社交工具。")
-        except Exception as e:
-            print(f"[SocialAgent] 加载工具出错: {e}")
-            social_tools = []
+    # [Legacy] social_chat method removed. Use chat(source='social') instead.
 
-        # 3. 调用 LLM
-        llm = LLMService(
-            api_key=config.get("api_key"),
-            api_base=config.get("api_base"),
-            model=config.get("model"),
-            provider=config.get("provider", "openai")
-        )
-        
-        # 我们对社交模式使用简化的循环 (暂时没有复杂的反思/视觉)
-        try:
-            import asyncio
-            async def _chat_with_retry(msgs, tools_list=None):
-                retry_count = 1
-                current_temp = config.get("temperature", 0.7)
-                for i in range(retry_count + 1):
-                    try:
-                        return await llm.chat(msgs, temperature=current_temp, tools=tools_list)
-                    except Exception as err:
-                        if i == retry_count:
-                            raise err
-                        print(f"[SocialAgent] LLM 连接失败 (尝试 {i+1}/{retry_count+1}): {err}. 1秒后重试...")
-                        await asyncio.sleep(1)
-
-            # 阶段2 MVP 简单起见使用非流式调用
-            response = await _chat_with_retry(messages, social_tools if social_tools else None)
-            
-            response_msg = response["choices"][0]["message"]
-            content = response_msg.get("content", "")
-            tool_calls = response_msg.get("tool_calls", [])
-            
-            # [Fix] 如果 content 是 None (这在仅有 tool_calls 时可能发生)，将其设为空字符串
-            if content is None:
-                content = ""
-            
-            # 4. 处理工具调用 (简单循环)
-            # 如果存在工具调用，执行它们并递归 (限制3轮)
-            # 对于 MVP 阶段2，我们只需执行并返回结果或确认。
-            
-            if tool_calls:
-                print(f"[SocialAgent] LLM 请求了 {len(tool_calls)} 个工具调用。")
-                # 追加带有工具调用的助手消息
-                messages.append(response_msg)
-                
-                for tc in tool_calls:
-                    func_name = tc["function"]["name"]
-                    args_str = tc["function"]["arguments"]
-                    call_id = tc["id"]
-                    
-                    print(f"[SocialAgent] 执行工具: {func_name}")
-                    
-                    # 通过 NIT Dispatcher 执行
-                    from nit_core.dispatcher import get_dispatcher
-                    dispatcher = get_dispatcher()
-                    
-                    # 直接通过 PluginManager 获取函数引用并执行
-                    # 因为这里是结构化的工具调用，不需要 Dispatcher 的文本解析能力
-                    func = plugin_manager.tools_map.get(func_name)
-                    tool_result = ""
-                    
-                    if func:
-                        try:
-                            import inspect
-                            args = json.loads(args_str)
-                            if inspect.iscoroutinefunction(func):
-                                tool_result = await func(**args)
-                            else:
-                                tool_result = func(**args)
-                        except Exception as e:
-                            tool_result = f"执行 {func_name} 出错: {e}"
-                    else:
-                        tool_result = f"未找到工具 {func_name}。"
-                        
-                    # 追加工具结果
-                    messages.append({
-                        "tool_call_id": call_id,
-                        "role": "tool",
-                        "name": func_name,
-                        "content": str(tool_result)
-                    })
-                    
-                # 递归调用 (第二轮)
-                # 为了安全，目前仅限一层递归深度
-                print("[SocialAgent] 发送工具结果回 LLM...")
-                response_2 = await _chat_with_retry(messages, social_tools)
-                content = response_2["choices"][0]["message"].get("content", "")
-                
-            return content
-
-        except Exception as e:
-            print(f"[SocialAgent] 错误: {e}")
-            # 抑制错误消息，避免将系统错误发送到聊天
-            return None
 
     async def _run_scorer_background(self, user_msg: str, assistant_msg: str, source: str, pair_id: str = None, agent_id: str = "pero"):
         """后台运行 Scorer 服务，使用独立 Session"""
@@ -957,63 +827,84 @@ class AgentService:
         print("[Agent] 正在加载 MCP 工具...")
         
         # --- 工具列表优化 ---
-        # 根据主模型是否支持多模态，动态调整工具定义
-        enable_vision = config.get("enable_vision", False)
-        dynamic_tools = []
-        for tool_def in TOOLS_DEFINITIONS:
-            # 检查工具定义是否符合 OpenAI Function Calling 格式
-            if "function" not in tool_def or "name" not in tool_def.get("function", {}):
-                # 如果不是标准 Function 格式（例如纯 NIT 指令），则跳过 Native Tool 注册
-                # 但它们依然会在 System Prompt 中可见（前面已处理）
-                continue
+        # [Refactor] Unified Tool Policy Enforcement
+        from services.agent_manager import get_agent_manager
+        from nit_core.plugin_manager import plugin_manager
+        
+        agent_manager = get_agent_manager()
+        agent_profile = agent_manager.get_agent(current_agent_id)
+        
+        # 1. Determine Policy Mode
+        policy_mode = "desktop"
+        if source == "social":
+            policy_mode = "social"
+        elif session_id and session_id.startswith("work_"):
+            policy_mode = "work"
+        elif source == "lightweight" or (session_id and "companion" in session_id):
+            policy_mode = "lightweight"
+            
+        # 2. Get Policy Config
+        policy = {}
+        if agent_profile and agent_profile.tool_policies:
+            policy = agent_profile.tool_policies.get(policy_mode, {})
+            print(f"[Agent] 使用工具策略: {policy_mode} (Agent: {current_agent_id})")
+            
+        # 3. Fallback Defaults (Backward Compatibility)
+        if not policy:
+            print(f"[Agent] 未找到策略配置，使用默认回退策略: {policy_mode}")
+            if policy_mode == "social":
+                 # Default safe social policy
+                 policy = {
+                     "strategy": "whitelist", 
+                     "allowed_prefixes": ["qq_"], 
+                     "allowed_tools": ["read_social_memory", "read_agent_memory", "qq_notify_master"]
+                 }
+            elif policy_mode == "work":
+                 # Default work policy
+                 policy = {
+                     "strategy": "whitelist",
+                     "allowed_keywords": ["screen", "window", "file", "dir", "read", "write", "search", "cmd", "exec", "browser", "click", "type", "scroll", "mouse", "keyboard", "system", "code", "terminal", "git"],
+                     "allowed_tools": ["take_screenshot", "see_screen", "get_active_windows", "finish_task"]
+                 }
+            elif policy_mode == "lightweight":
+                 policy = {
+                     "strategy": "whitelist",
+                     "allowed_tools": ["read_agent_memory", "add_reminder", "list_reminders", "delete_reminder"]
+                 }
+            else:
+                 policy = {"strategy": "all"}
 
-            # 复制一份以防修改全局变量
-            new_tool_def = json.loads(json.dumps(tool_def))
-            tool_name = new_tool_def["function"]["name"]
+        # 4. Build Tool Tags Map for Filtering
+        tool_tags_map = {}
+        all_manifests = plugin_manager.get_all_manifests()
+        for m in all_manifests:
+            tags = m.get("tags", [])
+            # Add implicit tag based on category if needed
+            if "_category" in m:
+                tags.append(m["_category"])
             
-            # 安全校验：如果是手机端且包含敏感词，则直接剔除
-            sensitive_tool_keywords = ["screenshot", "screen", "windows", "shell", "cmd", "file", "app", "browser", "exec", "write"]
-            if source == "mobile" and any(kw in tool_name.lower() for kw in sensitive_tool_keywords):
-                print(f"[安全] 为移动端过滤敏感工具: {tool_name}")
-                continue
+            cmds = []
+            if "capabilities" in m and "invocationCommands" in m["capabilities"]:
+                cmds = m["capabilities"]["invocationCommands"]
+            elif "capabilities" in m and "toolDefinitions" in m["capabilities"]:
+                cmds = m["capabilities"]["toolDefinitions"]
             
-            # 如果是多模态模型，且工具是 screen_ocr，则跳过不注入
-            if enable_vision and tool_name == "screen_ocr":
-                continue
-            
-            # [Stage 3] 动态能力过滤
-            # 如果指定了 capabilities（例如 social），则过滤工具
-            if capabilities:
-                # 1. 检查 metadata (required_capability)
-                # 注意：目前工具可能没有此元数据，默认为 "core"
-                req_cap = tool_def.get("required_capability", "core")
-                
-                # 2. 检查白名单/黑名单
-                if "social" in capabilities:
-                    # 社交模式白名单逻辑
-                    safe_prefixes = ["qq_"]
-                    safe_names = ["read_social_memory", "read_agent_memory", "qq_notify_master", "add_reminder", "list_reminders", "delete_reminder"]
-                    
-                    is_safe = False
-                    if req_cap == "social":
-                        is_safe = True
-                    elif any(tool_name.startswith(p) for p in safe_prefixes) or tool_name in safe_names:
-                        is_safe = True
-                    
-                    if not is_safe:
-                        continue
-            
-            if tool_name == "take_screenshot" or tool_name == "see_screen":
-                if not enable_vision:
-                    new_tool_def["function"]["description"] = "获取当前屏幕的视觉分析报告。系统将调用视觉 MCP 服务器分析屏幕内容并返回详细的文字描述。当你需要了解屏幕上的视觉信息、或出于好奇想看看主人在做什么但无法直接看到图片时，请使用此工具。"
-                    # 非多模态模式下，建议 count 设为 1
-                    new_tool_def["function"]["parameters"]["properties"]["count"]["description"] = "获取截图并分析的数量。在非多模态模式下，建议设为 1。"
-            dynamic_tools.append(new_tool_def)
+            for cmd in cmds:
+                c_id = cmd.get("commandIdentifier")
+                if c_id:
+                    tool_tags_map[c_id] = tags
+
+        # 5. Prepare All Potential Tools (Native + MCP)
+        candidate_tools = []
+        enable_vision = config.get("enable_vision", False)
         
-        # Log prepared tools for debugging
-        print(f"[AgentService] 准备了 {len(dynamic_tools)} 个工具: {[t['function']['name'] for t in dynamic_tools]}")
-        # --- End 工具列表优化 ---
-        
+        # 5.1 Native Tools
+        for tool_def in TOOLS_DEFINITIONS:
+            if "function" not in tool_def or "name" not in tool_def.get("function", {}): continue
+            new_def = json.loads(json.dumps(tool_def))
+            candidate_tools.append(new_def)
+
+        # 5.2 MCP Tools
         mcp_clients = []
         try:
             mcp_clients = await self._get_mcp_clients()
@@ -1027,15 +918,7 @@ class AgentService:
                 mcp_tools = await client.list_tools()
                 for tool in mcp_tools:
                     tool_name = f"mcp_{tool['name']}"
-                    
-                    # 同样对 MCP 工具实施安全校验
-                    sensitive_tool_keywords = ["screenshot", "screen", "windows", "shell", "cmd", "file", "app", "browser", "exec", "write"]
-                    if source == "mobile" and any(kw in tool_name.lower() for kw in sensitive_tool_keywords):
-                        print(f"[安全] 为移动端过滤敏感 MCP 工具: {tool_name}")
-                        continue
-
-                    # 如果有重名，后面的会覆盖前面的，或者我们可以加后缀
-                    dynamic_tools.append({
+                    candidate_tools.append({
                         "type": "function",
                         "function": {
                             "name": tool_name,
@@ -1044,32 +927,69 @@ class AgentService:
                         }
                     })
                     mcp_tool_map[tool_name] = client
-                    print(f"[Agent] 注册 MCP 工具: {tool_name} (来自 {client.name})")
+                    # MCP tools don't have tags in our system yet, but we can treat 'mcp' as a tag if needed
+                    tool_tags_map[tool_name] = ["mcp"]
             except Exception as e:
                 print(f"[AgentService] 警告: 列出客户端 {client.name} 的工具失败: {e}")
 
-        # [Work Mode] Tool Filtering
-        if session_id.startswith("work_"):
-            # Whitelist approach for maximum cleanliness
-            allowed_keywords = [
-                "screen", "window", "file", "dir", "read", "write", "search", "cmd", "exec", 
-                "browser", "click", "type", "scroll", "mouse", "keyboard", "system", "code", "terminal", "git"
-            ]
-            # Also allow specific essential tools
-            allowed_names = ["take_screenshot", "see_screen", "get_active_windows", "finish_task"]
+        # 6. Filter Tools based on Policy
+        final_tools = []
+        strategy = policy.get("strategy", "all")
+        
+        allowed_tools = set(policy.get("allowed_tools", []))
+        allowed_tags = set(policy.get("allowed_tags", []))
+        
+        for tool in candidate_tools:
+            t_name = tool["function"]["name"]
+            t_tags = set(tool_tags_map.get(t_name, []))
             
-            filtered_tools = []
-            for tool in dynamic_tools:
-                t_name = tool["function"]["name"].lower()
-                if any(k in t_name for k in allowed_keywords) or t_name in allowed_names:
-                    filtered_tools.append(tool)
-                else:
-                    # Allow memory search but restrict other memory ops
-                    if "memory" in t_name and ("search" in t_name or "read" in t_name):
-                         filtered_tools.append(tool)
+            # Mobile Check (Global Safety)
+            sensitive_tool_keywords = ["screenshot", "screen", "windows", "shell", "cmd", "file", "app", "browser", "exec", "write"]
+            if source == "mobile" and any(kw in t_name.lower() for kw in sensitive_tool_keywords):
+                print(f"[安全] 为移动端过滤敏感工具: {t_name}")
+                continue
+
+            # Vision Check
+            if enable_vision and t_name == "screen_ocr": continue
+            if t_name in ["take_screenshot", "see_screen"] and not enable_vision:
+                 # Modify description for non-vision mode
+                 tool["function"]["description"] = "获取当前屏幕的视觉分析报告。系统将调用视觉 MCP 服务器分析屏幕内容并返回详细的文字描述。当你需要了解屏幕上的视觉信息、或出于好奇想看看主人在做什么但无法直接看到图片时，请使用此工具。"
+                 if "count" in tool["function"]["parameters"]["properties"]:
+                    tool["function"]["parameters"]["properties"]["count"]["description"] = "获取截图并分析的数量。在非多模态模式下，建议设为 1。"
+
+            is_allowed = False
+            if strategy == "all":
+                is_allowed = True
+            elif strategy == "whitelist":
+                # Only 2 ways to allow: by exact name or by tag
+                if t_name in allowed_tools: is_allowed = True
+                elif not t_tags.isdisjoint(allowed_tags): is_allowed = True # Overlap exists
             
-            print(f"[Agent] 工作模式：工具列表已精简 ({len(dynamic_tools)} -> {len(filtered_tools)})")
-            dynamic_tools = filtered_tools
+            if is_allowed:
+                final_tools.append(tool)
+        
+        dynamic_tools = final_tools
+        print(f"[Agent] 最终工具列表 ({len(dynamic_tools)}): {[t['function']['name'] for t in dynamic_tools]}")
+        
+        # --- Create Whitelist for NIT Security ---
+        allowed_tool_names = [t["function"]["name"] for t in dynamic_tools]
+
+        # 7. Inject Tool Descriptions (Always inject if tools are available)
+        desc_lines = []
+        for t in dynamic_tools:
+            t_name = t["function"]["name"]
+            desc = t["function"].get("description", "")
+            desc_lines.append(f"- **{t_name}**: {desc}")
+        
+        if desc_lines:
+             tools_desc_text = "\n".join(desc_lines)
+             if "variables" not in context: context["variables"] = {}
+             context["variables"]["available_tools_desc"] = tools_desc_text
+             print(f"[Agent] 已注入工具描述到 Prompt (长度: {len(tools_desc_text)})")
+        
+
+
+
 
         # --- Native Tools Config ---
         disable_native_tools_config = (await self.session.exec(select(Config).where(Config.key == "disable_native_tools"))).first()
@@ -1178,7 +1098,7 @@ class AgentService:
                     # 检查是否有 NIT 调用指令，如果有则执行并进入下一轮
                     if full_response_text and full_response_text.strip():
                         # 注意：这里我们尝试执行 NIT，如果有结果，说明模型试图调用工具
-                        nit_results = await self._save_parsed_metadata(full_response_text, source, mcp_clients, execute_nit=True, expected_nit_id=current_nit_id)
+                        nit_results = await self._save_parsed_metadata(full_response_text, source, mcp_clients, execute_nit=True, expected_nit_id=current_nit_id, allowed_tools=allowed_tool_names)
                         
                         if nit_results:
                             print(f"[Agent] 检测到 {len(nit_results)} 个 NIT 调用。继续对话循环。")

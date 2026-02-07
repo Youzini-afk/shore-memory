@@ -38,8 +38,6 @@ version: "3.0"
 # 能力介绍
 {{ ability_nit }}
 
-{{ nit_tools_description }}
-
 {{ ability_sensory }}
 
 {{ ability }}

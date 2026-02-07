@@ -334,99 +334,18 @@ class NITDispatcher:
 
     def get_tools_description(self, category_filter: str = 'core') -> str:
         """
-        生成可用工具的描述信息，用于注入到 System Prompt 中。
-        支持按类别过滤：'core', 'work', 'plugins' (or 'all')
-        实时检查 NITManager 状态以决定是否显示。
+        [Deprecated] 
+        此方法已被 AgentService 中的 Unified Tool Policy Enforcement 取代。
+        仅保留为空实现以防止遗留代码报错，未来应彻底移除。
         """
-        descriptions = []
-        
-        # 检查轻量模式
-        config = get_config_manager()
-        is_lightweight = config.get("lightweight_mode", False)
-
-        manifests = self.pm.get_all_manifests()
-        
-        # Filter manifests based on category and status
-        filtered_manifests = []
-        for m in manifests:
-            plugin_name = m.get("name")
-            cat = m.get('_category', 'core')
-            
-            # Lightweight Mode Filter: Only ScreenVision, CharacterOps and MemoryOps are allowed
-            if is_lightweight:
-                if plugin_name not in ["ScreenVision", "CharacterOps", "MemoryOps"]:
-                    continue
-            
-            # Category Level Filter
-            if category_filter != 'all' and cat != category_filter:
-                continue
-            
-            # NITManager Status Filter (Level 1 & 2)
-            if not self.nm.is_category_enabled(cat):
-                continue
-            if not self.nm.is_plugin_enabled(plugin_name):
-                continue
-                
-            filtered_manifests.append(m)
-
-        # 按名称排序
-        for manifest in sorted(filtered_manifests, key=lambda x: x.get("name", "")):
-             name = manifest.get("displayName", manifest.get("name", "Unknown"))
-             desc_text = manifest.get("description", "")
-             
-             desc = f"### {name}\n"
-             desc += f"- **简介**: {desc_text}\n"
-             
-             commands = manifest.get("capabilities", {}).get("invocationCommands", [])
-             if commands:
-                 desc += "- **能力列表**:\n"
-                 for cmd in commands:
-                     cmd_id = cmd['commandIdentifier']
-                     cmd_desc = cmd['description']
-                     
-                     # Introspect function signature for better LLM guidance
-                     sig_hint = ""
-                     try:
-                        import inspect
-                        # Try to find the function in the registry
-                        # Note: Registry keys are normalized, so we need to be careful
-                        norm_key = normalize_nit_key(cmd_id)
-                        handler = PLUGIN_REGISTRY.get(norm_key)
-                        
-                        # If handler is an adapter (wrapper), we might need to unwrap or just accept generic signature
-                        # But our adapters call f(**params), so inspection might be tricky on the wrapper.
-                        # However, PluginManager registers the RAW function into self.tools_map, 
-                        # and Dispatcher registers that raw function wrapped in an adapter.
-                        
-                        # Let's try to get the raw function from PluginManager directly if possible
-                        # But Dispatcher doesn't have direct access to PluginManager's internal map easily
-                        # except via PM.get_tool() if we added that method.
-                        
-                        # Actually, PM has get_tool(cmd_id).
-                        raw_func = self.pm.get_tool(cmd_id)
-                        if raw_func:
-                            sig = inspect.signature(raw_func)
-                            params = []
-                            for param in sig.parameters.values():
-                                if param.name in ['self', 'args', 'kwargs']: continue
-                                params.append(param.name)
-                            if params:
-                                sig_hint = f" (Args: {', '.join(params)})"
-                     except Exception:
-                        pass
-
-                     desc += f"  - `{cmd_id}`: {cmd_desc}{sig_hint}\n"
-             
-             descriptions.append(desc)
-             
-        return "\n".join(descriptions)
+        return ""
 
     async def _echo_plugin(self, params: Dict[str, Any]) -> str:
         """测试用插件"""
         msg = params.get('message', '') or params.get('msg', '')
         return f"[Echo Plugin] Received: {msg}"
 
-    async def dispatch(self, text: str, extra_plugins: Dict[str, Any] = None, expected_nit_id: str = None) -> List[Dict[str, Any]]:
+    async def dispatch(self, text: str, extra_plugins: Dict[str, Any] = None, expected_nit_id: str = None, allowed_tools: List[str] = None) -> List[Dict[str, Any]]:
         """
         处理 AI 输出的文本块
         返回执行结果列表
@@ -434,6 +353,7 @@ class NITDispatcher:
         :param text: 包含 NIT 指令的文本
         :param extra_plugins: 临时的额外插件注册表 (例如 MCP 动态加载的工具)
         :param expected_nit_id: 本轮期望的 NIT-ID (用于安全握手)
+        :param allowed_tools: 允许执行的工具名称白名单 (如果为 None 则不限制)
         """
         results = []
 
@@ -451,8 +371,22 @@ class NITDispatcher:
             # 用于在闭包中捕获当前 block 执行过的工具
             current_block_tools = []
 
+            # Pre-calculate normalized allowed tools set for performance
+            normalized_allowed = None
+            if allowed_tools is not None:
+                normalized_allowed = {normalize_nit_key(t) for t in allowed_tools}
+
             # 定义 Runtime 的执行器回调
             async def runtime_tool_executor(name: str, params: Dict[str, Any]):
+                # --- Whitelist Check ---
+                if normalized_allowed is not None:
+                    norm_name = normalize_nit_key(name)
+                    # Also check against direct name just in case
+                    if norm_name not in normalized_allowed and name not in allowed_tools:
+                        logger.warning(f"安全拦截: 工具 '{name}' 不在白名单中。")
+                        raise PermissionError(f"Tool '{name}' is not allowed in current context.")
+                # -----------------------
+
                 current_block_tools.append(name)
                 return await self._execute_plugin(name, params, extra_plugins)
 

@@ -69,7 +69,7 @@ finish_task(summary="我好开心呀！")
 
 ### 3. 完整工具参考 (自动生成)
 以下是当前可用工具列表：
-{{nit_tools_description}}
+{{available_tools_desc}}
 
 **记住：NIT 2.0 是你操作数字世界的唯一合法通道。请务必配合安全 ID 使用。**
 </Ability_NIT>

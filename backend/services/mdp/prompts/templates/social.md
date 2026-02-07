@@ -20,7 +20,7 @@ version: "1.1"
 {% endblock %}
 
 {% block footer %}
-# 能力介绍
+
 {{ xml_guide }}
 
 # 输出要求

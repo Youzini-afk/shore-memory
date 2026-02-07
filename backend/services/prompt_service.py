@@ -43,9 +43,7 @@ class PromptManager:
                 "agent_name": active_agent.name,
                 "agent_id": active_agent.id,
                 "work_custom_persona": active_agent.work_custom_persona,
-                "work_traits": active_agent.work_traits,
                 "social_custom_persona": active_agent.social_custom_persona,
-                "social_traits": active_agent.social_traits,
             }
         
         # 合并配置 (variables 优先)
@@ -147,8 +145,8 @@ class PromptManager:
         variables.setdefault("agent_name", bot_name) # 仅当未设定时使用 bot_name 作为 agent_name
 
         # [Work Mode Decoupling]
-        variables["custom_persona"] = config.get("work_custom_persona", "你是一个全能的 AI 助手，你的名字是 {{ agent_name }}。")
-        variables["work_traits"] = config.get("work_traits", ["mode:concise"])
+        # 优先使用 Agent 配置文件中定义的 work_custom_persona，如果没有则回退到全局配置
+        variables["custom_persona"] = variables.get("work_custom_persona") or config.get("work_custom_persona", "你是一个全能的 AI 助手，你的名字是 {{ agent_name }}。")
 
         # [Persona Loading]
         agent_id = variables.get("agent_id") or config.get("agent_id", "pero")
@@ -161,19 +159,23 @@ class PromptManager:
             
         variables["persona_definition"] = self.mdp.render(persona_template, render_context)
         
-        # 注入 NIT 工具描述
+        # 注入工具描述 (无条件注入)
         try:
-            if not is_social_mode:
-                dispatcher = get_dispatcher()
-                tools_desc = dispatcher.get_tools_description(category_filter='core')
-                if variables.get("work_mode_enabled", False):
-                    tools_desc += "\n\n" + dispatcher.get_tools_description(category_filter='work')
-                variables["nit_tools_description"] = tools_desc
-            else:
-                variables["nit_tools_description"] = ""
+            dispatcher = get_dispatcher()
+            tools_desc = dispatcher.get_tools_description(category_filter='core')
+            if variables.get("work_mode_enabled", False):
+                tools_desc += "\n\n" + dispatcher.get_tools_description(category_filter='work')
+            
+            # 如果是社交模式，也尝试获取社交类工具描述
+            if is_social_mode:
+                social_desc = dispatcher.get_tools_description(category_filter='social')
+                if social_desc:
+                    tools_desc += "\n\n" + social_desc
+            
+            variables["available_tools_desc"] = tools_desc
         except Exception as e:
-            print(f"[PromptManager] 注入 NIT 工具描述错误: {e}")
-            variables["nit_tools_description"] = "加载工具出错。"
+            print(f"[PromptManager] 注入工具描述错误: {e}")
+            variables["available_tools_desc"] = "加载工具出错。"
 
         # 注入链逻辑（思维链）
         chain_name = variables.get("chain_name", "default")
@@ -205,7 +207,7 @@ class PromptManager:
                 tools_desc = dispatcher.get_tools_description(category_filter='core')
                 if not tools_desc or len(tools_desc) < 10:
                     tools_desc = dispatcher.get_tools_description()
-                variables["nit_tools_description"] = tools_desc
+                variables["available_tools_desc"] = tools_desc
             except Exception as e:
                 logger.error(f"加载工作工具错误: {e}")
 

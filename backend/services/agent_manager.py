@@ -25,6 +25,8 @@ class AgentProfile:
     prompt_path: str = ""
     identity_label: str = "智能助手"
     personality_tags: List[str] = field(default_factory=list)
+    tool_policies: Dict[str, Any] = field(default_factory=dict)
+    use_stickers: bool = False
 
 class AgentManager:
     """
@@ -162,6 +164,9 @@ class AgentManager:
         work_traits = traits.get("work", config.get("work_traits", []))
         social_traits = traits.get("social", config.get("social_traits", []))
             
+        social_binding = config.get("social", {})
+        use_stickers = social_binding.get("use_stickers", False)
+
         return AgentProfile(
             id=agent_id,
             name=config.get("name", agent_id.capitalize()),
@@ -171,11 +176,13 @@ class AgentManager:
             social_custom_persona=social_persona,
             social_traits=social_traits,
             model_config=config.get("model_config", {}),
-            social_binding=config.get("social_binding", {}),
+            social_binding=config.get("social", {}), # Updated to read 'social' block
             config_path=config_path,
             prompt_path=prompt_path,
             identity_label=config.get("identity_label", "智能助手"),
-            personality_tags=config.get("personality_tags", [])
+            personality_tags=config.get("personality_tags", []),
+            tool_policies=config.get("tool_policies", {}),
+            use_stickers=use_stickers
         )
 
     def get_agent(self, agent_id: str) -> Optional[AgentProfile]:

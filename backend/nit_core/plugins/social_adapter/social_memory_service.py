@@ -224,7 +224,8 @@ class SocialMemoryService:
             # 消息总数
             count_stmt = select(col(QQMessage.id)).where(
                 col(QQMessage.timestamp) >= start_dt,
-                col(QQMessage.timestamp) <= end_dt
+                col(QQMessage.timestamp) <= end_dt,
+                QQMessage.agent_id == agent_id
             )
             total_messages = len((await session.exec(count_stmt)).all())
             
@@ -232,7 +233,8 @@ class SocialMemoryService:
             group_stmt = select(QQMessage.session_id).where(
                 col(QQMessage.timestamp) >= start_dt,
                 col(QQMessage.timestamp) <= end_dt,
-                QQMessage.session_type == "group"
+                QQMessage.session_type == "group",
+                QQMessage.agent_id == agent_id
             ).distinct()
             active_groups = (await session.exec(group_stmt)).all()
             
@@ -242,7 +244,8 @@ class SocialMemoryService:
             # 3. 汇总当日生成的记忆总结
             mem_stmt = select(SocialMemory).where(
                 col(SocialMemory.created_at) >= start_dt,
-                col(SocialMemory.created_at) <= end_dt
+                col(SocialMemory.created_at) <= end_dt,
+                SocialMemory.agent_id == agent_id
             )
             daily_memories = (await session.exec(mem_stmt)).all()
             
@@ -261,7 +264,7 @@ class SocialMemoryService:
             # Get Agent Profile for dynamic persona injection
             from services.agent_manager import AgentManager
             agent_manager = AgentManager()
-            agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+            agent_profile = agent_manager.agents.get(agent_id)
             identity_label = agent_profile.identity_label if agent_profile else "智能助手"
             personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
