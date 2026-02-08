@@ -1,21 +1,24 @@
-from fastapi import APIRouter, HTTPException, Depends
-from typing import Dict, Any
+import json
+import os
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel import Session, select
+
+from core.config_manager import get_config_manager
 from database import get_session
 from models import Config
-from core.config_manager import get_config_manager
 from services.sync_service import sync_service
-import os
-import json
 
 router = APIRouter(prefix="/api/sync", tags=["Sync"])
+
 
 class SyncConfig(BaseModel):
     enabled: bool
     mode: str  # "client" or "server"
     url: str
     token: str
+
 
 @router.get("/config")
 async def get_sync_config():
@@ -24,11 +27,14 @@ async def get_sync_config():
         "enabled": sync_service.enabled,
         "mode": sync_service.mode,
         "url": sync_service.cloud_url,
-        "token": sync_service.cloud_token
+        "token": sync_service.cloud_token,
     }
 
+
 @router.post("/config")
-async def update_sync_config(config: SyncConfig, session: Session = Depends(get_session)):
+async def update_sync_config(
+    config: SyncConfig, session: Session = Depends(get_session)
+):
     """更新同步配置"""
     try:
         # Update Database
@@ -36,9 +42,9 @@ async def update_sync_config(config: SyncConfig, session: Session = Depends(get_
             "cloud_sync_enabled": str(config.enabled).lower(),
             "cloud_sync_mode": config.mode,
             "cloud_sync_url": config.url,
-            "cloud_sync_token": config.token
+            "cloud_sync_token": config.token,
         }
-        
+
         for key, value in configs_to_update.items():
             db_config = session.exec(select(Config).where(Config.key == key)).first()
             if not db_config:
@@ -47,19 +53,20 @@ async def update_sync_config(config: SyncConfig, session: Session = Depends(get_
             else:
                 db_config.value = value
                 session.add(db_config)
-        
+
         session.commit()
-        
+
         # Reload ConfigManager (memory cache)
         cm = get_config_manager()
         await cm.load_from_db()
-        
+
         # Reload SyncService
         await sync_service.reload()
-        
+
         return {"status": "success", "message": "Config updated and service reloaded"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @router.get("/status")
 async def get_sync_status():
@@ -69,15 +76,16 @@ async def get_sync_status():
         if sync_service.mode == "server":
             status = "listening"
         elif sync_service.client and sync_service.client.websocket:
-             # Basic check, ideally gateway_client should expose is_connected property
-             status = "connected"
-    
+            # Basic check, ideally gateway_client should expose is_connected property
+            status = "connected"
+
     return {
         "running": sync_service.running,
         "mode": sync_service.mode,
         "status": status,
-        "last_sync": "N/A" # TODO: Track sync time
+        "last_sync": "N/A",  # TODO: Track sync time
     }
+
 
 @router.get("/server-info")
 async def get_server_info():
@@ -87,15 +95,12 @@ async def get_server_info():
     try:
         token_path = os.path.join(os.getcwd(), "data", "gateway_token.json")
         if os.path.exists(token_path):
-             with open(token_path, "r", encoding="utf-8") as f:
-                 data = json.load(f)
-                 token = data.get("token", "")
-    except:
+            with open(token_path, "r", encoding="utf-8") as f:
+                data = json.load(f)
+                token = data.get("token", "")
+    except Exception:
         pass
 
     # Guess IP (Frontend should probably just show localhost or ask user)
     # But returning port is useful
-    return {
-        "port": 14747,
-        "token": token
-    }
+    return {"port": 14747, "token": token}

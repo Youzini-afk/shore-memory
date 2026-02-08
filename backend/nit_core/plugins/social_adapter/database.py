@@ -1,27 +1,29 @@
-
 import os
-from sqlmodel import SQLModel
+
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
+from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy import text
-from .models_db import QQMessage, QQUser, QQGroup
 
 # 使用绝对路径确保数据库文件位置正确
 # 默认存储在 backend/data 目录下，名为 social_storage.db
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
+BASE_DIR = os.path.dirname(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+)
 # 使用新的数据库文件名以避免锁定问题
 DATABASE_FILE = os.path.join(BASE_DIR, "data", "social_storage_v2.db")
 DATABASE_URL = f"sqlite+aiosqlite:///{DATABASE_FILE}"
 
 social_engine = create_async_engine(
-    DATABASE_URL, 
+    DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False}, # Allow multi-threading for SQLite
-    pool_size=20, # Increase pool size
+    connect_args={"check_same_thread": False},  # Allow multi-threading for SQLite
+    pool_size=20,  # Increase pool size
     max_overflow=10,
-    pool_timeout=30 # Timeout for getting connection
+    pool_timeout=30,  # Timeout for getting connection
 )
+
 
 async def init_social_db():
     """初始化社交数据库表"""
@@ -29,17 +31,24 @@ async def init_social_db():
         # Enable WAL mode for better concurrency
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
         await conn.run_sync(SQLModel.metadata.create_all)
-        
+
         # [Migration] Add agent_id column if missing (Safe migration)
         try:
-            await conn.execute(text("ALTER TABLE qqmessage ADD COLUMN agent_id VARCHAR DEFAULT 'pero'"))
+            await conn.execute(
+                text("ALTER TABLE qqmessage ADD COLUMN agent_id VARCHAR DEFAULT 'pero'")
+            )
         except Exception:
-            pass # Column likely exists
-            
+            pass  # Column likely exists
+
         try:
-            await conn.execute(text("ALTER TABLE socialmemory ADD COLUMN agent_id VARCHAR DEFAULT 'pero'"))
+            await conn.execute(
+                text(
+                    "ALTER TABLE socialmemory ADD COLUMN agent_id VARCHAR DEFAULT 'pero'"
+                )
+            )
         except Exception:
             pass
+
 
 async def get_social_db_session():
     """获取社交数据库会话"""

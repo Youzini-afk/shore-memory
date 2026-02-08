@@ -12,19 +12,11 @@
     "invocationCommands": [
       {
         "commandIdentifier": "windows_operation",
-        "description": "执行指令。如'打开vscode'、'按下Win+D'、'调大音量'。"
+        "description": "系统控制。参数 instruction: 自然语言指令 (如 '打开记事本', '按下Win+D', '调大音量', '静音', '锁屏')。"
       },
       {
         "commandIdentifier": "open_application",
-        "description": "打开指定的应用程序。",
-        "params": [
-          {
-            "name": "app_name",
-            "type": "string",
-            "description": "应用程序名称 (e.g. 'notepad', 'calc').",
-            "required": true
-          }
-        ]
+        "description": "打开应用。参数 app_name: 应用程序名称 (如 'notepad', 'calc', 'chrome')。"
       }
     ]
   }

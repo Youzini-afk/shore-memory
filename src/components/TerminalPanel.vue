@@ -6,19 +6,14 @@
       </div>
       <div class="actions">
         <el-checkbox v-model="autoScroll" label="自动滚动" size="small" />
-        <el-button size="small" circle @click="clearLogs" title="清空">
+        <el-button size="small" circle title="清空" @click="clearLogs">
           <el-icon><Delete /></el-icon>
         </el-button>
       </div>
     </div>
-    
-    <div class="terminal-content" ref="logContainer">
-      <div 
-        v-for="(log, index) in logs" 
-        :key="index" 
-        class="log-line"
-        :class="log.type"
-      >
+
+    <div ref="logContainer" class="terminal-content">
+      <div v-for="(log, index) in logs" :key="index" class="log-line" :class="log.type">
         <span class="timestamp">[{{ log.timestamp }}]</span>
         <span class="source" :class="log.source">[{{ log.source }}]</span>
         <span class="message" v-html="formatMessage(log.message)"></span>
@@ -44,19 +39,19 @@ let updateTimer = null
 const extractTimestamp = (msg) => {
   // 尝试从消息中提取时间戳 HH:mm:ss (例如 21:35:06)
   // 优先匹配带毫秒的，如 21:35:06.123
-  const timeMatch = msg && msg.match(/(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/);
-  return timeMatch ? timeMatch[1] : new Date().toLocaleTimeString();
+  const timeMatch = msg && msg.match(/(\d{1,2}:\d{2}:\d{2}(?:\.\d+)?)/)
+  return timeMatch ? timeMatch[1] : new Date().toLocaleTimeString()
 }
 
 const addLog = (source, type, message) => {
   const timestamp = extractTimestamp(message)
   pendingLogs.push({
     source, // 'backend' (后端) | 'frontend' (前端)
-    type,   // 'stdout' (标准输出) | 'stderr' (标准错误) | 'info' (信息) | 'warn' (警告) | 'error' (错误) | 'system' (系统)
+    type, // 'stdout' (标准输出) | 'stderr' (标准错误) | 'info' (信息) | 'warn' (警告) | 'error' (错误) | 'system' (系统)
     message,
     timestamp
   })
-  
+
   if (!updateTimer) {
     updateTimer = setTimeout(() => {
       const newLogs = [...logs.value, ...pendingLogs]
@@ -67,7 +62,7 @@ const addLog = (source, type, message) => {
       }
       pendingLogs = []
       updateTimer = null
-      
+
       if (autoScroll.value) {
         scrollToBottom()
       }
@@ -89,7 +84,7 @@ const clearLogs = () => {
 
 const formatMessage = (msg) => {
   if (!msg) return ''
-  
+
   // 转义 HTML 防止 XSS
   let escaped = msg
     .replace(/&/g, '&amp;')
@@ -100,15 +95,15 @@ const formatMessage = (msg) => {
 
   // 匹配并染色常见的后端标签 [TAG]
   const tagColors = {
-    'AGENT': '#ff88aa',    // 粉色
-    'VOICE': '#a0c4ff',    // 蓝色
-    'PROCESS': '#a8e6cf',  // 绿色
-    'LLM': '#bdb2ff',      // 紫色
-    'MEMORY': '#ffd1dc',   // 浅粉
-    'MCP': '#9cdcfe',      // 浅蓝
-    'SYSTEM': '#c586c0',   // 紫红
-    'ERROR': '#f48771',    // 红色
-    'WARN': '#cca700'      // 黄色
+    AGENT: '#ff88aa', // 粉色
+    VOICE: '#a0c4ff', // 蓝色
+    PROCESS: '#a8e6cf', // 绿色
+    LLM: '#bdb2ff', // 紫色
+    MEMORY: '#ffd1dc', // 浅粉
+    MCP: '#9cdcfe', // 浅蓝
+    SYSTEM: '#c586c0', // 紫红
+    ERROR: '#f48771', // 红色
+    WARN: '#cca700' // 黄色
   }
 
   // 使用正则替换标签
@@ -146,13 +141,13 @@ const unhookConsole = () => {
 
 onMounted(async () => {
   hookConsole()
-  
+
   try {
     // 1. 先拉取历史日志
     try {
       const historyLogs = await invoke('get_backend_logs')
       if (Array.isArray(historyLogs)) {
-        historyLogs.forEach(logLine => {
+        historyLogs.forEach((logLine) => {
           let type = 'info'
           if (logLine.toLowerCase().includes('[err]') || logLine.toLowerCase().includes('error')) {
             type = 'error'
@@ -160,12 +155,15 @@ onMounted(async () => {
             type = 'warn'
           }
           // 直接添加，不走 pending 以确保立即显示
-          logs.value = [...logs.value, {
-            source: 'backend',
-            type,
-            message: logLine,
-            timestamp: extractTimestamp(logLine) // 尝试从日志中提取时间戳
-          }]
+          logs.value = [
+            ...logs.value,
+            {
+              source: 'backend',
+              type,
+              message: logLine,
+              timestamp: extractTimestamp(logLine) // 尝试从日志中提取时间戳
+            }
+          ]
         })
         scrollToBottom()
       }
@@ -189,24 +187,24 @@ onMounted(async () => {
     const unlistenBatch = await listen('backend-log-batch', (event) => {
       const logs = event.payload || []
       if (Array.isArray(logs)) {
-        logs.forEach(msg => {
-            let type = 'info'
-            if (msg.toLowerCase().includes('[err]') || msg.toLowerCase().includes('error')) {
-                type = 'error'
-            } else if (msg.toLowerCase().includes('warn')) {
-                type = 'warn'
-            }
-            addLog('backend', type, msg)
+        logs.forEach((msg) => {
+          let type = 'info'
+          if (msg.toLowerCase().includes('[err]') || msg.toLowerCase().includes('error')) {
+            type = 'error'
+          } else if (msg.toLowerCase().includes('warn')) {
+            type = 'warn'
+          }
+          addLog('backend', type, msg)
         })
       }
     })
-    
+
     // 监听其他系统级日志 (如果需要)
     const unlistenTerminal = await listen('terminal-log', (event) => {
       const log = event.payload
       addLog('backend', log.type, log.message)
     })
-    
+
     // 组合清理函数
     const originalUnlisten = unlistenFn
     unlistenFn = () => {
@@ -319,7 +317,7 @@ onUnmounted(() => {
 }
 
 /* 日志类型 */
-.log-line.stderr .message, 
+.log-line.stderr .message,
 .log-line.error .message {
   color: #f48771;
 }

@@ -1,20 +1,22 @@
 import asyncio
-from typing import Dict, Any, Optional
 import logging
+from typing import Optional
 
 logger = logging.getLogger(__name__)
+
 
 class TaskManager:
     """
     管理活动的聊天任务，允许中断、暂停和指令注入。
     单例模式。
     """
+
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(TaskManager, cls).__new__(cls)
-            cls._instance.tasks = {} # session_id -> 任务上下文
+            cls._instance.tasks = {}  # session_id -> 任务上下文
         return cls._instance
 
     def register(self, session_id: str):
@@ -22,13 +24,13 @@ class TaskManager:
         if session_id in self.tasks:
             # 如果存在旧的任务上下文，则进行清理（尽管通常应该已经完成）
             logger.info(f"[TaskManager] 正在覆盖 {session_id} 的现有上下文")
-        
+
         self.tasks[session_id] = {
             "pause_event": asyncio.Event(),
             "injected_messages": asyncio.Queue(),
-            "status": "running" # running (运行中), paused (已暂停)
+            "status": "running",  # running (运行中), paused (已暂停)
         }
-        self.tasks[session_id]["pause_event"].set() # 初始状态为运行中
+        self.tasks[session_id]["pause_event"].set()  # 初始状态为运行中
         logger.info(f"[TaskManager] 已注册 {session_id} 的任务")
 
     def unregister(self, session_id: str):
@@ -84,5 +86,6 @@ class TaskManager:
         if session_id in self.tasks:
             return self.tasks[session_id]["status"]
         return None
+
 
 task_manager = TaskManager()

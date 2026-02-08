@@ -1,5 +1,6 @@
-import os
 import json
+import os
+
 from utils.workspace_utils import get_workspace_root
 
 # Define the workspace root relative to this file
@@ -8,11 +9,13 @@ from utils.workspace_utils import get_workspace_root
 # BASE_DIR = ...
 # WORKSPACE_ROOT = ...
 
+
 def _ensure_workspace():
     # Use active agent's workspace by default
     root = get_workspace_root()
     if not os.path.exists(root):
         os.makedirs(root)
+
 
 def _is_safe_path(file_path):
     # Ensure the path is within the workspace
@@ -20,7 +23,7 @@ def _is_safe_path(file_path):
     try:
         workspace_root = get_workspace_root()
         # Join workspace root with the provided path
-        # Note: os.path.join handles absolute paths in the second argument by discarding the first, 
+        # Note: os.path.join handles absolute paths in the second argument by discarding the first,
         # so we must strip leading slashes or drive letters if present (though unlikely from LLM)
         # But for safety, we treat it as relative.
         file_path = file_path.lstrip("/\\")
@@ -29,26 +32,30 @@ def _is_safe_path(file_path):
     except Exception:
         return False
 
+
 def write_workspace_file(filename: str, content: str) -> str:
     """
     Write content to a file in the workspace.
     """
     _ensure_workspace()
     if not _is_safe_path(filename):
-        return "Error: Access denied. You can only write to files within your workspace."
-    
+        return (
+            "Error: Access denied. You can only write to files within your workspace."
+        )
+
     try:
         workspace_root = get_workspace_root()
         filename = filename.lstrip("/\\")
         full_path = os.path.join(workspace_root, filename)
         # Create directories if they don't exist
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
-        
+
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
         return f"Successfully wrote to {filename}"
     except Exception as e:
         return f"Error writing file: {str(e)}"
+
 
 def read_workspace_file(filename: str) -> str:
     """
@@ -57,18 +64,19 @@ def read_workspace_file(filename: str) -> str:
     _ensure_workspace()
     if not _is_safe_path(filename):
         return "Error: Access denied. You can only read files within your workspace."
-    
+
     try:
         workspace_root = get_workspace_root()
         filename = filename.lstrip("/\\")
         full_path = os.path.join(workspace_root, filename)
         if not os.path.exists(full_path):
             return "Error: File not found."
-            
+
         with open(full_path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:
         return f"Error reading file: {str(e)}"
+
 
 def list_workspace_files(subdir: str = "") -> str:
     """
@@ -76,14 +84,14 @@ def list_workspace_files(subdir: str = "") -> str:
     """
     _ensure_workspace()
     workspace_root = get_workspace_root()
-    
+
     if subdir:
         if not _is_safe_path(subdir):
-             return "Error: Access denied."
+            return "Error: Access denied."
         target_dir = os.path.join(workspace_root, subdir.lstrip("/\\"))
     else:
         target_dir = workspace_root
-        
+
     if not os.path.exists(target_dir):
         return "Error: Directory not found."
 
@@ -95,13 +103,14 @@ def list_workspace_files(subdir: str = "") -> str:
                 abs_file = os.path.join(root, filename)
                 rel_path = os.path.relpath(abs_file, workspace_root)
                 file_list.append(rel_path)
-        
+
         if not file_list:
             return "Workspace is empty."
-            
+
         return json.dumps(file_list, indent=2)
     except Exception as e:
         return f"Error listing files: {str(e)}"
+
 
 # Definitions
 write_workspace_file_definition = {
@@ -114,16 +123,16 @@ write_workspace_file_definition = {
             "properties": {
                 "filename": {
                     "type": "string",
-                    "description": "Relative path to the file (e.g., 'notes.txt' or 'code/script.py')."
+                    "description": "Relative path to the file (e.g., 'notes.txt' or 'code/script.py').",
                 },
                 "content": {
                     "type": "string",
-                    "description": "The text content to write."
-                }
+                    "description": "The text content to write.",
+                },
             },
-            "required": ["filename", "content"]
-        }
-    }
+            "required": ["filename", "content"],
+        },
+    },
 }
 
 read_workspace_file_definition = {
@@ -136,12 +145,12 @@ read_workspace_file_definition = {
             "properties": {
                 "filename": {
                     "type": "string",
-                    "description": "Relative path to the file."
+                    "description": "Relative path to the file.",
                 }
             },
-            "required": ["filename"]
-        }
-    }
+            "required": ["filename"],
+        },
+    },
 }
 
 list_workspace_files_definition = {
@@ -155,9 +164,9 @@ list_workspace_files_definition = {
                 "subdir": {
                     "type": "string",
                     "description": "Optional subdirectory to list (default is root).",
-                    "default": ""
+                    "default": "",
                 }
-            }
-        }
-    }
+            },
+        },
+    },
 }

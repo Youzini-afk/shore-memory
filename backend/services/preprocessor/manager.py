@@ -1,13 +1,16 @@
-from typing import List, Dict, Any
 import logging
+from typing import Any, Dict, List
+
 from .base import BasePreprocessor
 
 logger = logging.getLogger(__name__)
+
 
 class PreprocessorManager:
     """
     管理并执行预处理器管道。
     """
+
     def __init__(self):
         self.preprocessors: List[BasePreprocessor] = []
 
@@ -29,6 +32,8 @@ class PreprocessorManager:
                 logger.error(f"预处理器 {processor.name} 出错: {e}", exc_info=True)
                 # Decide whether to halt or continue. For now, we continue but log error.
                 # In a robust system, we might want to flag this in the context.
-                current_context["errors"] = current_context.get("errors", []) + [f"{processor.name}: {str(e)}"]
-        
+                current_context["errors"] = current_context.get("errors", []) + [
+                    f"{processor.name}: {str(e)}"
+                ]
+
         return current_context

@@ -5,9 +5,20 @@
 """
 
 from typing import List, Optional
-from .lexer import Token, TokenType, Lexer
-from .ast_nodes import ASTNode, PipelineNode, AssignmentNode, CallNode, LiteralNode, VariableRefNode, ValueNode, ListNode
+
+from .ast_nodes import (
+    AssignmentNode,
+    ASTNode,
+    CallNode,
+    ListNode,
+    LiteralNode,
+    PipelineNode,
+    ValueNode,
+    VariableRefNode,
+)
 from .errors import NITParserError
+from .lexer import Token, TokenType
+
 
 class Parser:
     def __init__(self, tokens: List[Token], source: Optional[str] = None):
@@ -48,7 +59,7 @@ class Parser:
         # 检查是否为赋值语句: $var = ...
         if self.peek().type == TokenType.VARIABLE:
             return self.parse_assignment()
-        
+
         # 或者是直接调用 (异步或同步)
         return self.parse_call()
 
@@ -63,10 +74,10 @@ class Parser:
         if self.peek().type == TokenType.KEYWORD_ASYNC:
             self.advance()
             is_async = True
-            
+
         tool_name = self.match(TokenType.IDENTIFIER).value
         self.match(TokenType.LPAREN)
-        
+
         args = {}
         if self.peek().type != TokenType.RPAREN:
             while True:
@@ -74,22 +85,24 @@ class Parser:
                 self.match(TokenType.EQUALS)
                 arg_value = self.parse_value()
                 args[arg_name] = arg_value
-                
+
                 if self.peek().type == TokenType.COMMA:
                     self.advance()
                     continue
                 else:
                     break
-        
+
         self.match(TokenType.RPAREN)
-        
+
         # 检查异步调用中的回调 (约定: callback="func_name")
         # 在我们的语法中，callback 只是一个参数，但我们可能希望将其提升到 AST 属性
         callback = None
         if "callback" in args and isinstance(args["callback"], LiteralNode):
             callback = str(args["callback"].value)
-            
-        return CallNode(tool_name=tool_name, args=args, is_async=is_async, callback=callback)
+
+        return CallNode(
+            tool_name=tool_name, args=args, is_async=is_async, callback=callback
+        )
 
     def parse_value(self) -> ValueNode:
         token = self.peek()

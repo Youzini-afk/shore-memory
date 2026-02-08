@@ -6,14 +6,14 @@ import { logger } from '../utils/logger'
 
 export class WindowManager {
   private static instance: WindowManager
-  
+
   public launcherWin: BrowserWindow | null = null
   public petWin: BrowserWindow | null = null
   public dashboardWin: BrowserWindow | null = null
   public ideWin: BrowserWindow | null = null
-  
+
   private mouseTrackInterval: NodeJS.Timeout | null = null
-  
+
   private constructor() {}
 
   public static getInstance(): WindowManager {
@@ -31,17 +31,17 @@ export class WindowManager {
     // Prefer ICO on Windows for better quality/compatibility
     const iconName = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
     const paths = [
-        join(process.cwd(), 'public', iconName), // Dev
-        join(process.cwd(), 'resources', iconName), // Prod
-        join(process.resourcesPath, iconName), // Prod resources
-        join(__dirname, '../../public', iconName), // Relative dev
-        join(__dirname, '../../../public', iconName), // Relative dev deep
-        join(__dirname, '../../', iconName) // Fallback
+      join(process.cwd(), 'public', iconName), // Dev
+      join(process.cwd(), 'resources', iconName), // Prod
+      join(process.resourcesPath, iconName), // Prod resources
+      join(__dirname, '../../public', iconName), // Relative dev
+      join(__dirname, '../../../public', iconName), // Relative dev deep
+      join(__dirname, '../../', iconName) // Fallback
     ]
     for (const p of paths) {
-        if (existsSync(p)) {
-            return p
-        }
+      if (existsSync(p)) {
+        return p
+      }
     }
     return ''
   }
@@ -101,7 +101,7 @@ export class WindowManager {
     })
 
     this.launcherWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        logger.error('Main', `Failed to load: ${errorDescription} (${errorCode})`)
+      logger.error('Main', `Failed to load: ${errorDescription} (${errorCode})`)
     })
 
     // Handle external links
@@ -159,21 +159,21 @@ export class WindowManager {
     // this.petWin.webContents.openDevTools({ mode: 'detach' })
 
     this.petWin.setAlwaysOnTop(true, 'screen-saver')
-    
+
     // 忽略鼠标事件以实现透明点击穿透
     // 默认: 忽略所有，让特定元素通过 IPC 捕获
     // 常用模式: 渲染器根据悬停/点击发送 IPC 来设置忽略状态。
-    
+
     // 初始状态: 可交互
     this.petWin.setIgnoreMouseEvents(false)
-    
+
     // 强制显示
     this.petWin.show()
-    
+
     // 修复某些系统上的可见性问题
     this.petWin.on('ready-to-show', () => {
-        this.petWin?.show()
-        this.petWin?.setAlwaysOnTop(true, 'screen-saver')
+      this.petWin?.show()
+      this.petWin?.setAlwaysOnTop(true, 'screen-saver')
     })
 
     this.startMouseTracking()
@@ -188,7 +188,7 @@ export class WindowManager {
 
   private startMouseTracking() {
     if (this.mouseTrackInterval) return
-    
+
     // 30 FPS mouse tracking
     // 30 FPS 鼠标追踪
     this.mouseTrackInterval = setInterval(() => {
@@ -198,17 +198,17 @@ export class WindowManager {
       }
 
       try {
-        const point = screen.getCursorScreenPoint();
-        const bounds = this.petWin.getBounds();
-        
+        const point = screen.getCursorScreenPoint()
+        const bounds = this.petWin.getBounds()
+
         // Calculate relative position
         // 计算相对位置
-        const relativeX = point.x - bounds.x;
-        const relativeY = point.y - bounds.y;
+        const relativeX = point.x - bounds.x
+        const relativeY = point.y - bounds.y
 
         // Send to renderer
         // 发送到渲染进程
-        this.petWin.webContents.send('global-mouse-move', { x: relativeX, y: relativeY });
+        this.petWin.webContents.send('global-mouse-move', { x: relativeX, y: relativeY })
       } catch (e) {
         logger.error('Main', `鼠标追踪错误: ${e}`)
       }
@@ -224,57 +224,57 @@ export class WindowManager {
 
   public createDashboardWindow(): BrowserWindow {
     if (this.dashboardWin && !this.dashboardWin.isDestroyed()) {
-        if (this.dashboardWin.isMinimized()) this.dashboardWin.restore()
-        this.dashboardWin.focus()
-        return this.dashboardWin
+      if (this.dashboardWin.isMinimized()) this.dashboardWin.restore()
+      this.dashboardWin.focus()
+      return this.dashboardWin
     }
 
     this.dashboardWin = new BrowserWindow({
-        title: 'Pero Dashboard',
-        icon: this.getIconPath(),
-        width: 1280,
-        height: 800,
-        show: false,
-        frame: false,
-        center: true,
-        transparent: true,
-        hasShadow: true,
-        backgroundColor: '#00000000', // Allow acrylic to show through // 允许亚克力效果透出
-        webPreferences: {
-            preload: this.getPreloadPath(),
-            nodeIntegration: true,
-            contextIsolation: true,
-            backgroundThrottling: false
-        }
+      title: 'Pero Dashboard',
+      icon: this.getIconPath(),
+      width: 1280,
+      height: 800,
+      show: false,
+      frame: false,
+      center: true,
+      transparent: true,
+      hasShadow: true,
+      backgroundColor: '#00000000', // Allow acrylic to show through // 允许亚克力效果透出
+      webPreferences: {
+        preload: this.getPreloadPath(),
+        nodeIntegration: true,
+        contextIsolation: true,
+        backgroundThrottling: false
+      }
     })
 
     if (process.platform === 'win32') {
-        try {
-            this.dashboardWin.setBackgroundMaterial('acrylic')
-        } catch (e) {
-            // Ignore
-            // 忽略
-        }
+      try {
+        this.dashboardWin.setBackgroundMaterial('acrylic')
+      } catch (e) {
+        // Ignore
+        // 忽略
+      }
     }
 
     this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
     logger.info('Main', `Dashboard loading URL: ${this.getPageUrl('/dashboard')}`)
-    
+
     this.dashboardWin.on('ready-to-show', () => {
-        logger.info('Main', 'Dashboard ready-to-show')
-        this.dashboardWin?.show()
+      logger.info('Main', 'Dashboard ready-to-show')
+      this.dashboardWin?.show()
     })
 
     // Force show if ready-to-show doesn't fire (e.g. renderer crash or slow load)
     setTimeout(() => {
-        if (this.dashboardWin && !this.dashboardWin.isDestroyed() && !this.dashboardWin.isVisible()) {
-             logger.info('Main', 'Force showing Dashboard (timeout)')
-             this.dashboardWin.show()
-        }
+      if (this.dashboardWin && !this.dashboardWin.isDestroyed() && !this.dashboardWin.isVisible()) {
+        logger.info('Main', 'Force showing Dashboard (timeout)')
+        this.dashboardWin.show()
+      }
     }, 2000)
 
     this.dashboardWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-        logger.error('Main', `Dashboard failed to load: ${errorDescription} (${errorCode})`)
+      logger.error('Main', `Dashboard failed to load: ${errorDescription} (${errorCode})`)
     })
 
     // Handle external links
@@ -289,39 +289,39 @@ export class WindowManager {
 
   public createIDEWindow(): BrowserWindow {
     if (this.ideWin && !this.ideWin.isDestroyed()) {
-        if (this.ideWin.isMinimized()) this.ideWin.restore()
-        this.ideWin.focus()
-        return this.ideWin
+      if (this.ideWin.isMinimized()) this.ideWin.restore()
+      this.ideWin.focus()
+      return this.ideWin
     }
 
     this.ideWin = new BrowserWindow({
-        title: 'Pero IDE',
-        icon: this.getIconPath(),
-        width: 1400,
-        height: 900,
-        show: false,
-        frame: false,
-        center: true,
-        transparent: true,
-        hasShadow: true,
-        webPreferences: {
-            preload: this.getPreloadPath(),
-            nodeIntegration: true,
-            contextIsolation: true,
-            backgroundThrottling: false
-        }
+      title: 'Pero IDE',
+      icon: this.getIconPath(),
+      width: 1400,
+      height: 900,
+      show: false,
+      frame: false,
+      center: true,
+      transparent: true,
+      hasShadow: true,
+      webPreferences: {
+        preload: this.getPreloadPath(),
+        nodeIntegration: true,
+        contextIsolation: true,
+        backgroundThrottling: false
+      }
     })
 
     if (process.platform === 'win32') {
-        try {
-            this.ideWin.setBackgroundMaterial('acrylic')
-        } catch (e) {}
+      try {
+        this.ideWin.setBackgroundMaterial('acrylic')
+      } catch (e) {}
     }
 
     this.ideWin.loadURL(this.getPageUrl('/ide'))
-    
+
     this.ideWin.on('ready-to-show', () => {
-        this.ideWin?.show()
+      this.ideWin?.show()
     })
 
     this.ideWin.webContents.setWindowOpenHandler(({ url }) => {

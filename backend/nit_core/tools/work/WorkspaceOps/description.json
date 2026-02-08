@@ -11,15 +11,15 @@
     "invocationCommands": [
       {
         "commandIdentifier": "write_workspace_file",
-        "description": "写入笔记。在工作区创建或更新文件以记录长期记忆。"
+        "description": "写入笔记。参数 filename: 文件名; content: 内容。"
       },
       {
         "commandIdentifier": "read_workspace_file",
-        "description": "读取笔记。回顾工作区内的文件内容。"
+        "description": "读取笔记。参数 filename: 文件名。"
       },
       {
         "commandIdentifier": "list_workspace_files",
-        "description": "列出笔记。查看工作区内的所有文件。"
+        "description": "列出笔记。参数 subdir: (可选) 子目录。"
       }
     ]
   }

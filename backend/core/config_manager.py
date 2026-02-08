@@ -1,12 +1,12 @@
 # type: ignore
 import logging
-import asyncio
 import os
 import sys
-from typing import Any, Optional, Dict, Set
+from typing import Any, Dict, Optional, Set
+
+from sqlalchemy.orm import sessionmaker
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
-from sqlalchemy.orm import sessionmaker
 
 # Import engine directly to create sessions
 try:
@@ -18,9 +18,10 @@ except ImportError:
 
 logger = logging.getLogger(__name__)
 
+
 class ConfigManager:
-    _instance: Optional['ConfigManager'] = None
-    
+    _instance: Optional["ConfigManager"] = None
+
     def __init__(self, config_path: Optional[str] = None):
         # 默认配置
         self.config: Dict[str, Any] = {
@@ -29,11 +30,11 @@ class ConfigManager:
             "lightweight_mode": False,
             "aura_vision_enabled": False,
             "enable_social_mode": False,  # 默认关闭以确保安全
-            "tts_enabled": True
+            "tts_enabled": True,
         }
-        
+
         self.env_loaded_keys: Set[str] = set()
-        
+
         # 从环境变量加载 (覆盖默认值)
         for key in self.config.keys():
             env_key = key.upper()
@@ -57,15 +58,21 @@ class ConfigManager:
                         # 处理布尔标记，如 --enable-social-mode (隐含 true)
                         k = clean_arg
                         v = "true"
-                    
+
                     # 将连字符转换为下划线以匹配配置键
                     config_key = k.replace("-", "_")
-                    
+
                     if config_key in self.config:
                         self.config[config_key] = self._parse_value(v)
-                        self.env_loaded_keys.add(config_key) # 将 CLI 参数视为环境变量级别的覆盖
-                        logger.info(f"已从 CLI 加载配置: {config_key}={self.config[config_key]}")
-                        print(f"[ConfigManager] 已加载 CLI 配置: {config_key}={self.config[config_key]}")
+                        self.env_loaded_keys.add(
+                            config_key
+                        )  # 将 CLI 参数视为环境变量级别的覆盖
+                        logger.info(
+                            f"已从 CLI 加载配置: {config_key}={self.config[config_key]}"
+                        )
+                        print(
+                            f"[ConfigManager] 已加载 CLI 配置: {config_key}={self.config[config_key]}"
+                        )
                 except Exception as e:
                     logger.warning(f"无法解析 CLI 参数 {arg}: {e}")
 
@@ -75,20 +82,20 @@ class ConfigManager:
     async def load_from_db(self):
         """将配置从数据库加载到内存中。"""
         try:
-            async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False) # type: ignore
-            async with async_session() as session: # type: ignore
+            async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore
+            async with async_session() as session:  # type: ignore
                 statement = select(Config)
                 results = await session.exec(statement)
                 configs = results.all()
-                
+
                 for config in configs:
                     # 如果配置已从 ENV 加载，则不要用数据库值覆盖
                     if config.key in self.env_loaded_keys:
                         logger.info(f"忽略 {config.key} 的数据库配置 (已被 ENV 覆盖)")
                         continue
-                    
+
                     self.config[config.key] = self._parse_value(config.value)
-                    
+
             # logger.info(f"配置已从数据库加载。当前配置: {self.config}")
             pass
         except Exception as e:
@@ -117,19 +124,19 @@ class ConfigManager:
         """更新内存和数据库中的配置。"""
         logger.info(f"正在更新配置: {key} = {value}")
         self.config[key] = value
-        
+
         # 转换为字符串以便数据库存储
         str_value = str(value)
         if isinstance(value, bool):
             str_value = str(value).lower()
-            
+
         try:
             async for session in get_session():
                 try:
                     statement = select(Config).where(Config.key == key)
                     results = await session.exec(statement)
                     config_entry = results.first()
-                    
+
                     if config_entry:
                         config_entry.value = str_value
                         session.add(config_entry)
@@ -138,7 +145,7 @@ class ConfigManager:
                         config_entry = Config(key=key, value=str_value)
                         session.add(config_entry)
                         logger.info(f"创建新数据库配置项: {key}")
-                    
+
                     await session.commit()
                     logger.info(f"配置 {key} 已成功保存到数据库。")
                 finally:
@@ -146,6 +153,7 @@ class ConfigManager:
                 break
         except Exception as e:
             logger.error(f"无法保存配置到数据库: {e}")
+
 
 def get_config_manager():
     if ConfigManager._instance is None:

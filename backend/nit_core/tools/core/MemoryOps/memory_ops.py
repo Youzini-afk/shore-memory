@@ -1,14 +1,15 @@
-import os
-import json
 import datetime
+import json
 import logging
-from typing import Optional, List
-from sqlmodel import select, desc, and_
+import os
+
+from sqlmodel import desc, select
 
 # Try imports for Database access
 try:
-    from models import Memory, MaintenanceRecord, ScheduledTask
+    from models import MaintenanceRecord, Memory, ScheduledTask
     from services.memory_service import MemoryService
+
     try:
         from services.session_service import _CURRENT_SESSION_CONTEXT
     except ImportError:
@@ -18,8 +19,9 @@ try:
             from services.session_service import _CURRENT_SESSION_CONTEXT
 except ImportError:
     try:
-        from backend.models import Memory, MaintenanceRecord, ScheduledTask
+        from backend.models import MaintenanceRecord, Memory, ScheduledTask
         from backend.services.memory_service import MemoryService
+
         # Try to import session context from SessionOps
         try:
             from backend.services.session_service import _CURRENT_SESSION_CONTEXT
@@ -31,7 +33,9 @@ except ImportError:
     except ImportError:
         # Fallback for dev/testing without full backend context
         # This might fail in production if paths are wrong, but we'll handle it gracefully
-        logging.warning("MemoryOps: Failed to import backend modules. Database features may not work.")
+        logging.warning(
+            "MemoryOps: Failed to import backend modules. Database features may not work."
+        )
         _CURRENT_SESSION_CONTEXT = {}
         Memory = None
         MaintenanceRecord = None
@@ -50,10 +54,18 @@ except ImportError:
 # 配置日志存储路径 (作为备份/兼容)
 # Assuming file is in backend/nit_core/tools/core/MemoryOps/memory_ops.py
 # Root is backend (4 levels up)
-MEMORY_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))), "memory")
+MEMORY_DIR = os.path.join(
+    os.path.dirname(
+        os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        )
+    ),
+    "memory",
+)
 REFLECTION_FILE = os.path.join(MEMORY_DIR, "reflection_log.json")
 
 logger = logging.getLogger(__name__)
+
 
 def _ensure_memory_dir():
     if not os.path.exists(MEMORY_DIR):
@@ -61,6 +73,7 @@ def _ensure_memory_dir():
             os.makedirs(MEMORY_DIR)
         except Exception as e:
             logger.error(f"Failed to create memory directory: {e}")
+
 
 def _load_reflections_local():
     """Load reflections from local JSON file (Legacy/Backup)"""
@@ -74,6 +87,7 @@ def _load_reflections_local():
         logger.error(f"Failed to load reflection log: {e}")
         return []
 
+
 def _save_reflections_local(logs):
     """Save reflections to local JSON file (Legacy/Backup)"""
     _ensure_memory_dir()
@@ -83,7 +97,9 @@ def _save_reflections_local(logs):
     except Exception as e:
         logger.error(f"Failed to save reflection log: {e}")
 
+
 # --- Reflection Operations ---
+
 
 async def log_reflection(category: str, content: str, level: str = "info") -> str:
     """
@@ -94,18 +110,19 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
     # 1. Save to Database (Primary)
     db_status = ""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
-    
+
     if session and MemoryService:
         try:
             importance_map = {"info": 3, "warning": 6, "critical": 9}
             imp = importance_map.get(level, 3)
-            
+
             # Get active agent
             agent_id = "pero"
             if get_agent_manager:
                 try:
                     agent_id = get_agent_manager().active_agent_id
-                except: pass
+                except Exception:
+                    pass
 
             await MemoryService.save_memory(
                 session=session,
@@ -116,8 +133,8 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
                 base_importance=float(imp),
                 memory_type="reflection",
                 source="MemoryOps",
-                sentiment="neutral", # Reflection is usually neutral/objective
-                agent_id=agent_id
+                sentiment="neutral",  # Reflection is usually neutral/objective
+                agent_id=agent_id,
             )
             db_status = "(已同步至记忆数据库)"
         except Exception as e:
@@ -133,7 +150,7 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
             "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
             "category": category,
             "content": content,
-            "level": level
+            "level": level,
         }
         logs.insert(0, entry)
         if len(logs) > 50:
@@ -141,8 +158,9 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
         _save_reflections_local(logs)
     except Exception as e:
         logger.error(f"MemoryOps Local File Error: {e}")
-    
+
     return f"已记录反思日志 [{level.upper()}] {category}: {content} {db_status}"
+
 
 async def read_reflections(limit: int = 5) -> str:
     """
@@ -151,12 +169,12 @@ async def read_reflections(limit: int = 5) -> str:
     """
     try:
         limit = int(limit)
-    except:
+    except Exception:
         limit = 5
 
     logs_text = ""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
-    
+
     # Try DB first
     if session and Memory:
         try:
@@ -165,11 +183,18 @@ async def read_reflections(limit: int = 5) -> str:
             if get_agent_manager:
                 try:
                     agent_id = get_agent_manager().active_agent_id
-                except: pass
+                except Exception:
+                    pass
 
-            statement = select(Memory).where(Memory.type == "reflection").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
+            statement = (
+                select(Memory)
+                .where(Memory.type == "reflection")
+                .where(Memory.agent_id == agent_id)
+                .order_by(desc(Memory.timestamp))
+                .limit(limit)
+            )
             memories = (await session.exec(statement)).all()
-            
+
             if memories:
                 logs_text = "【我的错题本 (来自记忆数据库)】\n"
                 for m in memories:
@@ -177,9 +202,11 @@ async def read_reflections(limit: int = 5) -> str:
                     # tags format: reflection,category,level
                     level_tag = "INFO"
                     if m.tags:
-                        if "critical" in m.tags: level_tag = "CRITICAL"
-                        elif "warning" in m.tags: level_tag = "WARNING"
-                    
+                        if "critical" in m.tags:
+                            level_tag = "CRITICAL"
+                        elif "warning" in m.tags:
+                            level_tag = "WARNING"
+
                     logs_text += f"- [{m.realTime}] ({level_tag}) {m.content}\n"
                 return logs_text.strip()
         except Exception as e:
@@ -188,15 +215,16 @@ async def read_reflections(limit: int = 5) -> str:
     # Fallback to local file
     logs = _load_reflections_local()
     recent_logs = logs[:limit]
-    
+
     if not recent_logs:
         return "目前还没有反思记录哦，表现很棒！"
-        
+
     result = "【我的错题本 (来自本地备份)】\n"
     for log in recent_logs:
         result += f"- [{log['timestamp']}] ({log['level'].upper()}) {log['category']}: {log['content']}\n"
-        
+
     return result.strip()
+
 
 async def read_diary(limit: int = 5) -> str:
     """
@@ -209,7 +237,7 @@ async def read_diary(limit: int = 5) -> str:
 
     try:
         limit = int(limit)
-    except:
+    except Exception:
         limit = 5
 
     try:
@@ -219,21 +247,29 @@ async def read_diary(limit: int = 5) -> str:
         if get_agent_manager:
             try:
                 agent_id = get_agent_manager().active_agent_id
-            except: pass
+            except Exception:
+                pass
 
-        statement = select(Memory).where(Memory.source == "secretary_merge").where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
+        statement = (
+            select(Memory)
+            .where(Memory.source == "secretary_merge")
+            .where(Memory.agent_id == agent_id)
+            .order_by(desc(Memory.timestamp))
+            .limit(limit)
+        )
         memories = (await session.exec(statement)).all()
-        
+
         if not memories:
             return "还没有生成过日记 (Consolidated Memories)。可能需要等待记忆秘书运行一次维护任务。"
-            
+
         result = "【我的日记 (Consolidated Memories)】\n"
         for m in memories:
             result += f"### {m.realTime}\n{m.content}\n\n"
-            
+
         return result.strip()
     except Exception as e:
         return f"读取日记失败: {e}"
+
 
 async def read_maintenance_reports(limit: int = 5) -> str:
     """
@@ -246,16 +282,20 @@ async def read_maintenance_reports(limit: int = 5) -> str:
 
     try:
         limit = int(limit)
-    except:
+    except Exception:
         limit = 5
 
     try:
-        statement = select(MaintenanceRecord).order_by(desc(MaintenanceRecord.timestamp)).limit(limit)
+        statement = (
+            select(MaintenanceRecord)
+            .order_by(desc(MaintenanceRecord.timestamp))
+            .limit(limit)
+        )
         records = (await session.exec(statement)).all()
-        
+
         if not records:
             return "还没有维护记录。"
-            
+
         result = "【秘书工作周报 (Maintenance Records)】\n"
         for r in records:
             result += f"- [{r.timestamp.strftime('%Y-%m-%d %H:%M:%S')}] "
@@ -263,10 +303,11 @@ async def read_maintenance_reports(limit: int = 5) -> str:
             result += f"重要标记:{r.important_tagged}, "
             result += f"合并记忆:{r.consolidated}, "
             result += f"清理垃圾:{r.cleaned_count}\n"
-            
+
         return result.strip()
     except Exception as e:
         return f"读取周报失败: {e}"
+
 
 async def read_memory_by_cluster(cluster_name: str, limit: int = 10) -> str:
     """
@@ -279,7 +320,7 @@ async def read_memory_by_cluster(cluster_name: str, limit: int = 10) -> str:
 
     try:
         limit = int(limit)
-    except:
+    except Exception:
         limit = 10
 
     try:
@@ -289,23 +330,32 @@ async def read_memory_by_cluster(cluster_name: str, limit: int = 10) -> str:
         if get_agent_manager:
             try:
                 agent_id = get_agent_manager().active_agent_id
-            except: pass
+            except Exception:
+                pass
 
-        statement = select(Memory).where(Memory.clusters.contains(cluster_name)).where(Memory.agent_id == agent_id).order_by(desc(Memory.timestamp)).limit(limit)
+        statement = (
+            select(Memory)
+            .where(Memory.clusters.contains(cluster_name))
+            .where(Memory.agent_id == agent_id)
+            .order_by(desc(Memory.timestamp))
+            .limit(limit)
+        )
         memories = (await session.exec(statement)).all()
-        
+
         if not memories:
             return f"在簇 '{cluster_name}' 中没有找到记忆。"
-            
+
         result = f"【记忆簇: {cluster_name}】\n"
         for m in memories:
             result += f"- [{m.realTime}] {m.content}\n"
-            
+
         return result.strip()
     except Exception as e:
         return f"读取记忆簇失败: {e}"
 
+
 # --- Task/Schedule Operations ---
+
 
 async def add_schedule_task(time: str, content: str, type: str = "reminder") -> str:
     """
@@ -314,17 +364,12 @@ async def add_schedule_task(time: str, content: str, type: str = "reminder") -> 
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
         return "Error: Database session not available."
-    
+
     try:
         # Validate time format
         datetime.datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
-        
-        task = ScheduledTask(
-            time=time,
-            content=content,
-            type=type,
-            is_triggered=False
-        )
+
+        task = ScheduledTask(time=time, content=content, type=type, is_triggered=False)
         session.add(task)
         await session.commit()
         return f"Successfully added {type}: '{content}' at {time} (ID: {task.id})"
@@ -333,34 +378,41 @@ async def add_schedule_task(time: str, content: str, type: str = "reminder") -> 
     except Exception as e:
         return f"Error adding task: {str(e)}"
 
+
 async def list_pending_tasks() -> str:
     """List all pending scheduled tasks."""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
         return "Error: Database session not available."
-    
-    tasks = (await session.exec(select(ScheduledTask).where(ScheduledTask.is_triggered == False))).all()
+
+    tasks = (
+        await session.exec(
+            select(ScheduledTask).where(ScheduledTask.is_triggered == False)
+        )
+    ).all()
     if not tasks:
         return "No pending tasks."
-    
+
     result = "Pending Tasks:\n"
     for t in tasks:
         result += f"- [ID: {t.id}] {t.type.upper()} at {t.time}: {t.content}\n"
     return result
+
 
 async def delete_schedule_task(task_id: int) -> str:
     """Delete a scheduled task by ID."""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
         return "Error: Database session not available."
-    
+
     task = await session.get(ScheduledTask, task_id)
     if not task:
         return f"Error: Task with ID {task_id} not found."
-    
+
     await session.delete(task)
     await session.commit()
     return f"Successfully deleted task {task_id}."
+
 
 async def add_pre_action(delay_seconds: int, content: str) -> str:
     """
@@ -370,20 +422,22 @@ async def add_pre_action(delay_seconds: int, content: str) -> str:
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
         return "Error: Database session not available."
-    
+
     try:
         delay_seconds = int(delay_seconds)
         if delay_seconds <= 0:
             return "Error: delay_seconds must be positive."
-            
-        trigger_time = datetime.datetime.now() + datetime.timedelta(seconds=delay_seconds)
+
+        trigger_time = datetime.datetime.now() + datetime.timedelta(
+            seconds=delay_seconds
+        )
         time_str = trigger_time.strftime("%Y-%m-%d %H:%M:%S")
-        
+
         task = ScheduledTask(
             time=time_str,
             content=content,
             type="reaction",  # Special type that gets cancelled on user input
-            is_triggered=False
+            is_triggered=False,
         )
         session.add(task)
         await session.commit()

@@ -6,44 +6,46 @@ export type LogSource = 'Main' | 'Renderer' | 'Gateway' | 'Backend' | 'Plugin' |
 
 class Logger {
   private static instance: Logger
-  
+
   // Patterns to hide (Noise reduction)
   // Optimized: Combined regex for better performance
-  private hiddenPattern: RegExp = new RegExp([
-    '\\[vite\\]',
-    'page reload',
-    'Found \\d+ errors\\. Watching for file changes',
-    'Files found:', 
-    'sys\\.argv:',
-    'ENABLE_SOCIAL_MODE 环境变量:',
-    'Logging initialized at level',
-    'Using Gateway Token:',
-    'Connecting to Gateway',
-    'Connected to Gateway',
-    'checkNapCatInstalled result:',
-    'Python found at:',
-    'Python Version:',
-    '发现安装路径:',
-    '工作区:',
-    '资源目录:',
-    '已索引 Agent Prompt:',
-    '已添加 Agent 目录到加载路径:',
-    'MDP: 已',
-    '从 .* 加载 了 \\d+ 个 MDP 提示词',
-    '正在扫描类别:',
-    'Discovered plugin',
-    'Loading URL:',
-    'ready-to-show',
-    'did-fail-load',
-    'Force showing Dashboard',
-    '托盘图标候选路径',
-    '选定的托盘图标路径',
-    'checkNapCatInstalled'
-  ].join('|'))
+  private hiddenPattern: RegExp = new RegExp(
+    [
+      '\\[vite\\]',
+      'page reload',
+      'Found \\d+ errors\\. Watching for file changes',
+      'Files found:',
+      'sys\\.argv:',
+      'ENABLE_SOCIAL_MODE 环境变量:',
+      'Logging initialized at level',
+      'Using Gateway Token:',
+      'Connecting to Gateway',
+      'Connected to Gateway',
+      'checkNapCatInstalled result:',
+      'Python found at:',
+      'Python Version:',
+      '发现安装路径:',
+      '工作区:',
+      '资源目录:',
+      '已索引 Agent Prompt:',
+      '已添加 Agent 目录到加载路径:',
+      'MDP: 已',
+      '从 .* 加载 了 \\d+ 个 MDP 提示词',
+      '正在扫描类别:',
+      'Discovered plugin',
+      'Loading URL:',
+      'ready-to-show',
+      'did-fail-load',
+      'Force showing Dashboard',
+      '托盘图标候选路径',
+      '选定的托盘图标路径',
+      'checkNapCatInstalled'
+    ].join('|')
+  )
 
   // Translation map (English -> Chinese)
   // Optimized: Use a Map for O(1) lookup of exact matches, and regex for patterns
-  private translations: Array<{ from: RegExp | string, to: string }> = [
+  private translations: Array<{ from: RegExp | string; to: string }> = [
     { from: 'Window ready-to-show event fired', to: '窗口准备就绪' },
     { from: 'Loading URL', to: '正在加载页面' },
     { from: 'Dashboard loading URL', to: '仪表盘正在加载' },
@@ -84,33 +86,33 @@ class Logger {
 
   private shouldHide(message: string): boolean {
     // Fast path: Check length or common prefixes first
-    if (message.length > 500) return false; // Don't filter long messages (likely important)
-    if (message.startsWith('[vite]')) return true;
-    
+    if (message.length > 500) return false // Don't filter long messages (likely important)
+    if (message.startsWith('[vite]')) return true
+
     return this.hiddenPattern.test(message)
   }
 
   private translate(message: string): string {
     // Fast path: if message is very short, skip translation
     if (message.length < 2) return message
-    
+
     // Fast path: skip translation for known log formats to save CPU
     // e.g. [2026-...] [INFO] ...
-    if (message.startsWith('[') && message.includes('] [')) return message;
-    
+    if (message.startsWith('[') && message.includes('] [')) return message
+
     let translated = message
     // Most translations are specific phrases. We can check if the message *contains* key words first?
     // But since we have a list of replacements, iterating is necessary unless we rebuild the whole string.
     // However, we can optimize by only replacing if the source string is present.
-    
+
     for (const { from, to } of this.translations) {
       if (typeof from === 'string') {
         if (translated.includes(from)) {
-            translated = translated.replace(from, to)
+          translated = translated.replace(from, to)
         }
       } else {
         if (from.test(translated)) {
-            translated = translated.replace(from, to)
+          translated = translated.replace(from, to)
         }
       }
     }
@@ -124,11 +126,11 @@ class Logger {
 
     const translatedMsg = this.translate(message)
     const timestamp = dayjs().format('HH:mm:ss')
-    
+
     // Unified format: [HH:mm:ss] [SOURCE] [LEVEL] Message
     const formattedLog = `[${timestamp}] [${source}] [${level}] ${translatedMsg}`
 
-    // Use console.log/error based on level to preserve terminal colors if available, 
+    // Use console.log/error based on level to preserve terminal colors if available,
     // or just standard output.
     if (level === 'ERROR') {
       console.error(formattedLog)

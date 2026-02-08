@@ -1,33 +1,35 @@
 <template>
   <div class="react-viewer">
     <!-- 顶部工具栏：暂停/继续 (仅 Live 模式) -->
-    <div class="toolbar" v-if="isLive">
+    <div v-if="isLive" class="toolbar">
       <div class="status-indicator">
-        <span class="status-dot" :class="{ 'paused': isTaskPaused, 'running': !isTaskPaused }"></span>
+        <span class="status-dot" :class="{ paused: isTaskPaused, running: !isTaskPaused }"></span>
         <span class="status-text">{{ isTaskPaused ? '任务已暂停' : '正在思考中...' }}</span>
       </div>
-      <button 
-        class="control-btn pause-btn" 
+      <button
+        class="control-btn pause-btn"
         :class="{ active: isTaskPaused }"
-        @click="toggleTaskPause"
         :title="isTaskPaused ? '继续任务' : '暂停任务'"
+        @click="toggleTaskPause"
       >
         {{ isTaskPaused ? '▶️ 继续运行' : '⏸️ 暂停思考' }}
       </button>
     </div>
 
     <!-- 思考内容滚动区 -->
-    <div class="content-scroll-area custom-scrollbar" ref="scrollArea">
-       <div v-if="segments.length === 0" class="empty-tip">
-         {{ isLive ? '等待思考数据...' : '无思考过程记录' }}
-       </div>
-       <div v-else v-for="(segment, index) in segments" :key="index" class="monitor-segment">
+    <div ref="scrollArea" class="content-scroll-area custom-scrollbar">
+      <div v-if="segments.length === 0" class="empty-tip">
+        {{ isLive ? '等待思考数据...' : '无思考过程记录' }}
+      </div>
+      <div v-for="(segment, index) in segments" v-else :key="index" class="monitor-segment">
         <!-- 普通文本 -->
         <div v-if="segment.type === 'text'" class="segment-text">{{ segment.content }}</div>
-        
+
         <!-- 动作描述 -->
-        <div v-else-if="segment.type === 'action'" class="segment-action">* {{ segment.content }} *</div>
-        
+        <div v-else-if="segment.type === 'action'" class="segment-action">
+          * {{ segment.content }} *
+        </div>
+
         <!-- 思考过程 -->
         <div v-else-if="segment.type === 'thinking'" class="segment-thinking">
           <div class="thinking-label">🤔 思考链 (Chain of Thought)</div>
@@ -49,18 +51,18 @@
     </div>
 
     <!-- 底部指令注入区 (仅 Live 模式) -->
-    <div class="injection-panel" v-if="isLive">
-      <input 
-        v-model="injectionInput" 
-        @keyup.enter="sendInjection"
+    <div v-if="isLive" class="injection-panel">
+      <input
+        v-model="injectionInput"
         :placeholder="`发送指令干预 ${AGENT_NAME} 的思考 (例如: 停下，换个方向)...`"
         :disabled="isSendingInjection"
         class="injection-input"
+        @keyup.enter="sendInjection"
       />
-      <button 
+      <button
         class="send-btn"
-        @click="sendInjection" 
         :disabled="!injectionInput.trim() || isSendingInjection"
+        @click="sendInjection"
       >
         {{ isSendingInjection ? '发送中...' : '发送' }}
       </button>
@@ -89,13 +91,17 @@ const isSendingInjection = ref(false)
 const scrollArea = ref(null)
 
 // 自动滚动到底部
-watch(() => props.segments, () => {
-  nextTick(() => {
-    if (scrollArea.value) {
-      scrollArea.value.scrollTop = scrollArea.value.scrollHeight
-    }
-  })
-}, { deep: true })
+watch(
+  () => props.segments,
+  () => {
+    nextTick(() => {
+      if (scrollArea.value) {
+        scrollArea.value.scrollTop = scrollArea.value.scrollHeight
+      }
+    })
+  },
+  { deep: true }
+)
 
 // --- 任务控制逻辑 ---
 const checkTaskStatus = async () => {
@@ -138,7 +144,7 @@ const toggleTaskPause = async () => {
 
 const sendInjection = async () => {
   if (!injectionInput.value.trim()) return
-  
+
   isSendingInjection.value = true
   try {
     const res = await fetch(`http://localhost:9120/api/task/default/inject`, {
@@ -146,7 +152,7 @@ const sendInjection = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instruction: injectionInput.value })
     })
-    
+
     if (res.ok) {
       injectionInput.value = ''
     }
@@ -250,7 +256,7 @@ const sendInjection = async () => {
   background: white;
   padding: 10px 15px;
   border-radius: 8px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 }
 
 .segment-action {
@@ -393,8 +399,14 @@ const sendInjection = async () => {
 }
 
 @keyframes pulse {
-  0% { opacity: 1; }
-  50% { opacity: 0.5; }
-  100% { opacity: 1; }
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
 }
 </style>

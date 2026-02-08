@@ -2,16 +2,16 @@ import { createApp } from 'vue'
 import ElementPlus from 'element-plus'
 import 'element-plus/dist/index.css'
 import * as ElementPlusIconsVue from '@element-plus/icons-vue'
-import { loader } from "@guolao/vue-monaco-editor"
+import { loader } from '@guolao/vue-monaco-editor'
 import App from './App.vue'
 import router from './router'
 import './style.css'
 
 // 配置 Monaco Editor 中文支持
 loader.config({
-  "vs/nls": {
+  'vs/nls': {
     availableLanguages: {
-      "*": "zh-cn"
+      '*': 'zh-cn'
     }
   }
 })
@@ -20,9 +20,9 @@ const app = createApp(App)
 
 // 全局错误处理
 app.config.errorHandler = (err, instance, info) => {
-  console.error('[Vue Error]', err);
-  console.error('[Vue Error Info]', info);
-};
+  console.error('[Vue Error]', err)
+  console.error('[Vue Error Info]', info)
+}
 
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {
   app.component(key, component)

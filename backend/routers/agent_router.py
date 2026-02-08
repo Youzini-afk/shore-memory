@@ -1,12 +1,15 @@
-from fastapi import APIRouter, HTTPException, Body, Depends
-from typing import List, Dict, Any
-from services.agent_manager import get_agent_manager
+from typing import Any, Dict, List
+
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
+
 from database import get_session
+from services.agent_manager import get_agent_manager
 from services.agent_service import AgentService
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
+
 
 class AgentInfo(BaseModel):
     id: str
@@ -15,16 +18,20 @@ class AgentInfo(BaseModel):
     is_active: bool
     is_enabled: bool
 
+
 class EnabledAgentsRequest(BaseModel):
     agent_ids: List[str]
 
+
 class ActiveAgentRequest(BaseModel):
     agent_id: str
+
 
 class PromptPreviewRequest(BaseModel):
     session_id: str
     source: str
     log_id: int
+
 
 @router.get("", response_model=List[AgentInfo])
 async def list_agents():
@@ -32,11 +39,13 @@ async def list_agents():
     manager = get_agent_manager()
     return manager.list_agents()
 
+
 @router.get("/enabled", response_model=List[str])
 async def get_enabled_agents():
     """获取已启用代理 ID 的列表。"""
     manager = get_agent_manager()
     return manager.get_enabled_agents()
+
 
 @router.post("/enabled")
 async def set_enabled_agents(request: EnabledAgentsRequest):
@@ -45,6 +54,7 @@ async def set_enabled_agents(request: EnabledAgentsRequest):
     manager.set_enabled_agents(request.agent_ids)
     return {"status": "ok", "enabled_agents": manager.get_enabled_agents()}
 
+
 @router.get("/active", response_model=Dict[str, Any])
 async def get_active_agent():
     """获取当前活跃的代理。"""
@@ -52,12 +62,9 @@ async def get_active_agent():
     profile = manager.get_active_agent()
     if not profile:
         raise HTTPException(status_code=404, detail="No active agent")
-    
-    return {
-        "id": profile.id,
-        "name": profile.name,
-        "description": profile.description
-    }
+
+    return {"id": profile.id, "name": profile.name, "description": profile.description}
+
 
 @router.post("/active")
 async def set_active_agent(request: ActiveAgentRequest):
@@ -65,12 +72,20 @@ async def set_active_agent(request: ActiveAgentRequest):
     manager = get_agent_manager()
     success = manager.set_active_agent(request.agent_id)
     if not success:
-        raise HTTPException(status_code=400, detail=f"Agent '{request.agent_id}' not found or cannot be activated")
-    
+        raise HTTPException(
+            status_code=400,
+            detail=f"Agent '{request.agent_id}' not found or cannot be activated",
+        )
+
     return {"status": "ok", "active_agent": request.agent_id}
 
+
 @router.post("/preview_prompt")
-async def preview_prompt(request: PromptPreviewRequest, session: AsyncSession = Depends(get_session)):
+async def preview_prompt(
+    request: PromptPreviewRequest, session: AsyncSession = Depends(get_session)
+):
     """Preview the full prompt for a given log."""
     service = AgentService(session)
-    return await service.preview_prompt(request.session_id, request.source, request.log_id)
+    return await service.preview_prompt(
+        request.session_id, request.source, request.log_id
+    )

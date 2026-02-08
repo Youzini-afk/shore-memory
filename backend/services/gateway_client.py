@@ -1,12 +1,15 @@
 import asyncio
 import logging
+import platform
 import time
 import uuid
-import platform
+
 import websockets
+
 from peroproto import perolink_pb2
 
 logger = logging.getLogger(__name__)
+
 
 class GatewayClient:
     def __init__(self, uri="ws://localhost:14747/ws"):
@@ -15,8 +18,8 @@ class GatewayClient:
         self.running = False
         self.device_id = f"python-backend-{str(uuid.uuid4())[:8]}"
         self.heartbeat_task = None
-        self.token = "python-token" # Default, will be overwritten
-        self.listeners = {} # event_name -> [callback]
+        self.token = "python-token"  # Default, will be overwritten
+        self.listeners = {}  # event_name -> [callback]
 
     def set_token(self, token):
         self.token = token
@@ -51,13 +54,13 @@ class GatewayClient:
                     self.websocket = websocket
                     logger.debug("已连接到 Gateway")
                     self.emit("connect")
-                    
+
                     await self.send_hello()
                     await self.send_test_broadcast()
-                    
+
                     # Start heartbeat loop
                     self.heartbeat_task = asyncio.create_task(self.heartbeat_loop())
-                    
+
                     # Listen for messages
                     await self.listen()
             except Exception as e:
@@ -94,12 +97,12 @@ class GatewayClient:
         envelope.source_id = self.device_id
         envelope.target_id = "master"
         envelope.timestamp = int(time.time() * 1000)
-        
+
         envelope.hello.token = self.token
         envelope.hello.device_name = "PeroCore Backend"
         envelope.hello.client_version = "1.0.0"
         envelope.hello.platform = platform.system().lower()
-        
+
         await self.send(envelope)
 
     async def send_test_broadcast(self):
@@ -110,7 +113,7 @@ class GatewayClient:
         envelope.timestamp = int(time.time() * 1000)
         envelope.trace_id = "TEST-BROADCAST"
         envelope.request.action_name = "ping"
-        
+
         logger.debug(f"正在发送广播 Ping，来自 {self.device_id}")
         await self.send(envelope)
 
@@ -125,14 +128,14 @@ class GatewayClient:
             envelope.source_id = self.device_id
             envelope.target_id = "broadcast"
             envelope.timestamp = int(time.time() * 1000)
-            
+
             envelope.request.action_name = "state_update"
-            
+
             # Convert all values to string for protobuf map
             for k, v in state_dict.items():
                 if v is not None:
                     envelope.request.params[k] = str(v)
-            
+
             await self.send(envelope)
             logger.debug(f"广播 PetState 更新: {state_dict.get('mood')}")
         except Exception as e:
@@ -149,21 +152,23 @@ class GatewayClient:
             envelope.source_id = self.device_id
             envelope.target_id = "broadcast"
             envelope.timestamp = int(time.time() * 1000)
-            
+
             envelope.request.action_name = "text_response"
             envelope.request.params["content"] = content
             envelope.request.params["target"] = target
-            
+
             # [Fix] Also send 'chat' event for legacy compatibility if needed
             # But frontend listens to 'action:text_response', so this is fine.
             # However, we must ensure content is not empty if we want to show bubble.
-            
+
             await self.send(envelope)
             logger.debug(f"Broadcasted text_response: {content[:30]}...")
         except Exception as e:
             logger.error(f"广播文本响应失败: {e}")
 
-    async def broadcast_error(self, message: str, title: str = "错误", error_type: str = "error"):
+    async def broadcast_error(
+        self, message: str, title: str = "错误", error_type: str = "error"
+    ):
         """Broadcast error notification to frontend."""
         if not self.websocket or not self.running:
             return
@@ -174,15 +179,15 @@ class GatewayClient:
             envelope.source_id = self.device_id
             envelope.target_id = "broadcast"
             envelope.timestamp = int(time.time() * 1000)
-            
+
             envelope.request.action_name = "system_error"
             # 前端 ipcAdapter 接收到的 payload 可能是整个 params 字典，或者经过 Main Process 处理后的内容
             # 这里我们尽量多传点信息
-            envelope.request.params["payload"] = message # 兼容前端 event.payload
+            envelope.request.params["payload"] = message  # 兼容前端 event.payload
             envelope.request.params["message"] = message
             envelope.request.params["title"] = title
             envelope.request.params["type"] = error_type
-            
+
             await self.send(envelope)
             logger.debug(f"广播错误通知: {title} - {message}")
         except Exception as e:
@@ -200,7 +205,7 @@ class GatewayClient:
                 envelope.target_id = "master"
                 envelope.timestamp = int(time.time() * 1000)
                 envelope.heartbeat.seq = seq
-                
+
                 await self.send(envelope)
             except asyncio.CancelledError:
                 break
@@ -215,7 +220,7 @@ class GatewayClient:
 
     async def handle_envelope(self, envelope):
         # logger.info(f"Received Envelope: {envelope.id} from {envelope.source_id}")
-        
+
         if envelope.HasField("request"):
             await self.handle_request(envelope)
         elif envelope.HasField("stream"):
@@ -226,20 +231,20 @@ class GatewayClient:
     async def handle_request(self, envelope):
         req = envelope.request
         logger.debug(f"处理请求: {req.action_name} 参数={req.params}")
-        
+
         # Emit generic request event
         self.emit("request", envelope)
         # Emit specific action event
         self.emit(f"action:{req.action_name}", envelope)
-        
+
         # Default handlers for basic diagnostics
         resp_envelope = perolink_pb2.Envelope()
         resp_envelope.id = str(uuid.uuid4())
         resp_envelope.source_id = self.device_id
-        resp_envelope.target_id = envelope.source_id # Reply to sender
+        resp_envelope.target_id = envelope.source_id  # Reply to sender
         resp_envelope.timestamp = int(time.time() * 1000)
         resp_envelope.trace_id = envelope.trace_id
-        
+
         if req.action_name == "ping":
             resp_envelope.response.request_id = envelope.id
             resp_envelope.response.status = 0

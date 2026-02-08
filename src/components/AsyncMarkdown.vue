@@ -33,8 +33,8 @@ let observer = null
 const renderer = new marked.Renderer()
 renderer.code = ({ text, lang }) => {
   const language = lang && hljs.getLanguage(lang) ? lang : ''
-  const highlighted = language 
-    ? hljs.highlight(text, { language }).value 
+  const highlighted = language
+    ? hljs.highlight(text, { language }).value
     : hljs.highlightAuto(text).value
   return `<pre><code class="hljs language-${language}">${highlighted}</code></pre>`
 }
@@ -43,34 +43,35 @@ marked.use({ renderer })
 
 const render = () => {
   if (isRendered.value) return
-  
+
   // Custom Render Logic (migrated from DashboardView)
   // 自定义渲染逻辑 (从 DashboardView 迁移)
   let formatted = props.content || ''
-  
+
   // 仅保留少数仍在使用的功能性 XML 标签 (如核心记忆)
-  const triggers = [
-    { tag: 'MEMORY', title: '核心记忆', icon: '💾' }
-  ]
+  const triggers = [{ tag: 'MEMORY', title: '核心记忆', icon: '💾' }]
 
   const replacements = []
-  
+
   // 1. 先提取触发器，替换为占位符
   triggers.forEach(({ tag, title, icon }) => {
     const regex = new RegExp(`<\\s*${tag}\\s*>([\\s\\S]*?)<\\s*/\\s*${tag}\\s*>`, 'gi')
     formatted = formatted.replace(regex, (match, jsonStr) => {
       try {
-        const cleanJson = jsonStr.trim()
+        const cleanJson = jsonStr
+          .trim()
           .replace(/&quot;/g, '"')
           .replace(/&lt;/g, '<')
           .replace(/&gt;/g, '>')
           .replace(/&amp;/g, '&')
-        
+
         const data = JSON.parse(cleanJson)
         let detailsHtml = ''
-        
+
         if (tag.toUpperCase() === 'MEMORY') {
-          const tagHtml = (data.tags || []).map(t => `<span class="pero-tag">${t}</span>`).join('')
+          const tagHtml = (data.tags || [])
+            .map((t) => `<span class="pero-tag">${t}</span>`)
+            .join('')
           detailsHtml = `
             <div class="pero-memory-content">${data.content || ''}</div>
             <div class="pero-tag-cloud">${tagHtml}</div>
@@ -113,15 +114,15 @@ const render = () => {
   // Fallback: If result is empty but source wasn't, use raw content (wrapped in p)
   // 降级处理：如果结果为空但源内容不为空，使用原始内容（包裹在 p 标签中）
   if (!sanitized && formatted.trim().length > 0) {
-      // Basic escape for raw content
-      // 原始内容的基本转义
-      const escaped = formatted
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
-      sanitized = `<p>${escaped}</p>`
+    // Basic escape for raw content
+    // 原始内容的基本转义
+    const escaped = formatted
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#039;')
+    sanitized = `<p>${escaped}</p>`
   }
 
   renderedContent.value = sanitized
@@ -140,12 +141,15 @@ onUnmounted(() => {
   if (observer) observer.disconnect()
 })
 
-watch(() => props.content, () => {
-  isRendered.value = false
-  if (container.value && observer) {
+watch(
+  () => props.content,
+  () => {
+    isRendered.value = false
+    if (container.value && observer) {
       observer.observe(container.value)
+    }
   }
-})
+)
 </script>
 
 <style>
@@ -181,12 +185,18 @@ watch(() => props.content, () => {
 }
 
 @keyframes pulse {
-  0% { opacity: 0.6; }
-  50% { opacity: 1; }
-  100% { opacity: 0.6; }
+  0% {
+    opacity: 0.6;
+  }
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0.6;
+  }
 }
 
 .async-markdown {
-    min-height: 40px; /* Prevent layout thrashing */ /* 防止布局抖动 */
+  min-height: 40px; /* Prevent layout thrashing */ /* 防止布局抖动 */
 }
 </style>

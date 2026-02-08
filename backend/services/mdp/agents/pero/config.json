@@ -28,7 +28,7 @@
     "lightweight": {
       "strategy": "whitelist",
       "allowed_tools": [
-        "update_character_status",
+        "finish_task",
         "take_screenshot",
         "screen_ocr",
         "log_reflection",

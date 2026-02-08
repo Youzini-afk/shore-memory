@@ -4,82 +4,84 @@ import fs from 'fs-extra'
 import path from 'path'
 
 export interface SystemStats {
-    cpu_usage: number
-    memory_used: number
-    memory_total: number
+  cpu_usage: number
+  memory_used: number
+  memory_total: number
 }
 
 // 缓存 CPU 负载 (定期更新以降低开销)
 let lastCpuLoad = 0
 
 setInterval(async () => {
-    try {
-        const load = await si.currentLoad()
-        lastCpuLoad = load.currentLoad
-    } catch (e) {
-        // ignore
-    }
+  try {
+    const load = await si.currentLoad()
+    lastCpuLoad = load.currentLoad
+  } catch (e) {
+    // ignore
+  }
 }, 5000)
 
 export async function getSystemStats(): Promise<SystemStats> {
-    try {
-        const mem = await si.mem()
-        return {
-            cpu_usage: parseFloat(lastCpuLoad.toFixed(1)),
-            memory_used: mem.active,
-            memory_total: mem.total
-        }
-    } catch (e) {
-        return { cpu_usage: 0, memory_used: 0, memory_total: 0 }
+  try {
+    const mem = await si.mem()
+    return {
+      cpu_usage: parseFloat(lastCpuLoad.toFixed(1)),
+      memory_used: mem.active,
+      memory_total: mem.total
     }
+  } catch (e) {
+    return { cpu_usage: 0, memory_used: 0, memory_total: 0 }
+  }
 }
 
 export function getBackendLogs(): string[] {
-    // 目前返回空 (待办: 实现日志存储)
-    return []
+  // 目前返回空 (待办: 实现日志存储)
+  return []
 }
 
 export function getConfig(): any {
-    const configPath = path.join(paths.userData, 'data/config.json')
-    if (fs.existsSync(configPath)) {
-        try {
-            return fs.readJsonSync(configPath)
-        } catch (e) { return {} }
+  const configPath = path.join(paths.userData, 'data/config.json')
+  if (fs.existsSync(configPath)) {
+    try {
+      return fs.readJsonSync(configPath)
+    } catch (e) {
+      return {}
     }
-    return {}
+  }
+  return {}
 }
 
 export function saveConfig(config: any) {
-    // Save configuration to file
-    // 将配置保存到文件
-    const dataDir = path.join(paths.userData, 'data')
-    fs.ensureDirSync(dataDir)
-    fs.writeJsonSync(path.join(dataDir, 'config.json'), config, { spaces: 2 })
+  // Save configuration to file
+  // 将配置保存到文件
+  const dataDir = path.join(paths.userData, 'data')
+  fs.ensureDirSync(dataDir)
+  fs.writeJsonSync(path.join(dataDir, 'config.json'), config, { spaces: 2 })
 }
 
 export function getGatewayToken(): string {
-    // Development path
-    const devPath = path.join(process.cwd(), 'data/gateway_token.json')
-    // Production path (next to exe or in userData)
-    const prodPath = path.join(paths.userData, 'data/gateway_token.json')
-    
-    // Check ENV first (set by startGateway if in same process, but unlikely here)
-    if (process.env.GATEWAY_TOKEN_PATH && fs.existsSync(process.env.GATEWAY_TOKEN_PATH)) {
-        try {
-            const data = fs.readJsonSync(process.env.GATEWAY_TOKEN_PATH)
-            return data.token || ''
-        } catch (e) { }
-    }
+  // Development path
+  const devPath = path.join(process.cwd(), 'data/gateway_token.json')
+  // Production path (next to exe or in userData)
+  const prodPath = path.join(paths.userData, 'data/gateway_token.json')
 
-    const tokenPath = fs.existsSync(devPath) ? devPath : prodPath
-    
-    if (fs.existsSync(tokenPath)) {
-        try {
-            const data = fs.readJsonSync(tokenPath)
-            return data.token || ''
-        } catch (e) {
-            return ''
-        }
+  // Check ENV first (set by startGateway if in same process, but unlikely here)
+  if (process.env.GATEWAY_TOKEN_PATH && fs.existsSync(process.env.GATEWAY_TOKEN_PATH)) {
+    try {
+      const data = fs.readJsonSync(process.env.GATEWAY_TOKEN_PATH)
+      return data.token || ''
+    } catch (e) {}
+  }
+
+  const tokenPath = fs.existsSync(devPath) ? devPath : prodPath
+
+  if (fs.existsSync(tokenPath)) {
+    try {
+      const data = fs.readJsonSync(tokenPath)
+      return data.token || ''
+    } catch (e) {
+      return ''
     }
-    return ''
+  }
+  return ''
 }

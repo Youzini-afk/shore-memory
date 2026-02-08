@@ -1,7 +1,7 @@
 {
   "name": "pero-core",
   "private": true,
-  "version": "0.5.11",
+  "version": "0.5.12",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -18,7 +18,9 @@
     "preview": "vite preview",
     "docs:dev": "vitepress dev wiki --port 6657",
     "docs:build": "vitepress build wiki",
-    "docs:preview": "vitepress preview wiki --port 6657"
+    "docs:preview": "vitepress preview wiki --port 6657",
+    "lint": "eslint . --ext .vue,.js,.ts,.jsx,.tsx --fix",
+    "format": "prettier --write ."
   },
   "dependencies": {
     "@bufbuild/protobuf": "^2.11.0",
@@ -61,6 +63,8 @@
     "@types/which": "^3.0.4",
     "@types/winreg": "^1.2.36",
     "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.54.0",
+    "@typescript-eslint/parser": "^8.54.0",
     "@vitejs/plugin-vue": "^6.0.1",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",
@@ -68,8 +72,14 @@
     "electron": "^40.0.0",
     "electron-builder": "^26.4.0",
     "esbuild": "^0.25.12",
+    "eslint": "^8.57.1",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-only-warn": "^1.1.0",
+    "eslint-plugin-prettier": "^5.5.5",
+    "eslint-plugin-vue": "^9.33.0",
     "markdown-it-mathjax3": "^4.3.2",
     "postcss": "^8.5.6",
+    "prettier": "^3.8.1",
     "rimraf": "^6.1.2",
     "tailwindcss": "^3.4.17",
     "ts-proto": "^2.11.1",

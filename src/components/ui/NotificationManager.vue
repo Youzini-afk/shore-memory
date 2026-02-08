@@ -1,9 +1,9 @@
 <template>
   <div class="notification-container">
     <TransitionGroup name="list" tag="div">
-      <div 
-        v-for="notification in notifications" 
-        :key="notification.id" 
+      <div
+        v-for="notification in notifications"
+        :key="notification.id"
         class="notification-item"
         :class="notification.type"
       >
@@ -13,7 +13,7 @@
           <span v-else>ℹ️</span>
         </div>
         <div class="content">
-          <div class="title" v-if="notification.title">{{ notification.title }}</div>
+          <div v-if="notification.title" class="title">{{ notification.title }}</div>
           <div class="message">{{ notification.message }}</div>
         </div>
         <button class="close-btn" @click="remove(notification.id)">×</button>
@@ -23,30 +23,30 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue'
 import { listen } from '@/utils/ipcAdapter'
 
-const notifications = ref([]);
-let nextId = 0;
-let unlistenFn = null;
+const notifications = ref([])
+let nextId = 0
+let unlistenFn = null
 
 const add = (message, type = 'info', title = '', duration = 5000) => {
-  const id = nextId++;
-  notifications.value.push({ id, message, type, title });
+  const id = nextId++
+  notifications.value.push({ id, message, type, title })
 
   if (duration > 0) {
     setTimeout(() => {
-      remove(id);
-    }, duration);
+      remove(id)
+    }, duration)
   }
-};
+}
 
 const remove = (id) => {
-  const index = notifications.value.findIndex(n => n.id === id);
+  const index = notifications.value.findIndex((n) => n.id === id)
   if (index !== -1) {
-    notifications.value.splice(index, 1);
+    notifications.value.splice(index, 1)
   }
-};
+}
 
 onMounted(async () => {
   // 监听系统级错误
@@ -54,39 +54,39 @@ onMounted(async () => {
     // 兼容多种 payload 格式
     // 1. 如果 event 是字符串，直接作为 msg
     // 2. 如果 event 是对象，优先取 payload 或 message，以及 title/type
-    
-    let msg = '';
-    let title = '系统错误';
-    let type = 'error';
+
+    let msg = ''
+    let title = '系统错误'
+    let type = 'error'
 
     if (typeof event === 'string') {
-        msg = event;
+      msg = event
     } else if (typeof event === 'object' && event !== null) {
-        msg = event.payload || event.message || JSON.stringify(event);
-        if (event.title) title = event.title;
-        if (event.type) type = event.type;
+      msg = event.payload || event.message || JSON.stringify(event)
+      if (event.title) title = event.title
+      if (event.type) type = event.type
     } else {
-        msg = String(event);
+      msg = String(event)
     }
-    
+
     // 简单的关键词分类 (仅当 title 为默认值时尝试智能推断)
     if (title === '系统错误') {
-        if (msg.includes('Python')) title = 'Python 后端异常';
-        else if (msg.includes('NapCat')) title = 'NapCat 异常';
-        else if (msg.includes('WebView2')) title = 'WebView2 组件异常';
-        else if (msg.includes('DLL')) title = '系统组件缺失';
+      if (msg.includes('Python')) title = 'Python 后端异常'
+      else if (msg.includes('NapCat')) title = 'NapCat 异常'
+      else if (msg.includes('WebView2')) title = 'WebView2 组件异常'
+      else if (msg.includes('DLL')) title = '系统组件缺失'
     }
-    
-    add(msg, type, title, 10000); // 错误停留 10秒
-  });
-});
+
+    add(msg, type, title, 10000) // 错误停留 10秒
+  })
+})
 
 onUnmounted(() => {
-  if (unlistenFn) unlistenFn();
-});
+  if (unlistenFn) unlistenFn()
+})
 
 // 暴露给全局
-window.$notify = add;
+window.$notify = add
 </script>
 
 <style scoped>

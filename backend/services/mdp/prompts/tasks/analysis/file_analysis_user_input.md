@@ -6,9 +6,9 @@ description: "文件分析用户输入模板"
 version: "1.0"
 -->
 
-用户请求: {{ user_query }}
+{{user}}请求: {{ user_query }}
 
 搜索到的文件列表 (前 {{ preview_count }} 个):
 {{ files_text }}
 
-请分析哪些文件最可能是用户想要的？
+请分析哪些文件最可能是{{user}}想要的？

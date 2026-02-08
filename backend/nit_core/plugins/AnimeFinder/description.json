@@ -11,7 +11,7 @@
     "invocationCommands": [
       {
         "commandIdentifier": "find_anime_by_image",
-        "description": "识图搜番。根据截图获取番剧名、集数及时间点。"
+        "description": "识图搜番。参数 image_url: 图片的网络链接 (如需搜本地图片，请先上传或尝试传入本地路径)。"
       }
     ]
   }

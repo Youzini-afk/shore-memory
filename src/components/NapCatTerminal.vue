@@ -5,22 +5,24 @@
         <el-icon><ChatDotSquare /></el-icon> NapCat 交互终端
       </div>
       <div class="actions">
-        <el-button size="small" circle @click="clearLogs" title="清空">
+        <el-button size="small" circle title="清空" @click="clearLogs">
           <el-icon><Delete /></el-icon>
         </el-button>
       </div>
     </div>
-    
-    <div class="terminal-content" ref="logContainer">
+
+    <div ref="logContainer" class="terminal-content">
       <!-- Download Progress Bar -->
       <div v-if="downloadProgress.active" class="download-progress-bar">
         <div class="progress-info">
           <span>{{ downloadProgress.status }}</span>
           <span>{{ downloadProgress.percent }}%</span>
         </div>
-        <el-progress 
-          :percentage="downloadProgress.percent" 
-          :status="downloadProgress.error ? 'exception' : (downloadProgress.completed ? 'success' : '')"
+        <el-progress
+          :percentage="downloadProgress.percent"
+          :status="
+            downloadProgress.error ? 'exception' : downloadProgress.completed ? 'success' : ''
+          "
           :stroke-width="12"
           :text-inside="true"
           striped
@@ -33,22 +35,22 @@
         <span class="message" v-html="ansiToHtml(log.content)"></span>
       </div>
       <div v-if="logs.length === 0" class="empty-state">
-         <el-icon class="empty-icon"><Monitor /></el-icon>
-         <span>等待 NapCat 进程输出...</span>
+        <el-icon class="empty-icon"><Monitor /></el-icon>
+        <span>等待 NapCat 进程输出...</span>
       </div>
     </div>
 
     <div class="terminal-input-area">
-        <div class="input-prefix">
-            <el-icon><ArrowRight /></el-icon>
-        </div>
-        <input 
-            v-model="inputValue" 
-            class="terminal-input"
-            placeholder="输入指令并回车..." 
-            @keyup.enter="sendCommand"
-            spellcheck="false"
-        />
+      <div class="input-prefix">
+        <el-icon><ArrowRight /></el-icon>
+      </div>
+      <input
+        v-model="inputValue"
+        class="terminal-input"
+        placeholder="输入指令并回车..."
+        spellcheck="false"
+        @keyup.enter="sendCommand"
+      />
     </div>
   </div>
 </template>
@@ -64,11 +66,11 @@ const logs = ref([])
 const inputValue = ref('')
 const logContainer = ref(null)
 const downloadProgress = ref({
-    active: false,
-    percent: 0,
-    status: '',
-    error: false,
-    completed: false
+  active: false,
+  percent: 0,
+  status: '',
+  error: false,
+  completed: false
 })
 let unlistenFn = null
 let unlistenProgressFn = null
@@ -91,12 +93,12 @@ watch(logs, () => scrollToBottom(), { deep: true })
 
 const sendCommand = async () => {
   if (!inputValue.value.trim()) return
-  
+
   const cmd = inputValue.value
-  
+
   try {
     await invoke('send_napcat_command_wrapper', { command: cmd })
-    
+
     // Mirror the input to the terminal
     // 将输入镜像到终端
     logs.value.push({
@@ -115,24 +117,21 @@ const sendCommand = async () => {
 // ANSI 转 HTML 辅助函数
 const ansiToHtml = (text) => {
   if (!text) return ''
-  let result = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-  
+  let result = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+
   // Basic ANSI colors
   // 基本 ANSI 颜色
   const colors = {
-    '0': 'reset',
-    '30': 'text-slate-500', // black
-    '31': 'text-red-400',   // red
-    '32': 'text-emerald-400', // green
-    '33': 'text-amber-400',  // yellow
-    '34': 'text-blue-400',   // blue
-    '35': 'text-purple-400', // magenta
-    '36': 'text-cyan-400',   // cyan
-    '37': 'text-slate-200',  // white
-    '90': 'text-slate-600',  // bright black
+    0: 'reset',
+    30: 'text-slate-500', // black
+    31: 'text-red-400', // red
+    32: 'text-emerald-400', // green
+    33: 'text-amber-400', // yellow
+    34: 'text-blue-400', // blue
+    35: 'text-purple-400', // magenta
+    36: 'text-cyan-400', // cyan
+    37: 'text-slate-200', // white
+    90: 'text-slate-600' // bright black
   }
 
   // Very basic implementation
@@ -143,63 +142,63 @@ const ansiToHtml = (text) => {
     if (className) return `<span class="${className}">`
     return ''
   })
-  
+
   return result
 }
 
 onMounted(async () => {
   try {
-      const invoke = (cmd, args) => import('@/utils/ipcAdapter').then(m => m.invoke(cmd, args))
-      // 1. Fetch history first to show past logs (including QR code)
-      // 1. 首先获取历史记录以显示过去的日志（包括二维码）
-      const history = await (await import('@/utils/ipcAdapter')).invoke('get_napcat_logs')
-      if (history && history.length > 0) {
-          logs.value = history.map(line => ({
-            time: new Date().toLocaleTimeString(),
-            content: line,
-            id: Date.now() + Math.random()
-          }))
+    const invoke = (cmd, args) => import('@/utils/ipcAdapter').then((m) => m.invoke(cmd, args))
+    // 1. Fetch history first to show past logs (including QR code)
+    // 1. 首先获取历史记录以显示过去的日志（包括二维码）
+    const history = await (await import('@/utils/ipcAdapter')).invoke('get_napcat_logs')
+    if (history && history.length > 0) {
+      logs.value = history.map((line) => ({
+        time: new Date().toLocaleTimeString(),
+        content: line,
+        id: Date.now() + Math.random()
+      }))
+    }
+
+    // 2. Start listening for new logs
+    // 2. 开始监听新日志
+    unlistenFn = await listen('napcat_log', (payload) => {
+      // 在 Electron 中，payload 就是日志内容本身 (字符串)
+      // 在 Tauri 中，payload 可能是 event.payload，但 ipcAdapter 已处理过
+      const logLine = typeof payload === 'string' ? payload : payload.payload || String(payload)
+
+      const timestamp = new Date().toLocaleTimeString()
+
+      logs.value.push({
+        time: timestamp,
+        content: logLine,
+        id: Date.now() + Math.random()
+      })
+
+      if (logs.value.length > 500) logs.value.shift()
+    })
+
+    // 3. Listen for download progress
+    unlistenProgressFn = await listen('napcat-download-progress', (payload) => {
+      // payload: { percent, status, url, error, completed }
+      downloadProgress.value = {
+        active: true,
+        percent: payload.percent,
+        status: payload.status,
+        error: payload.error || false,
+        completed: payload.completed || false
       }
 
-      // 2. Start listening for new logs
-      // 2. 开始监听新日志
-      unlistenFn = await listen('napcat_log', (payload) => {
-        // 在 Electron 中，payload 就是日志内容本身 (字符串)
-        // 在 Tauri 中，payload 可能是 event.payload，但 ipcAdapter 已处理过
-        const logLine = typeof payload === 'string' ? payload : (payload.payload || String(payload))
-        
-        const timestamp = new Date().toLocaleTimeString()
-        
-        logs.value.push({
-          time: timestamp,
-          content: logLine,
-          id: Date.now() + Math.random()
-        })
-        
-        if (logs.value.length > 500) logs.value.shift()
-      })
+      if (payload.error) {
+        ElMessage.error(`NapCat 安装失败: ${payload.status}`)
+      }
 
-      // 3. Listen for download progress
-      unlistenProgressFn = await listen('napcat-download-progress', (payload) => {
-          // payload: { percent, status, url, error, completed }
-          downloadProgress.value = {
-              active: true,
-              percent: payload.percent,
-              status: payload.status,
-              error: payload.error || false,
-              completed: payload.completed || false
-          }
-          
-          if (payload.error) {
-              ElMessage.error(`NapCat 安装失败: ${payload.status}`)
-          }
-          
-          if (payload.completed || payload.error) {
-              setTimeout(() => {
-                  downloadProgress.value.active = false
-              }, 5000)
-          }
-      })
+      if (payload.completed || payload.error) {
+        setTimeout(() => {
+          downloadProgress.value.active = false
+        }, 5000)
+      }
+    })
   } catch (e) {
     console.error('初始化 NapCat 日志失败', e)
   }
@@ -305,60 +304,77 @@ onUnmounted(() => {
 /* Empty State */
 /* 空状态 */
 .empty-state {
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: #666;
-    gap: 10px;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: #666;
+  gap: 10px;
 }
 .empty-icon {
-    font-size: 48px;
-    opacity: 0.5;
+  font-size: 48px;
+  opacity: 0.5;
 }
 
 /* Input Area */
 /* 输入区域 */
 .terminal-input-area {
-    display: flex;
-    align-items: center;
-    padding: 10px 12px;
-    background-color: #252526;
-    border-top: 1px solid #3d3d3d;
+  display: flex;
+  align-items: center;
+  padding: 10px 12px;
+  background-color: #252526;
+  border-top: 1px solid #3d3d3d;
 }
 
 .input-prefix {
-    color: #22c55e; /* emerald-500 */
-    margin-right: 8px;
-    display: flex;
-    align-items: center;
+  color: #22c55e; /* emerald-500 */
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
 }
 
 .terminal-input {
-    flex: 1;
-    background: transparent;
-    border: none;
-    outline: none;
-    color: #d4d4d4;
-    font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
-    font-size: 13px;
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #d4d4d4;
+  font-family: 'Consolas', 'Monaco', 'Courier New', monospace;
+  font-size: 13px;
 }
 
 .terminal-input::placeholder {
-    color: #666;
+  color: #666;
 }
 
 /* Tailwind-like text colors for ANSI */
 /* 类似 Tailwind 的 ANSI 文本颜色 */
-.text-slate-500 { color: #64748b; }
-.text-red-400 { color: #f87171; }
-.text-emerald-400 { color: #34d399; }
-.text-amber-400 { color: #fbbf24; }
-.text-blue-400 { color: #60a5fa; }
-.text-purple-400 { color: #c084fc; }
-.text-cyan-400 { color: #22d3ee; }
-.text-slate-200 { color: #e2e8f0; }
-.text-slate-600 { color: #475569; }
-
+.text-slate-500 {
+  color: #64748b;
+}
+.text-red-400 {
+  color: #f87171;
+}
+.text-emerald-400 {
+  color: #34d399;
+}
+.text-amber-400 {
+  color: #fbbf24;
+}
+.text-blue-400 {
+  color: #60a5fa;
+}
+.text-purple-400 {
+  color: #c084fc;
+}
+.text-cyan-400 {
+  color: #22d3ee;
+}
+.text-slate-200 {
+  color: #e2e8f0;
+}
+.text-slate-600 {
+  color: #475569;
+}
 </style>

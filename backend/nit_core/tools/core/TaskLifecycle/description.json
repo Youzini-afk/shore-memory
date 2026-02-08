@@ -2,88 +2,16 @@
   "manifestVersion": "1.0.0",
   "name": "TaskLifecycle",
   "displayName": "任务生命周期 (TaskLifecycle)",
-  "version": "1.0.0",
-  "description": "管理任务的结束与角色状态更新。",
+  "version": "1.1.1",
+  "description": "管理任务的结束与角色状态更新，包括3D模型交互台词。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "task_lifecycle.py",
   "capabilities": {
-    "toolDefinitions": [
-      {
-        "type": "function",
-        "function": {
-          "name": "finish_task",
-          "description": "结束当前任务循环，并同步更新角色状态（心情、动作、内心想法等）。此工具必须在任务最终完成时调用。注：update_character_status 是此工具的别名，功能一致。",
-          "parameters": {
-            "type": "object",
-            "properties": {
-              "summary": {
-                "type": "string",
-                "description": "给主人的最终回复。请用亲切自然的语气总结任务结果。"
-              },
-              "status": {
-                "type": "string",
-                "description": "'success' (成功) 或 'failure' (失败)。",
-                "default": "success"
-              },
-              "mood": {
-                "type": "string",
-                "description": "任务结束时的心情 (如 happy, sad, angry, surprised, thinking, mocking)。"
-              },
-              "vibe": {
-                "type": "string",
-                "description": "任务结束时的动作或氛围状态（如 active, idle, sleeping）。"
-              },
-              "mind": {
-                "type": "string",
-                "description": "内心独白或当前的思考内容（用户不可见）。"
-              },
-              "click_head_msgs": {
-                "type": "string",
-                "description": "摸头反应（逗号分隔或JSON列表）。"
-              },
-              "click_chest_msgs": {
-                "type": "string",
-                "description": "摸胸口反应。"
-              },
-              "click_body_msgs": {
-                "type": "string",
-                "description": "摸身体反应。"
-              },
-              "idle_msgs": {
-                "type": "string",
-                "description": "待机自言自语。"
-              },
-              "back_msgs": {
-                "type": "string",
-                "description": "主人回归欢迎语。"
-              }
-            },
-            "required": ["summary"]
-          }
-        }
-      }
-    ],
     "invocationCommands": [
       {
         "commandIdentifier": "finish_task",
-        "description": "结束任务并更新状态。",
-        "params": [
-           { "name": "summary", "type": "string", "description": "最终回复", "required": true },
-           { "name": "status", "type": "string", "description": "状态", "required": false },
-           { "name": "mood", "type": "string", "description": "心情", "required": false },
-           { "name": "vibe", "type": "string", "description": "氛围", "required": false },
-           { "name": "mind", "type": "string", "description": "内心", "required": false }
-        ]
-      },
-      {
-        "commandIdentifier": "update_character_status",
-        "description": "更新状态并结束任务（finish_task 的别名）。",
-        "params": [
-           { "name": "mood", "type": "string", "description": "心情", "required": false },
-           { "name": "vibe", "type": "string", "description": "氛围", "required": false },
-           { "name": "mind", "type": "string", "description": "内心", "required": false }
-        ]
+        "description": "结束任务并总结。参数 summary: 给主人的最终回复(必填); mood: 心情(如高兴, 思考); vibe: 氛围(如活跃, 发呆); mind: 内心独白; click_head_msgs/click_chest_msgs/click_body_msgs: 触碰头部/胸部/身体的随机台词(支持字符串或列表); idle_msgs: 闲置台词; back_msgs: 欢迎回来台词。"
       }
     ]
   }

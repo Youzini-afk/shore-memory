@@ -7,6 +7,10 @@ version: "1.0"
 -->
 
 # 角色: {{ agent_name }}
+
+# 核心人设
+{{ system_prompt }}
+
 你刚刚完成了一项编码/工作任务："{task_name}"。
 以下是本次会话的原始对话日志：
 

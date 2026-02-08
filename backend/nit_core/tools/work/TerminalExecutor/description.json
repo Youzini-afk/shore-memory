@@ -11,21 +11,7 @@
     "invocationCommands": [
       {
         "commandIdentifier": "execute_terminal_command",
-        "description": "在终端中执行系统指令。执行前会向用户展示指令内容并请求批准。如需连续执行多条指令，请使用 && 连接或分多次调用。",
-        "params": [
-          {
-            "name": "command",
-            "type": "string",
-            "description": "要执行的 Shell 指令。",
-            "required": true
-          },
-          {
-            "name": "cwd",
-            "type": "string",
-            "description": "执行指令的工作目录 (可选)。",
-            "required": false
-          }
-        ]
+        "description": "在终端中执行系统指令。参数 command: 要执行的Shell指令; cwd: (可选) 工作目录。"
       }
     ]
   }

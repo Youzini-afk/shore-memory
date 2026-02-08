@@ -1,13 +1,24 @@
 <template>
-  <div class="flex flex-col h-full transition-colors duration-300 relative" :class="workMode ? 'bg-[#1e293b] text-slate-200' : 'bg-transparent text-slate-700'">
-    
+  <div
+    class="flex flex-col h-full transition-colors duration-300 relative"
+    :class="workMode ? 'bg-[#1e293b] text-slate-200' : 'bg-transparent text-slate-700'"
+  >
     <!-- 指令执行遮罩 -->
     <Transition name="fade">
-      <div v-if="activeCommand" class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transform transition-all animate-scale-in">
+      <div
+        v-if="activeCommand"
+        class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6"
+      >
+        <div
+          class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transform transition-all animate-scale-in"
+        >
           <!-- 标题栏 -->
-          <div class="px-6 py-4 bg-sky-50 dark:bg-sky-900/20 border-b border-sky-100 dark:border-sky-800/30 flex items-center gap-3">
-            <div class="p-2 bg-sky-100 dark:bg-sky-800/40 rounded-full text-sky-600 dark:text-sky-400 animate-spin-slow">
+          <div
+            class="px-6 py-4 bg-sky-50 dark:bg-sky-900/20 border-b border-sky-100 dark:border-sky-800/30 flex items-center gap-3"
+          >
+            <div
+              class="p-2 bg-sky-100 dark:bg-sky-800/40 rounded-full text-sky-600 dark:text-sky-400 animate-spin-slow"
+            >
               <Terminal class="w-5 h-5" />
             </div>
             <div>
@@ -15,10 +26,12 @@
               <p class="text-xs text-slate-500 dark:text-slate-400">请稍候，任务正在后台运行</p>
             </div>
           </div>
-          
+
           <!-- 内容区域 -->
           <div class="p-6">
-            <div class="bg-slate-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto custom-scrollbar border border-slate-700 shadow-inner relative">
+            <div
+              class="bg-slate-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto custom-scrollbar border border-slate-700 shadow-inner relative"
+            >
               <span class="select-text">{{ activeCommand.command }}</span>
               <div class="absolute bottom-2 right-2 flex gap-1">
                 <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
@@ -28,9 +41,9 @@
             </div>
             <div class="mt-4 flex items-center justify-between">
               <p class="text-xs text-slate-500 dark:text-slate-400">PID: {{ activeCommand.pid }}</p>
-              <button 
-                @click="skipCommandWait" 
+              <button
                 class="text-xs text-amber-500 hover:text-amber-600 font-medium underline underline-offset-2 transition-colors"
+                @click="skipCommandWait"
               >
                 跳过等待 (后台继续)
               </button>
@@ -42,64 +55,114 @@
 
     <!-- 指令确认遮罩 -->
     <Transition name="fade">
-      <div v-if="pendingConfirmation" class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6">
-        <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transform transition-all animate-scale-in">
+      <div
+        v-if="pendingConfirmation"
+        class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6"
+      >
+        <div
+          class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transform transition-all animate-scale-in"
+        >
           <!-- 标题栏 -->
-          <div 
+          <div
             class="px-6 py-4 flex items-center gap-3 border-b transition-colors"
-            :class="pendingConfirmation.riskInfo?.level >= 2 ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/30' : 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30'"
+            :class="
+              pendingConfirmation.riskInfo?.level >= 2
+                ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/30'
+                : 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30'
+            "
           >
-            <div 
+            <div
               class="p-2 rounded-full transition-colors"
-              :class="pendingConfirmation.riskInfo?.level >= 2 ? 'bg-red-100 dark:bg-red-800/40 text-red-600 dark:text-red-400 animate-pulse' : 'bg-amber-100 dark:bg-amber-800/40 text-amber-600 dark:text-amber-400'"
+              :class="
+                pendingConfirmation.riskInfo?.level >= 2
+                  ? 'bg-red-100 dark:bg-red-800/40 text-red-600 dark:text-red-400 animate-pulse'
+                  : 'bg-amber-100 dark:bg-amber-800/40 text-amber-600 dark:text-amber-400'
+              "
             >
               <Terminal class="w-5 h-5" />
             </div>
             <div>
               <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 请求执行终端指令
-                <span v-if="pendingConfirmation.riskInfo?.level >= 2" class="px-2 py-0.5 bg-red-500 text-white text-[10px] rounded-full uppercase tracking-wide font-bold">高风险 (High Risk)</span>
+                <span
+                  v-if="pendingConfirmation.riskInfo?.level >= 2"
+                  class="px-2 py-0.5 bg-red-500 text-white text-[10px] rounded-full uppercase tracking-wide font-bold"
+                  >高风险 (High Risk)</span
+                >
               </h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400">{{ agentName }} 申请在您的系统中执行以下命令</p>
+              <p class="text-xs text-slate-500 dark:text-slate-400">
+                {{ agentName }} 申请在您的系统中执行以下命令
+              </p>
             </div>
           </div>
-          
+
           <!-- 内容区域 -->
           <div class="p-6">
-            <div 
-                class="bg-slate-900 rounded-lg p-4 font-mono text-sm overflow-x-auto custom-scrollbar border shadow-inner transition-colors"
-                :class="pendingConfirmation.riskInfo?.level >= 2 ? 'text-red-300 border-red-900/50 bg-red-950/20' : 'text-green-400 border-slate-700'"
+            <div
+              class="bg-slate-900 rounded-lg p-4 font-mono text-sm overflow-x-auto custom-scrollbar border shadow-inner transition-colors"
+              :class="
+                pendingConfirmation.riskInfo?.level >= 2
+                  ? 'text-red-300 border-red-900/50 bg-red-950/20'
+                  : 'text-green-400 border-slate-700'
+              "
             >
-              <span v-if="pendingConfirmation.riskInfo?.highlight" v-html="highlightCommand(pendingConfirmation.command, pendingConfirmation.riskInfo.highlight)"></span>
+              <span
+                v-if="pendingConfirmation.riskInfo?.highlight"
+                v-html="
+                  highlightCommand(
+                    pendingConfirmation.command,
+                    pendingConfirmation.riskInfo.highlight
+                  )
+                "
+              ></span>
               <span v-else class="select-text">{{ pendingConfirmation.command }}</span>
             </div>
-            
-            <div v-if="pendingConfirmation.riskInfo?.level >= 2" class="mt-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-lg flex gap-3 items-start">
-                 <div class="p-1 bg-red-100 dark:bg-red-800/50 rounded text-red-600 dark:text-red-400 shrink-0">
-                    <AlertTriangle class="w-4 h-4" />
-                 </div>
-                 <div class="text-xs text-red-600 dark:text-red-400">
-                    <p class="font-bold mb-1">系统警告：{{ pendingConfirmation.riskInfo?.reason || '敏感操作' }}</p>
-                    <p class="opacity-90">此指令包含可能修改系统关键配置或删除文件的操作。请务必确认指令来源和意图。</p>
-                 </div>
+
+            <div
+              v-if="pendingConfirmation.riskInfo?.level >= 2"
+              class="mt-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-lg flex gap-3 items-start"
+            >
+              <div
+                class="p-1 bg-red-100 dark:bg-red-800/50 rounded text-red-600 dark:text-red-400 shrink-0"
+              >
+                <AlertTriangle class="w-4 h-4" />
+              </div>
+              <div class="text-xs text-red-600 dark:text-red-400">
+                <p class="font-bold mb-1">
+                  系统警告：{{ pendingConfirmation.riskInfo?.reason || '敏感操作' }}
+                </p>
+                <p class="opacity-90">
+                  此指令包含可能修改系统关键配置或删除文件的操作。请务必确认指令来源和意图。
+                </p>
+              </div>
             </div>
             <p v-else class="mt-4 text-xs text-slate-500 dark:text-slate-400 text-center">
-              说明: {{ pendingConfirmation.riskInfo?.reason || '请仔细检查指令内容。此操作将在您的系统终端中真实执行。' }}
+              说明:
+              {{
+                pendingConfirmation.riskInfo?.reason ||
+                '请仔细检查指令内容。此操作将在您的系统终端中真实执行。'
+              }}
             </p>
           </div>
-          
+
           <!-- 操作按钮 -->
-          <div class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700">
-            <button 
-              @click="respondConfirmation(false)" 
+          <div
+            class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700"
+          >
+            <button
               class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              @click="respondConfirmation(false)"
             >
               拒绝执行
             </button>
-            <button 
-              @click="respondConfirmation(true)" 
+            <button
               class="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-lg transition-all active:scale-95 flex items-center gap-2"
-              :class="pendingConfirmation.riskInfo?.level >= 2 ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30' : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'"
+              :class="
+                pendingConfirmation.riskInfo?.level >= 2
+                  ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
+                  : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'
+              "
+              @click="respondConfirmation(true)"
             >
               <Check class="w-4 h-4" />
               <span>{{ pendingConfirmation.isHighRisk ? '确认授权并执行' : '批准并执行' }}</span>
@@ -110,182 +173,357 @@
     </Transition>
 
     <!-- 消息区域 -->
-    <div class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col" ref="msgContainer">
+    <div
+      ref="msgContainer"
+      class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col"
+    >
       <!-- 加载更多按钮 -->
       <div v-if="hasMore" class="flex justify-center py-4">
-         <button @click="loadMore" class="text-xs text-slate-400 hover:text-sky-500 transition-colors flex items-center gap-1">
-           <Clock class="w-3 h-3" />
-           <span>查看更多历史记录</span>
-         </button>
+        <button
+          class="text-xs text-slate-400 hover:text-sky-500 transition-colors flex items-center gap-1"
+          @click="loadMore"
+        >
+          <Clock class="w-3 h-3" />
+          <span>查看更多历史记录</span>
+        </button>
       </div>
 
       <div v-for="msg in messages" :key="msg.id || msg.timestamp" class="flex flex-col">
-        
         <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="flex justify-end mb-4 animate-fade-in-up group">
           <div class="max-w-[85%] animate-float flex flex-col items-end">
             <!-- 图片显示 -->
-            <div v-if="msg.images && msg.images.length > 0" class="flex gap-2 mb-2 flex-wrap justify-end">
-               <div v-for="(img, iIdx) in msg.images" :key="iIdx" class="relative">
-                  <img :src="img" class="max-h-32 rounded-lg shadow-md border border-white/10 object-cover hover:scale-105 transition-transform cursor-pointer" @click="window.open(img, '_blank')" />
-               </div>
+            <div
+              v-if="msg.images && msg.images.length > 0"
+              class="flex gap-2 mb-2 flex-wrap justify-end"
+            >
+              <div v-for="(img, iIdx) in msg.images" :key="iIdx" class="relative">
+                <img
+                  :src="img"
+                  class="max-h-32 rounded-lg shadow-md border border-white/10 object-cover hover:scale-105 transition-transform cursor-pointer"
+                  @click="window.open(img, '_blank')"
+                />
+              </div>
             </div>
 
-            <div 
+            <div
               class="px-5 py-3 rounded-2xl rounded-tr-sm shadow-md text-sm leading-relaxed whitespace-pre-wrap font-sans transition-all backdrop-blur-xl border border-white/10 hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg hover:shadow-sky-500/30 relative hover:z-10 duration-300 ease-out"
-              :class="workMode ? 'bg-amber-600/90 text-white' : 'bg-gradient-to-br from-sky-500/60 to-blue-600/60 text-white shadow-sky-500/20'"
+              :class="
+                workMode
+                  ? 'bg-amber-600/90 text-white'
+                  : 'bg-gradient-to-br from-sky-500/60 to-blue-600/60 text-white shadow-sky-500/20'
+              "
             >
               <template v-if="editingMsgId === msg.id">
-                 <textarea v-model="editingContent" class="w-full bg-transparent border-none outline-none resize-none text-white custom-scrollbar" rows="3" style="min-width: 200px;"></textarea>
-                 <div class="flex gap-2 justify-end mt-2 pt-2 border-t border-white/20">
-                    <button @click="saveEdit(msg)" class="p-1 hover:bg-white/20 rounded text-white" title="Save"><Check class="w-4 h-4" /></button>
-                    <button @click="cancelEdit" class="p-1 hover:bg-white/20 rounded text-white" title="Cancel"><X class="w-4 h-4" /></button>
-                 </div>
+                <textarea
+                  v-model="editingContent"
+                  class="w-full bg-transparent border-none outline-none resize-none text-white custom-scrollbar"
+                  rows="3"
+                  style="min-width: 200px"
+                ></textarea>
+                <div class="flex gap-2 justify-end mt-2 pt-2 border-t border-white/20">
+                  <button
+                    class="p-1 hover:bg-white/20 rounded text-white"
+                    title="Save"
+                    @click="saveEdit(msg)"
+                  >
+                    <Check class="w-4 h-4" />
+                  </button>
+                  <button
+                    class="p-1 hover:bg-white/20 rounded text-white"
+                    title="Cancel"
+                    @click="cancelEdit"
+                  >
+                    <X class="w-4 h-4" />
+                  </button>
+                </div>
               </template>
               <template v-else>
-                  {{ msg.content }}
-               </template>
+                {{ msg.content }}
+              </template>
             </div>
             <div class="flex items-center gap-2 mt-1 mr-1">
-               <div class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2" v-if="!editingMsgId">
-                  <button @click="startEdit(msg)" class="text-slate-400 hover:text-sky-500 transition-colors"><Edit2 class="w-3 h-3" /></button>
-                  <button @click="deleteMessage(msg.id)" class="text-slate-400 hover:text-red-500 transition-colors"><Trash2 class="w-3 h-3" /></button>
-               </div>
-               <div class="text-[10px] text-right" :class="workMode ? 'text-slate-500' : 'text-slate-400'">{{ formatTime(msg.timestamp) }}</div>
+              <div
+                v-if="!editingMsgId"
+                class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2"
+              >
+                <button
+                  class="text-slate-400 hover:text-sky-500 transition-colors"
+                  @click="startEdit(msg)"
+                >
+                  <Edit2 class="w-3 h-3" />
+                </button>
+                <button
+                  class="text-slate-400 hover:text-red-500 transition-colors"
+                  @click="deleteMessage(msg.id)"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
+              </div>
+              <div
+                class="text-[10px] text-right"
+                :class="workMode ? 'text-slate-500' : 'text-slate-400'"
+              >
+                {{ formatTime(msg.timestamp) }}
+              </div>
             </div>
           </div>
         </div>
 
         <!-- 助手消息 -->
-        <div v-else-if="msg.role === 'assistant'" class="flex justify-start mb-4 gap-3 group animate-fade-in-up">
+        <div
+          v-else-if="msg.role === 'assistant'"
+          class="flex justify-start mb-4 gap-3 group animate-fade-in-up"
+        >
           <!-- 头像 -->
-          <div class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white shadow-md transition-all overflow-hidden relative animate-float"
-            :class="workMode ? 'bg-gradient-to-br from-indigo-400 to-purple-500' : 'bg-gradient-to-br from-sky-400 to-blue-500 shadow-sky-500/20'"
+          <div
+            class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white shadow-md transition-all overflow-hidden relative animate-float"
+            :class="
+              workMode
+                ? 'bg-gradient-to-br from-indigo-400 to-purple-500'
+                : 'bg-gradient-to-br from-sky-400 to-blue-500 shadow-sky-500/20'
+            "
           >
-             <span class="text-sm font-bold">{{ (msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user') ? msg.senderId[0].toUpperCase() : AGENT_AVATAR_TEXT }}</span>
-             <!-- Online Status Dot -->
-             <!-- 在线状态点 -->
-             <div class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"></div>
+            <span class="text-sm font-bold">{{
+              msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user'
+                ? msg.senderId[0].toUpperCase()
+                : AGENT_AVATAR_TEXT
+            }}</span>
+            <!-- Online Status Dot -->
+            <!-- 在线状态点 -->
+            <div
+              class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"
+            ></div>
           </div>
-          
-          <div class="max-w-[85%] min-w-[200px] animate-float" style="animation-delay: 1s;">
-             <!-- 名称与时间 -->
-             <div class="flex items-center gap-2 mb-1.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-               <span class="text-xs font-bold" :class="workMode ? 'text-indigo-300' : 'text-slate-500'">{{ (msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user') ? msg.senderId : AGENT_NAME }}</span>
-               <span class="text-[10px] text-slate-400">{{ formatTime(msg.timestamp) }}</span>
-               
-               <!-- 操作按钮 -->
-               <div class="flex gap-2 ml-2" v-if="!editingMsgId">
-                  <button 
-                    @click="playMessage(msg)" 
-                    class="transition-colors"
-                    :class="[
-                      playingMsgId === msg.id ? 'text-sky-500 animate-pulse' : 'text-slate-400 hover:text-sky-500',
-                      isLoadingAudio && playingMsgId === msg.id ? 'cursor-wait' : ''
-                    ]"
-                    :title="playingMsgId === msg.id ? '停止播放' : '播放语音'"
-                  >
-                    <component :is="playingMsgId === msg.id ? Square : Volume2" class="w-3 h-3" />
-                  </button>
-                  <button @click="startEdit(msg)" class="text-slate-400 hover:text-sky-500 transition-colors"><Edit2 class="w-3 h-3" /></button>
-                  <button @click="deleteMessage(msg.id)" class="text-slate-400 hover:text-red-500 transition-colors"><Trash2 class="w-3 h-3" /></button>
-               </div>
-             </div>
 
-            <div 
+          <div class="max-w-[85%] min-w-[200px] animate-float" style="animation-delay: 1s">
+            <!-- 名称与时间 -->
+            <div
+              class="flex items-center gap-2 mb-1.5 ml-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+            >
+              <span
+                class="text-xs font-bold"
+                :class="workMode ? 'text-indigo-300' : 'text-slate-500'"
+                >{{
+                  msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user'
+                    ? msg.senderId
+                    : AGENT_NAME
+                }}</span
+              >
+              <span class="text-[10px] text-slate-400">{{ formatTime(msg.timestamp) }}</span>
+
+              <!-- 操作按钮 -->
+              <div v-if="!editingMsgId" class="flex gap-2 ml-2">
+                <button
+                  class="transition-colors"
+                  :class="[
+                    playingMsgId === msg.id
+                      ? 'text-sky-500 animate-pulse'
+                      : 'text-slate-400 hover:text-sky-500',
+                    isLoadingAudio && playingMsgId === msg.id ? 'cursor-wait' : ''
+                  ]"
+                  :title="playingMsgId === msg.id ? '停止播放' : '播放语音'"
+                  @click="playMessage(msg)"
+                >
+                  <component :is="playingMsgId === msg.id ? Square : Volume2" class="w-3 h-3" />
+                </button>
+                <button
+                  class="text-slate-400 hover:text-sky-500 transition-colors"
+                  @click="startEdit(msg)"
+                >
+                  <Edit2 class="w-3 h-3" />
+                </button>
+                <button
+                  class="text-slate-400 hover:text-red-500 transition-colors"
+                  @click="deleteMessage(msg.id)"
+                >
+                  <Trash2 class="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            <div
               class="p-4 rounded-2xl rounded-tl-sm shadow-sm text-sm leading-relaxed font-sans border transition-all flex flex-col gap-3 backdrop-blur-xl hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-xl relative hover:z-10 duration-300 ease-out"
-              :class="workMode 
-                ? 'bg-[#1e293b]/90 text-slate-200 border-slate-700/50' 
-                : 'bg-white/30 text-slate-700 border-white/20 shadow-lg shadow-sky-100/30'"
+              :class="
+                workMode
+                  ? 'bg-[#1e293b]/90 text-slate-200 border-slate-700/50'
+                  : 'bg-white/30 text-slate-700 border-white/20 shadow-lg shadow-sky-100/30'
+              "
             >
               <template v-if="editingMsgId === msg.id">
-                 <textarea v-model="editingContent" class="w-full bg-transparent border-none outline-none resize-none custom-scrollbar" :class="workMode ? 'text-slate-200' : 'text-slate-700'" rows="10"></textarea>
-                 <div class="flex gap-2 justify-end mt-2 pt-2 border-t" :class="workMode ? 'border-slate-700' : 'border-slate-200'">
-                    <button @click="saveEdit(msg)" class="p-1 hover:bg-black/10 rounded" :class="workMode ? 'text-slate-300' : 'text-slate-600'" title="Save"><Check class="w-4 h-4" /></button>
-                    <button @click="cancelEdit" class="p-1 hover:bg-black/10 rounded" :class="workMode ? 'text-slate-300' : 'text-slate-600'" title="Cancel"><X class="w-4 h-4" /></button>
-                 </div>
+                <textarea
+                  v-model="editingContent"
+                  class="w-full bg-transparent border-none outline-none resize-none custom-scrollbar"
+                  :class="workMode ? 'text-slate-200' : 'text-slate-700'"
+                  rows="10"
+                ></textarea>
+                <div
+                  class="flex gap-2 justify-end mt-2 pt-2 border-t"
+                  :class="workMode ? 'border-slate-700' : 'border-slate-200'"
+                >
+                  <button
+                    class="p-1 hover:bg-black/10 rounded"
+                    :class="workMode ? 'text-slate-300' : 'text-slate-600'"
+                    title="Save"
+                    @click="saveEdit(msg)"
+                  >
+                    <Check class="w-4 h-4" />
+                  </button>
+                  <button
+                    class="p-1 hover:bg-black/10 rounded"
+                    :class="workMode ? 'text-slate-300' : 'text-slate-600'"
+                    title="Cancel"
+                    @click="cancelEdit"
+                  >
+                    <X class="w-4 h-4" />
+                  </button>
+                </div>
               </template>
               <template v-else>
-              <template v-if="!msg.content && msg.role === 'assistant' && idx === messages.length - 1 && isSending">
-                 <div class="flex items-center gap-2 h-6 px-1">
-                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"></span>
-                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"></span>
-                    <span class="text-xs text-slate-400 ml-2 font-medium">{{ agentName }} 正在思考...</span>
-                 </div>
-              </template>
-              <template v-else v-for="(segment, sIdx) in parseMessage(msg.content)" :key="sIdx">
-                
-                <!-- 思考过程块 -->
-                <div v-if="segment.type === 'thinking'" class="rounded-lg overflow-hidden border my-1 transition-all duration-300"
-                   :class="workMode ? 'bg-slate-800/50 border-slate-700' : 'bg-slate-50/50 border-slate-200/60'"
+                <template
+                  v-if="
+                    !msg.content &&
+                    msg.role === 'assistant' &&
+                    idx === messages.length - 1 &&
+                    isSending
+                  "
                 >
-                   <div class="px-3 py-1.5 flex items-center justify-between cursor-pointer select-none border-b transition-colors"
-                      :class="workMode ? 'text-sky-400 border-slate-700 hover:bg-slate-700/50' : 'text-slate-500 bg-slate-100/30 border-slate-200/60 hover:bg-slate-100/50'"
+                  <div class="flex items-center gap-2 h-6 px-1">
+                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
+                    <span
+                      class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"
+                    ></span>
+                    <span
+                      class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"
+                    ></span>
+                    <span class="text-xs text-slate-400 ml-2 font-medium"
+                      >{{ agentName }} 正在思考...</span
+                    >
+                  </div>
+                </template>
+                <template v-for="(segment, sIdx) in parseMessage(msg.content)" v-else :key="sIdx">
+                  <!-- 思考过程块 -->
+                  <div
+                    v-if="segment.type === 'thinking'"
+                    class="rounded-lg overflow-hidden border my-1 transition-all duration-300"
+                    :class="
+                      workMode
+                        ? 'bg-slate-800/50 border-slate-700'
+                        : 'bg-slate-50/50 border-slate-200/60'
+                    "
+                  >
+                    <div
+                      class="px-3 py-1.5 flex items-center justify-between cursor-pointer select-none border-b transition-colors"
+                      :class="
+                        workMode
+                          ? 'text-sky-400 border-slate-700 hover:bg-slate-700/50'
+                          : 'text-slate-500 bg-slate-100/30 border-slate-200/60 hover:bg-slate-100/50'
+                      "
                       @click="toggleCollapse(idx, sIdx)"
-                   >
+                    >
                       <div class="flex items-center gap-2 text-xs font-bold">
                         <Brain class="w-3.5 h-3.5" />
                         <span>思考过程 (Thinking Process)</span>
                       </div>
-                      <span class="text-[10px] transition-transform duration-200" :class="{'rotate-180': isCollapsed(idx, sIdx)}">▼</span>
-                   </div>
-                   <div v-show="!isCollapsed(idx, sIdx)" class="p-3 text-xs italic opacity-80 whitespace-pre-wrap font-mono leading-relaxed text-slate-500">
-                     {{ segment.content }}
-                   </div>
-                </div>
+                      <span
+                        class="text-[10px] transition-transform duration-200"
+                        :class="{ 'rotate-180': isCollapsed(idx, sIdx) }"
+                        >▼</span
+                      >
+                    </div>
+                    <div
+                      v-show="!isCollapsed(idx, sIdx)"
+                      class="p-3 text-xs italic opacity-80 whitespace-pre-wrap font-mono leading-relaxed text-slate-500"
+                    >
+                      {{ segment.content }}
+                    </div>
+                  </div>
 
-                <!-- 独白块 -->
-                <div v-else-if="segment.type === 'monologue'" class="rounded-lg overflow-hidden border relative my-1 transition-all duration-300"
-                   :class="workMode ? 'bg-pink-900/10 border-pink-500/20' : 'bg-pink-50/30 border-pink-100/60'"
-                >
-                   <div class="px-3 py-1.5 flex items-center justify-between cursor-pointer select-none border-b transition-colors"
+                  <!-- 独白块 -->
+                  <div
+                    v-else-if="segment.type === 'monologue'"
+                    class="rounded-lg overflow-hidden border relative my-1 transition-all duration-300"
+                    :class="
+                      workMode
+                        ? 'bg-pink-900/10 border-pink-500/20'
+                        : 'bg-pink-50/30 border-pink-100/60'
+                    "
+                  >
+                    <div
+                      class="px-3 py-1.5 flex items-center justify-between cursor-pointer select-none border-b transition-colors"
                       :class="[
-                         workMode ? 'text-pink-400 border-pink-500/10 hover:bg-pink-900/20' : 'text-pink-400 bg-pink-50/30 border-pink-100/60 hover:bg-pink-50/60'
+                        workMode
+                          ? 'text-pink-400 border-pink-500/10 hover:bg-pink-900/20'
+                          : 'text-pink-400 bg-pink-50/30 border-pink-100/60 hover:bg-pink-50/60'
                       ]"
                       @click="toggleCollapse(idx, sIdx)"
-                   >
+                    >
                       <div class="flex items-center gap-2 text-xs font-bold">
                         <MessageSquareQuote class="w-3.5 h-3.5" />
                         <span>内心独白 (Inner Monologue)</span>
                       </div>
-                      <span class="text-[10px] transition-transform duration-200" :class="{'rotate-180': isCollapsed(idx, sIdx)}">▼</span>
-                   </div>
-                   <div v-show="!isCollapsed(idx, sIdx)" class="px-3 py-3 text-xs opacity-90 whitespace-pre-wrap leading-relaxed text-slate-600">
-                     {{ segment.content }}
-                   </div>
-                </div>
+                      <span
+                        class="text-[10px] transition-transform duration-200"
+                        :class="{ 'rotate-180': isCollapsed(idx, sIdx) }"
+                        >▼</span
+                      >
+                    </div>
+                    <div
+                      v-show="!isCollapsed(idx, sIdx)"
+                      class="px-3 py-3 text-xs opacity-90 whitespace-pre-wrap leading-relaxed text-slate-600"
+                    >
+                      {{ segment.content }}
+                    </div>
+                  </div>
 
-                <!-- 工具调用块 (NIT) -->
-                <div v-else-if="segment.type === 'tool'" class="rounded-xl overflow-hidden border shadow-sm my-2"
-                   :class="workMode ? 'border-blue-500/30' : 'border-blue-100/60'"
-                >
-                   <div class="px-3 py-2 text-xs font-bold text-white flex items-center justify-between cursor-pointer"
-                      :class="workMode ? 'bg-blue-600/80' : 'bg-gradient-to-r from-blue-500/80 to-sky-500/80 backdrop-blur-sm'"
+                  <!-- 工具调用块 (NIT) -->
+                  <div
+                    v-else-if="segment.type === 'tool'"
+                    class="rounded-xl overflow-hidden border shadow-sm my-2"
+                    :class="workMode ? 'border-blue-500/30' : 'border-blue-100/60'"
+                  >
+                    <div
+                      class="px-3 py-2 text-xs font-bold text-white flex items-center justify-between cursor-pointer"
+                      :class="
+                        workMode
+                          ? 'bg-blue-600/80'
+                          : 'bg-gradient-to-r from-blue-500/80 to-sky-500/80 backdrop-blur-sm'
+                      "
                       @click="toggleCollapse(idx, sIdx)"
-                   >
+                    >
                       <div class="flex items-center gap-2">
                         <Terminal class="w-3.5 h-3.5" />
                         <span>NIT: {{ segment.name }}</span>
                       </div>
                       <div class="flex items-center gap-2">
-                         <span class="font-mono opacity-70 text-[10px]">{{ segment.id }}</span>
-                         <span class="text-[10px] transition-transform duration-200" :class="{'rotate-180': isCollapsed(idx, sIdx)}">▼</span>
+                        <span class="font-mono opacity-70 text-[10px]">{{ segment.id }}</span>
+                        <span
+                          class="text-[10px] transition-transform duration-200"
+                          :class="{ 'rotate-180': isCollapsed(idx, sIdx) }"
+                          >▼</span
+                        >
                       </div>
-                   </div>
-                   <div v-show="!isCollapsed(idx, sIdx)" class="p-3 text-xs font-mono overflow-x-auto custom-scrollbar whitespace-pre"
-                      :class="workMode ? 'bg-[#0f172a]/80 text-blue-100' : 'bg-slate-50/50 text-slate-600'"
-                   >
+                    </div>
+                    <div
+                      v-show="!isCollapsed(idx, sIdx)"
+                      class="p-3 text-xs font-mono overflow-x-auto custom-scrollbar whitespace-pre"
+                      :class="
+                        workMode ? 'bg-[#0f172a]/80 text-blue-100' : 'bg-slate-50/50 text-slate-600'
+                      "
+                    >
                       {{ segment.content }}
-                   </div>
-                </div>
+                    </div>
+                  </div>
 
-                <!-- 普通文本 -->
-                <div v-else class="min-h-[1.5em]" :class="workMode ? 'text-slate-100' : 'text-slate-700'">
-                   <AsyncMarkdown :content="segment.content" v-if="segment.content" />
-                </div>
-                
-              </template>
+                  <!-- 普通文本 -->
+                  <div
+                    v-else
+                    class="min-h-[1.5em]"
+                    :class="workMode ? 'text-slate-100' : 'text-slate-700'"
+                  >
+                    <AsyncMarkdown v-if="segment.content" :content="segment.content" />
+                  </div>
+                </template>
               </template>
             </div>
           </div>
@@ -293,120 +531,206 @@
 
         <!-- 思维链卡片 -->
         <div v-else-if="msg.role === 'thought_chain'" class="flex justify-start mb-4 gap-3 w-full">
-           <div class="w-10 h-10 flex-shrink-0"></div> <!-- Spacer --> <!-- 占位符 -->
-           <div class="w-full max-w-2xl">
-              <div 
-                class="rounded-2xl overflow-hidden shadow-lg transition-all duration-300 border hover:shadow-xl hover:scale-[1.01] hover:-translate-y-[2px]"
-                :class="workMode 
-                  ? 'bg-[#0f172a] border-slate-700/50' 
-                  : 'bg-white/40 backdrop-blur-md border-white/30 shadow-sky-200/30'"
+          <div class="w-10 h-10 flex-shrink-0"></div>
+          <!-- Spacer -->
+          <!-- 占位符 -->
+          <div class="w-full max-w-2xl">
+            <div
+              class="rounded-2xl overflow-hidden shadow-lg transition-all duration-300 border hover:shadow-xl hover:scale-[1.01] hover:-translate-y-[2px]"
+              :class="
+                workMode
+                  ? 'bg-[#0f172a] border-slate-700/50'
+                  : 'bg-white/40 backdrop-blur-md border-white/30 shadow-sky-200/30'
+              "
+            >
+              <!-- Header -->
+              <!-- 头部 -->
+              <div
+                class="px-4 py-3 flex items-center justify-between cursor-pointer transition-colors"
+                :class="workMode ? 'hover:bg-slate-800/50' : 'hover:bg-white/40'"
+                @click="msg.isCollapsed = !msg.isCollapsed"
               >
-                <!-- Header -->
-                <!-- 头部 -->
-                <div 
-                  class="px-4 py-3 flex items-center justify-between cursor-pointer transition-colors"
-                  :class="workMode ? 'hover:bg-slate-800/50' : 'hover:bg-white/40'"
-                  @click="msg.isCollapsed = !msg.isCollapsed"
-                >
-                  <div class="flex items-center gap-2">
-                    <div class="relative">
-                       <div class="w-2 h-2 rounded-full" :class="[workMode ? 'bg-sky-400' : 'bg-sky-500', {'animate-pulse': msg.isThinking}]"></div>
-                       <div v-if="msg.isThinking" class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-75" :class="workMode ? 'bg-sky-400' : 'bg-sky-500'"></div>
-                    </div>
-                    <span class="text-xs font-bold tracking-wide" :class="workMode ? 'text-sky-400' : 'text-sky-600'">
-                      {{ msg.isThinking ? 'PERO 正在思考...' : '思考过程' }}
-                    </span>
+                <div class="flex items-center gap-2">
+                  <div class="relative">
+                    <div
+                      class="w-2 h-2 rounded-full"
+                      :class="[
+                        workMode ? 'bg-sky-400' : 'bg-sky-500',
+                        { 'animate-pulse': msg.isThinking }
+                      ]"
+                    ></div>
+                    <div
+                      v-if="msg.isThinking"
+                      class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-75"
+                      :class="workMode ? 'bg-sky-400' : 'bg-sky-500'"
+                    ></div>
                   </div>
-                  <div class="flex items-center gap-2">
-                    <span class="text-[10px] font-mono" :class="workMode ? 'text-slate-500' : 'text-slate-500'" v-if="msg.steps.length > 0">{{ msg.steps.length }} 步</span>
-                    <span class="transition-transform duration-200" :class="[workMode ? 'text-slate-500' : 'text-slate-400', {'rotate-180': !msg.isCollapsed}]">▼</span>
-                  </div>
+                  <span
+                    class="text-xs font-bold tracking-wide"
+                    :class="workMode ? 'text-sky-400' : 'text-sky-600'"
+                  >
+                    {{ msg.isThinking ? 'PERO 正在思考...' : '思考过程' }}
+                  </span>
                 </div>
-                
-                <!-- Content -->
-                <div v-if="!msg.isCollapsed" class="max-h-[400px] overflow-y-auto custom-scrollbar" :class="workMode ? 'bg-[#020617]/50 border-t border-slate-800/50' : 'bg-white/30 border-t border-white/20'">
-                  <div class="p-4 space-y-3">
-                    <div v-for="(step, sIdx) in msg.steps" :key="sIdx" class="relative pl-4 border-l-2"
-                      :class="{
-                        'border-sky-500/50': step.type === 'thinking',
-                        'border-emerald-500/50': step.type === 'action',
-                        'border-red-500/50': step.type === 'error',
-                        'border-amber-500/50': step.type === 'reflection'
-                      }"
-                    >
-                      <div class="absolute -left-[5px] top-0 w-2 h-2 rounded-full" 
-                        :class="{
-                           'bg-sky-500': step.type === 'thinking',
-                           'bg-emerald-500': step.type === 'action',
-                           'bg-red-500': step.type === 'error',
-                           'bg-amber-500': step.type === 'reflection'
-                        }"
-                      ></div>
-                      <div class="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70"
-                        :class="[
-                          workMode ? '' : 'font-semibold',
-                          {
-                           'text-sky-400': step.type === 'thinking' && workMode,
-                           'text-sky-700': step.type === 'thinking' && !workMode,
-                           'text-emerald-400': step.type === 'action' && workMode,
-                           'text-emerald-700': step.type === 'action' && !workMode,
-                           'text-red-400': step.type === 'error' && workMode,
-                           'text-red-700': step.type === 'error' && !workMode,
-                           'text-amber-400': step.type === 'reflection' && workMode,
-                           'text-amber-700': step.type === 'reflection' && !workMode
-                        }]"
-                      >
-                        {{ step.type }}
-                      </div>
-                      <div class="text-xs font-mono whitespace-pre-wrap leading-relaxed opacity-90" :class="workMode ? 'text-slate-300' : 'text-slate-700'">{{ step.content }}</div>
-                    </div>
-                  </div>
-
-                  <!-- Actions -->
-                  <div v-if="msg.isThinking" class="px-4 py-2 flex gap-2 border-t" :class="workMode ? 'bg-slate-900/50 border-slate-800/50' : 'bg-white/40 border-white/20'">
-                     <button @click="injectInstruction('stop')" class="px-3 py-1 text-xs rounded-md border transition-all font-medium flex items-center gap-1"
-                       :class="workMode 
-                         ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20' 
-                         : 'bg-red-100 text-red-600 hover:bg-red-200 border-red-200'"
-                     >
-                       <span class="w-1.5 h-1.5 rounded-sm" :class="workMode ? 'bg-red-500' : 'bg-red-600'"></span> 停止
-                     </button>
-                     <button @click="togglePause" class="px-3 py-1 text-xs rounded-md border transition-all font-medium flex items-center gap-1"
-                       :class="workMode 
-                         ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border-amber-500/20' 
-                         : 'bg-amber-100 text-amber-600 hover:bg-amber-200 border-amber-200'"
-                     >
-                       <span class="w-1.5 h-1.5 rounded-full" :class="workMode ? 'bg-amber-500' : 'bg-amber-600'"></span> {{ msg.isPaused ? '继续' : '暂停' }}
-                     </button>
-                  </div>
+                <div class="flex items-center gap-2">
+                  <span
+                    v-if="msg.steps.length > 0"
+                    class="text-[10px] font-mono"
+                    :class="workMode ? 'text-slate-500' : 'text-slate-500'"
+                    >{{ msg.steps.length }} 步</span
+                  >
+                  <span
+                    class="transition-transform duration-200"
+                    :class="[
+                      workMode ? 'text-slate-500' : 'text-slate-400',
+                      { 'rotate-180': !msg.isCollapsed }
+                    ]"
+                    >▼</span
+                  >
                 </div>
               </div>
-           </div>
-        </div>
 
+              <!-- Content -->
+              <div
+                v-if="!msg.isCollapsed"
+                class="max-h-[400px] overflow-y-auto custom-scrollbar"
+                :class="
+                  workMode
+                    ? 'bg-[#020617]/50 border-t border-slate-800/50'
+                    : 'bg-white/30 border-t border-white/20'
+                "
+              >
+                <div class="p-4 space-y-3">
+                  <div
+                    v-for="(step, sIdx) in msg.steps"
+                    :key="sIdx"
+                    class="relative pl-4 border-l-2"
+                    :class="{
+                      'border-sky-500/50': step.type === 'thinking',
+                      'border-emerald-500/50': step.type === 'action',
+                      'border-red-500/50': step.type === 'error',
+                      'border-amber-500/50': step.type === 'reflection'
+                    }"
+                  >
+                    <div
+                      class="absolute -left-[5px] top-0 w-2 h-2 rounded-full"
+                      :class="{
+                        'bg-sky-500': step.type === 'thinking',
+                        'bg-emerald-500': step.type === 'action',
+                        'bg-red-500': step.type === 'error',
+                        'bg-amber-500': step.type === 'reflection'
+                      }"
+                    ></div>
+                    <div
+                      class="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70"
+                      :class="[
+                        workMode ? '' : 'font-semibold',
+                        {
+                          'text-sky-400': step.type === 'thinking' && workMode,
+                          'text-sky-700': step.type === 'thinking' && !workMode,
+                          'text-emerald-400': step.type === 'action' && workMode,
+                          'text-emerald-700': step.type === 'action' && !workMode,
+                          'text-red-400': step.type === 'error' && workMode,
+                          'text-red-700': step.type === 'error' && !workMode,
+                          'text-amber-400': step.type === 'reflection' && workMode,
+                          'text-amber-700': step.type === 'reflection' && !workMode
+                        }
+                      ]"
+                    >
+                      {{ step.type }}
+                    </div>
+                    <div
+                      class="text-xs font-mono whitespace-pre-wrap leading-relaxed opacity-90"
+                      :class="workMode ? 'text-slate-300' : 'text-slate-700'"
+                    >
+                      {{ step.content }}
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Actions -->
+                <div
+                  v-if="msg.isThinking"
+                  class="px-4 py-2 flex gap-2 border-t"
+                  :class="
+                    workMode ? 'bg-slate-900/50 border-slate-800/50' : 'bg-white/40 border-white/20'
+                  "
+                >
+                  <button
+                    class="px-3 py-1 text-xs rounded-md border transition-all font-medium flex items-center gap-1"
+                    :class="
+                      workMode
+                        ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20'
+                        : 'bg-red-100 text-red-600 hover:bg-red-200 border-red-200'
+                    "
+                    @click="injectInstruction('stop')"
+                  >
+                    <span
+                      class="w-1.5 h-1.5 rounded-sm"
+                      :class="workMode ? 'bg-red-500' : 'bg-red-600'"
+                    ></span>
+                    停止
+                  </button>
+                  <button
+                    class="px-3 py-1 text-xs rounded-md border transition-all font-medium flex items-center gap-1"
+                    :class="
+                      workMode
+                        ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border-amber-500/20'
+                        : 'bg-amber-100 text-amber-600 hover:bg-amber-200 border-amber-200'
+                    "
+                    @click="togglePause"
+                  >
+                    <span
+                      class="w-1.5 h-1.5 rounded-full"
+                      :class="workMode ? 'bg-amber-500' : 'bg-amber-600'"
+                    ></span>
+                    {{ msg.isPaused ? '继续' : '暂停' }}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
 
     <!-- 输入区域 -->
     <div class="p-6 pt-0 bg-transparent flex-shrink-0">
-      <div 
+      <div
         class="relative rounded-2xl shadow-xl border transition-all flex flex-col"
-        :class="workMode 
-          ? 'bg-[#0f172a] border-slate-700/50 focus-within:border-amber-500/50 focus-within:shadow-amber-500/10' 
-          : 'bg-white/60 border-sky-200/50 focus-within:border-sky-400/50 focus-within:shadow-sky-400/20 backdrop-blur-md'"
+        :class="
+          workMode
+            ? 'bg-[#0f172a] border-slate-700/50 focus-within:border-amber-500/50 focus-within:shadow-amber-500/10'
+            : 'bg-white/60 border-sky-200/50 focus-within:border-sky-400/50 focus-within:shadow-sky-400/20 backdrop-blur-md'
+        "
       >
         <!-- 待发送图片预览 -->
-        <div v-if="pendingImages.length > 0" class="px-4 pt-4 pb-2 flex gap-2 overflow-x-auto custom-scrollbar">
-           <div v-for="(img, idx) in pendingImages" :key="idx" class="relative group flex-shrink-0">
-              <img :src="img.url" class="h-16 w-16 object-cover rounded-lg shadow-sm" :class="workMode ? 'border border-slate-700' : 'border border-slate-200'" />
-              <button @click="removePendingImage(idx)" class="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow-md hover:scale-110 transition-transform" :class="workMode ? 'text-slate-900 hover:text-red-600' : 'text-slate-500 hover:text-red-500'">
-                 <XCircle class="w-4 h-4 fill-current" />
-              </button>
-           </div>
+        <div
+          v-if="pendingImages.length > 0"
+          class="px-4 pt-4 pb-2 flex gap-2 overflow-x-auto custom-scrollbar"
+        >
+          <div v-for="(img, idx) in pendingImages" :key="idx" class="relative group flex-shrink-0">
+            <img
+              :src="img.url"
+              class="h-16 w-16 object-cover rounded-lg shadow-sm"
+              :class="workMode ? 'border border-slate-700' : 'border border-slate-200'"
+            />
+            <button
+              class="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow-md hover:scale-110 transition-transform"
+              :class="
+                workMode ? 'text-slate-900 hover:text-red-600' : 'text-slate-500 hover:text-red-500'
+              "
+              @click="removePendingImage(idx)"
+            >
+              <XCircle class="w-4 h-4 fill-current" />
+            </button>
+          </div>
         </div>
-
       </div>
-      <div class="text-center mt-2 text-[10px] font-medium tracking-wide" :class="workMode ? 'text-slate-600' : 'text-slate-400'">
+      <div
+        class="text-center mt-2 text-[10px] font-medium tracking-wide"
+        :class="workMode ? 'text-slate-600' : 'text-slate-400'"
+      >
         {{ AGENT_NAME.toUpperCase() }} AI AGENT · POWERED BY RE-ACT ENGINE
       </div>
     </div>
@@ -415,48 +739,72 @@
     <!-- 输入区域 -->
     <div class="flex-none p-6 pt-0 relative z-20">
       <div class="relative">
-        <textarea 
-          v-model="input" 
-          @keydown.enter.prevent="handleEnter"
+        <textarea
+          v-model="input"
           class="w-full bg-transparent text-sm p-4 pr-24 rounded-2xl focus:outline-none resize-none h-14 max-h-32 min-h-[56px] custom-scrollbar font-sans border transition-colors shadow-sm"
           :class="[
-            workMode ? 'text-slate-200 placeholder-slate-500 bg-[#0f172a]/50 border-slate-700 focus:border-slate-600' : 'text-slate-800 placeholder-slate-400 bg-white/50 border-white/20 focus:bg-white/80 shadow-sky-100/20',
+            workMode
+              ? 'text-slate-200 placeholder-slate-500 bg-[#0f172a]/50 border-slate-700 focus:border-slate-600'
+              : 'text-slate-800 placeholder-slate-400 bg-white/50 border-white/20 focus:bg-white/80 shadow-sky-100/20',
             disabled ? 'opacity-50 cursor-not-allowed' : ''
           ]"
           :placeholder="disabled ? '工作区初始化中...' : `问 ${agentName} 任何问题...`"
           :disabled="isInputLocked || disabled"
-          style="field-sizing: content;" 
+          style="field-sizing: content"
+          @keydown.enter.prevent="handleEnter"
         ></textarea>
-        
+
         <div class="absolute right-2 bottom-2 flex items-center gap-1">
           <!-- 图片上传按钮 -->
-           <input type="file" ref="fileInput" accept="image/*" multiple class="hidden" @change="handleFileSelect" />
-           <button 
-              @click="triggerUpload" 
-              :disabled="isInputLocked || disabled || !isVisionEnabled"
-             class="p-2 rounded-xl transition-all flex items-center justify-center group relative"
-             :class="workMode
-               ? (!isVisionEnabled 
-                   ? 'opacity-30 cursor-not-allowed text-slate-400' 
-                   : 'text-amber-500/80 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400')
-               : 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/20 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed'"
-             :title="!isVisionEnabled ? '当前模型不支持视觉功能 (请在设置中开启)' : '上传图片'"
+          <input
+            ref="fileInput"
+            type="file"
+            accept="image/*"
+            multiple
+            class="hidden"
+            @change="handleFileSelect"
+          />
+          <button
+            :disabled="isInputLocked || disabled || !isVisionEnabled"
+            class="p-2 rounded-xl transition-all flex items-center justify-center group relative"
+            :class="
+              workMode
+                ? !isVisionEnabled
+                  ? 'opacity-30 cursor-not-allowed text-slate-400'
+                  : 'text-amber-500/80 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400'
+                : 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/20 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed'
+            "
+            :title="!isVisionEnabled ? '当前模型不支持视觉功能 (请在设置中开启)' : '上传图片'"
+            @click="triggerUpload"
           >
-             <ImageIcon class="w-5 h-5" />
+            <ImageIcon class="w-5 h-5" />
           </button>
 
-          <button 
-             @click="sendMessage" 
-             :disabled="isInputLocked || (!input.trim() && pendingImages.length === 0) || disabled"
-             class="p-2 text-white rounded-xl transition-all shadow-lg flex items-center justify-center group"
-             :class="workMode 
-               ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20 disabled:bg-slate-700 disabled:text-slate-500' 
-               : 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/20 disabled:bg-slate-200 disabled:text-slate-400'"
+          <button
+            :disabled="isInputLocked || (!input.trim() && pendingImages.length === 0) || disabled"
+            class="p-2 text-white rounded-xl transition-all shadow-lg flex items-center justify-center group"
+            :class="
+              workMode
+                ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20 disabled:bg-slate-700 disabled:text-slate-500'
+                : 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/20 disabled:bg-slate-200 disabled:text-slate-400'
+            "
+            @click="sendMessage"
           >
-             <svg v-if="!isSending" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" class="w-5 h-5 group-hover:translate-x-0.5 transition-transform">
-               <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
-             </svg>
-             <div v-else class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+            <svg
+              v-if="!isSending"
+              xmlns="http://www.w3.org/2000/svg"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              class="w-5 h-5 group-hover:translate-x-0.5 transition-transform"
+            >
+              <path
+                d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z"
+              />
+            </svg>
+            <div
+              v-else
+              class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"
+            ></div>
           </button>
         </div>
       </div>
@@ -472,13 +820,29 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue';
-import { listen, emit } from '@/utils/ipcAdapter';
-import { Brain, MessageSquareQuote, Terminal, Play, Pause, Square, Clock, Edit2, Trash2, Check, X, Volume2, AlertTriangle, Image as ImageIcon, XCircle } from 'lucide-vue-next';
-import AsyncMarkdown from '../AsyncMarkdown.vue';
-import CustomDialog from '../ui/CustomDialog.vue';
-import { AGENT_NAME, AGENT_AVATAR_TEXT } from '../../config';
-import { gatewayClient } from '../../api/gateway';
+import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
+import { listen, emit } from '@/utils/ipcAdapter'
+import {
+  Brain,
+  MessageSquareQuote,
+  Terminal,
+  Play,
+  Pause,
+  Square,
+  Clock,
+  Edit2,
+  Trash2,
+  Check,
+  X,
+  Volume2,
+  AlertTriangle,
+  Image as ImageIcon,
+  XCircle
+} from 'lucide-vue-next'
+import AsyncMarkdown from '../AsyncMarkdown.vue'
+import CustomDialog from '../ui/CustomDialog.vue'
+import { AGENT_NAME, AGENT_AVATAR_TEXT } from '../../config'
+import { gatewayClient } from '../../api/gateway'
 
 const props = defineProps({
   workMode: Boolean,
@@ -486,157 +850,160 @@ const props = defineProps({
   mode: { type: String, default: 'direct' }, // 'direct' | 'group'
   targetId: { type: String, default: 'pero' },
   agentName: { type: String, default: AGENT_NAME }
-});
+})
 
 // 确认状态
-const pendingConfirmation = ref(null);
+const pendingConfirmation = ref(null)
 
 // 设置确认监听器
 onMounted(async () => {
-  checkVisionCapability();
-  fetchHistory(true);
-  
+  checkVisionCapability()
+  fetchHistory(true)
+
   // 1. Listen for WebSocket messages forwarded from parent or global bus (via Gateway)
   gatewayClient.on('action:new_message', (data) => {
-    const payload = data.params || data;
+    const payload = data.params || data
     // Append new message if it belongs to current session or is relevant
     // We assume default session for now or check payload.session_id
-    console.log('[ChatInterface] Received new message via Gateway:', payload);
-    
+    console.log('[ChatInterface] Received new message via Gateway:', payload)
+
     // Check duplication
     // 1. Check exact ID match
-    const exists = messages.value.some(m => m.id == payload.id);
-    
+    const exists = messages.value.some((m) => m.id == payload.id)
+
     // 2. Check for pending assistant message (no ID) that matches this content
     // This handles the transition from "Streamed/Pending" -> "Persisted"
-    let pendingMatchIndex = -1;
+    let pendingMatchIndex = -1
     if (!exists && payload.role === 'assistant') {
-        const lastMsgIndex = messages.value.length - 1;
-        const lastMsg = messages.value[lastMsgIndex];
-        
-        // If last message is assistant, has no ID, and content is similar or it's just the last one
-        if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.id) {
-            // We assume this is the persisted version of the stream
-            pendingMatchIndex = lastMsgIndex;
-        }
+      const lastMsgIndex = messages.value.length - 1
+      const lastMsg = messages.value[lastMsgIndex]
+
+      // If last message is assistant, has no ID, and content is similar or it's just the last one
+      if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.id) {
+        // We assume this is the persisted version of the stream
+        pendingMatchIndex = lastMsgIndex
+      }
     }
 
     if (!exists) {
-        if (pendingMatchIndex !== -1) {
-            // Update the pending message with real ID and final content
-            const msg = messages.value[pendingMatchIndex];
-            msg.id = payload.id;
-            msg.content = payload.content; // Use final content (cleaned or full)
-            msg.timestamp = payload.timestamp;
-            msg.senderId = payload.agent_id || 'pero';
-            msg.pair_id = payload.pair_id;
-            msg.metadata = JSON.parse(payload.metadata || '{}');
-            // Images usually handled separately, but if payload has them, update
-        } else {
-            // Add as new message
-            messages.value.push({
-                id: payload.id,
-                role: payload.role,
-                content: payload.content,
-                timestamp: payload.timestamp,
-                senderId: payload.agent_id || 'pero',
-                pair_id: payload.pair_id,
-                images: [], // Images handled separately or via metadata
-                metadata: JSON.parse(payload.metadata || '{}')
-            });
-            scrollToBottom();
-        }
+      if (pendingMatchIndex !== -1) {
+        // Update the pending message with real ID and final content
+        const msg = messages.value[pendingMatchIndex]
+        msg.id = payload.id
+        msg.content = payload.content // Use final content (cleaned or full)
+        msg.timestamp = payload.timestamp
+        msg.senderId = payload.agent_id || 'pero'
+        msg.pair_id = payload.pair_id
+        msg.metadata = JSON.parse(payload.metadata || '{}')
+        // Images usually handled separately, but if payload has them, update
+      } else {
+        // Add as new message
+        messages.value.push({
+          id: payload.id,
+          role: payload.role,
+          content: payload.content,
+          timestamp: payload.timestamp,
+          senderId: payload.agent_id || 'pero',
+          pair_id: payload.pair_id,
+          images: [], // Images handled separately or via metadata
+          metadata: JSON.parse(payload.metadata || '{}')
+        })
+        scrollToBottom()
+      }
     }
-  });
+  })
 
   gatewayClient.on('action:confirmation_request', (payload) => {
-      pendingConfirmation.value = {
-        id: payload.id,
-        command: payload.command,
-        riskInfo: payload.risk_info,
-        isHighRisk: payload.is_high_risk || false
-      };
-  });
-});
+    pendingConfirmation.value = {
+      id: payload.id,
+      command: payload.command,
+      riskInfo: payload.risk_info,
+      isHighRisk: payload.is_high_risk || false
+    }
+  })
+})
 
-let unlistenConfirmation = null;
+let unlistenConfirmation = null
 
 const highlightCommand = (command, highlight) => {
-  if (!highlight) return command;
+  if (!highlight) return command
   // 使用正则替换以支持多次出现，忽略大小写
   try {
-    const regex = new RegExp(`(${highlight})`, 'gi');
-    return command.replace(regex, '<span class="bg-red-500/30 text-red-200 font-bold px-1 rounded">$1</span>');
+    const regex = new RegExp(`(${highlight})`, 'gi')
+    return command.replace(
+      regex,
+      '<span class="bg-red-500/30 text-red-200 font-bold px-1 rounded">$1</span>'
+    )
   } catch (e) {
-    return command;
+    return command
   }
-};
+}
 
 const respondConfirmation = async (approved) => {
-  if (!pendingConfirmation.value) return;
-  
+  if (!pendingConfirmation.value) return
+
   // Send back via Gateway
   try {
-      await gatewayClient.sendRequest('backend', 'confirm', {
-          id: pendingConfirmation.value.id,
-          approved: approved ? 'true' : 'false'
-      });
+    await gatewayClient.sendRequest('backend', 'confirm', {
+      id: pendingConfirmation.value.id,
+      approved: approved ? 'true' : 'false'
+    })
   } catch (e) {
-      console.error("Failed to send confirmation response:", e);
+    console.error('Failed to send confirmation response:', e)
   }
-  
-  pendingConfirmation.value = null;
-};
+
+  pendingConfirmation.value = null
+}
 
 // 当前活动指令状态
-const activeCommand = ref(null);
+const activeCommand = ref(null)
 
 const skipCommandWait = async () => {
-  if (!activeCommand.value) return;
-  
+  if (!activeCommand.value) return
+
   try {
     await fetch(`${API_BASE}/api/ide/tools/terminal/skip`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pid: activeCommand.value.pid })
-    });
+    })
     // Optimistically clear the overlay
     // 乐观地清除覆盖层
-    activeCommand.value = null;
+    activeCommand.value = null
   } catch (e) {
-    console.error('Failed to skip command', e);
+    console.error('Failed to skip command', e)
   }
-};
+}
 
 onUnmounted(() => {
-  if (unlistenConfirmation) unlistenConfirmation();
-});
+  if (unlistenConfirmation) unlistenConfirmation()
+})
 
 // TTS 语音状态
-const playingMsgId = ref(null);
-const isLoadingAudio = ref(false);
-const currentAudio = ref(null);
+const playingMsgId = ref(null)
+const isLoadingAudio = ref(false)
+const currentAudio = ref(null)
 
 const playMessage = async (msg) => {
   // 如果当前正在播放这条消息，则停止
   if (playingMsgId.value === msg.id) {
     if (currentAudio.value) {
-      currentAudio.value.pause();
-      currentAudio.value = null;
+      currentAudio.value.pause()
+      currentAudio.value = null
     }
-    playingMsgId.value = null;
-    isLoadingAudio.value = false;
-    return;
+    playingMsgId.value = null
+    isLoadingAudio.value = false
+    return
   }
 
   // 停止之前的播放
   if (currentAudio.value) {
-    currentAudio.value.pause();
-    currentAudio.value = null;
+    currentAudio.value.pause()
+    currentAudio.value = null
   }
 
-  playingMsgId.value = msg.id;
-  isLoadingAudio.value = true;
+  playingMsgId.value = msg.id
+  isLoadingAudio.value = true
 
   try {
     const response = await fetch('http://localhost:8000/api/tts/preview', {
@@ -645,123 +1012,122 @@ const playMessage = async (msg) => {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({ text: msg.content })
-    });
+    })
 
     if (!response.ok) {
-      throw new Error('TTS request failed');
+      throw new Error('TTS request failed')
     }
 
-    const blob = await response.blob();
-    const url = URL.createObjectURL(blob);
-    const audio = new Audio(url);
-    
-    currentAudio.value = audio;
-    
+    const blob = await response.blob()
+    const url = URL.createObjectURL(blob)
+    const audio = new Audio(url)
+
+    currentAudio.value = audio
+
     audio.onended = () => {
-      playingMsgId.value = null;
-      currentAudio.value = null;
-      isLoadingAudio.value = false;
-      URL.revokeObjectURL(url);
-    };
+      playingMsgId.value = null
+      currentAudio.value = null
+      isLoadingAudio.value = false
+      URL.revokeObjectURL(url)
+    }
 
     audio.onerror = (e) => {
-      console.error("Audio playback error:", e);
-      playingMsgId.value = null;
-      currentAudio.value = null;
-      isLoadingAudio.value = false;
-      URL.revokeObjectURL(url);
-    };
+      console.error('Audio playback error:', e)
+      playingMsgId.value = null
+      currentAudio.value = null
+      isLoadingAudio.value = false
+      URL.revokeObjectURL(url)
+    }
 
-    await audio.play();
-    isLoadingAudio.value = false; // 开始播放，停止加载动画
-
+    await audio.play()
+    isLoadingAudio.value = false // 开始播放，停止加载动画
   } catch (error) {
-    console.error("TTS Error:", error);
-    playingMsgId.value = null;
-    isLoadingAudio.value = false;
-    currentAudio.value = null;
+    console.error('TTS Error:', error)
+    playingMsgId.value = null
+    isLoadingAudio.value = false
+    currentAudio.value = null
   }
-};
+}
 
-const emitEvent = defineEmits(['mode-change']);
+const emitEvent = defineEmits(['mode-change'])
 
-const messages = ref([]);
-const offset = ref(0);
-const hasMore = ref(true);
-const input = ref('');
-const fileInput = ref(null);
-const pendingImages = ref([]);
-const isVisionEnabled = ref(false);
+const messages = ref([])
+const offset = ref(0)
+const hasMore = ref(true)
+const input = ref('')
+const fileInput = ref(null)
+const pendingImages = ref([])
+const isVisionEnabled = ref(false)
 
 const checkVisionCapability = async () => {
   try {
-    const configRes = await fetch(`${API_BASE}/api/configs`);
-    if (!configRes.ok) return;
-    const configs = await configRes.json();
-    const modelId = configs.current_model_id;
-    
+    const configRes = await fetch(`${API_BASE}/api/configs`)
+    if (!configRes.ok) return
+    const configs = await configRes.json()
+    const modelId = configs.current_model_id
+
     if (modelId) {
-        const modelsRes = await fetch(`${API_BASE}/api/models`);
-        if (!modelsRes.ok) return;
-        const models = await modelsRes.json();
-        const currentModel = models.find(m => m.id == modelId);
-        if (currentModel && currentModel.enable_vision) {
-            isVisionEnabled.value = true;
-        } else {
-            isVisionEnabled.value = false;
-        }
+      const modelsRes = await fetch(`${API_BASE}/api/models`)
+      if (!modelsRes.ok) return
+      const models = await modelsRes.json()
+      const currentModel = models.find((m) => m.id == modelId)
+      if (currentModel && currentModel.enable_vision) {
+        isVisionEnabled.value = true
+      } else {
+        isVisionEnabled.value = false
+      }
     }
   } catch (e) {
-    console.error('Failed to check vision capability', e);
+    console.error('Failed to check vision capability', e)
   }
-};
+}
 
 const triggerUpload = () => {
-  fileInput.value.click();
-};
+  fileInput.value.click()
+}
 
 const handleFileSelect = (event) => {
-  const files = event.target.files;
-  if (!files || files.length === 0) return;
+  const files = event.target.files
+  if (!files || files.length === 0) return
 
   for (let i = 0; i < files.length; i++) {
-    const file = files[i];
-    if (!file.type.startsWith('image/')) continue;
+    const file = files[i]
+    if (!file.type.startsWith('image/')) continue
 
-    const reader = new FileReader();
+    const reader = new FileReader()
     reader.onload = (e) => {
       pendingImages.value.push({
         file: file,
         url: e.target.result // Data URL for preview and sending
         // Data URL 用于预览和发送
-      });
-    };
-    reader.readAsDataURL(file);
+      })
+    }
+    reader.readAsDataURL(file)
   }
   // Reset input
   // 重置输入
-  event.target.value = '';
-};
+  event.target.value = ''
+}
 
 const removePendingImage = (index) => {
-  pendingImages.value.splice(index, 1);
-};
+  pendingImages.value.splice(index, 1)
+}
 
-const msgContainer = ref(null);
-const isSending = ref(false);
+const msgContainer = ref(null)
+const isSending = ref(false)
 const isInputLocked = computed(() => {
-  return isSending.value || (activeThoughtChain.value && activeThoughtChain.value.isThinking);
-});
+  return isSending.value || (activeThoughtChain.value && activeThoughtChain.value.isThinking)
+})
 
 // 配置
-const API_BASE = 'http://localhost:9120';
-const HISTORY_LIMIT = 30;
+const API_BASE = 'http://localhost:9120'
+const HISTORY_LIMIT = 30
 
 const parseMessage = (content) => {
-  if (!content) return [{ type: 'text', content: '' }];
-  
-  const segments = [];
-  
+  if (!content) return [{ type: 'text', content: '' }]
+
+  const segments = []
+
   // 健壮的正则模式
   // 1. Thinking/Monologue: 【Thinking: ...】 or 【Monologue: ...】
   // 1. 思考/独白: 【Thinking: ...】 或 【Monologue: ...】
@@ -769,257 +1135,307 @@ const parseMessage = (content) => {
   // 2. NIT 工具: <nit>...</nit> 或 <nit-ID>...</nit-ID> 或 [[[NIT_CALL]]]...[[[NIT_END]]]
   // 3. DeepSeek Thinking: <think>...</think>
   // 3. DeepSeek 思考: <think>...</think>
-  
-  const regex = /【(Thinking|Monologue)\s*:\s*([\s\S]*?)】|<(nit(?:-[a-zA-Z0-9-]+)?)>([\s\S]*?)<\/\3>|\[\[\[NIT_CALL\]\]\]([\s\S]*?)\[\[\[NIT_END\]\]\]|<think>([\s\S]*?)<\/think>/g;
-  
-  let lastIndex = 0;
-  let match;
-  
+
+  const regex =
+    /【(Thinking|Monologue)\s*:\s*([\s\S]*?)】|<(nit(?:-[a-zA-Z0-9-]+)?)>([\s\S]*?)<\/\3>|\[\[\[NIT_CALL\]\]\]([\s\S]*?)\[\[\[NIT_END\]\]\]|<think>([\s\S]*?)<\/think>/g
+
+  let lastIndex = 0
+  let match
+
   while ((match = regex.exec(content)) !== null) {
     // Add text before match
     // 添加匹配前的文本
     if (match.index > lastIndex) {
-      const text = content.slice(lastIndex, match.index);
+      const text = content.slice(lastIndex, match.index)
       if (text.trim()) {
-        segments.push({ type: 'text', content: text });
+        segments.push({ type: 'text', content: text })
       }
     }
-    
-    if (match[1]) { // Thinking or Monologue (Standard)
+
+    if (match[1]) {
+      // Thinking or Monologue (Standard)
       // 思考或独白（标准）
-      segments.push({ 
-        type: match[1].toLowerCase(), 
-        content: match[2].trim() 
-      });
-    } else if (match[6]) { // DeepSeek <think>
+      segments.push({
+        type: match[1].toLowerCase(),
+        content: match[2].trim()
+      })
+    } else if (match[6]) {
       // DeepSeek <think>
-      segments.push({ 
-        type: 'thinking', 
-        content: match[6].trim() 
-      });
-    } else if (match[3] || match[5]) { // NIT Tool (XML or Bracket)
-       // NIT 工具（XML 或括号）
-       const nitTag = match[3];
-       const code = match[4] || match[5]; // Group 4 for XML, Group 5 for Bracket
-       // Group 4 用于 XML，Group 5 用于括号
-       
-       // Extract ID from tag if present (e.g. nit-123 -> 123)
-       // 如果存在，从标签中提取 ID（例如 nit-123 -> 123）
-       let toolId = 'unknown';
-       if (nitTag && nitTag.startsWith('nit-')) {
-         toolId = nitTag.substring(4);
-       }
-       
-       const trimmedCode = code.trim();
-       
-       let toolName = '脚本执行'; // Script Execution -> 脚本执行
-       const funcMatch = /([a-zA-Z_][a-zA-Z0-9_]*)\./.exec(trimmedCode);
-       if (funcMatch) {
-         toolName = funcMatch[1];
-       }
-       
-       segments.push({
-         type: 'tool',
-         name: toolName,
-         id: toolId,
-         content: trimmedCode
-       });
-    }
-    
-    lastIndex = regex.lastIndex;
-  }
-  
-      // Add remaining text
-      if (lastIndex < content.length) {
-        let text = content.slice(lastIndex);
-        
-        // Remove NIT data lines completely
-        text = text.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1');
+      // DeepSeek <think>
+      segments.push({
+        type: 'thinking',
+        content: match[6].trim()
+      })
+    } else if (match[3] || match[5]) {
+      // NIT Tool (XML or Bracket)
+      // NIT 工具（XML 或括号）
+      const nitTag = match[3]
+      const code = match[4] || match[5] // Group 4 for XML, Group 5 for Bracket
+      // Group 4 用于 XML，Group 5 用于括号
 
-        if (text.trim()) {
-           segments.push({ type: 'text', content: text });
-        }
+      // Extract ID from tag if present (e.g. nit-123 -> 123)
+      // 如果存在，从标签中提取 ID（例如 nit-123 -> 123）
+      let toolId = 'unknown'
+      if (nitTag && nitTag.startsWith('nit-')) {
+        toolId = nitTag.substring(4)
       }
-      
-      return segments.length > 0 ? segments : [{ type: 'text', content: content.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1') }];
-    };
 
+      const trimmedCode = code.trim()
 
+      let toolName = '脚本执行' // Script Execution -> 脚本执行
+      const funcMatch = /([a-zA-Z_][a-zA-Z0-9_]*)\./.exec(trimmedCode)
+      if (funcMatch) {
+        toolName = funcMatch[1]
+      }
+
+      segments.push({
+        type: 'tool',
+        name: toolName,
+        id: toolId,
+        content: trimmedCode
+      })
+    }
+
+    lastIndex = regex.lastIndex
+  }
+
+  // Add remaining text
+  if (lastIndex < content.length) {
+    let text = content.slice(lastIndex)
+
+    // Remove NIT data lines completely
+    text = text.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1')
+
+    if (text.trim()) {
+      segments.push({ type: 'text', content: text })
+    }
+  }
+
+  return segments.length > 0
+    ? segments
+    : [
+        {
+          type: 'text',
+          content: content.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1')
+        }
+      ]
+}
 
 // --- 折叠逻辑 ---
-const collapsedStates = ref(new Set());
+const collapsedStates = ref(new Set())
 
 const toggleCollapse = (msgIdx, segIdx) => {
-  const key = `${msgIdx}-${segIdx}`;
+  const key = `${msgIdx}-${segIdx}`
   if (collapsedStates.value.has(key)) {
-    collapsedStates.value.delete(key);
+    collapsedStates.value.delete(key)
   } else {
-    collapsedStates.value.add(key);
+    collapsedStates.value.add(key)
   }
-};
+}
 
 const isCollapsed = (msgIdx, segIdx) => {
-  return collapsedStates.value.has(`${msgIdx}-${segIdx}`);
-};
+  return collapsedStates.value.has(`${msgIdx}-${segIdx}`)
+}
 
 // --- Editing Logic ---
 // --- 编辑逻辑 ---
-const editingMsgId = ref(null);
-const editingContent = ref('');
+const editingMsgId = ref(null)
+const editingContent = ref('')
 
 const startEdit = (msg) => {
-  editingMsgId.value = msg.id;
-  editingContent.value = msg.content;
-};
+  editingMsgId.value = msg.id
+  editingContent.value = msg.content
+}
 
 const cancelEdit = () => {
-  editingMsgId.value = null;
-  editingContent.value = '';
-};
+  editingMsgId.value = null
+  editingContent.value = ''
+}
 
 const saveEdit = async (msg) => {
-  if (!editingContent.value.trim() || !msg.id) return;
-  
+  if (!editingContent.value.trim() || !msg.id) return
+
   try {
     const res = await fetch(`${API_BASE}/api/history/${msg.id}`, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: editingContent.value })
-    });
-    
+    })
+
     if (res.ok) {
-      msg.content = editingContent.value;
-      editingMsgId.value = null;
+      msg.content = editingContent.value
+      editingMsgId.value = null
     }
   } catch (e) {
-    console.error('Failed to edit message', e);
+    console.error('Failed to edit message', e)
   }
-};
+}
 
 // --- 对话框逻辑 ---
-const deleteDialogVisible = ref(false);
-const deleteDialogMessage = ref('');
-const pendingDeleteId = ref(null);
+const deleteDialogVisible = ref(false)
+const deleteDialogMessage = ref('')
+const pendingDeleteId = ref(null)
 
 const deleteMessage = (msgId) => {
-  pendingDeleteId.value = msgId;
-  deleteDialogMessage.value = '确定删除这条消息吗？此操作无法撤销。';
-  deleteDialogVisible.value = true;
-};
+  pendingDeleteId.value = msgId
+  deleteDialogMessage.value = '确定删除这条消息吗？此操作无法撤销。'
+  deleteDialogVisible.value = true
+}
 
 const handleConfirmDelete = async () => {
-  if (!pendingDeleteId.value) return;
-  
+  if (!pendingDeleteId.value) return
+
   try {
     const res = await fetch(`${API_BASE}/api/history/${pendingDeleteId.value}`, {
       method: 'DELETE'
-    });
-    
+    })
+
     if (res.ok) {
-      const deletedMsg = messages.value.find(m => m.id === pendingDeleteId.value);
+      const deletedMsg = messages.value.find((m) => m.id === pendingDeleteId.value)
       if (deletedMsg && deletedMsg.pair_id) {
         // 如果有 pair_id，删除本地所有匹配的消息（原子化同步）
-        messages.value = messages.value.filter(m => m.pair_id !== deletedMsg.pair_id);
+        messages.value = messages.value.filter((m) => m.pair_id !== deletedMsg.pair_id)
       } else {
         // 否则仅删除单条
-        messages.value = messages.value.filter(m => m.id !== pendingDeleteId.value);
+        messages.value = messages.value.filter((m) => m.id !== pendingDeleteId.value)
       }
     }
   } catch (e) {
-    console.error('Failed to delete message', e);
+    console.error('Failed to delete message', e)
   } finally {
-    deleteDialogVisible.value = false;
-    pendingDeleteId.value = null;
+    deleteDialogVisible.value = false
+    pendingDeleteId.value = null
   }
-};
+}
 
 // --- Gateway Event Logic ---
 const handleVoiceUpdate = (data) => {
-  const params = data.params || data;
-  if (params.target === 'pet_view_only') return;
-  
+  const params = data.params || data
+  if (params.target === 'pet_view_only') return
+
+  // [Fix] Handle text_response and transcription from RealtimeSessionManager (Voice/Desktop Mode)
+  if (params.type === 'transcription') {
+    // User input from Voice/Desktop
+    if (!isSending.value) {
+      const content = params.content || params.text
+      messages.value.push({ role: 'user', content: content, timestamp: new Date().toISOString() })
+      scrollToBottom()
+    }
+  } else if (params.type === 'text_response') {
+    // Assistant response from Voice/Desktop (Incremental or Final)
+    if (!isSending.value) {
+      const content = params.content
+      const lastMsg = messages.value[messages.value.length - 1]
+
+      if (lastMsg && lastMsg.role === 'assistant') {
+        // Update existing message if it looks like a continuation or replacement
+        // Since RealtimeSessionManager sends full accumulated text in 'content', we can just replace it.
+        lastMsg.content = content
+        scrollToBottom()
+      } else {
+        // New message
+        messages.value.push({
+          role: 'assistant',
+          content: content,
+          timestamp: new Date().toISOString()
+        })
+        scrollToBottom()
+      }
+    }
+  }
+
   if (params.status === 'thinking') {
-    ensureActiveThoughtChain();
+    ensureActiveThoughtChain()
     if (params.detail) {
-      const stepContent = params.detail;
-      const lastStep = activeThoughtChain.value.steps[activeThoughtChain.value.steps.length - 1];
+      const stepContent = params.detail
+      const lastStep = activeThoughtChain.value.steps[activeThoughtChain.value.steps.length - 1]
       if (!lastStep || lastStep.content !== stepContent) {
-         activeThoughtChain.value.steps.push({
-           type: 'thinking', 
-           content: stepContent
-         });
-         scrollToBottom();
+        activeThoughtChain.value.steps.push({
+          type: 'thinking',
+          content: stepContent
+        })
+        scrollToBottom()
       }
     }
   } else if (params.status === 'idle') {
     if (activeThoughtChain.value) {
-      activeThoughtChain.value.isThinking = false;
-      activeThoughtChain.value = null; 
+      activeThoughtChain.value.isThinking = false
+      activeThoughtChain.value = null
     }
   }
-};
+}
 
 const handleTextStream = (data) => {
-  const params = data.params || data;
-  if (params.target === 'pet_view_only') return;
+  const params = data.params || data
+  if (params.target === 'pet_view_only') return
 
   // Ignore stream updates if we are actively sending (handled by fetch)
-  if (isSending.value) return;
+  if (isSending.value) return
 
   // Smart Append for Passive Updates
-  const lastMsg = messages.value[messages.value.length - 1];
+  const lastMsg = messages.value[messages.value.length - 1]
   if (lastMsg && lastMsg.role === 'assistant') {
-      // If content is just being extended, update it
-      // Simple heuristic: if new content starts with old content
-      if (params.content.startsWith(lastMsg.content)) {
-          lastMsg.content = params.content;
-          scrollToBottom();
-          return;
-      }
-      // If new content is a delta (how to know?), append?
-      // For now, assuming full content replacement if not matched.
+    // If content is just being extended, update it
+    // Simple heuristic: if new content starts with old content
+    if (params.content.startsWith(lastMsg.content)) {
+      lastMsg.content = params.content
+      scrollToBottom()
+      return
+    }
+    // If new content is a delta (how to know?), append?
+    // For now, assuming full content replacement if not matched.
   }
 
-  messages.value.push({ role: 'assistant', content: params.content, timestamp: new Date().toISOString() });
-  scrollToBottom();
-};
+  messages.value.push({
+    role: 'assistant',
+    content: params.content,
+    timestamp: new Date().toISOString()
+  })
+  scrollToBottom()
+}
+
+// [Fix] Add handler for text_response (Final/Full response broadcast)
+const handleTextResponse = (data) => {
+  // Logic is same as text_stream for now, as both carry 'content'
+  handleTextStream(data)
+}
 
 const handleTranscription = (data) => {
-  const params = data.params || data;
+  const params = data.params || data
   if (!isSending.value) {
-    messages.value.push({ role: 'user', content: params.text, timestamp: new Date().toISOString() });
-    scrollToBottom();
+    messages.value.push({ role: 'user', content: params.text, timestamp: new Date().toISOString() })
+    scrollToBottom()
   }
-};
+}
 
 const handleCommandRunning = (data) => {
-  const params = data.params || data;
+  const params = data.params || data
   activeCommand.value = {
     command: params.command,
     pid: params.pid
-  };
-};
+  }
+}
 
 const handleCommandFinished = (data) => {
-  activeCommand.value = null;
-};
+  activeCommand.value = null
+}
 
 const handleModeUpdate = (data) => {
-    const params = data.params || data;
-    if (params.mode === 'work') {
-      emitEvent('mode-change', params.is_active === 'true' || params.is_active === true);
-    }
-};
+  const params = data.params || data
+  if (params.mode === 'work') {
+    emitEvent('mode-change', params.is_active === 'true' || params.is_active === true)
+  }
+}
 
-const activeThoughtChain = ref(null);
+const activeThoughtChain = ref(null)
 
 const ensureActiveThoughtChain = () => {
-  const lastMsg = messages.value[messages.value.length - 1];
+  const lastMsg = messages.value[messages.value.length - 1]
   if (lastMsg && lastMsg.role === 'thought_chain' && lastMsg.isThinking) {
-    activeThoughtChain.value = lastMsg;
-    return;
+    activeThoughtChain.value = lastMsg
+    return
   }
-  
+
   const newChain = {
     role: 'thought_chain',
     isThinking: true,
@@ -1027,415 +1443,447 @@ const ensureActiveThoughtChain = () => {
     isPaused: false,
     steps: [],
     timestamp: new Date().toISOString()
-  };
-  messages.value.push(newChain);
-  activeThoughtChain.value = newChain;
-  scrollToBottom();
-};
+  }
+  messages.value.push(newChain)
+  activeThoughtChain.value = newChain
+  scrollToBottom()
+}
 
 const togglePause = async () => {
-  if (!activeThoughtChain.value) return;
-  const isPaused = activeThoughtChain.value.isPaused;
-  const action = isPaused ? 'resume' : 'pause';
-  
-  await injectInstruction(action);
-  activeThoughtChain.value.isPaused = !isPaused;
-};
+  if (!activeThoughtChain.value) return
+  const isPaused = activeThoughtChain.value.isPaused
+  const action = isPaused ? 'resume' : 'pause'
+
+  await injectInstruction(action)
+  activeThoughtChain.value.isPaused = !isPaused
+}
 
 const injectInstruction = async (action) => {
-  const sessionId = props.workMode ? 'current_work_session' : (props.targetId || 'default'); 
+  const sessionId = props.workMode ? 'current_work_session' : props.targetId || 'default'
   try {
     if (action === 'pause') {
-      await fetch(`${API_BASE}/api/task/${sessionId}/pause`, { method: 'POST' });
+      await fetch(`${API_BASE}/api/task/${sessionId}/pause`, { method: 'POST' })
     } else if (action === 'resume') {
-       await fetch(`${API_BASE}/api/task/${sessionId}/resume`, { method: 'POST' });
+      await fetch(`${API_BASE}/api/task/${sessionId}/resume`, { method: 'POST' })
     } else if (action === 'stop') {
-       await fetch(`${API_BASE}/api/task/${sessionId}/inject`, {
-         method: 'POST',
-         headers: { 'Content-Type': 'application/json' },
-         body: JSON.stringify({ instruction: '停止任务' })
-       });
+      await fetch(`${API_BASE}/api/task/${sessionId}/inject`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ instruction: '停止任务' })
+      })
     }
   } catch (e) {
-    console.error('Task control failed', e);
+    console.error('Task control failed', e)
   }
-};
+}
 
 const formatTime = (ts) => {
-  if (!ts) return '';
-  const date = new Date(ts);
-  const now = new Date();
-  
-  const isToday = date.getDate() === now.getDate() && 
-                  date.getMonth() === now.getMonth() && 
-                  date.getFullYear() === now.getFullYear();
-                  
+  if (!ts) return ''
+  const date = new Date(ts)
+  const now = new Date()
+
+  const isToday =
+    date.getDate() === now.getDate() &&
+    date.getMonth() === now.getMonth() &&
+    date.getFullYear() === now.getFullYear()
+
   if (isToday) {
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
   } else {
-    return date.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) + ' ' + 
-           date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return (
+      date.toLocaleDateString([], { month: '2-digit', day: '2-digit' }) +
+      ' ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    )
   }
-};
+}
 
 const fetchHistory = async (append = false) => {
   // If in work mode, use 'ide' source.
   // If in chat mode (workMode false), use 'desktop' source to sync with PetView.
-  const source = props.workMode ? 'ide' : 'desktop';
-  const sessionId = props.workMode ? 'current_work_session' : (props.targetId || 'default');
-  
+  const source = props.workMode ? 'ide' : 'desktop'
+  const sessionId = props.workMode ? 'current_work_session' : props.targetId || 'default'
+
   try {
-    let res;
+    let res
     if (props.mode === 'group') {
-        if (append) { hasMore.value = false; return; } // Group chat pagination not supported yet
-        res = await fetch(`${API_BASE}/api/groupchat/rooms/${props.targetId}/history?limit=${HISTORY_LIMIT}`);
+      if (append) {
+        hasMore.value = false
+        return
+      } // Group chat pagination not supported yet
+      res = await fetch(
+        `${API_BASE}/api/groupchat/rooms/${props.targetId}/history?limit=${HISTORY_LIMIT}`
+      )
     } else {
-        let url = `${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`;
-        // Pass agent_id for direct mode (targetId acts as agentId)
-        if (props.targetId) {
-            url += `&agent_id=${props.targetId}`;
-        }
-        res = await fetch(url);
+      let url = `${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`
+      // Pass agent_id for direct mode (targetId acts as agentId)
+      if (props.targetId) {
+        url += `&agent_id=${props.targetId}`
+      }
+      res = await fetch(url)
     }
 
     if (res.ok) {
-      const logs = await res.json();
+      const logs = await res.json()
       if (logs.length < HISTORY_LIMIT) {
-        hasMore.value = false;
+        hasMore.value = false
       }
-      
-      const newMsgs = (Array.isArray(logs) ? logs : [])
-        .filter(log => log && typeof log === 'object')
-        .map(log => {
-        let images = [];
-        try {
-            if (log.metadata_json) {
-                const meta = JSON.parse(log.metadata_json);
-                if (meta.images && Array.isArray(meta.images)) {
-                    images = meta.images.map(path => `${API_BASE}/api/ide/image?path=${encodeURIComponent(path)}`);
-                }
-            }
-        } catch (e) { console.warn('Meta parse error', e); }
-        
-        // Group Chat Compatibility
-        let role = log.role;
-        if (props.mode === 'group') {
-            role = log.sender_id === 'user' ? 'user' : 'assistant';
-        }
 
-        return {
-          id: log.id,
-          role: role,
-          content: log.raw_content || log.content, // Prioritize raw_content for NIT tool display
-          timestamp: log.timestamp,
-          images: images,
-          senderId: log.sender_id,
-          pair_id: log.pair_id
-        };
-      });
-      
+      const newMsgs = (Array.isArray(logs) ? logs : [])
+        .filter((log) => log && typeof log === 'object')
+        .map((log) => {
+          let images = []
+          try {
+            if (log.metadata_json) {
+              const meta = JSON.parse(log.metadata_json)
+              if (meta.images && Array.isArray(meta.images)) {
+                images = meta.images.map(
+                  (path) => `${API_BASE}/api/ide/image?path=${encodeURIComponent(path)}`
+                )
+              }
+            }
+          } catch (e) {
+            console.warn('Meta parse error', e)
+          }
+
+          // Group Chat Compatibility
+          let role = log.role
+          if (props.mode === 'group') {
+            role = log.sender_id === 'user' ? 'user' : 'assistant'
+          }
+
+          return {
+            id: log.id,
+            role: role,
+            content: log.raw_content || log.content, // Prioritize raw_content for NIT tool display
+            timestamp: log.timestamp,
+            images: images,
+            senderId: log.sender_id,
+            pair_id: log.pair_id
+          }
+        })
+
       // Reverse to get [Oldest, ..., Newest] order for display
       // Direct history returns DESC (Newest first), so reverse needed.
       // Group history returns ASC (Oldest first), so NO reverse needed.
       if (props.mode !== 'group') {
-        newMsgs.reverse();
+        newMsgs.reverse()
       }
 
       if (append) {
         // Prepend older messages (history) to the top
         // Save scroll position
         if (msgContainer.value) {
-            const oldHeight = msgContainer.value.scrollHeight;
-            const oldTop = msgContainer.value.scrollTop;
-            
-            messages.value.unshift(...newMsgs);
-            
-            await nextTick();
-            // Restore scroll position relative to the new content
-            const newHeight = msgContainer.value.scrollHeight;
-            msgContainer.value.scrollTop = newHeight - oldHeight + oldTop;
+          const oldHeight = msgContainer.value.scrollHeight
+          const oldTop = msgContainer.value.scrollTop
+
+          messages.value.unshift(...newMsgs)
+
+          await nextTick()
+          // Restore scroll position relative to the new content
+          const newHeight = msgContainer.value.scrollHeight
+          msgContainer.value.scrollTop = newHeight - oldHeight + oldTop
         } else {
-            messages.value.unshift(...newMsgs);
+          messages.value.unshift(...newMsgs)
         }
       } else {
         // Initial load
-        messages.value = newMsgs;
-        await nextTick();
-        scrollToBottom();
+        messages.value = newMsgs
+        await nextTick()
+        scrollToBottom()
       }
     } else {
-       console.error("Fetch history failed with status:", res.status);
+      console.error('Fetch history failed with status:', res.status)
     }
   } catch (e) {
-    console.error('Failed to fetch history', e);
+    console.error('Failed to fetch history', e)
   }
-};
+}
 
 const loadMore = async () => {
   // Fix: If messages are empty (initial load failed), do NOT increment offset
   if (messages.value.length === 0) {
-      offset.value = 0;
+    offset.value = 0
   } else {
-      offset.value += HISTORY_LIMIT;
+    offset.value += HISTORY_LIMIT
   }
-  await fetchHistory(true);
-};
+  await fetchHistory(true)
+}
 
-let groupPollingInterval = null;
+let groupPollingInterval = null
 
 const startGroupPolling = () => {
-  if (props.mode !== 'group' || !props.targetId) return;
-  stopGroupPolling();
-  
+  if (props.mode !== 'group' || !props.targetId) return
+  stopGroupPolling()
+
   groupPollingInterval = setInterval(async () => {
-      if (document.hidden) return; // Optimization
-      try {
-          // Use fetchHistory with append=true to get new messages? 
-          // Actually fetchHistory implementation for group chat might need adjustment or we use a separate endpoint.
-          // For now, let's reuse fetchHistory but we need to handle duplication carefully.
-          // Or better, just fetch latest messages.
-          // Let's stick to simple polling for now.
-          await fetchHistory(true); 
-      } catch (e) {
-          console.error("Group polling failed", e);
-      }
-  }, 3000);
-};
+    if (document.hidden) return // Optimization
+    try {
+      // Use fetchHistory with append=true to get new messages?
+      // Actually fetchHistory implementation for group chat might need adjustment or we use a separate endpoint.
+      // For now, let's reuse fetchHistory but we need to handle duplication carefully.
+      // Or better, just fetch latest messages.
+      // Let's stick to simple polling for now.
+      await fetchHistory(true)
+    } catch (e) {
+      console.error('Group polling failed', e)
+    }
+  }, 3000)
+}
 
 const stopGroupPolling = () => {
   if (groupPollingInterval) {
-      clearInterval(groupPollingInterval);
-      groupPollingInterval = null;
+    clearInterval(groupPollingInterval)
+    groupPollingInterval = null
   }
-};
+}
 
-let unlistenSync = null;
-let unlistenDelete = null;
-let visionCheckInterval = null;
+let unlistenSync = null
+let unlistenDelete = null
+let visionCheckInterval = null
 
 onMounted(async () => {
-  gatewayClient.on('action:voice_update', handleVoiceUpdate);
-  gatewayClient.on('action:text_stream', handleTextStream);
-  gatewayClient.on('action:transcription', handleTranscription);
-  gatewayClient.on('action:command_running', handleCommandRunning);
-  gatewayClient.on('action:command_finished', handleCommandFinished);
-  gatewayClient.on('action:mode_update', handleModeUpdate);
+  gatewayClient.on('action:voice_update', handleVoiceUpdate)
+  gatewayClient.on('action:text_stream', handleTextStream)
+  // [Fix] Listen for text_response
+  gatewayClient.on('action:text_response', handleTextResponse)
+  gatewayClient.on('action:transcription', handleTranscription)
+  gatewayClient.on('action:command_running', handleCommandRunning)
+  gatewayClient.on('action:command_finished', handleCommandFinished)
+  gatewayClient.on('action:mode_update', handleModeUpdate)
 
-  fetchHistory();
-  startGroupPolling();
-  checkVisionCapability();
+  fetchHistory()
+  startGroupPolling()
+  checkVisionCapability()
   // Poll for vision capability changes (e.g. model switch)
-  visionCheckInterval = setInterval(checkVisionCapability, 5000);
+  visionCheckInterval = setInterval(checkVisionCapability, 5000)
 
   // Setup Tauri Event Listeners for Chat Sync
   try {
     // Listen for log deletion
     unlistenDelete = await listen('log-deleted', (event) => {
-      const deletedLogId = event.payload;
+      const deletedLogId = event.payload
       if (deletedLogId) {
-        messages.value = messages.value.filter(msg => msg.id !== deletedLogId);
+        messages.value = messages.value.filter((msg) => msg.id !== deletedLogId)
       }
-    });
+    })
 
     // 监听来自后端/PetView的同步消息
     unlistenSync = await listen('sync-chat-to-ide', (event) => {
-      const { role, content, timestamp } = event.payload;
-      
+      const { role, content, timestamp } = event.payload
+
       // Helper to normalize content for comparison (strip NIT data and whitespace)
       const normalize = (str) => {
-          return (str || '').replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '').trim();
-      };
-      
-      const incomingNorm = normalize(content);
+        return (str || '').replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '').trim()
+      }
+
+      const incomingNorm = normalize(content)
 
       // 避免重复添加 (Enhanced Dedup Logic)
       // 1. Check exact match at the end (Normalized)
-      const lastMsg = messages.value[messages.value.length - 1];
+      const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.role === role) {
-          const lastNorm = normalize(lastMsg.content);
-          // If content is identical or incoming is a subset (e.g. streaming artifact), skip
-          if (lastNorm === incomingNorm || (incomingNorm.length > 0 && lastNorm.includes(incomingNorm))) {
-              return;
-          }
+        const lastNorm = normalize(lastMsg.content)
+        // If content is identical or incoming is a subset (e.g. streaming artifact), skip
+        if (
+          lastNorm === incomingNorm ||
+          (incomingNorm.length > 0 && lastNorm.includes(incomingNorm))
+        ) {
+          return
+        }
       }
-      
+
       // 2. Check user message sent optimistically (no ID, same content, recent)
       if (role === 'user') {
-          // Look backwards for a pending user message
-          for (let i = messages.value.length - 1; i >= 0; i--) {
-              const m = messages.value[i];
-              const mNorm = normalize(m.content);
-              
-              // If we find a user message without ID (optimistic) and same content
-              if (m.role === 'user' && !m.id && mNorm === incomingNorm) {
-                  return;
-              }
-              // If we find a user message WITH ID, we probably passed the optimistic zone
-              if (m.role === 'user' && m.id) break;
+        // Look backwards for a pending user message
+        for (let i = messages.value.length - 1; i >= 0; i--) {
+          const m = messages.value[i]
+          const mNorm = normalize(m.content)
+
+          // If we find a user message without ID (optimistic) and same content
+          if (m.role === 'user' && !m.id && mNorm === incomingNorm) {
+            return
           }
+          // If we find a user message WITH ID, we probably passed the optimistic zone
+          if (m.role === 'user' && m.id) break
+        }
       }
-      
-      messages.value.push({ role, content, timestamp: timestamp || new Date().toISOString() });
-      scrollToBottom();
-    });
+
+      messages.value.push({ role, content, timestamp: timestamp || new Date().toISOString() })
+      scrollToBottom()
+    })
   } catch (e) {
-    console.warn('Failed to setup Tauri listener:', e);
+    console.warn('Failed to setup Tauri listener:', e)
   }
-});
+})
 
-watch(() => props.workMode, () => {
-  offset.value = 0;
-  hasMore.value = true;
-  fetchHistory();
-});
+watch(
+  () => props.workMode,
+  () => {
+    offset.value = 0
+    hasMore.value = true
+    fetchHistory()
+  }
+)
 
-watch(() => props.mode, () => {
-    stopGroupPolling();
-    startGroupPolling();
-});
+watch(
+  () => props.mode,
+  () => {
+    stopGroupPolling()
+    startGroupPolling()
+  }
+)
 
 onUnmounted(() => {
-  gatewayClient.off('action:voice_update', handleVoiceUpdate);
-  gatewayClient.off('action:text_stream', handleTextStream);
-  gatewayClient.off('action:transcription', handleTranscription);
-  gatewayClient.off('action:command_running', handleCommandRunning);
-  gatewayClient.off('action:command_finished', handleCommandFinished);
-  gatewayClient.off('action:mode_update', handleModeUpdate);
+  gatewayClient.off('action:voice_update', handleVoiceUpdate)
+  gatewayClient.off('action:text_stream', handleTextStream)
+  gatewayClient.off('action:text_response', handleTextResponse)
+  gatewayClient.off('action:transcription', handleTranscription)
+  gatewayClient.off('action:command_running', handleCommandRunning)
+  gatewayClient.off('action:command_finished', handleCommandFinished)
+  gatewayClient.off('action:mode_update', handleModeUpdate)
 
-  if (visionCheckInterval) clearInterval(visionCheckInterval);
-  stopGroupPolling();
-  if (unlistenSync) unlistenSync();
-  if (unlistenDelete) unlistenDelete();
-});
+  if (visionCheckInterval) clearInterval(visionCheckInterval)
+  stopGroupPolling()
+  if (unlistenSync) unlistenSync()
+  if (unlistenDelete) unlistenDelete()
+})
 
 // --- Chat Logic ---
 const handleEnter = (e) => {
-    if (e.shiftKey) return;
-    sendMessage();
-};
+  if (e.shiftKey) return
+  sendMessage()
+}
 
 const sendMessage = async () => {
-  if ((!input.value.trim() && pendingImages.value.length === 0) || isSending.value) return;
-  
-  const content = input.value;
-  
+  if ((!input.value.trim() && pendingImages.value.length === 0) || isSending.value) return
+
+  const content = input.value
+
   // Capture images for local display
-  const currentImages = pendingImages.value.map(p => p.url);
-  
-  const userMsg = { 
-      role: 'user', 
-      content, 
-      timestamp: new Date().toISOString(),
-      images: currentImages
-  };
-  messages.value.push(userMsg);
-  
+  const currentImages = pendingImages.value.map((p) => p.url)
+
+  const userMsg = {
+    role: 'user',
+    content,
+    timestamp: new Date().toISOString(),
+    images: currentImages
+  }
+  messages.value.push(userMsg)
+
   // Emit sync event for PetView if not in Work Mode
   if (!props.workMode) {
-    emit('sync-chat-to-pet', { role: 'user', content, timestamp: new Date().toISOString() });
+    emit('sync-chat-to-pet', { role: 'user', content, timestamp: new Date().toISOString() })
   }
 
   // Construct Payload Content (Structured if images exist)
-  let payloadContent;
+  let payloadContent
   if (currentImages.length > 0) {
-      payloadContent = [];
-      if (content) payloadContent.push({ type: 'text', text: content });
-      currentImages.forEach(url => {
-          payloadContent.push({ type: 'image_url', image_url: { url } });
-      });
+    payloadContent = []
+    if (content) payloadContent.push({ type: 'text', text: content })
+    currentImages.forEach((url) => {
+      payloadContent.push({ type: 'image_url', image_url: { url } })
+    })
   } else {
-      payloadContent = content;
+    payloadContent = content
   }
 
-  input.value = '';
-  pendingImages.value = [];
-  isSending.value = true;
-  
-  await nextTick();
-  scrollToBottom();
+  input.value = ''
+  pendingImages.value = []
+  isSending.value = true
+
+  await nextTick()
+  scrollToBottom()
 
   // Pre-add assistant message for immediate feedback
-  const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() };
-  messages.value.push(assistantMsg);
-  await nextTick();
-  scrollToBottom();
+  const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() }
+  messages.value.push(assistantMsg)
+  await nextTick()
+  scrollToBottom()
 
   try {
     if (props.mode === 'group') {
-        const res = await fetch(`${API_BASE}/api/groupchat/rooms/${props.targetId}/messages`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ 
-                sender_id: 'user', 
-                content: content,
-                role: 'user'
-            })
-        });
-        if (res.ok) {
-            assistantMsg.content = ""; // Clear placeholder
-            messages.value.pop(); // Remove placeholder assistant msg
-        } else {
-             assistantMsg.content = "Failed to send message.";
-        }
-        return;
+      const res = await fetch(`${API_BASE}/api/groupchat/rooms/${props.targetId}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          sender_id: 'user',
+          content: content,
+          role: 'user'
+        })
+      })
+      if (res.ok) {
+        assistantMsg.content = '' // Clear placeholder
+        messages.value.pop() // Remove placeholder assistant msg
+      } else {
+        assistantMsg.content = 'Failed to send message.'
+      }
+      return
     }
 
     // Construct messages list for API
-    const historyMsgs = messages.value.slice(0, -1).filter(m => m.role === 'user' || m.role === 'assistant').slice(-10);
-    const apiMessages = historyMsgs.map(m => {
-        if (m === userMsg) {
-            return { role: 'user', content: payloadContent };
-        }
-        return { role: m.role, content: m.content }; // History is always text
-    });
+    const historyMsgs = messages.value
+      .slice(0, -1)
+      .filter((m) => m.role === 'user' || m.role === 'assistant')
+      .slice(-10)
+    const apiMessages = historyMsgs.map((m) => {
+      if (m === userMsg) {
+        return { role: 'user', content: payloadContent }
+      }
+      return { role: m.role, content: m.content } // History is always text
+    })
 
     const res = await fetch(`${API_BASE}/api/ide/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-        messages: apiMessages, 
+      body: JSON.stringify({
+        messages: apiMessages,
         source: props.workMode ? 'ide' : 'desktop',
-        session_id: props.workMode ? 'current_work_session' : (props.targetId || 'default')
+        session_id: props.workMode ? 'current_work_session' : props.targetId || 'default'
       })
-    });
-    
-    if (!res.body) throw new Error("No response body");
-    
-    const reader = res.body.getReader();
-    const decoder = new TextDecoder();
-    
-    while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        const chunk = decoder.decode(value);
-        assistantMsg.content += chunk;
-        scrollToBottom();
-    }
+    })
 
+    if (!res.body) throw new Error('No response body')
+
+    const reader = res.body.getReader()
+    const decoder = new TextDecoder()
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const chunk = decoder.decode(value)
+      assistantMsg.content += chunk
+      scrollToBottom()
+    }
   } catch (e) {
-    assistantMsg.content = `Error: ${e.message}`;
+    assistantMsg.content = `Error: ${e.message}`
     // Force reset thought chain on error
     if (activeThoughtChain.value) {
-      activeThoughtChain.value.isThinking = false;
-      activeThoughtChain.value = null;
+      activeThoughtChain.value.isThinking = false
+      activeThoughtChain.value = null
     }
   } finally {
-    isSending.value = false;
-    scrollToBottom();
+    isSending.value = false
+    scrollToBottom()
   }
-};
+}
 
 const scrollToBottom = () => {
   if (msgContainer.value) {
-    msgContainer.value.scrollTop = msgContainer.value.scrollHeight;
+    msgContainer.value.scrollTop = msgContainer.value.scrollHeight
   }
-};
+}
 </script>
 
 <style scoped>
 @keyframes float {
-  0%, 100% { transform: translateY(0px) scale(1); }
-  50% { transform: translateY(-6px) scale(1.01); }
+  0%,
+  100% {
+    transform: translateY(0px) scale(1);
+  }
+  50% {
+    transform: translateY(-6px) scale(1.01);
+  }
 }
 
 .animate-float {

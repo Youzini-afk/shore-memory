@@ -11,7 +11,7 @@
     "invocationCommands": [
       {
         "commandIdentifier": "code_search",
-        "description": "代码搜索。快速定位函数定义、引用或相似逻辑。"
+        "description": "代码搜索。参数 query_pattern: 关键词/正则; target_rel_path: (可选) 相对路径; is_case_sensitive: (可选) True/False; context_lines_count: (可选) 上下文行数。"
       }
     ]
   }

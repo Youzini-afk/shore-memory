@@ -20,15 +20,15 @@ const router = createRouter({
 })
 
 router.beforeEach((to, from, next) => {
-  console.log(`[路由] 正在从 ${from.path} 导航到 ${to.path}`);
-  
+  console.log(`[路由] 正在从 ${from.path} 导航到 ${to.path}`)
+
   // Docker 模式重定向
   if (!window.electron && to.path === '/launcher') {
-    next('/dashboard');
-    return;
+    next('/dashboard')
+    return
   }
 
-  next();
-});
+  next()
+})
 
 export default router

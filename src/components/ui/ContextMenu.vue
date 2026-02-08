@@ -1,35 +1,33 @@
 <template>
-  <div 
+  <div
     v-if="visible"
     class="fixed z-[9999] bg-[#252526] border border-[#454545] rounded shadow-xl py-1 min-w-[160px]"
     :style="{ top: y + 'px', left: x + 'px' }"
     @click.stop
     @contextmenu.prevent
   >
-    <div 
-      v-for="(item, index) in items" 
-      :key="index"
-    >
-      <div 
-        v-if="item.type === 'separator'" 
-        class="h-[1px] bg-[#454545] my-1 mx-2"
-      ></div>
-      <button 
+    <div v-for="(item, index) in items" :key="index">
+      <div v-if="item.type === 'separator'" class="h-[1px] bg-[#454545] my-1 mx-2"></div>
+      <button
         v-else
         class="w-full text-left px-3 py-1.5 text-xs text-[#cccccc] hover:bg-[#094771] hover:text-white flex items-center justify-between group transition-colors"
-        @click="handleClick(item)"
         :class="{ 'opacity-50 cursor-not-allowed': item.disabled }"
         :disabled="item.disabled"
+        @click="handleClick(item)"
       >
         <span>{{ item.label }}</span>
-        <span v-if="item.shortcut" class="text-[10px] text-[#888888] group-hover:text-white/80 ml-4">{{ item.shortcut }}</span>
+        <span
+          v-if="item.shortcut"
+          class="text-[10px] text-[#888888] group-hover:text-white/80 ml-4"
+          >{{ item.shortcut }}</span
+        >
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { onMounted, onUnmounted } from 'vue';
+import { onMounted, onUnmounted } from 'vue'
 
 const props = defineProps({
   visible: Boolean,
@@ -37,29 +35,29 @@ const props = defineProps({
   y: Number,
   items: Array // [{ label, action, type: 'item'|'separator', disabled, shortcut }]
   // [{ label: 标签, action: 动作, type: 'item'|'separator' 类型, disabled: 禁用, shortcut: 快捷键 }]
-});
+})
 
-const emit = defineEmits(['close', 'action']);
+const emit = defineEmits(['close', 'action'])
 
 const handleClick = (item) => {
-  if (item.disabled) return;
-  item.action();
-  emit('close');
-};
+  if (item.disabled) return
+  item.action()
+  emit('close')
+}
 
-const close = () => emit('close');
+const close = () => emit('close')
 
 onMounted(() => {
-  window.addEventListener('click', close);
-  window.addEventListener('contextmenu', close); // Close on right click elsewhere // 在其他地方右键单击时关闭
+  window.addEventListener('click', close)
+  window.addEventListener('contextmenu', close) // Close on right click elsewhere // 在其他地方右键单击时关闭
   window.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') close();
-  });
-});
+    if (e.key === 'Escape') close()
+  })
+})
 
 onUnmounted(() => {
-  window.removeEventListener('click', close);
-  window.removeEventListener('contextmenu', close);
-  window.removeEventListener('keydown', close);
-});
+  window.removeEventListener('click', close)
+  window.removeEventListener('contextmenu', close)
+  window.removeEventListener('keydown', close)
+})
 </script>

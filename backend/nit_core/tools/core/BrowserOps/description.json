@@ -11,31 +11,31 @@
     "invocationCommands": [
       {
         "commandIdentifier": "browser_fetch_text",
-        "description": "文本速读。快速抓取网页正文，无交互。适用于阅读新闻/文章。"
+        "description": "文本速读。快速抓取网页正文。参数 url: 目标网页地址。"
       },
       {
         "commandIdentifier": "browser_open_url",
-        "description": "视觉浏览-打开。加载网页以进行视觉交互（点击/截图）。"
+        "description": "视觉浏览-打开。加载网页以进行交互。参数 url: 目标网页地址。"
       },
       {
         "commandIdentifier": "browser_click",
-        "description": "视觉浏览-点击。点击页面元素。需指定文本或 CSS 选择器。"
+        "description": "视觉浏览-点击。点击页面元素。参数 selector: CSS选择器 (如 '#submit-btn') 或 text: 元素包含的文本 (如 '登录')。"
       },
       {
         "commandIdentifier": "browser_type",
-        "description": "视觉浏览-输入。在输入框填写内容。需指定标签/Placeholder。"
+        "description": "视觉浏览-输入。在输入框填写内容。参数 selector: CSS选择器; text: 要输入的文本内容。"
       },
       {
         "commandIdentifier": "browser_get_content",
-        "description": "视觉浏览-观察。获取当前页面的结构化 Markdown 视图。"
+        "description": "视觉浏览-观察。获取当前页面的结构化 Markdown 视图 (无需参数)。"
       },
       {
         "commandIdentifier": "browser_scroll",
-        "description": "视觉浏览-滚动。向下/向上滚动屏幕以查看更多内容。"
+        "description": "视觉浏览-滚动。参数 direction: 'down' (向下) 或 'up' (向上)。"
       },
       {
         "commandIdentifier": "browser_back",
-        "description": "视觉浏览-后退。返回上一页。"
+        "description": "视觉浏览-后退。返回上一页 (无需参数)。"
       }
     ]
   }

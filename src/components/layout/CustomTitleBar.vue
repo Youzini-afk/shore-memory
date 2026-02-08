@@ -1,8 +1,8 @@
 <template>
-  <div 
+  <div
     class="h-8 w-full flex items-center justify-between select-none z-[9999] fixed top-0 left-0 right-0 transition-colors duration-300"
     :class="transparent ? 'bg-transparent' : 'bg-slate-900/50 backdrop-blur-sm'"
-    style="-webkit-app-region: drag;"
+    style="-webkit-app-region: drag"
   >
     <!-- Left: App Title / Icon -->
     <!-- 左侧：应用标题 / 图标 -->
@@ -13,42 +13,47 @@
 
     <!-- Right: Window Controls -->
     <!-- 右侧：窗口控制 -->
-    <div class="flex items-center h-full" style="-webkit-app-region: no-drag;">
+    <div class="flex items-center h-full" style="-webkit-app-region: no-drag">
       <!-- Mode Toggle -->
       <!-- 模式切换 -->
-      <button 
+      <button
         v-if="showModeToggle"
-        @click="$emit('toggle-mode')"
         class="h-full px-3 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 gap-2 mr-1"
         :title="isWorkMode ? 'Switch to Chat' : 'Switch to Work'"
+        @click="$emit('toggle-mode')"
       >
         <component :is="isWorkMode ? MessageSquare : Briefcase" class="w-3.5 h-3.5" />
-        <span class="text-[10px] font-bold tracking-wider uppercase opacity-80">{{ isWorkMode ? 'Chat' : 'Work' }}</span>
+        <span class="text-[10px] font-bold tracking-wider uppercase opacity-80">{{
+          isWorkMode ? 'Chat' : 'Work'
+        }}</span>
       </button>
 
       <!-- Minimize -->
       <!-- 最小化 -->
-      <button 
-        @click="minimize"
+      <button
         class="h-full w-12 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 group"
+        @click="minimize"
       >
         <Minus class="w-4 h-4 group-hover:scale-110 transition-transform" />
       </button>
-      
+
       <!-- Maximize / Restore -->
       <!-- 最大化 / 还原 -->
-      <button 
-        @click="toggleMaximize"
+      <button
         class="h-full w-12 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 group"
+        @click="toggleMaximize"
       >
-        <component :is="isMaximized ? Copy : Square" class="w-3.5 h-3.5 group-hover:scale-110 transition-transform" />
+        <component
+          :is="isMaximized ? Copy : Square"
+          class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"
+        />
       </button>
-      
+
       <!-- Close -->
       <!-- 关闭 -->
-      <button 
-        @click="close"
+      <button
         class="h-full w-12 flex items-center justify-center hover:bg-red-500 text-slate-400 hover:text-white transition-all duration-200 group"
+        @click="close"
       >
         <X class="w-4 h-4 group-hover:scale-110 transition-transform" />
       </button>
@@ -92,17 +97,16 @@ const toggleMaximize = async () => {
 const close = () => invoke('window-close')
 
 onMounted(async () => {
-    try {
-        isMaximized.value = await invoke('window-is-maximized')
-    } catch (e) {
-        // Fallback or ignore
-        // 回退或忽略
-    }
+  try {
+    isMaximized.value = await invoke('window-is-maximized')
+  } catch (e) {
+    // Fallback or ignore
+    // 回退或忽略
+  }
 })
 </script>
 
 <style scoped>
 /* No additional styles needed with Tailwind */
 /* 使用 Tailwind 不需要额外的样式 */
-
 </style>

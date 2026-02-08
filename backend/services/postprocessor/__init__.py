@@ -1,5 +1,5 @@
 from .base import BasePostprocessor
-from .manager import PostprocessorManager
 from .implementations import NITFilterPostprocessor
+from .manager import PostprocessorManager
 
 __all__ = ["BasePostprocessor", "PostprocessorManager", "NITFilterPostprocessor"]

@@ -1,7 +1,8 @@
-import os
 import json
+import os
 import time
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional
+
 from services.embedding_service import embedding_service
 
 # 尝试导入 Rust 核心
@@ -10,16 +11,21 @@ try:
     # 该模块实现了定制化的 HNSW 索引，针对增量更新、SIMD 性能优化及嵌入式部署进行了专门设计，
     # 相比 FAISS/Milvus 更适合本项目的轻量级、零依赖需求。
     from pero_memory_core import SemanticVectorIndex
+
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False
+
     # Define dummy class to prevent NameError in type hints
-    class SemanticVectorIndex: pass
+    class SemanticVectorIndex:
+        pass
+
     print("[VectorStore] ❌ 严重错误: 未找到 pero_memory_core！向量搜索将被禁用。")
+
 
 class VectorStoreService:
     _instance = None
-    
+
     def __new__(cls):
         if cls._instance is None:
             cls._instance = super(VectorStoreService, cls).__new__(cls)
@@ -27,8 +33,9 @@ class VectorStoreService:
         return cls._instance
 
     def __init__(self):
-        if self._initialized: return
-        
+        if self._initialized:
+            return
+
         env_data_dir = os.environ.get("PERO_DATA_DIR")
         if env_data_dir:
             self.data_dir = os.path.join(env_data_dir, "rust_db")
@@ -43,25 +50,25 @@ class VectorStoreService:
         # [Multi-Agent Refactor]
         # 不再使用单一的 memory_index_path，而是维护一个 agent_id -> Index 的映射
         self.indices: Dict[str, SemanticVectorIndex] = {}
-        
+
         # Tags 索引目前是全局共享还是隔离？
         # 考虑到 Tags 是对概念的抽象，建议保持全局共享 (Global Concept Space)
         # 或者也进行隔离。为了架构一致性，我们暂且保持 Tags 为全局，因为它们通常是通用的。
         self.tag_index_path = os.path.join(self.data_dir, "tags.index")
         self.tag_map_path = os.path.join(self.data_dir, "tags.json")
-        
-        self.dimension = 384 
-        
+
+        self.dimension = 384
+
         self.tag_index = None
-        
+
         # 标签映射
-        self.tag_map: Dict[str, int] = {} 
+        self.tag_map: Dict[str, int] = {}
         self.tag_map_rev: Dict[int, str] = {}
         self.next_tag_id = 1
-        
+
         self._initialized = True
         self._lazy_loaded = False
-        self.deleted_ids: Dict[str, set] = {} # agent_id -> set of deleted memory_ids
+        self.deleted_ids: Dict[str, set] = {}  # agent_id -> set of deleted memory_ids
 
     def _get_agent_index_path(self, agent_id: str) -> str:
         """获取指定 Agent 的索引文件路径"""
@@ -72,8 +79,9 @@ class VectorStoreService:
 
     def _get_index(self, agent_id: str) -> Optional[SemanticVectorIndex]:
         """获取或加载指定 Agent 的索引实例"""
-        if not RUST_AVAILABLE: return None
-        
+        if not RUST_AVAILABLE:
+            return None
+
         if agent_id not in self.indices:
             path = self._get_agent_index_path(agent_id)
             if os.path.exists(path):
@@ -85,18 +93,22 @@ class VectorStoreService:
                     # Backup and recreate
                     try:
                         import shutil
+
                         shutil.copy2(path, path + f".bak.{int(time.time())}")
-                    except: pass
+                    except Exception:
+                        pass
                     self.indices[agent_id] = SemanticVectorIndex(self.dimension, 10000)
             else:
                 self.indices[agent_id] = SemanticVectorIndex(self.dimension, 10000)
-        
+
         return self.indices[agent_id]
 
     def _ensure_loaded(self):
-        if not RUST_AVAILABLE: return
-        if self._lazy_loaded: return
-        
+        if not RUST_AVAILABLE:
+            return
+        if self._lazy_loaded:
+            return
+
         # 如果可能，从 embedding service 检测维度
         try:
             dummy_vec = embedding_service.encode_one("test")
@@ -108,13 +120,20 @@ class VectorStoreService:
         # 加载标签索引 (全局)
         if os.path.exists(self.tag_index_path):
             try:
-                self.tag_index = SemanticVectorIndex.load_index(self.tag_index_path, self.dimension)
+                self.tag_index = SemanticVectorIndex.load_index(
+                    self.tag_index_path, self.dimension
+                )
             except Exception as e:
                 print(f"[VectorStore] 加载标签索引失败: {e}。")
                 try:
                     import shutil
-                    shutil.copy2(self.tag_index_path, self.tag_index_path + f".bak.{int(time.time())}")
-                except Exception: pass
+
+                    shutil.copy2(
+                        self.tag_index_path,
+                        self.tag_index_path + f".bak.{int(time.time())}",
+                    )
+                except Exception:
+                    pass
                 self.tag_index = SemanticVectorIndex(self.dimension, 1000)
         else:
             self.tag_index = SemanticVectorIndex(self.dimension, 1000)
@@ -122,14 +141,14 @@ class VectorStoreService:
         # 加载标签映射
         if os.path.exists(self.tag_map_path):
             try:
-                with open(self.tag_map_path, 'r', encoding='utf-8') as f:
+                with open(self.tag_map_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     self.tag_map = data.get("map", {})
                     self.next_tag_id = data.get("next_id", 1)
                     self.tag_map_rev = {int(v): k for k, v in self.tag_map.items()}
             except Exception as e:
                 print(f"[VectorStore] 加载标签映射失败: {e}")
-        
+
         # 兼容旧数据迁移: 检查是否存在根目录下的 memory.index (属于 Pero)
         # 如果存在，将其移动到 agents/pero/memory.index
         legacy_path = os.path.join(self.data_dir, "memory.index")
@@ -139,6 +158,7 @@ class VectorStoreService:
             if not os.path.exists(pero_path):
                 try:
                     import shutil
+
                     shutil.move(legacy_path, pero_path)
                     print("[VectorStore] 迁移成功。")
                 except Exception as e:
@@ -147,40 +167,49 @@ class VectorStoreService:
         self._lazy_loaded = True
 
     def save(self):
-        if not RUST_AVAILABLE or not self._lazy_loaded: return
+        if not RUST_AVAILABLE or not self._lazy_loaded:
+            return
         try:
             # Save all loaded agent indices
             for agent_id, index in self.indices.items():
                 path = self._get_agent_index_path(agent_id)
-                
+
                 # [Optimization] Apply physical deletion before saving
                 pending_deletions = self.deleted_ids.get(agent_id, set())
                 temp_path = path + ".tmp"
-                
+
                 if pending_deletions:
                     # 1. Save current state (including logically deleted)
                     index.persist_index(temp_path)
-                    
+
                     # 2. Physically remove from JSON
                     try:
-                        with open(temp_path, 'r', encoding='utf-8') as f:
+                        with open(temp_path, "r", encoding="utf-8") as f:
                             data = json.load(f)
-                        
+
                         original_len = len(data)
-                        new_data = [item for item in data if item.get('id') not in pending_deletions]
-                        
+                        new_data = [
+                            item
+                            for item in data
+                            if item.get("id") not in pending_deletions
+                        ]
+
                         if len(new_data) < original_len:
-                            with open(temp_path, 'w', encoding='utf-8') as f:
+                            with open(temp_path, "w", encoding="utf-8") as f:
                                 json.dump(new_data, f, ensure_ascii=False)
-                            
+
                             # 3. Reload index to sync memory state
                             # Rust core doesn't support hot-reload, so we create a new instance
-                            new_index = SemanticVectorIndex.load_index(temp_path, self.dimension)
+                            new_index = SemanticVectorIndex.load_index(
+                                temp_path, self.dimension
+                            )
                             self.indices[agent_id] = new_index
-                            
+
                             # Clear pending deletions
                             self.deleted_ids[agent_id] = set()
-                            print(f"[VectorStore] Agent {agent_id} 物理清理了 {original_len - len(new_data)} 条向量。")
+                            print(
+                                f"[VectorStore] Agent {agent_id} 物理清理了 {original_len - len(new_data)} 条向量。"
+                            )
                     except Exception as e:
                         print(f"[VectorStore] 物理清理失败: {e}")
                 else:
@@ -198,14 +227,16 @@ class VectorStoreService:
                 os.replace(temp_tag_path, self.tag_index_path)
             else:
                 os.rename(temp_tag_path, self.tag_index_path)
-            
+
             # Atomic save for tag map
             temp_map_path = self.tag_map_path + ".tmp"
-            with open(temp_map_path, 'w', encoding='utf-8') as f:
-                json.dump({
-                    "map": self.tag_map,
-                    "next_id": self.next_tag_id
-                }, f, ensure_ascii=False, indent=2)
+            with open(temp_map_path, "w", encoding="utf-8") as f:
+                json.dump(
+                    {"map": self.tag_map, "next_id": self.next_tag_id},
+                    f,
+                    ensure_ascii=False,
+                    indent=2,
+                )
             if os.path.exists(self.tag_map_path):
                 os.replace(temp_map_path, self.tag_map_path)
             else:
@@ -215,32 +246,38 @@ class VectorStoreService:
 
     # --- Memory Operations ---
 
-    def add_memory(self, memory_id: int, embedding: List[float], metadata: Dict[str, Any] = None):
+    def add_memory(
+        self, memory_id: int, embedding: List[float], metadata: Dict[str, Any] = None
+    ):
         """
         添加记忆向量
         :param metadata: 必须包含 agent_id
         """
         self._ensure_loaded()
-        
+
         agent_id = "pero"
         if metadata and "agent_id" in metadata:
             agent_id = metadata["agent_id"]
-            
+
         index = self._get_index(agent_id)
-        if not index: return
-        
+        if not index:
+            return
+
         try:
             index.insert_vector(memory_id, embedding)
-            self.save() # TODO: Optimize save frequency
+            self.save()  # TODO: Optimize save frequency
         except Exception as e:
             print(f"[VectorStore] 为 {agent_id} 添加记忆失败: {e}")
 
-    def add_memories_batch(self, ids: List[int], embeddings: List[List[float]], agent_id: str = "pero"):
+    def add_memories_batch(
+        self, ids: List[int], embeddings: List[List[float]], agent_id: str = "pero"
+    ):
         """批量添加记忆"""
         self._ensure_loaded()
         index = self._get_index(agent_id)
-        if not index: return
-        
+        if not index:
+            return
+
         try:
             index.batch_insert_vectors(ids, embeddings)
             self.save()
@@ -254,19 +291,24 @@ class VectorStoreService:
             self.deleted_ids[agent_id] = set()
         self.deleted_ids[agent_id].add(memory_id)
 
-    def search_memory(self, query_vector: List[float], limit: int = 10, agent_id: str = "pero") -> List[Dict]:
+    def search_memory(
+        self, query_vector: List[float], limit: int = 10, agent_id: str = "pero"
+    ) -> List[Dict]:
         """
         搜索记忆
         :param agent_id: 指定 Agent ID 进行隔离搜索
         """
         self._ensure_loaded()
         index = self._get_index(agent_id)
-        if not index: return []
-        
+        if not index:
+            return []
+
         try:
             # Fetch more candidates to account for deleted ones
-            candidates = index.search_similar_vectors(query_vector, limit + len(self.deleted_ids.get(agent_id, set())) + 5)
-            
+            candidates = index.search_similar_vectors(
+                query_vector, limit + len(self.deleted_ids.get(agent_id, set())) + 5
+            )
+
             # Filter logically deleted
             deleted = self.deleted_ids.get(agent_id, set())
             results = []
@@ -274,8 +316,9 @@ class VectorStoreService:
                 mid = int(r[0])
                 if mid not in deleted:
                     results.append({"id": mid, "score": float(r[1])})
-                    if len(results) >= limit: break
-            
+                    if len(results) >= limit:
+                        break
+
             return results
         except Exception as e:
             print(f"[VectorStore] 搜索 {agent_id} 失败: {e}")
@@ -284,18 +327,21 @@ class VectorStoreService:
     def count_memories(self, agent_id: str = "pero") -> int:
         self._ensure_loaded()
         index = self._get_index(agent_id)
-        if not index: return 0
+        if not index:
+            return 0
         return index.size()
 
     # --- Tag Operations ---
 
     def add_tag(self, tag_name: str, embedding: List[float]):
         self._ensure_loaded()
-        if not self.tag_index: return
-        
+        if not self.tag_index:
+            return
+
         tag_name = tag_name.strip()
-        if not tag_name: return
-        
+        if not tag_name:
+            return
+
         if tag_name in self.tag_map:
             # 已存在，也许更新向量？
             tid = self.tag_map[tag_name]
@@ -313,21 +359,20 @@ class VectorStoreService:
 
     def search_tags(self, query_vec: List[float], limit: int = 5) -> List[Dict]:
         self._ensure_loaded()
-        if not self.tag_index: return []
-        
+        if not self.tag_index:
+            return []
+
         try:
             results = self.tag_index.search_similar_vectors(query_vec, limit)
             output = []
             for tid, score in results:
                 tag_name = self.tag_map_rev.get(tid, f"Unknown_{tid}")
                 # Rust core returns cosine similarity directly
-                output.append({
-                    "tag": tag_name,
-                    "score": max(0.0, float(score))
-                })
+                output.append({"tag": tag_name, "score": max(0.0, float(score))})
             return output
         except Exception as e:
             print(f"[VectorStore] 搜索标签失败: {e}")
             return []
+
 
 vector_store = VectorStoreService()

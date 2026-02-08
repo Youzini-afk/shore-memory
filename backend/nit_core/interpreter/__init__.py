@@ -8,19 +8,22 @@ NIT Interpreter 核心模块
 try:
     # 尝试导入 Rust 编译的高性能运行时
     from nit_rust_runtime import Lexer, Parser, PipelineNode
+
     RUST_AVAILABLE = True
 except ImportError:
     # 降级方案：使用原生 Python 实现
     from .lexer import Lexer
     from .parser import Parser
+
     RUST_AVAILABLE = False
 
 from .engine import NITRuntime
 
+
 async def execute_nit_script(script: str, tool_executor):
     """
     根据可用运行时执行 NIT 脚本。
-    
+
     [双轨制逻辑]
     - Rust 路径: 处理大规模脚本或高并发请求时，利用 Rust 的内存安全和计算性能。
     - Python 路径: 保证在无法编译 Rust 扩展的简单环境或调试场景下仍能运行。
@@ -30,7 +33,7 @@ async def execute_nit_script(script: str, tool_executor):
         # 1. 分词 (Rust 实现，比 Python 快 50-100 倍)
         lexer = Lexer(script)
         tokens = lexer.tokenize()
-        
+
         # 2. 解析 (Rust 实现)
         parser = Parser(tokens)
         pipeline = parser.parse()

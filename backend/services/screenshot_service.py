@@ -1,11 +1,11 @@
-import time
-import threading
-from collections import deque
-from typing import List, Dict, Optional
-import io
 import base64
+import io
 import os
 import platform
+import threading
+import time
+from collections import deque
+from typing import Dict, List, Optional
 
 # Optional import for pyautogui
 try:
@@ -13,13 +13,16 @@ try:
 except ImportError:
     pyautogui = None
 
+
 class ScreenshotManager:
     def __init__(self, max_size: int = 10, interval: int = 30):
         self.pool = deque(maxlen=max_size)
         self.interval = interval
         self.running = False
         self._thread = None
-        self._is_server = os.environ.get("PERO_ENV") == "server" or platform.system() != "Windows"
+        self._is_server = (
+            os.environ.get("PERO_ENV") == "server" or platform.system() != "Windows"
+        )
 
     def capture(self) -> Optional[Dict]:
         """捕获当前屏幕并存入池中"""
@@ -30,25 +33,21 @@ class ScreenshotManager:
         try:
             start_time = time.time()
             screenshot = pyautogui.screenshot()
-            
+
             # [优化] 如果大于 1080p 则调整大小以提高性能
             if screenshot.width > 1920 or screenshot.height > 1080:
                 screenshot.thumbnail((1920, 1080))
-            
+
             buffered = io.BytesIO()
             screenshot.save(buffered, format="PNG")
             img_base64 = base64.b64encode(buffered.getvalue()).decode()
-            
+
             now = time.time()
             time_str = time.strftime("%H:%M:%S", time.localtime(now))
-            
-            data = {
-                "timestamp": now,
-                "time_str": time_str,
-                "base64": img_base64
-            }
+
+            data = {"timestamp": now, "time_str": time_str, "base64": img_base64}
             self.pool.append(data)
-            
+
             duration = (now - start_time) * 1000
             print(f"[ScreenshotManager] 已截屏于 {time_str} (耗时 {duration:.2f}ms)")
             return data
@@ -65,12 +64,12 @@ class ScreenshotManager:
         items = list(self.pool)
         if not items:
             return []
-            
+
         if max_age is not None:
             now = time.time()
             # 过滤掉过期的图片
             items = [item for item in items if now - item["timestamp"] <= max_age]
-            
+
         return items[-count:] if items else []
 
     def start_background_task(self):
@@ -90,7 +89,8 @@ class ScreenshotManager:
     def stop_background_task(self):
         self.running = False
 
+
 # 全局单例
-screenshot_manager = ScreenshotManager(interval=60) # 每分钟截一张图作为历史背景
+screenshot_manager = ScreenshotManager(interval=60)  # 每分钟截一张图作为历史背景
 # 立即启动后台任务
 screenshot_manager.start_background_task()

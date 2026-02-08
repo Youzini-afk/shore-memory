@@ -1,23 +1,20 @@
 <template>
   <transition name="modal-fade">
     <div v-if="visible" class="file-search-modal" @click.self="close">
-      <div 
-        class="modal-content" 
-        :style="modalStyle"
-      >
+      <div class="modal-content" :style="modalStyle">
         <div class="modal-header" @mousedown="startDragHeader">
           <div class="header-title">
             <span class="header-icon">🔍</span>
             <h3>找到的文件 ({{ files.length }})</h3>
           </div>
-          <button class="close-btn" @click.stop="close" title="关闭 (Esc)">×</button>
+          <button class="close-btn" title="关闭 (Esc)" @click.stop="close">×</button>
         </div>
-        
+
         <div class="file-list-container custom-scrollbar">
           <div v-if="files.length > 0" class="file-list">
-            <div 
-              v-for="(file, index) in files" 
-              :key="index" 
+            <div
+              v-for="(file, index) in files"
+              :key="index"
               class="file-item"
               @click="openFile(file)"
             >
@@ -33,13 +30,13 @@
               </div>
             </div>
           </div>
-          
+
           <div v-else class="empty-state">
             <div class="empty-icon">📂</div>
             <p>没有找到相关文件</p>
           </div>
         </div>
-        
+
         <div class="modal-footer">
           <p class="footer-hint">提示：点击文件项可直接在资源管理器中定位</p>
           <button class="footer-close-btn" @click="close">确定</button>
@@ -86,14 +83,14 @@ const modalStyle = computed(() => {
 const startDragHeader = (e) => {
   // 仅左键拖动
   if (e.button !== 0) return
-  
+
   position.isDragging = true
   position.startX = e.clientX - position.x
   position.startY = e.clientY - position.y
-  
+
   window.addEventListener('mousemove', onDrag)
   window.addEventListener('mouseup', stopDrag)
-  
+
   // 防止文本选中
   e.preventDefault()
 }
@@ -163,7 +160,7 @@ const openFile = async (path) => {
     // 确保路径中的反斜杠被正确处理
     const sanitizedPath = path.replace(/\\/g, '/')
     console.log('[FileSearchModal] 尝试打开路径:', sanitizedPath)
-    
+
     const response = await fetch(`${API_BASE}/open-path`, {
       method: 'POST',
       headers: {
@@ -171,12 +168,12 @@ const openFile = async (path) => {
       },
       body: JSON.stringify({ path: sanitizedPath })
     })
-    
+
     if (!response.ok) {
-        const errData = await response.json()
-        throw new Error(errData.detail || `HTTP 错误! 状态码: ${response.status}`)
+      const errData = await response.json()
+      throw new Error(errData.detail || `HTTP 错误! 状态码: ${response.status}`)
     }
-    
+
     console.log('[FileSearchModal] 成功打开路径')
   } catch (error) {
     console.error('打开文件失败:', error)
@@ -217,8 +214,14 @@ const openFile = async (path) => {
 }
 
 @keyframes modal-pop {
-  from { transform: scale(0.9) translate(0, 0); opacity: 0; }
-  to { transform: scale(1) translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0)); opacity: 1; }
+  from {
+    transform: scale(0.9) translate(0, 0);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) translate(var(--tw-translate-x, 0), var(--tw-translate-y, 0));
+    opacity: 1;
+  }
 }
 
 .modal-header {
@@ -435,10 +438,12 @@ const openFile = async (path) => {
 }
 
 /* 动画 */
-.modal-fade-enter-active, .modal-fade-leave-active {
+.modal-fade-enter-active,
+.modal-fade-leave-active {
   transition: opacity 0.3s;
 }
-.modal-fade-enter-from, .modal-fade-leave-to {
+.modal-fade-enter-from,
+.modal-fade-leave-to {
   opacity: 0;
 }
 </style>

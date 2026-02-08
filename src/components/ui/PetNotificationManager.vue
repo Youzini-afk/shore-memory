@@ -1,24 +1,27 @@
 <template>
   <div class="pet-notification-container">
     <TransitionGroup name="pet-list" tag="div">
-      <div 
-        v-for="notification in notifications" 
-        :key="notification.id" 
+      <div
+        v-for="notification in notifications"
+        :key="notification.id"
         class="pet-notification-item"
         :class="notification.type"
       >
         <div class="pet-notif-header">
-            <span class="pet-notif-icon" v-if="notification.type === 'error'">🛑</span>
-            <span class="pet-notif-icon" v-else-if="notification.type === 'success'">🟢</span>
-            <span class="pet-notif-icon" v-else>🔵</span>
-            <span class="pet-notif-title">{{ notification.title }}</span>
-            <button class="pet-notif-close" @click="remove(notification.id)">×</button>
+          <span v-if="notification.type === 'error'" class="pet-notif-icon">🛑</span>
+          <span v-else-if="notification.type === 'success'" class="pet-notif-icon">🟢</span>
+          <span v-else class="pet-notif-icon">🔵</span>
+          <span class="pet-notif-title">{{ notification.title }}</span>
+          <button class="pet-notif-close" @click="remove(notification.id)">×</button>
         </div>
         <div class="pet-notif-body">
-            {{ notification.message }}
+          {{ notification.message }}
         </div>
-        <div class="pet-notif-progress" v-if="notification.duration > 0">
-            <div class="progress-bar" :style="{ animationDuration: notification.duration + 'ms' }"></div>
+        <div v-if="notification.duration > 0" class="pet-notif-progress">
+          <div
+            class="progress-bar"
+            :style="{ animationDuration: notification.duration + 'ms' }"
+          ></div>
         </div>
       </div>
     </TransitionGroup>
@@ -26,62 +29,62 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue'
 import { listen } from '@/utils/ipcAdapter'
 
-const notifications = ref([]);
-let nextId = 0;
-let unlistenFn = null;
+const notifications = ref([])
+let nextId = 0
+let unlistenFn = null
 
 const add = (message, type = 'info', title = '', duration = 8000) => {
-  const id = nextId++;
-  notifications.value.push({ id, message, type, title, duration });
+  const id = nextId++
+  notifications.value.push({ id, message, type, title, duration })
 
   if (duration > 0) {
     setTimeout(() => {
-      remove(id);
-    }, duration);
+      remove(id)
+    }, duration)
   }
-};
+}
 
 const remove = (id) => {
-  const index = notifications.value.findIndex(n => n.id === id);
+  const index = notifications.value.findIndex((n) => n.id === id)
   if (index !== -1) {
-    notifications.value.splice(index, 1);
+    notifications.value.splice(index, 1)
   }
-};
+}
 
 onMounted(async () => {
   // 监听系统级错误 (与 Dashboard 同步)
   unlistenFn = await listen('system-error', (event) => {
-    let msg = '';
-    let title = 'System Alert';
-    let type = 'error';
+    let msg = ''
+    let title = 'System Alert'
+    let type = 'error'
 
     if (typeof event === 'string') {
-        msg = event;
+      msg = event
     } else if (typeof event === 'object' && event !== null) {
-        msg = event.payload || event.message || JSON.stringify(event);
-        if (event.title) title = event.title;
-        if (event.type) type = event.type;
+      msg = event.payload || event.message || JSON.stringify(event)
+      if (event.title) title = event.title
+      if (event.type) type = event.type
     } else {
-        msg = String(event);
+      msg = String(event)
     }
-    
+
     // 如果没有 title，尝试推断
     if (title === 'System Alert' || title === '系统错误') {
-        if (msg.includes('Python')) title = 'Backend Error';
-        else if (msg.includes('NapCat')) title = 'NapCat Error';
-        else if (msg.includes('WebView2')) title = 'Runtime Error';
+      if (msg.includes('Python')) title = 'Backend Error'
+      else if (msg.includes('NapCat')) title = 'NapCat Error'
+      else if (msg.includes('WebView2')) title = 'Runtime Error'
     }
-    
-    add(msg, type, title, 10000); 
-  });
-});
+
+    add(msg, type, title, 10000)
+  })
+})
 
 onUnmounted(() => {
-  if (unlistenFn) unlistenFn();
-});
+  if (unlistenFn) unlistenFn()
+})
 </script>
 
 <style scoped>
@@ -181,13 +184,23 @@ onUnmounted(() => {
   transform-origin: left;
   animation: progress linear forwards;
 }
-.pet-notification-item.error .progress-bar { background: #ff4757; }
-.pet-notification-item.success .progress-bar { background: #2ed573; }
-.pet-notification-item.info .progress-bar { background: #1e90ff; }
+.pet-notification-item.error .progress-bar {
+  background: #ff4757;
+}
+.pet-notification-item.success .progress-bar {
+  background: #2ed573;
+}
+.pet-notification-item.info .progress-bar {
+  background: #1e90ff;
+}
 
 @keyframes progress {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(0); }
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
 }
 
 /* 列表过渡动画 */

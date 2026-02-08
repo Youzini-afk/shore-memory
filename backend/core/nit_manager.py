@@ -1,9 +1,10 @@
-import os
 import json
 import logging
-from typing import Dict, List, Any, Optional
+import os
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
+
 
 class NITManager:
     """
@@ -12,32 +13,29 @@ class NITManager:
     1. 第一层：分类开关 (core, work, plugins)
     2. 第二层：具体插件开关 (仅针对 plugins 类别)
     """
+
     _instance = None
 
     def __init__(self, config_path="nit_settings.json"):
         if not os.path.isabs(config_path):
-             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-             config_path = os.path.join(base_dir, config_path)
-             
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            config_path = os.path.join(base_dir, config_path)
+
         self.config_path = config_path
         self.settings = {
-            "categories": {
-                "core": True,
-                "work": True,
-                "plugins": True
-            },
+            "categories": {"core": True, "work": True, "plugins": True},
             "plugins": {
                 "social_adapter": True,
                 "AnimeFinder": True,
-                "BilibiliFetch": True
-            }
+                "BilibiliFetch": True,
+            },
         }
         self.load_settings()
 
     def load_settings(self):
         if os.path.exists(self.config_path):
             try:
-                with open(self.config_path, 'r', encoding='utf-8') as f:
+                with open(self.config_path, "r", encoding="utf-8") as f:
                     data = json.load(f)
                     # 深度合并或更新
                     if "categories" in data:
@@ -51,7 +49,7 @@ class NITManager:
 
     def save_settings(self):
         try:
-            with open(self.config_path, 'w', encoding='utf-8') as f:
+            with open(self.config_path, "w", encoding="utf-8") as f:
                 json.dump(self.settings, f, indent=4)
         except Exception as e:
             logger.error(f"保存 NIT 设置到 {self.config_path} 失败: {e}")
@@ -81,6 +79,7 @@ class NITManager:
     def get_all_settings(self) -> Dict[str, Any]:
         """获取所有配置"""
         return self.settings
+
 
 def get_nit_manager() -> NITManager:
     if NITManager._instance is None:

@@ -11,11 +11,11 @@
     "invocationCommands": [
       {
         "commandIdentifier": "bilibili_get_info",
-        "description": "获取信息。解析链接/BV号，返回标题、简介及数据。"
+        "description": "获取信息。解析链接/BV号，返回标题、简介及数据。参数 url: 视频链接或BV号。"
       },
       {
         "commandIdentifier": "bilibili_get_subtitles",
-        "description": "获取字幕。提取视频CC字幕以便总结内容。"
+        "description": "获取字幕。提取视频CC字幕以便总结内容。参数 url: 视频链接或BV号。"
       }
     ]
   }

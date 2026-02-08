@@ -1,13 +1,29 @@
-from google.protobuf.internal import containers as _containers
+from collections.abc import Iterable as _Iterable
+from collections.abc import Mapping as _Mapping
+from typing import ClassVar as _ClassVar
+from typing import Optional as _Optional
+from typing import Union as _Union
+
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from collections.abc import Iterable as _Iterable, Mapping as _Mapping
-from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
+from google.protobuf.internal import containers as _containers
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
 class Envelope(_message.Message):
-    __slots__ = ("id", "source_id", "target_id", "timestamp", "trace_id", "heartbeat", "hello", "register", "request", "response", "stream")
+    __slots__ = (
+        "id",
+        "source_id",
+        "target_id",
+        "timestamp",
+        "trace_id",
+        "heartbeat",
+        "hello",
+        "register",
+        "request",
+        "response",
+        "stream",
+    )
     ID_FIELD_NUMBER: _ClassVar[int]
     SOURCE_ID_FIELD_NUMBER: _ClassVar[int]
     TARGET_ID_FIELD_NUMBER: _ClassVar[int]
@@ -30,7 +46,20 @@ class Envelope(_message.Message):
     request: ActionRequest
     response: ActionResponse
     stream: DataStream
-    def __init__(self, id: _Optional[str] = ..., source_id: _Optional[str] = ..., target_id: _Optional[str] = ..., timestamp: _Optional[int] = ..., trace_id: _Optional[str] = ..., heartbeat: _Optional[_Union[Heartbeat, _Mapping]] = ..., hello: _Optional[_Union[Hello, _Mapping]] = ..., register: _Optional[_Union[CapabilityRegister, _Mapping]] = ..., request: _Optional[_Union[ActionRequest, _Mapping]] = ..., response: _Optional[_Union[ActionResponse, _Mapping]] = ..., stream: _Optional[_Union[DataStream, _Mapping]] = ...) -> None: ...
+    def __init__(
+        self,
+        id: _Optional[str] = ...,
+        source_id: _Optional[str] = ...,
+        target_id: _Optional[str] = ...,
+        timestamp: _Optional[int] = ...,
+        trace_id: _Optional[str] = ...,
+        heartbeat: _Optional[_Union[Heartbeat, _Mapping]] = ...,
+        hello: _Optional[_Union[Hello, _Mapping]] = ...,
+        register: _Optional[_Union[CapabilityRegister, _Mapping]] = ...,
+        request: _Optional[_Union[ActionRequest, _Mapping]] = ...,
+        response: _Optional[_Union[ActionResponse, _Mapping]] = ...,
+        stream: _Optional[_Union[DataStream, _Mapping]] = ...,
+    ) -> None: ...
 
 class Heartbeat(_message.Message):
     __slots__ = ("seq",)
@@ -50,7 +79,14 @@ class Hello(_message.Message):
     client_version: str
     platform: str
     capabilities: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, token: _Optional[str] = ..., device_name: _Optional[str] = ..., client_version: _Optional[str] = ..., platform: _Optional[str] = ..., capabilities: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(
+        self,
+        token: _Optional[str] = ...,
+        device_name: _Optional[str] = ...,
+        client_version: _Optional[str] = ...,
+        platform: _Optional[str] = ...,
+        capabilities: _Optional[_Iterable[str]] = ...,
+    ) -> None: ...
 
 class Capability(_message.Message):
     __slots__ = ("name", "description", "params")
@@ -60,28 +96,43 @@ class Capability(_message.Message):
     name: str
     description: str
     params: _containers.RepeatedScalarFieldContainer[str]
-    def __init__(self, name: _Optional[str] = ..., description: _Optional[str] = ..., params: _Optional[_Iterable[str]] = ...) -> None: ...
+    def __init__(
+        self,
+        name: _Optional[str] = ...,
+        description: _Optional[str] = ...,
+        params: _Optional[_Iterable[str]] = ...,
+    ) -> None: ...
 
 class CapabilityRegister(_message.Message):
     __slots__ = ("capabilities",)
     CAPABILITIES_FIELD_NUMBER: _ClassVar[int]
     capabilities: _containers.RepeatedCompositeFieldContainer[Capability]
-    def __init__(self, capabilities: _Optional[_Iterable[_Union[Capability, _Mapping]]] = ...) -> None: ...
+    def __init__(
+        self, capabilities: _Optional[_Iterable[_Union[Capability, _Mapping]]] = ...
+    ) -> None: ...
 
 class ActionRequest(_message.Message):
     __slots__ = ("action_name", "params")
+
     class ParamsEntry(_message.Message):
         __slots__ = ("key", "value")
         KEY_FIELD_NUMBER: _ClassVar[int]
         VALUE_FIELD_NUMBER: _ClassVar[int]
         key: str
         value: str
-        def __init__(self, key: _Optional[str] = ..., value: _Optional[str] = ...) -> None: ...
+        def __init__(
+            self, key: _Optional[str] = ..., value: _Optional[str] = ...
+        ) -> None: ...
+
     ACTION_NAME_FIELD_NUMBER: _ClassVar[int]
     PARAMS_FIELD_NUMBER: _ClassVar[int]
     action_name: str
     params: _containers.ScalarMap[str, str]
-    def __init__(self, action_name: _Optional[str] = ..., params: _Optional[_Mapping[str, str]] = ...) -> None: ...
+    def __init__(
+        self,
+        action_name: _Optional[str] = ...,
+        params: _Optional[_Mapping[str, str]] = ...,
+    ) -> None: ...
 
 class ActionResponse(_message.Message):
     __slots__ = ("request_id", "status", "data", "error_msg")
@@ -93,7 +144,13 @@ class ActionResponse(_message.Message):
     status: int
     data: str
     error_msg: str
-    def __init__(self, request_id: _Optional[str] = ..., status: _Optional[int] = ..., data: _Optional[str] = ..., error_msg: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        request_id: _Optional[str] = ...,
+        status: _Optional[int] = ...,
+        data: _Optional[str] = ...,
+        error_msg: _Optional[str] = ...,
+    ) -> None: ...
 
 class DataStream(_message.Message):
     __slots__ = ("stream_id", "data", "is_end", "content_type")
@@ -105,4 +162,10 @@ class DataStream(_message.Message):
     data: bytes
     is_end: bool
     content_type: str
-    def __init__(self, stream_id: _Optional[str] = ..., data: _Optional[bytes] = ..., is_end: _Optional[bool] = ..., content_type: _Optional[str] = ...) -> None: ...
+    def __init__(
+        self,
+        stream_id: _Optional[str] = ...,
+        data: _Optional[bytes] = ...,
+        is_end: _Optional[bool] = ...,
+        content_type: _Optional[str] = ...,
+    ) -> None: ...

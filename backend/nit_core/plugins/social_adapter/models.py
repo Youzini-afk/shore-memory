@@ -1,12 +1,14 @@
 from dataclasses import dataclass, field
-from typing import List, Optional, Literal, Any
 from datetime import datetime
+from typing import Any, List, Literal, Optional
+
 
 @dataclass
 class SocialMessage:
     """
     表示社交上下文中的单条消息。
     """
+
     msg_id: str
     sender_id: str
     sender_name: str
@@ -14,35 +16,41 @@ class SocialMessage:
     timestamp: datetime
     platform: str = "qq"
     raw_event: dict = field(default_factory=dict)
-    images: List[str] = field(default_factory=list) # 图片 URL 列表
-    
+    images: List[str] = field(default_factory=list)  # 图片 URL 列表
+
     # [Internal] Pending download tasks for images (not persisted)
-    image_tasks: List[Any] = field(default_factory=list) 
+    image_tasks: List[Any] = field(default_factory=list)
+
 
 @dataclass
 class SocialSession:
     """
     表示一个社交会话（群聊或私聊）。
     """
+
     session_id: str  # group_id or user_id
     session_type: Literal["group", "private"]
     session_name: str = ""
-    agent_id: str = "pero" # 所属 Agent ID
-    
+    agent_id: str = "pero"  # 所属 Agent ID
+
     # 消息缓冲区
     buffer: List[SocialMessage] = field(default_factory=list)
-    
+
     # 状态机
     state: Literal["observing", "summoned", "active"] = "observing"
-    last_active_time: datetime = field(default_factory=datetime.now) # Bot 真正活跃（互动）的时间
-    last_message_time: datetime = field(default_factory=datetime.now) # 群里最后一条消息的时间（无论是否与 Bot 有关）
-    
+    last_active_time: datetime = field(
+        default_factory=datetime.now
+    )  # Bot 真正活跃（互动）的时间
+    last_message_time: datetime = field(
+        default_factory=datetime.now
+    )  # 群里最后一条消息的时间（无论是否与 Bot 有关）
+
     # 定时器句柄（如果新消息到达则取消）
-    flush_timer_task: Optional[object] = None # asyncio.Task
-    
+    flush_timer_task: Optional[object] = None  # asyncio.Task
+
     # [Preemption] 当前正在执行的主动搭话任务（如果用户发消息则取消）
-    active_response_task: Optional[object] = None # asyncio.Task
-    
+    active_response_task: Optional[object] = None  # asyncio.Task
+
     # [Scanner] 下次主动审视时间（用于私聊的独立周期）
     next_scan_time: datetime = field(default_factory=datetime.now)
 

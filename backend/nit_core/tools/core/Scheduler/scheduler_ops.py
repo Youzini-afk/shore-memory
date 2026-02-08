@@ -1,12 +1,14 @@
-from typing import Optional
-from datetime import datetime, timedelta
+from datetime import datetime
+
 import dateparser
+
 from services.scheduler_service import scheduler_service
 
 try:
     from services.session_service import _CURRENT_SESSION_CONTEXT
 except ImportError:
     from backend.services.session_service import _CURRENT_SESSION_CONTEXT
+
 
 async def add_reminder(time: str, content: str, repeat_rule: str = None) -> str:
     """
@@ -19,19 +21,25 @@ async def add_reminder(time: str, content: str, repeat_rule: str = None) -> str:
     try:
         # 使用 dateparser 解析自然语言时间
         # 设置 settings={'PREFER_DATES_FROM': 'future'} 倾向于未来时间
-        trigger_time = dateparser.parse(time, settings={'PREFER_DATES_FROM': 'future', 'RELATIVE_BASE': datetime.now()})
-        
+        trigger_time = dateparser.parse(
+            time,
+            settings={"PREFER_DATES_FROM": "future", "RELATIVE_BASE": datetime.now()},
+        )
+
         if not trigger_time:
             return "Error: 无法解析时间，请使用更清晰的格式（如 'YYYY-MM-DD HH:MM' 或 '10分钟后'）。"
-            
+
         if trigger_time <= datetime.now():
             return "Error: 触发时间必须是未来时间。"
 
         agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
-        job_id = scheduler_service.add_reminder(trigger_time, content, repeat=repeat_rule, agent_id=agent_id)
+        job_id = scheduler_service.add_reminder(
+            trigger_time, content, repeat=repeat_rule, agent_id=agent_id
+        )
         return f"Success: 已添加提醒 '{content}'，将在 {trigger_time.strftime('%Y-%m-%d %H:%M:%S')} 触发 (ID: {job_id})。"
     except Exception as e:
         return f"Error: 添加提醒失败: {str(e)}"
+
 
 async def list_reminders() -> str:
     """
@@ -41,12 +49,17 @@ async def list_reminders() -> str:
     jobs = scheduler_service.list_jobs(agent_id=agent_id)
     if not jobs:
         return "当前没有待执行的提醒任务。"
-        
+
     result = "【待执行提醒列表】:\n"
     for job in jobs:
-        next_run = job.next_run_time.strftime('%Y-%m-%d %H:%M:%S') if job.next_run_time else "N/A"
+        next_run = (
+            job.next_run_time.strftime("%Y-%m-%d %H:%M:%S")
+            if job.next_run_time
+            else "N/A"
+        )
         result += f"- [{job.id}] {job.name} (触发时间: {next_run})\n"
     return result
+
 
 async def delete_reminder(id: str) -> str:
     """
@@ -58,7 +71,7 @@ async def delete_reminder(id: str) -> str:
         agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
         jobs = scheduler_service.list_jobs(agent_id=agent_id)
         owned_ids = [job.id for job in jobs]
-        
+
         if id not in owned_ids:
             return f"Error: 未找到 ID 为 {id} 的任务 (或无权删除)。"
 

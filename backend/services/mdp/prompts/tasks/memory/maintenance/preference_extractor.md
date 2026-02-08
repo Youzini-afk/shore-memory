@@ -19,6 +19,6 @@ Injected Via: mdp.render("tasks/memory/maintenance/preference_extractor")
 
 请以 {{ agent_name }} 的视角（第一人称）描述这些发现。
    - 示例：“我发现主人似乎更喜欢在安静的深夜与我交流，这种时候他会变得很感性。”
-   - 避免：“用户喜欢深夜交流。”
+   - 避免：“{{user}}喜欢深夜交流。”
 
 返回 JSON 列表: ["发现1", "发现2", ...]

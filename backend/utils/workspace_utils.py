@@ -1,4 +1,5 @@
 import os
+
 from services.agent_manager import get_agent_manager
 
 # Base workspace directory (PeroCore/pero_workspace)
@@ -6,11 +7,12 @@ from services.agent_manager import get_agent_manager
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GLOBAL_WORKSPACE_ROOT = os.path.join(BASE_DIR, "pero_workspace")
 
+
 def get_workspace_root(agent_id: str = None) -> str:
     """
     Get the workspace root for a specific agent.
     If agent_id is not provided, it uses the currently active agent.
-    
+
     Structure:
     - pero_workspace/
       - {agent_id}/  <-- Returned path
@@ -22,20 +24,21 @@ def get_workspace_root(agent_id: str = None) -> str:
             if agent:
                 agent_id = agent.id
             else:
-                agent_id = "pero" # Fallback
+                agent_id = "pero"  # Fallback
         except Exception:
-            agent_id = "pero" # Fallback if manager fails (e.g. during init)
-            
+            agent_id = "pero"  # Fallback if manager fails (e.g. during init)
+
     # Normalize agent_id to lowercase
     agent_id = str(agent_id).lower()
-    
+
     # Target directory
     target_path = os.path.join(GLOBAL_WORKSPACE_ROOT, agent_id)
-    
+
     if not os.path.exists(target_path):
         os.makedirs(target_path, exist_ok=True)
-        
+
     return target_path
+
 
 def get_global_workspace_root() -> str:
     """
