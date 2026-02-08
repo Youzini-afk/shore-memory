@@ -388,13 +388,11 @@ class ThinkingChainService:
         # Get Agent Profile for dynamic persona injection
         agent_manager = AgentManager()
         agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
-        identity_label = agent_profile.identity_label if agent_profile else "智能助手"
 
         prompt = mdp.render("tasks/analysis/weekly_report", {
             "agent_name": bot_name,
             "current_time": now_str,
-            "context": context,
-            "identity_label": identity_label
+            "context": context
         })
         try:
             messages = [{"role": "user", "content": prompt}]

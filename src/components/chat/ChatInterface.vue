@@ -529,6 +529,7 @@ onMounted(async () => {
             msg.content = payload.content; // Use final content (cleaned or full)
             msg.timestamp = payload.timestamp;
             msg.senderId = payload.agent_id || 'pero';
+            msg.pair_id = payload.pair_id;
             msg.metadata = JSON.parse(payload.metadata || '{}');
             // Images usually handled separately, but if payload has them, update
         } else {
@@ -539,6 +540,7 @@ onMounted(async () => {
                 content: payload.content,
                 timestamp: payload.timestamp,
                 senderId: payload.agent_id || 'pero',
+                pair_id: payload.pair_id,
                 images: [], // Images handled separately or via metadata
                 metadata: JSON.parse(payload.metadata || '{}')
             });
@@ -914,7 +916,14 @@ const handleConfirmDelete = async () => {
     });
     
     if (res.ok) {
-      messages.value = messages.value.filter(m => m.id !== pendingDeleteId.value);
+      const deletedMsg = messages.value.find(m => m.id === pendingDeleteId.value);
+      if (deletedMsg && deletedMsg.pair_id) {
+        // 如果有 pair_id，删除本地所有匹配的消息（原子化同步）
+        messages.value = messages.value.filter(m => m.pair_id !== deletedMsg.pair_id);
+      } else {
+        // 否则仅删除单条
+        messages.value = messages.value.filter(m => m.id !== pendingDeleteId.value);
+      }
     }
   } catch (e) {
     console.error('Failed to delete message', e);
@@ -1073,7 +1082,7 @@ const fetchHistory = async (append = false) => {
   // If in work mode, use 'ide' source.
   // If in chat mode (workMode false), use 'desktop' source to sync with PetView.
   const source = props.workMode ? 'ide' : 'desktop';
-  const sessionId = props.workMode ? 'current_work_session' : 'default';
+  const sessionId = props.workMode ? 'current_work_session' : (props.targetId || 'default');
   
   try {
     let res;
@@ -1120,7 +1129,8 @@ const fetchHistory = async (append = false) => {
           content: log.raw_content || log.content, // Prioritize raw_content for NIT tool display
           timestamp: log.timestamp,
           images: images,
-          senderId: log.sender_id
+          senderId: log.sender_id,
+          pair_id: log.pair_id
         };
       });
       

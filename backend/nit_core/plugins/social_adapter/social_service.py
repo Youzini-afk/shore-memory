@@ -659,8 +659,6 @@ class SocialService:
             target_name = target_session.session_name
             # [Fix] Use target_session.agent_id
             agent_profile = agent_manager.agents.get(target_session.agent_id)
-            identity_label = agent_profile.identity_label if agent_profile else "智能助手"
-            personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
             if agent_profile:
                 bot_name = agent_profile.name
@@ -670,9 +668,7 @@ class SocialService:
                 "current_time": datetime.now().strftime('%H:%M'),
                 "session_state": session_state,
                 "session_type_str": session_type_str,
-                "target_session_name": target_name,
-                "identity_label": identity_label,
-                "personality_tags": personality_tags
+                "target_session_name": target_name
             }
 
             prompt = mdp.render(template_name, prompt_context)
@@ -1148,18 +1144,13 @@ class SocialService:
                     
                     bot_name = agent_profile.name if agent_profile else self.config_manager.get("bot_name", "Pero")
                     
-                    identity_label = agent_profile.identity_label if agent_profile else "智能助手"
-                    personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
-                    
                     if agent_profile:
                         bot_name = agent_profile.name
 
                 prompt = mdp.render("social/decisions/friend_request_decision", {
                     "agent_name": bot_name,
                     "user_id": user_id,
-                    "comment": comment,
-                    "identity_label": identity_label,
-                    "personality_tags": personality_tags
+                    "comment": comment
                 })
                 
                 messages = [{"role": "system", "content": prompt}]
@@ -1277,7 +1268,7 @@ class SocialService:
         await self._send_api("delete_friend", {"user_id": user_id})
         logger.debug(f"[Social] 好友 {user_id} 已删除。")
 
-    async def _perform_active_agent_response(self, session: SocialSession, current_mode: str = "ACTIVE_OBSERVATION", extra_images: list = None) -> bool:
+    async def _perform_active_agent_response(self, session: SocialSession, current_mode: str = "ACTIVE_OBSERVATION", extra_images: list = None, user_text_context: str = None) -> bool:
         """
         [Action Layer] 直接调用 Agent 进行思考和回复。
         用于 Active 状态下的即时响应（消息触发或主动触发）。
@@ -1286,6 +1277,7 @@ class SocialService:
             session: 目标会话
             current_mode: "SUMMONED" 或 "ACTIVE_OBSERVATION"
             extra_images: 也就是 session.buffer 中的图片，用于 Vision 分析
+            user_text_context: 用户发送的文本内容 (如果有)
             
         Returns:
             bool: 是否发送了消息
@@ -1646,17 +1638,12 @@ class SocialService:
                     custom_persona = agent_profile.social_custom_persona
                     logger.debug(f"[{session.session_id}] Using active agent persona: {agent_name}")
 
-                identity_label = agent_profile.identity_label if agent_profile else "智能助手"
-                personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
-
                 if not custom_persona:
                     # 尝试从 MDP 加载默认人设模板 (personas/social_default.md)
-                    fallback_persona = f"你是一个{identity_label}，正在以社交模式与用户交流。"
+                    fallback_persona = "你是一个智能助手，正在以社交模式与用户交流。"
                     try:
                         rendered_default = mdp.render("social/personas/social_default", {
-                            "owner_qq": owner_qq,
-                            "identity_label": identity_label,
-                            "personality_tags": personality_tags
+                            "owner_qq": owner_qq
                         })
                         if "Missing Prompt" not in rendered_default and "Error" not in rendered_default:
                             custom_persona = rendered_default
@@ -1738,6 +1725,11 @@ class SocialService:
                 
                 # 构造最终的消息列表 (仅包含 User Content)
                 # 为防止 Empty User Message 错误，如果没有图片则添加默认触发词
+                
+                # [Fix] 注入用户文本内容
+                if user_text_context:
+                    user_content.append({"type": "text", "text": user_text_context})
+
                 if not user_content:
                     user_content.append({"type": "text", "text": "(Listening...)"})
                 
@@ -1913,9 +1905,14 @@ class SocialService:
         try:
             # 收集当前 Buffer 中的图片用于 Vision 分析
             session_images = []
+            session_texts = []
             for buf_msg in session.buffer:
                 if buf_msg.images:
                     session_images.extend(buf_msg.images)
+                if buf_msg.content:
+                    session_texts.append(buf_msg.content)
+            
+            user_text_context = "\n".join(session_texts) if session_texts else None
 
             # 调用统一的 Action Layer
             logger.debug(f"[{session.session_id}] 正在进入 _perform_active_agent_response...")
@@ -1923,7 +1920,7 @@ class SocialService:
             # [CRITICAL FIX] 使用 create_task 避免阻塞 flush 逻辑，但必须确保持有引用
             # 注意：原代码是直接 await，这会导致 flush 阻塞，进而可能影响 WS 接收。
             # 如果改为 create_task，则必须持有引用防止 GC。
-            task = asyncio.create_task(self._perform_active_agent_response(session, current_mode, session_images))
+            task = asyncio.create_task(self._perform_active_agent_response(session, current_mode, session_images, user_text_context))
             
             # [CRITICAL FIX] 保存任务引用，防止被垃圾回收
             # 我们使用 session 对象本身来持有这个引用，因为它生命周期足够长

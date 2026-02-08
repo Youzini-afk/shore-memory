@@ -11,7 +11,9 @@ except ImportError:
     from backend.models import PetState
     from sqlmodel import select
 
-async def update_character_status(
+async def finish_task(
+    summary: str,
+    status: str = "success",
     mood: str = None, 
     vibe: str = None, 
     mind: str = None,
@@ -23,14 +25,24 @@ async def update_character_status(
     **kwargs
 ) -> str:
     """
-    Updates the character's emotion, motion, and interactive messages.
-    Persists changes to database and returns a JSON string of triggers.
+    Updates the character's emotion, motion, and interactive messages, THEN terminates the current task loop.
+    Note: In this project, state updates are merged into finish_task. 
+    Calling this (or its alias update_character_status) will both update the state and end the ReAct cycle.
+    
+    Args:
+        summary (str): The final response message to the user.
+        status (str): "success" or "failure".
+        mood (str): Current mood (e.g., happy, sad, angry).
+        vibe (str): Current vibe/action (e.g., active, idle).
+        mind (str): Inner monologue.
+        click_*_msgs (str/list): Interactive messages.
+        idle_msgs (str/list): Idle messages.
+        back_msgs (str/list): Welcome back messages.
     """
+    
+    # --- Part 1: Update Character Status ---
     try:
-        # 1. Construct triggers dictionary
         triggers = {}
-        
-        # (1) State / Perocue
         state_data = {}
         if mood: state_data["mood"] = mood
         if vibe: state_data["vibe"] = vibe
@@ -39,10 +51,7 @@ async def update_character_status(
         if state_data:
             triggers["state"] = state_data
 
-        # (2) Click Messages
         click_data = {}
-        
-        # Map parameter names to internal keys
         msg_map = {
             "head": click_head_msgs,
             "chest": click_chest_msgs,
@@ -63,7 +72,6 @@ async def update_character_status(
         if click_data:
             triggers["click_messages"] = click_data
 
-        # (3) Idle Messages
         if idle_msgs:
             if isinstance(idle_msgs, str):
                 try:
@@ -74,7 +82,6 @@ async def update_character_status(
             elif isinstance(idle_msgs, list):
                     triggers["idle_messages"] = idle_msgs
 
-        # (4) Back Messages
         if back_msgs:
                 if isinstance(back_msgs, str):
                     try:
@@ -85,57 +92,58 @@ async def update_character_status(
                 elif isinstance(back_msgs, list):
                     triggers["back_messages"] = back_msgs
 
-        # --- Database Update Logic ---
+        # Database Logic
         session = _CURRENT_SESSION_CONTEXT.get("db_session")
         agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
         
         if session:
-            # Get or Create PetState
             pet_state = (await session.exec(select(PetState).where(PetState.agent_id == agent_id).limit(1))).first()
             if not pet_state:
                 pet_state = PetState(agent_id=agent_id)
                 session.add(pet_state)
             
-            # Update Fields
             if mood: pet_state.mood = mood
             if vibe: pet_state.vibe = vibe
             if mind: pet_state.mind = mind
             
-            # Update JSON fields if present
+            # Map correctly to model fields (based on the original code's pattern)
+            # In PeroCore-Electron, the model might use click_messages_json or similar
             if click_data:
-                # Merge with existing? Or overwrite? 
-                # Ideally merge, but simple overwrite is safer for consistency with current thought.
-                # But let's check if we need to merge. 
-                # For now, let's overwrite to ensure new behavior takes effect.
-                # Actually, if only 'head' is provided, we shouldn't wipe 'chest'.
-                current_click = json.loads(pet_state.click_messages_json) if pet_state.click_messages_json else {}
+                field_name = "click_messages_json" if hasattr(pet_state, "click_messages_json") else "click_messages"
+                current_val = getattr(pet_state, field_name)
+                current_click = json.loads(current_val) if current_val and isinstance(current_val, str) else {}
                 current_click.update(click_data)
-                pet_state.click_messages_json = json.dumps(current_click, ensure_ascii=False)
+                setattr(pet_state, field_name, json.dumps(current_click, ensure_ascii=False))
                 
             if "idle_messages" in triggers:
-                pet_state.idle_messages_json = json.dumps(triggers["idle_messages"], ensure_ascii=False)
+                field_name = "idle_messages_json" if hasattr(pet_state, "idle_messages_json") else "idle_messages"
+                setattr(pet_state, field_name, json.dumps(triggers["idle_messages"], ensure_ascii=False))
                 
             if "back_messages" in triggers:
-                pet_state.back_messages_json = json.dumps(triggers["back_messages"], ensure_ascii=False)
+                field_name = "back_messages_json" if hasattr(pet_state, "back_messages_json") else "back_messages"
+                setattr(pet_state, field_name, json.dumps(triggers["back_messages"], ensure_ascii=False))
                 
             pet_state.updated_at = datetime.now()
             session.add(pet_state)
             await session.commit()
             
-            # [Feature] Broadcast State Update via Gateway
+            # Gateway Broadcast
             try:
-                from services.gateway_client import gateway_client
-                from peroproto import perolink_pb2
-                import uuid
-                import time
-                
-                # Construct payload
+                try:
+                    from services.gateway_client import gateway_client
+                    from peroproto import perolink_pb2
+                    import uuid
+                    import time
+                except ImportError:
+                    from backend.services.gateway_client import gateway_client
+                    from backend.peroproto import perolink_pb2
+                    import uuid
+                    import time
+
                 payload = {}
                 if mood: payload["mood"] = mood
                 if vibe: payload["vibe"] = vibe
                 if mind: payload["mind"] = mind
-                
-                # Include triggers (click_messages, idle_messages, etc.)
                 if click_data: payload["click_messages"] = click_data
                 if "idle_messages" in triggers: payload["idle_messages"] = triggers["idle_messages"]
                 if "back_messages" in triggers: payload["back_messages"] = triggers["back_messages"]
@@ -143,12 +151,11 @@ async def update_character_status(
                 if payload:
                     envelope = perolink_pb2.Envelope()
                     envelope.id = str(uuid.uuid4())
-                    envelope.source_id = "backend_character_ops"
+                    envelope.source_id = "backend_task_lifecycle"
                     envelope.target_id = "broadcast"
                     envelope.timestamp = int(time.time() * 1000)
                     envelope.request.action_name = "state_update"
                     
-                    # Convert payload to JSON string for params
                     for k, v in payload.items():
                         if isinstance(v, (dict, list)):
                             envelope.request.params[k] = json.dumps(v, ensure_ascii=False)
@@ -156,48 +163,44 @@ async def update_character_status(
                             envelope.request.params[k] = str(v)
                             
                     await gateway_client.send(envelope)
-                    print(f"[CharacterOps] Broadcasted state update: {payload.keys()}")
                 else:
-                    try:
-                        from services.gateway_client import gateway_client
-                        await gateway_client.broadcast_pet_state(pet_state.model_dump())
-                    except Exception as e:
-                        print(f"[CharacterOps] Broadcast failed: {e}")
+                    await gateway_client.broadcast_pet_state(pet_state.model_dump())
 
             except Exception as e:
-                print(f"[CharacterOps] Failed to broadcast state update: {e}")
-            
-            # No refresh needed unless we read back
+                print(f"[TaskLifecycle] Failed to broadcast state update: {e}")
             
         else:
-            print("[CharacterOps] Warning: No database session available. Changes not persisted.")
+            print("[TaskLifecycle] Warning: No database session available. Changes not persisted.")
 
-        if not triggers:
-            return "No status updates provided."
-
-        # Broadcast to frontend (Tauri/Web)
-        try:
-            # Lazy import to avoid circular dependency
+        # Realtime Broadcast
+        if triggers:
             try:
-                from services.realtime_session_manager import realtime_session_manager
-            except ImportError:
-                from backend.services.realtime_session_manager import realtime_session_manager
+                try:
+                    from services.realtime_session_manager import realtime_session_manager
+                except ImportError:
+                    from backend.services.realtime_session_manager import realtime_session_manager
                 
-            await realtime_session_manager.broadcast({
-                "type": "triggers",
-                "data": triggers
-            })
-        except Exception as e:
-            print(f"[CharacterOps] Failed to broadcast triggers: {e}")
-
-        return json.dumps(triggers, ensure_ascii=False)
+                await realtime_session_manager.broadcast({
+                    "type": "triggers",
+                    "data": triggers
+                })
+            except Exception as e:
+                print(f"[TaskLifecycle] Failed to broadcast triggers: {e}")
 
     except Exception as e:
         import traceback
         traceback.print_exc()
-        return f"Error updating status: {str(e)}"
+        print(f"[TaskLifecycle] Error updating status: {str(e)}")
 
-# Aliases for backward compatibility if needed by direct python calls
-update_status = update_character_status
-set_status = update_character_status
-set_state = update_character_status
+    # --- Part 2: Return Finish Message ---
+    return f"[System] Task finished with status: {status}. Summary: {summary}"
+
+# Alias for backward compatibility and Agent "hallucinations"
+async def update_character_status(**kwargs) -> str:
+    """
+    Alias for finish_task. In this project, updating status implies finishing the task.
+    If 'summary' is missing, it uses 'mind' or a default message.
+    """
+    if "summary" not in kwargs:
+        kwargs["summary"] = kwargs.get("mind", "状态已更新。")
+    return await finish_task(**kwargs)

@@ -13,7 +13,7 @@ Injected Via: mdp.render("social/reporting/daily_report_generator", ...)
 {{ context_text }}
 
 要求:
-1. **人设**: 你是 {{ agent_name }}（{{ identity_label }}），性格{{ personality_tags }}。
+1. **人设**: 你是 {{ agent_name }}。
 2. **格式**: 必须是**第一人称**（“我”）的日记格式。
 3. **内容**: 回顾今天和大家聊了什么有趣的事情，记录你的心情变化。
 4. **风格**: 就像写给自己的私密日记，或者发给主人的碎碎念。不要写成工作汇报！

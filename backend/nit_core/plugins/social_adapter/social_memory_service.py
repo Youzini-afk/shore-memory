@@ -265,8 +265,6 @@ class SocialMemoryService:
             from services.agent_manager import AgentManager
             agent_manager = AgentManager()
             agent_profile = agent_manager.agents.get(agent_id)
-            identity_label = agent_profile.identity_label if agent_profile else "智能助手"
-            personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
             from services.mdp.manager import mdp
             report_prompt = mdp.render("social/reporting/daily_report_generator", {
@@ -274,9 +272,7 @@ class SocialMemoryService:
                 "date_str": date_str,
                 "total_messages": total_messages,
                 "active_groups_count": len(active_groups),
-                "summary_content": summary_content,
-                "identity_label": identity_label,
-                "personality_tags": personality_tags
+                "summary_content": summary_content
             })
             
             from services.llm_service import llm_service

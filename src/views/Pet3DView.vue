@@ -72,6 +72,7 @@
         </button>
         <button class="tool-btn" @click.stop="openChatWindow" title="聊天">💬</button>
         <button class="tool-btn" @click.stop="openDashboard" title="面板">⚙️</button>
+        <button class="tool-btn" @click.stop="minimizeToTray" title="最小化到托盘">➖</button>
       </div>
 
       <!-- PTT Floating Button (Voxel Style) -->
@@ -1367,13 +1368,13 @@ onMounted(async () => {
 });
 
 const windowSizes = [
-    { width: 500, height: 500 },
     { width: 600, height: 600 },
     { width: 800, height: 800 },
     { width: 1000, height: 1000 },
-    { width: 1200, height: 1200 }
+    { width: 1200, height: 1200 },
+    { width: 500, height: 500 }
 ];
-const currentSizeIndex = ref(0); // Default 500x500
+const currentSizeIndex = ref(0); // Default 600x600
 
 const toggleWindowSize = async () => {
     // Increment index and wrap around
@@ -1400,6 +1401,10 @@ const openChatWindow = () => {
 
 const openDashboard = () => {
     invoke('open_dashboard').catch(console.error);
+}
+
+const minimizeToTray = () => {
+    invoke('hide_pet_window').catch(console.error);
 }
 </script>
 

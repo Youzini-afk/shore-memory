@@ -214,14 +214,10 @@ class ScorerService:
              agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
              
         bot_name = agent_profile.name if agent_profile else config_manager.get("bot_name", "Pero")
-        identity_label = agent_profile.identity_label if agent_profile else "智能助手"
-        personality_tags = "、".join(agent_profile.personality_tags) if agent_profile else ""
 
         # 渲染分析提示词
         system_prompt = self.mdp.render("tasks/memory/scorer/summary", {
-            "agent_name": bot_name,
-            "identity_label": identity_label,
-            "personality_tags": personality_tags
+            "agent_name": bot_name
         })
         
         # 验证是否加载成功，如果包含 Error 则记录警告 (虽然 render 会返回错误信息，但不会抛出异常)

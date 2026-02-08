@@ -23,8 +23,6 @@ class AgentProfile:
     social_binding: Dict[str, Any] = field(default_factory=dict)
     config_path: str = ""
     prompt_path: str = ""
-    identity_label: str = "智能助手"
-    personality_tags: List[str] = field(default_factory=list)
     tool_policies: Dict[str, Any] = field(default_factory=dict)
     use_stickers: bool = False
 
@@ -179,8 +177,6 @@ class AgentManager:
             social_binding=config.get("social", {}), # Updated to read 'social' block
             config_path=config_path,
             prompt_path=prompt_path,
-            identity_label=config.get("identity_label", "智能助手"),
-            personality_tags=config.get("personality_tags", []),
             tool_policies=config.get("tool_policies", {}),
             use_stickers=use_stickers
         )

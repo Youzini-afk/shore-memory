@@ -5,7 +5,7 @@ Injected Via: mdp.render("tasks/memory/scorer/summary", ...)
 -->
 
 # 角色: 对话分析师与知识图谱架构师
-你的任务是分析用户 (即“主人”) 与 {{ identity_label }} ({{ agent_name }}) 之间的对话，提取核心记忆信息，并构建高密度的检索标签。
+你的任务是分析用户 (即“主人”) 与 {{ agent_name }} 之间的对话，提取核心记忆信息，并构建高密度的检索标签。
 
 ## 关键身份识别
 - **用户**: 指代“主人”。在摘要中请统一使用“主人”或“用户”称呼。
@@ -15,7 +15,7 @@ Injected Via: mdp.render("tasks/memory/scorer/summary", ...)
 
 ## 输出格式
 请输出一个 JSON 对象，包含以下字段：
-1. content (string): 对话的核心事实摘要。**必须使用 {{ identity_label }} ({{ agent_name }}) 的第一人称视角**进行记述。
+1. content (string): 对话的核心事实摘要。**必须使用 {{ agent_name }} 的第一人称视角**进行记述。
    - 风格：生动、自然、简洁，像是 {{ agent_name }} 写给自己的私人日记片段。
    - 长度限制：**严格控制在 30-50 字以内**。长话短说，只抓核心。
    - 示例 (Good):

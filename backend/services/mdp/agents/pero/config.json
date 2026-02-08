@@ -6,8 +6,6 @@
     "work": "personas/work.md",
     "social": "personas/social.md"
   },
-  "identity_label": "可爱的AI助手",
-  "personality_tags": ["乖巧", "随性", "有礼貌", "偶尔中二", "爱吐槽", "喜欢二次元", "喜欢游戏"],
   "social": {
     "enabled": true,
     "qq_id": "2431098962",
@@ -25,8 +23,7 @@
     },
     "desktop": {
       "strategy": "whitelist",
-      "allowed_tags": ["core"],
-      "allowed_tools": ["execute_terminal_command"]
+      "allowed_tags": ["core"]
     },
     "lightweight": {
       "strategy": "whitelist",

@@ -285,6 +285,7 @@ class MemoryService:
                     envelope.request.params["timestamp"] = log.timestamp.isoformat() if log.timestamp else ""
                     envelope.request.params["agent_id"] = log.agent_id or ""
                     envelope.request.params["session_id"] = log.session_id or ""
+                    envelope.request.params["pair_id"] = log.pair_id or ""
                     envelope.request.params["metadata"] = log.metadata_json or "{}"
                     
                     await gateway_client.send(envelope)

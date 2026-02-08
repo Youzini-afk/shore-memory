@@ -46,8 +46,21 @@ async def websocket_endpoint(websocket: WebSocket):
                 try:
                     preview = json.loads(data)
                     ptype = preview.get("post_type", "unknown")
+                    
+                    # 尝试细化 unknown 类型的显示 (例如 meta_event)
+                    sub_type = ""
+                    if ptype == "meta_event":
+                        sub_type = f" ({preview.get('meta_event_type', '')})"
+                    elif ptype == "notice":
+                        sub_type = f" ({preview.get('notice_type', '')})"
+                    elif ptype == "request":
+                        sub_type = f" ({preview.get('request_type', '')})"
+                    
                     if ptype != "meta_event": # 忽略心跳
-                        logger.info(f"[Social-WS] 收到事件: {ptype}, length={len(data)}")
+                        logger.info(f"[Social-WS] 收到事件: {ptype}{sub_type}, length={len(data)}")
+                    else:
+                        # 对于心跳，仅使用 debug 级别，防止刷屏
+                        logger.debug(f"[Social-WS] 收到心跳: {preview.get('meta_event_type')}")
                 except:
                     logger.debug(f"[Social-WS] 收到数据: {len(data)} chars")
             

@@ -46,7 +46,7 @@ if os.name == 'nt':
         path_str = '/' + path_str
     DATABASE_URL = f"sqlite+aiosqlite://{path_str}"
 
-from sqlalchemy import event
+from sqlalchemy import event, text
 
 engine = create_async_engine(
     DATABASE_URL, 
@@ -80,20 +80,20 @@ async def check_and_migrate_db():
     """
     async with engine.connect() as conn:
         def sync_check(sync_conn):
-            cursor = sync_conn.cursor()
-            
             # 1. 修复 MaintenanceRecord 表缺失 clustered_count 列的问题
             try:
-                cursor.execute("PRAGMA table_info(maintenancerecord)")
-                columns = [column[1] for column in cursor.fetchall()]
+                # 使用 text() 构建 SQL，sync_conn 是 SQLAlchemy Connection 对象
+                result = sync_conn.execute(text("PRAGMA table_info(maintenancerecord)"))
+                # result.fetchall() 返回 Row 对象列表，Row 对象支持索引访问
+                # PRAGMA table_info 返回列：cid, name, type, ... (name 是索引 1)
+                columns = [row[1] for row in result.fetchall()]
+                
                 if columns and 'clustered_count' not in columns:
                     print("[Database Migration] Adding 'clustered_count' column to 'maintenancerecord'...")
-                    cursor.execute("ALTER TABLE maintenancerecord ADD COLUMN clustered_count INTEGER DEFAULT 0")
+                    sync_conn.execute(text("ALTER TABLE maintenancerecord ADD COLUMN clustered_count INTEGER DEFAULT 0"))
                     sync_conn.commit()
             except Exception as e:
                 print(f"[Database Migration] Error migrating maintenancerecord: {e}")
-            
-            cursor.close()
 
         await conn.run_sync(sync_check)
 

@@ -51,12 +51,12 @@ class ReflectionService:
             "temperature": 0.4 # 需要一定的创造力来发现关联，但不能太发散
         }
 
-    async def backfill_failed_scorer_tasks(self, retry_limit: int = 3, concurrency_limit: int = 5):
+    async def backfill_failed_scorer_tasks(self, retry_limit: int = 3, concurrency_limit: int = 5, agent_id: str = None):
         """
         [补录记忆]
         处理失败的Scorer分析任务
         """
-        print("[Reflection] 开始回填失败的 Scorer 任务...", flush=True)
+        print(f"[Reflection] 开始回填失败的 Scorer 任务 (agent_id={agent_id})...", flush=True)
         
         semaphore = asyncio.Semaphore(concurrency_limit)
         
@@ -64,7 +64,12 @@ class ReflectionService:
         statement = select(ConversationLog).where(
             (ConversationLog.analysis_status == "failed") &
             (ConversationLog.retry_count < retry_limit)
-        ).order_by(desc(ConversationLog.timestamp))
+        )
+        
+        if agent_id:
+            statement = statement.where(ConversationLog.agent_id == agent_id)
+            
+        statement = statement.order_by(desc(ConversationLog.timestamp))
         
         failed_tasks = (await self.session.exec(statement)).all()
         if not failed_tasks:
@@ -273,9 +278,7 @@ class ReflectionService:
         
         variables = {
             "agent_name": agent_id,
-            "identity_label": "桌宠助手",
             "owner_name": owner_name,
-            "personality_tags": "温柔、活泼、粘人",
             "date_str": date_str,
             "chat_history": chat_history[:10000] # Token limit safeguard
         }

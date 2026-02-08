@@ -384,7 +384,7 @@ class NITDispatcher:
                     # Also check against direct name just in case
                     if norm_name not in normalized_allowed and name not in allowed_tools:
                         logger.warning(f"安全拦截: 工具 '{name}' 不在白名单中。")
-                        raise PermissionError(f"Tool '{name}' is not allowed in current context.")
+                        return f"⚠️ 权限拒绝: 当前模式下不允许使用工具 '{name}'。请尝试使用其他工具，或告知用户无法执行此操作。"
                 # -----------------------
 
                 current_block_tools.append(name)
@@ -469,7 +469,7 @@ class NITDispatcher:
             # 轻量模式检查
             config = get_config_manager()
             if config.get("lightweight_mode", False):
-                if plugin_id not in ["ScreenVision", "CharacterOps", "MemoryOps"]:
+                if plugin_id not in ["ScreenVision", "TaskLifecycle", "MemoryOps"]:
                     logger.warning(f"轻量模式拦截: {plugin_name}")
                     return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。"
 
@@ -509,10 +509,13 @@ class NITDispatcher:
         if not handler:
             if norm_name in self.category_map:
                 tools = self.category_map[norm_name]
-                return f"错误: '{plugin_name}' 是类别而非工具。可用工具: {', '.join(tools)}"
+                msg = f"错误: '{plugin_name}' 是类别而非工具。可用工具: {', '.join(tools)}"
+                logger.error(msg)
+                raise RuntimeError(msg)
             
-            logger.error(f"未找到插件 '{plugin_name}'")
-            return f"错误: 未找到插件 '{plugin_name}' (归一化名: {norm_name})。"
+            msg = f"错误: 未找到插件 '{plugin_name}' (归一化名: {norm_name})。"
+            logger.error(msg)
+            raise RuntimeError(msg)
             
         try:
             result = None

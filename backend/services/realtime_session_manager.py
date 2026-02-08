@@ -226,6 +226,7 @@ class RealtimeSessionManager:
                 generation_error = None
                 
                 try:
+                    last_broadcasted_ui_text = ""
                     async for chunk in agent.chat(
                         messages_payload, 
                         source="gateway",
@@ -235,7 +236,20 @@ class RealtimeSessionManager:
                         user_text_override=user_text
                     ):
                         if chunk:
+                            # Filter out SSE events (internal signaling)
+                            if chunk.startswith("data:"):
+                                continue
+
                             full_response += chunk
+                            
+                            # [Incremental Broadcast]
+                            # Try to clean the text to see if we have displayable content
+                            current_ui_text = self._clean_text(full_response, for_tts=False)
+                            # Broadcast only if content exists and has changed
+                            if current_ui_text and current_ui_text != last_broadcasted_ui_text:
+                                await self.broadcast_gateway({"type": "text_response", "content": current_ui_text})
+                                last_broadcasted_ui_text = current_ui_text
+                                
                 except Exception as e:
                     print(f"生成错误: {e}")
                     generation_error = str(e)

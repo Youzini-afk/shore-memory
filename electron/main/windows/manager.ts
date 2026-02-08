@@ -131,10 +131,10 @@ export class WindowManager {
     this.petWin = new BrowserWindow({
       title: 'Pero Pet',
       icon: this.getIconPath(),
-      width: 800,
-      height: 800,
-      x: width - 850,
-      y: height - 850,
+      width: 600,
+      height: 600,
+      x: width - 650,
+      y: height - 650,
       // type: 'toolbar', // 已移除: 'toolbar' 可能在某些 Windows 版本上导致可见性问题
       frame: false,
       transparent: true, // 恢复透明

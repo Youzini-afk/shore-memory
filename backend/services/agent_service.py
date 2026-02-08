@@ -664,7 +664,8 @@ class AgentService:
                 # Ideally we should filter tasks by agent_id too.
                 # But ReflectionService.backfill_failed_scorer_tasks doesn't support filtering yet.
                 # It's safe to run globally as it respects log.agent_id.
-                await service.backfill_failed_scorer_tasks()
+                # UPDATE: Now it supports filtering to prevent log noise and potential race conditions.
+                await service.backfill_failed_scorer_tasks(agent_id=agent_id)
         
                 # 2. 孤独记忆扫描 (New Feature: Fix isolated memories)
                 # 每次梦境周期扫描 3 个孤独记忆
@@ -829,8 +830,9 @@ class AgentService:
         # --- 工具列表优化 ---
         # [Refactor] Unified Tool Policy Enforcement
         from services.agent_manager import get_agent_manager
-        from nit_core.plugin_manager import plugin_manager
+        from core.plugin_manager import get_plugin_manager
         
+        plugin_manager = get_plugin_manager()
         agent_manager = get_agent_manager()
         agent_profile = agent_manager.get_agent(current_agent_id)
         
@@ -931,6 +933,33 @@ class AgentService:
                     tool_tags_map[tool_name] = ["mcp"]
             except Exception as e:
                 print(f"[AgentService] 警告: 列出客户端 {client.name} 的工具失败: {e}")
+
+        # 5.3 Plugin Tools (NIT Plugins)
+        # Ensure plugins are also candidates so they can be whitelisted and exposed
+        existing_tool_names = set(t["function"]["name"] for t in candidate_tools)
+        for m in all_manifests:
+            cmds = []
+            if "capabilities" in m and "invocationCommands" in m["capabilities"]:
+                cmds = m["capabilities"]["invocationCommands"]
+            elif "capabilities" in m and "toolDefinitions" in m["capabilities"]:
+                cmds = m["capabilities"]["toolDefinitions"]
+            
+            for cmd in cmds:
+                c_id = cmd.get("commandIdentifier")
+                if c_id and c_id not in existing_tool_names:
+                    # Construct a basic function definition
+                    # Note: Plugin args might not be perfect JSON Schema, so we default to empty dict if unsure
+                    # or wrap them if they look like simple key-values. 
+                    # For now, we trust the plugin author or provide a permissive schema.
+                    candidate_tools.append({
+                        "type": "function",
+                        "function": {
+                            "name": c_id,
+                            "description": cmd.get("description", ""),
+                            "parameters": {"type": "object", "properties": {}, "additionalProperties": True} 
+                        }
+                    })
+                    existing_tool_names.add(c_id)
 
         # 6. Filter Tools based on Policy
         final_tools = []
@@ -1121,7 +1150,6 @@ class AgentService:
                             should_terminate_nit_loop = False
                             
                             for res in nit_results:
-                                icon = "✅" if res['status'] == 'success' else "❌"
                                 out_str = str(res['output'])
 
                                 # [Feature] Real-time Status Sync for NIT
@@ -1163,9 +1191,29 @@ class AgentService:
                                     print(f"[Agent] Failed to parse state update from NIT result: {e}")
 
                                 if len(out_str) > 2000: out_str = out_str[:2000] + "...(truncated)"
-                                obs_text += f"{icon} 工具 [{res['plugin']}] 执行完成。\n结果:\n{out_str}\n\n"
                                 
-                                if res['plugin'] == 'finish_task':
+                                # --- 优化反馈文案与状态判定 ---
+                                display_name = res['plugin']
+                                if display_name == "NIT_Script" and res.get('executed_tools'):
+                                    # 如果是脚本块，列出主要执行的工具
+                                    display_name = f"NIT 脚本: {', '.join(res['executed_tools'])}"
+                                
+                                # 启发式判定：如果输出以错误标识开头，或者包含“未找到插件”，则视为失败
+                                is_actually_success = res['status'] == 'success'
+                                if is_actually_success:
+                                    error_indicators = ["错误:", "⚠️", "未找到插件", "权限拒绝", "Error:"]
+                                    if any(out_str.startswith(ind) for ind in error_indicators) or "未找到插件" in out_str:
+                                        is_actually_success = False
+                                        # 同步更新 res['status'] 以便后续逻辑（如熔断、反思）能识别
+                                        res['status'] = 'error'
+                                
+                                icon = "✅" if is_actually_success else "❌"
+                                status_text = "执行完成" if is_actually_success else "执行失败"
+                                
+                                obs_text += f"{icon} 工具 [{display_name}] {status_text}。\n结果:\n{out_str}\n\n"
+                                # ----------------------------
+                                
+                                if res['plugin'] == 'finish_task' or 'finish_task' in res.get('executed_tools', []):
                                     should_terminate_nit_loop = True
 
                                 # 宽松匹配截图请求 (处理大小写和别名)
