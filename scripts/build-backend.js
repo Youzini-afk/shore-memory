@@ -189,6 +189,27 @@ function buildRustExtensions() {
             continue;
         }
 
+        // In CI, if the package is already installed, skip building to avoid double-build issues
+        // (The YAML workflow already builds and installs them using the system python)
+        if (process.env.CI) {
+            let installed = false;
+            try {
+                execSync(`"${pythonExe}" -m pip show ${ext.name}`, { stdio: 'ignore' });
+                installed = true;
+            } catch (e) {
+                try {
+                    const pkgName = ext.name.replace(/_/g, '-');
+                    execSync(`"${pythonExe}" -m pip show ${pkgName}`, { stdio: 'ignore' });
+                    installed = true;
+                } catch (e2) {}
+            }
+
+            if (installed) {
+                log(`${ext.name} is already installed (CI detected). Skipping rebuild.`, 'success');
+                continue;
+            }
+        }
+
         // Try to find existing wheel in target/wheels to reuse
         const targetWheelsDir = path.join(ext.dir, 'target', 'wheels');
         let reused = false;
