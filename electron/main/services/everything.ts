@@ -1,4 +1,3 @@
-import path from 'path'
 import fs from 'fs-extra'
 import AdmZip from 'adm-zip'
 import axios from 'axios'
@@ -13,19 +12,16 @@ function getWorkspaceRoot() {
 }
 
 export function getEsDir() {
-  // 1. Dev
   // 1. 开发环境
   const devRoot = getWorkspaceRoot()
   const devPath = join(devRoot, 'backend/nit_core/tools/core/FileSearch')
   if (fs.existsSync(devPath)) return devPath
 
-  // 2. Prod (resources)
   // 2. 生产环境 (resources)
   const resourcePath = paths.resources
   const pkgPath = join(resourcePath, 'backend/nit_core/tools/core/FileSearch')
   if (fs.existsSync(pkgPath)) return pkgPath
 
-  // Fallback
   // 后备方案
   return devPath
 }
@@ -41,7 +37,9 @@ export async function installEs(window: WindowLike) {
   const emit = (msg: string) => {
     try {
       if (!window.isDestroyed()) window.webContents.send('es-log', msg)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
   }
 
   emit(`正在检查 ES 工具: ${dir}`)

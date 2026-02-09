@@ -7,7 +7,7 @@ NIT Interpreter 核心模块
 
 try:
     # 尝试导入 Rust 编译的高性能运行时
-    from nit_rust_runtime import Lexer, Parser, PipelineNode
+    from nit_rust_runtime import Lexer, Parser
 
     RUST_AVAILABLE = True
 except ImportError:

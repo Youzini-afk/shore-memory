@@ -5,6 +5,7 @@ import logging
 import os
 import random
 import uuid
+from contextlib import suppress
 from contextvars import ContextVar
 from datetime import datetime, timedelta
 from typing import Any, Dict, Optional, Set
@@ -14,9 +15,9 @@ from fastapi import WebSocket, WebSocketDisconnect
 
 from core.config_manager import get_config_manager
 
-# ContextVar for deduplication
-injected_msg_ids_var: ContextVar[Set[str]] = ContextVar(
-    "injected_msg_ids", default=set()
+# ContextVar 用于去重
+injected_msg_ids_var: ContextVar[Optional[Set[str]]] = ContextVar(
+    "injected_msg_ids", default=None
 )
 from sqlalchemy.orm import sessionmaker
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -27,11 +28,12 @@ from services.agent_manager import AgentManager
 from services.mdp.manager import mdp
 from services.memory_service import MemoryService
 
+# ruff: noqa: E402
 from .models import SocialSession
 from .session_manager import SocialSessionManager
 
-# from services.agent_service import AgentService (Moved inside method)
-# from services.prompt_service import PromptManager (Moved inside method to avoid circular import)
+# from services.agent_service import AgentService (移至方法内部)
+# from services.prompt_service import PromptManager (移至方法内部以避免循环导入)
 
 logger = logging.getLogger(__name__)
 
@@ -43,18 +45,18 @@ class SocialService:
 
     def __init__(self):
         self.config_manager = get_config_manager()
-        # [Refactor] Replace single active_ws with connection pool
+        # [重构] 将单个 active_ws 替换为连接池
         self.connections: Dict[str, WebSocket] = {}  # self_id -> WebSocket
-        self.default_ws: Optional[WebSocket] = None  # Fallback for no-ID connections
+        self.default_ws: Optional[WebSocket] = None  # 无 ID 连接的回退
 
         self.running = False
         self._enabled = self.config_manager.get("enable_social_mode", False)
         self._thought_task: Optional[asyncio.Task] = None
 
-        # [Social Identity] Bot 信息缓存 (Map: self_id -> Info Dict)
+        # [社交身份] Bot 信息缓存 (映射: self_id -> 信息字典)
         self.bot_infos: Dict[str, Dict[str, Any]] = {}
 
-        # [Agent Mapping] Load agent configs to map QQ -> Agent
+        # [Agent 映射] 加载 Agent 配置以映射 QQ -> Agent
         self.qq_agent_map: Dict[str, str] = {}  # qq_id -> agent_id
         self._load_agent_mappings()
 
@@ -67,56 +69,61 @@ class SocialService:
         self.pending_requests: Dict[str, asyncio.Future] = {}
 
     def _load_agent_mappings(self):
-        """Load social configurations from all agents"""
+        """从所有 Agent 加载社交配置"""
         try:
             from services.agent_manager import AgentManager
 
-            # We need a temporary instance to read configs, or use static method if available.
-            # Here we just instantiate AgentManager which loads configs in __init__
+            # 我们需要一个临时实例来读取配置，或者使用静态方法（如果可用）。
+            # 这里我们只实例化 AgentManager，它会在 __init__ 中加载配置
             am = AgentManager()
             for agent_id, agent in am.agents.items():
-                if hasattr(agent, "social_config") and agent.social_config:
-                    if agent.social_config.get("enabled") and agent.social_config.get(
-                        "qq_id"
-                    ):
-                        qq_id = str(agent.social_config.get("qq_id"))
-                        self.qq_agent_map[qq_id] = agent_id
-                        logger.info(
-                            f"[Social] Loaded mapping: QQ {qq_id} -> Agent {agent_id}"
-                        )
+                # [Fix] Support both social_config (legacy/tauri) and social_binding (new profile)
+                social_cfg = getattr(agent, "social_config", None) or getattr(
+                    agent, "social_binding", None
+                )
+                if (
+                    social_cfg
+                    and social_cfg.get("enabled")
+                    and social_cfg.get("qq_id")
+                ):
+                    qq_id = str(social_cfg.get("qq_id"))
+                    self.qq_agent_map[qq_id] = agent_id
+                    logger.info(
+                        f"[Social] 已加载映射: QQ {qq_id} -> Agent {agent_id}"
+                    )
         except Exception as e:
-            logger.error(f"[Social] Failed to load agent mappings: {e}")
+            logger.error(f"[Social] 加载 Agent 映射失败: {e}")
 
     def register_connection(self, self_id: Optional[str], websocket: WebSocket):
-        """Register a new WebSocket connection"""
+        """注册新的 WebSocket 连接"""
         if self_id:
             self.connections[str(self_id)] = websocket
-            # Check if we have an agent mapping for this QQ
+            # 检查此 QQ 是否有 Agent 映射
             agent_id = self.qq_agent_map.get(str(self_id))
             if agent_id:
                 logger.info(
-                    f"[Social] Connection registered for Agent {agent_id} (QQ: {self_id})"
+                    f"[Social] 已为 Agent {agent_id} 注册连接 (QQ: {self_id})"
                 )
             else:
                 logger.warning(
-                    f"[Social] Connection registered for QQ {self_id} but NO AGENT MAPPED!"
+                    f"[Social] 已为 QQ {self_id} 注册连接，但未映射 AGENT！"
                 )
         else:
             self.default_ws = websocket
-            logger.info("[Social] Default connection registered (No X-Self-ID)")
+            logger.info("[Social] 已注册默认连接 (无 X-Self-ID)")
 
     def unregister_connection(self, self_id: Optional[str]):
-        """Unregister a WebSocket connection"""
+        """注销 WebSocket 连接"""
         if self_id and str(self_id) in self.connections:
             del self.connections[str(self_id)]
-            logger.info(f"[Social] Connection unregistered for QQ: {self_id}")
+            logger.info(f"[Social] 已注销 QQ 连接: {self_id}")
         elif self.default_ws:
             self.default_ws = None
-            logger.info("[Social] Default connection unregistered")
+            logger.info("[Social] 已注销默认连接")
 
     @property
     def active_ws(self):
-        """Backwards compatibility property - returns first available connection"""
+        """向后兼容属性 - 返回第一个可用连接"""
         if self.default_ws:
             return self.default_ws
         if self.connections:
@@ -125,7 +132,7 @@ class SocialService:
 
     @active_ws.setter
     def active_ws(self, ws):
-        """Backwards compatibility setter - sets default connection"""
+        """向后兼容设置器 - 设置默认连接"""
         self.default_ws = ws
 
     @property
@@ -210,29 +217,29 @@ class SocialService:
             user_id = str(event.get("user_id"))
             self_id = str(event.get("self_id", ""))
 
-            # [Multi-Agent] Determine which Agent this message is for
+            # [多 Agent] 确定此消息属于哪个 Agent
             agent_id = self.qq_agent_map.get(self_id)
             if not agent_id:
-                # Fallback: if single connection or default
+                # 回退: 如果是单连接或默认连接
                 if not self.qq_agent_map:
-                    # Default to active agent or Pero?
-                    # Ideally we shouldn't process if we don't know who it is for in multi-agent mode.
-                    # But for backward compatibility:
+                    # 默认为活跃 Agent 或 Pero？
+                    # 理想情况下，在多 Agent 模式下，如果我们不知道它是给谁的，就不应该处理。
+                    # 但为了向后兼容：
                     agent_id = "pero"  # Default
                 else:
-                    # We have mappings but this QQ is not mapped. Ignore?
+                    # 我们有映射，但此 QQ 未映射。忽略？
                     logger.debug(
-                        f"[Social] Ignoring message for unmapped QQ: {self_id}"
+                        f"[Social] 忽略未映射 QQ 的消息: {self_id}"
                     )
                     return
 
             # 更新 Bot 自身 ID 信息
             if self_id not in self.bot_infos:
                 self.bot_infos[self_id] = {"user_id": self_id}
-                logger.info(f"[Social] New Bot detected: {self_id} (Agent: {agent_id})")
+                logger.info(f"[Social] 检测到新 Bot: {self_id} (Agent: {agent_id})")
 
             # 忽略自己发的消息
-            # Check against the specific bot_id for this connection
+            # 检查此连接的特定 bot_id
             if user_id == self_id:
                 return
 
@@ -241,7 +248,7 @@ class SocialService:
             )
 
             # 2. 转交 Session Manager 处理完整逻辑 (Buffer, Persistence, Trigger)
-            # [Multi-Agent] Pass agent_id context
+            # [多 Agent] 传递 agent_id 上下文
             await self.session_manager.handle_message(event, agent_id=agent_id)
 
         except Exception as e:
@@ -256,7 +263,7 @@ class SocialService:
         """
         等待 WS 连接，执行启动检查：
         1. 检查待处理的好友请求
-        2. 复活历史会话 (Cold Start)
+        2. 复活历史会话 (冷启动)
         """
         # 等待 WS 连接最多 60 秒
         for _ in range(12):
@@ -271,7 +278,7 @@ class SocialService:
         logger.info("[Social] 正在执行启动检查...")
         await asyncio.sleep(5)  # 等待系统稳定
 
-        # 0. 获取 Bot 信息 (Critical for filtering self-messages)
+        # 0. 获取 Bot 信息 (对于过滤自身消息至关重要)
         try:
             await self.get_bot_info()
         except Exception as e:
@@ -281,7 +288,7 @@ class SocialService:
         await self._revive_sessions_from_db()
 
         try:
-            # [Optimization] 检测 OneBot 实现类型
+            # [优化] 检测 OneBot 实现类型
             # NapCat 等现代实现通常不支持拉取历史系统消息，而是完全依赖事件推送。
             version_resp = await self._send_api_and_wait(
                 "get_version_info", {}, timeout=5
@@ -299,7 +306,7 @@ class SocialService:
                     )
                     return
 
-            # [Fixed] 尝试多种 API 变体以兼容不同的 OneBot 实现 (NapCat, LLOneBot, Go-CQHTTP)
+            # [修复] 尝试多种 API 变体以兼容不同的 OneBot 实现 (NapCat, LLOneBot, Go-CQHTTP)
             resp = None
             api_candidates = ["get_system_msg", "get_friend_system_msg"]
 
@@ -363,14 +370,20 @@ class SocialService:
         """
         获取 NapCat 连接状态 (双向检查)
         """
+        # 如果 self.bot_infos 有数据，取第一个作为展示，或者返回 None
+        first_bot_info = None
+        if self.bot_infos:
+            first_bot_info = next(iter(self.bot_infos.values()))
+
         status = {
             "ws_connected": False,
             "api_responsive": False,
-            "bot_info": self.bot_info,
+            "bot_info": first_bot_info,
             "latency_ms": -1,
         }
 
-        if self.active_ws:
+        # 检查是否有任何活动连接
+        if self.connections or self.default_ws:
             status["ws_connected"] = True
 
             # 测试 API 响应
@@ -378,7 +391,12 @@ class SocialService:
             try:
                 # 使用 get_version_info 作为心跳检测
                 # timeout 设置短一点，以免阻塞 UI 轮询
-                resp = await self._send_api_and_wait("get_version_info", {}, timeout=2)
+                # 尝试通过任意一个连接发送
+                target_id = None
+                if self.connections:
+                    target_id = next(iter(self.connections.keys()))
+                
+                resp = await self._send_api_and_wait("get_version_info", {}, self_id=target_id, timeout=2)
                 if resp and resp.get("status") == "ok":
                     status["api_responsive"] = True
                     # 计算延迟
@@ -392,7 +410,7 @@ class SocialService:
 
     async def _revive_sessions_from_db(self):
         """
-        [Cold Start] 从数据库恢复最近活跃的会话到内存中。
+        [冷启动] 从数据库恢复最近活跃的会话到内存中。
         """
         logger.info("[Social] 正在从数据库恢复会话...")
         try:
@@ -439,7 +457,7 @@ class SocialService:
                         )
                         session.last_active_time = msg.timestamp
 
-                        # [Fix] 复活的会话推迟扫描 (15~45分钟)，防止启动爆发
+                        # [修复] 复活的会话推迟扫描 (15~45分钟)，防止启动爆发
                         session.next_scan_time = datetime.now() + timedelta(
                             seconds=random.randint(900, 2700)
                         )
@@ -458,7 +476,7 @@ class SocialService:
 
     async def _random_thought_worker(self):
         """
-        [Master Worker] 协调并行的群聊扫描和私聊扫描。
+        [主 Worker] 协调并行的群聊扫描和私聊扫描。
         """
         logger.debug("[Social] 社交观察服务已启动。")
 
@@ -466,13 +484,14 @@ class SocialService:
 
     async def _group_scan_loop(self):
         """
-        [Group] 群聊扫描循环
+        [群聊] 群聊扫描循环
         全局单一计时器，随机选择活跃群聊进行观察。
         """
         logger.debug("[Social] 群聊扫描线程已启动。")
         while self.running:
             try:
                 await asyncio.sleep(30)
+
 
                 if not self.running or not self.enabled:
                     continue
@@ -542,10 +561,7 @@ class SocialService:
 
                 # 决定下次检查时间
                 if spoke:
-                    if is_active:
-                        interval = 120  # 互动中保持高频
-                    else:
-                        interval = random.randint(1800, 3600)  # 主动冒泡后进入贤者模式
+                    interval = 120 if is_active else random.randint(1800, 3600)  # 主动冒泡后进入贤者模式
                 elif is_active:
                     interval = 60
                 else:
@@ -563,7 +579,7 @@ class SocialService:
 
     async def _private_scan_loop(self):
         """
-        [Private] 私聊扫描循环
+        [私聊] 私聊扫描循环
         每个私聊对象有独立的时间表 (next_scan_time)。
         """
         logger.debug("[Social] 私聊扫描线程已启动。")
@@ -598,7 +614,7 @@ class SocialService:
                         logger.debug(
                             f"[Social-Private] 触发检查: {session.session_name}"
                         )
-                        spoke = await self._attempt_random_thought(session)
+                        await self._attempt_random_thought(session)
 
                         # 私聊长周期 (4-8 小时)
                         next_interval = random.randint(14400, 28800)
@@ -670,7 +686,7 @@ class SocialService:
         主动消息传递逻辑（秘书层）。
         由 _random_thought_worker 调用（随机目标）或 handle_session_flush 调用（指定目标）。
         """
-        # [Fix] 夜间静音 (00:00 - 08:00) - 防止 flush 触发的潜水观察在深夜运行
+        # [修复] 夜间静音 (00:00 - 08:00) - 防止 flush 触发的潜水观察在深夜运行
         now = datetime.now()
         if 0 <= now.hour < 8:
             # logger.debug("[Social] 深夜模式 (00:00-08:00)，秘书停止观察。")
@@ -716,7 +732,7 @@ class SocialService:
             recent_context = ""
             for msg in recent_messages:
                 sender = msg.sender_name
-                # [Fix] Use target_session.agent_id
+                # [修复] 使用 target_session.agent_id
                 agent_profile = agent_manager.agents.get(target_session.agent_id)
                 current_agent_name = (
                     agent_profile.name
@@ -738,7 +754,7 @@ class SocialService:
                 recent_context = "(本地缓存为空)"
 
             # 秘书 Prompt
-            owner_qq = self.config_manager.get("owner_qq") or "未知"
+            self.config_manager.get("owner_qq") or "未知"
             session_type_str = (
                 "群聊 (Group)"
                 if target_session.session_type == "group"
@@ -757,7 +773,7 @@ class SocialService:
                 )
 
             target_name = target_session.session_name
-            # [Fix] Use target_session.agent_id
+            # [修复] 使用 target_session.agent_id
             agent_profile = agent_manager.agents.get(target_session.agent_id)
 
             if agent_profile:
@@ -787,7 +803,7 @@ class SocialService:
                 model=config.get("model"),
             )
 
-            # [Multimodal] 收集最近的图片
+            # [多模态] 收集最近的图片
             processed_images = []
             if config.get("enable_vision"):
                 for msg in reversed(target_session.buffer):
@@ -861,7 +877,7 @@ class SocialService:
                 response_msg = response["choices"][0]["message"]
                 content = response_msg.get("content", "").strip()
 
-                # [Robustness] 输出清洗
+                # [鲁棒性] 输出清洗
                 if (content.startswith('"') and content.endswith('"')) or (
                     content.startswith("'") and content.endswith("'")
                 ):
@@ -1098,10 +1114,8 @@ class SocialService:
         self.running = False
         if self._thought_task:
             self._thought_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._thought_task
-            except asyncio.CancelledError:
-                pass
             self._thought_task = None
 
         if self.active_ws:
@@ -1596,13 +1610,12 @@ class SocialService:
                     and uid != "system"
                     and uid not in seen_users
                     and not is_current_session_user
+                    and uid.isdigit()
                 ):
-                    # Also ensure it's a valid user ID (digits)
-                    if uid.isdigit():
-                        relevant_users.append(uid)
-                        seen_users.add(uid)
-                        if len(relevant_users) >= 3:
-                            break
+                    relevant_users.append(uid)
+                    seen_users.add(uid)
+                    if len(relevant_users) >= 3:
+                        break
 
             logger.debug(f"[{session.session_id}] 发现相关用户: {relevant_users}")
 
@@ -2177,10 +2190,9 @@ class SocialService:
                         # Task already done, update image path if successful
                         try:
                             res = task.result()
-                            if res and os.path.exists(res):
+                            if res and os.path.exists(res) and idx < len(msg.images):
                                 # Replace URL with local path
-                                if idx < len(msg.images):
-                                    msg.images[idx] = res
+                                msg.images[idx] = res
                         except Exception as e:
                             logger.warning(f"[Social] 图片下载任务失败（已完成）: {e}")
 
@@ -2310,7 +2322,7 @@ class SocialService:
                 statement = select(func.count(QQMessage.id)).where(
                     QQMessage.session_id == session.session_id,
                     QQMessage.session_type == session.session_type,
-                    QQMessage.is_summarized == False,
+                    not QQMessage.is_summarized,
                     QQMessage.agent_id == session.agent_id,
                 )
                 count = (await db_session.exec(statement)).one()
@@ -2343,7 +2355,7 @@ class SocialService:
                 .where(
                     QQMessage.session_id == session.session_id,
                     QQMessage.session_type == session.session_type,
-                    QQMessage.is_summarized == False,
+                    not QQMessage.is_summarized,
                     QQMessage.agent_id == session.agent_id,
                 )
                 .order_by(QQMessage.timestamp.asc())
@@ -2557,9 +2569,9 @@ class SocialService:
             response = await asyncio.wait_for(future, timeout=timeout)
             return response
         except asyncio.TimeoutError:
-            if echo_id in self.pending_requests:
-                del self.pending_requests[echo_id]
-            raise TimeoutError(f"API {action} timed out.")
+                if echo_id in self.pending_requests:
+                    del self.pending_requests[echo_id]
+                raise TimeoutError(f"API {action} timed out.") from None
 
     def _ensure_sticker_map(self):
         if not hasattr(self, "_sticker_map"):
@@ -2786,7 +2798,7 @@ class SocialService:
             from .social.models_db import QQMessage
 
             # Get injected IDs to exclude
-            exclude_ids = injected_msg_ids_var.get()
+            exclude_ids = injected_msg_ids_var.get() or set()
 
             async for db_session in get_social_db_session():
                 # 基础查询：内容匹配

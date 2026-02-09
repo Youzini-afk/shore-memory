@@ -16,6 +16,15 @@ def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None)
     log_format = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
 
+    # 强制 stdout 使用 UTF-8
+    if sys.stdout.encoding.lower() != "utf-8":
+        try:
+            sys.stdout.reconfigure(encoding="utf-8")
+        except AttributeError:
+            # Python 3.7 之前的版本或某些环境可能不支持 reconfigure
+            import io
+            sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
     # 创建处理器
     handlers = []
 
@@ -50,4 +59,4 @@ def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None)
     # 确保 PeroCore 日志记录器至少为 INFO
     logging.getLogger("pero").setLevel(level)
 
-    print(f"[System] Logging initialized at level {logging.getLevelName(level)}")
+    print(f"[System] 日志已初始化，级别: {logging.getLevelName(level)}")

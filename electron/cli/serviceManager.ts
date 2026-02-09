@@ -1,6 +1,6 @@
-import { startBackend, stopBackend, getBackendLogs } from '../main/services/python'
-import { startGateway, stopGateway, getGatewayLogs } from '../main/services/gateway'
-import { startNapCat, stopNapCat, getNapCatLogs, installNapCat } from '../main/services/napcat'
+import { startBackend, stopBackend } from '../main/services/python'
+import { startGateway, stopGateway } from '../main/services/gateway'
+import { startNapCat, stopNapCat, installNapCat } from '../main/services/napcat'
 import { getDiagnostics } from '../main/services/diagnostics'
 import { getConfig } from '../main/services/system'
 import { WindowLike } from '../main/types'
@@ -17,8 +17,8 @@ export interface ServiceStatus {
 }
 
 /**
- * Headless Service Manager
- * Orchestrates all backend services in CLI mode
+ * 无头服务管理器
+ * 在 CLI 模式下编排所有后端服务
  */
 export class ServiceManager extends EventEmitter {
   private status: ServiceStatus = {
@@ -34,19 +34,19 @@ export class ServiceManager extends EventEmitter {
 
   constructor() {
     super()
-    // Create a mock window object to capture logs and events from services
+    // 创建一个模拟窗口对象来捕获服务的日志和事件
     this.mockWindow = {
       isDestroyed: () => false,
       webContents: {
         send: (channel: string, ...args: any[]) => {
           this.emit('service-event', { channel, args })
 
-          // Route to WebBridge (WebSocket broadcast)
+          // 路由到 WebBridge (WebSocket 广播)
           if (this.webBridge) {
             this.webBridge.broadcast(channel, ...args)
           }
 
-          // Route specific logs
+          // 路由特定日志
           if (channel === 'backend-log') {
             this.emit('log', { source: 'backend', message: args[0] })
           } else if (channel === 'gateway-log') {
@@ -66,7 +66,7 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
-   * Checks if a port is in use
+   * 检查端口是否被占用
    */
   private checkPort(port: number): Promise<boolean> {
     return new Promise((resolve) => {
@@ -87,7 +87,7 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
-   * Waits for a service port to be active
+   * 等待服务端口处于活动状态
    */
   private async waitForPort(port: number, timeoutMs = 5000): Promise<boolean> {
     const start = Date.now()
@@ -109,9 +109,9 @@ export class ServiceManager extends EventEmitter {
   async startAll(args: CliArgs) {
     this.args = args
     try {
-      this.log('system', `Starting all services with args: ${JSON.stringify(args)}`)
+      this.log('system', `正在启动所有服务，参数: ${JSON.stringify(args)}`)
 
-      // 0. Start WebBridge (Always start in CLI mode to support dashboard)
+      // 0. 启动 WebBridge (始终在 CLI 模式下启动以支持仪表板)
       this.status.webBridge = 'starting'
       this.emit('status-change', this.status)
       try {
@@ -119,97 +119,94 @@ export class ServiceManager extends EventEmitter {
         this.webBridge = new WebBridge(bridgePort)
         await this.webBridge.start()
         this.status.webBridge = 'running'
-        this.log('webBridge', `Started at http://localhost:${bridgePort}`)
+        this.log('webBridge', `已启动于 http://localhost:${bridgePort}`)
       } catch (e: any) {
         this.status.webBridge = 'error'
-        this.error('webBridge', `Failed to start: ${e.message}`)
+        this.error('webBridge', `启动失败: ${e.message}`)
       }
 
-      // 1. Diagnostics
+      // 1. 诊断
       const diag = await getDiagnostics()
       if (diag.errors.length > 0) {
-        this.error('system', `Diagnostics failed: ${diag.errors.join(', ')}`)
-        // We might want to continue or exit depending on severity
+        this.error('system', `诊断失败: ${diag.errors.join(', ')}`)
+        // 根据严重程度，我们可能希望继续或退出
       }
 
-      // 2. Start Gateway
+      // 2. 启动 Gateway
       if (!args.noGateway) {
         this.status.gateway = 'starting'
         this.emit('status-change', this.status)
         try {
           await startGateway(this.mockWindow)
-          // Wait for Gateway port (assuming 14747 from logs, or should be configurable)
-          // For now we just trust it started, but in production we should check port
+          // 等待 Gateway 端口 (假设从日志中获取的是 14747，或者应该是可配置的)
+          // 目前我们只是相信它已启动，但在生产环境中我们应该检查端口
           this.status.gateway = 'running'
         } catch (e: any) {
           this.status.gateway = 'error'
-          this.error('gateway', `Failed to start: ${e.message}`)
+          this.error('gateway', `启动失败: ${e.message}`)
         }
       } else {
-        this.log('system', 'Skipping Gateway (disabled by args)')
+        this.log('system', '跳过 Gateway (由参数禁用)')
       }
 
-      // 3. Start Backend
+      // 3. 启动后端
       this.status.backend = 'starting'
       this.emit('status-change', this.status)
       try {
-        // Check config for social mode
+        // 检查配置中的社交模式
         const config = getConfig()
         const enableSocial = config.enable_social_mode ?? false
 
-        // Override social mode if explicitly requested or disabled
-        // Note: args doesn't strictly have force-social, but we could add it.
-        // For now, we respect config, but let NapCat be controlled by args.
+        // 如果明确请求或禁用，则覆盖社交模式
+        // 注意：args 没有严格的 force-social，但我们可以添加它。
+        // 目前，我们尊重配置，但让 NapCat 由 args 控制。
 
         await startBackend(this.mockWindow, enableSocial)
 
-        // Check backend port (default 9120)
+        // 检查后端端口 (默认 9120)
         const backendPort = parseInt(process.env.PORT || '9120')
         const isBackendUp = await this.waitForPort(backendPort, 10000)
         if (isBackendUp) {
           this.status.backend = 'running'
         } else {
-          this.log(
-            'backend',
-            `Process started but port ${backendPort} is not yet active. It might be initializing.`
-          )
-          this.status.backend = 'running' // Set running anyway as it might just be slow
+          this.log('backend', `进程已启动，但端口 ${backendPort} 尚未激活。它可能正在初始化。`)
+          this.status.backend = 'running' // 无论如何都设置为运行，因为它可能只是很慢
         }
       } catch (e: any) {
         this.status.backend = 'error'
-        this.error('backend', `Failed to start: ${e.message}`)
+        this.error('backend', `启动失败: ${e.message}`)
       }
 
-      // 4. Start NapCat (Optional)
+      // 4. 启动 NapCat (可选)
       if (!args.noNapcat) {
         const config = getConfig()
         if (config.enable_social_mode) {
           this.status.napcat = 'starting'
           this.emit('status-change', this.status)
           try {
-            // Check if installed first
+            // 首先检查是否安装
             await installNapCat(this.mockWindow)
             await startNapCat(this.mockWindow)
             this.status.napcat = 'running'
           } catch (e: any) {
             this.status.napcat = 'error'
-            this.error('napcat', `Failed to start: ${e.message}`)
+            this.error('napcat', `启动失败: ${e.message}`)
           }
         }
       } else {
-        this.log('system', 'Skipping NapCat (disabled by args)')
+        this.log('system', '跳过 NapCat (由参数禁用)')
       }
 
       this.emit('all-services-started')
-      this.log('system', 'All services startup sequence completed.')
+      this.log('system', '所有服务启动序列已完成。')
     } catch (error: any) {
-      this.error('system', `Fatal error during startup: ${error.message}`)
+      this.error('system', `启动期间发生致命错误: ${error.message}`)
       process.exit(1)
     }
   }
 
   /**
-   * Get all services status
+   * 获取所有服务状态
    */
   getAllServices() {
     return [
@@ -221,29 +218,30 @@ export class ServiceManager extends EventEmitter {
   }
 
   /**
-   * Restart a specific service
+   * 重启特定服务
    */
   async restartService(name: string) {
-    this.log('system', `Restarting ${name}...`)
+    this.log('system', `正在重启 ${name}...`)
 
     try {
       switch (name) {
-        case 'backend':
+        case 'backend': {
           await stopBackend()
           this.status.backend = 'stopped'
           this.emit('status-change', this.status)
 
           this.status.backend = 'starting'
-          // Re-read config in case it changed
+          // 重新读取配置以防更改
           const config = getConfig()
           const enableSocial = config.enable_social_mode ?? false
           await startBackend(this.mockWindow, enableSocial)
           this.status.backend = 'running'
           break
+        }
 
         case 'gateway':
           if (this.args?.noGateway) {
-            this.log('system', 'Gateway is disabled by args.')
+            this.log('system', 'Gateway 已由参数禁用。')
             return
           }
           await stopGateway()
@@ -257,7 +255,7 @@ export class ServiceManager extends EventEmitter {
 
         case 'napcat':
           if (this.args?.noNapcat) {
-            this.log('system', 'NapCat is disabled by args.')
+            this.log('system', 'NapCat 已由参数禁用。')
             return
           }
           await stopNapCat()
@@ -269,7 +267,7 @@ export class ServiceManager extends EventEmitter {
           this.status.napcat = 'running'
           break
 
-        case 'webBridge':
+        case 'webBridge': {
           if (this.webBridge) {
             await this.webBridge.stop()
           }
@@ -282,19 +280,20 @@ export class ServiceManager extends EventEmitter {
           await this.webBridge.start()
           this.status.webBridge = 'running'
           break
+        }
 
         default:
-          this.log('system', `Unknown service: ${name}`)
+          this.log('system', `未知服务: ${name}`)
       }
-      this.log('system', `Restarted ${name} successfully.`)
+      this.log('system', `重启 ${name} 成功。`)
     } catch (e: any) {
       this.status[name as keyof ServiceStatus] = 'error'
-      this.error(name, `Restart failed: ${e.message}`)
+      this.error(name, `重启失败: ${e.message}`)
     }
   }
 
   async stopAll() {
-    this.log('system', 'Stopping all services...')
+    this.log('system', '正在停止所有服务...')
     try {
       if (this.webBridge) {
         await this.webBridge.stop()
@@ -310,10 +309,10 @@ export class ServiceManager extends EventEmitter {
       await stopGateway()
       this.status.gateway = 'stopped'
 
-      this.log('system', 'All services stopped.')
+      this.log('system', '所有服务已停止。')
       this.emit('status-change', this.status)
     } catch (e: any) {
-      this.error('system', `Error stopping services: ${e.message}`)
+      this.error('system', `停止服务时出错: ${e.message}`)
     }
   }
 }

@@ -27,11 +27,10 @@ class ImportStoryRequest(BaseModel):
 
 @router.post("/import_story")
 async def import_story(
-    request: ImportStoryRequest, session: AsyncSession = Depends(get_session)
+    request: ImportStoryRequest, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     """
-    Import a story/diary to initialize long-term memory.
-    Extracts events using LLM and saves them as a sequential memory chain.
+    导入故事/日记初始化长期记忆（LLM提取事件）。
     """
     importer = MemoryImporter(session)
     result = await importer.import_story(request.story, request.agent_id)
@@ -41,17 +40,17 @@ async def import_story(
 
 
 @router.post("/secretary/run")
-async def run_memory_secretary(session: AsyncSession = Depends(get_session)):
+async def run_memory_secretary(session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         service = MemorySecretaryService(session)
         return await service.run_maintenance()
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @legacy_memories_router.delete("/by_timestamp/{msg_timestamp}")
 async def delete_memory_by_timestamp(
-    msg_timestamp: str, session: AsyncSession = Depends(get_session)
+    msg_timestamp: str, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     service = MemoryService()
     await service.delete_by_msg_timestamp(session, msg_timestamp)
@@ -66,17 +65,13 @@ async def get_chat_history(
     offset: int = 0,
     date: str = None,
     sort: str = "asc",
-    agent_id: Optional[str] = None,  # Add agent_id param
-    query: Optional[str] = None,  # [Feature] Unified Search
-    session: AsyncSession = Depends(get_session),
+    agent_id: Optional[str] = None,  # 新增agent_id参数
+    query: Optional[str] = None,  # [特性] 统一搜索
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     service = MemoryService()
-    # If agent_id is not provided, default to "pero" to maintain backward compatibility,
-    # OR we can make it optional in service.query_logs?
-    # service.query_logs defaults to "pero".
-    # If we want to support "all agents" when agent_id is None, we need to modify service.
-    # But usually dashboard views a specific agent.
-    # Let's pass agent_id if provided, otherwise default "pero" (handled by service default).
+    # 若未提供agent_id则默认为"pero"（兼容性考虑）。
+    # Dashboard通常查看特定代理。
 
     target_agent = agent_id if agent_id else "pero"
     logs = await service.query_logs(
@@ -95,12 +90,12 @@ async def get_chat_history(
             "id": log.id,
             "role": log.role,
             "content": log.content,
-            "raw_content": getattr(log, "raw_content", None),  # Return raw content
+            "raw_content": getattr(log, "raw_content", None),  # 返回原始内容
             "timestamp": log.timestamp,
             "sentiment": getattr(log, "sentiment", None),
             "importance": getattr(log, "importance", None),
             "metadata_json": log.metadata_json,
-            "pair_id": getattr(log, "pair_id", None),  # Added pair_id
+            "pair_id": getattr(log, "pair_id", None),  # 新增pair_id
             "analysis_status": getattr(log, "analysis_status", "pending"),
             "retry_count": getattr(log, "retry_count", 0),
             "last_error": getattr(log, "last_error", None),
@@ -120,7 +115,7 @@ async def run_retry_background(log_id: int):
             scorer = ScorerService(session)
             await scorer.retry_interaction(log_id)
 
-            # Broadcast update
+            # 广播更新
             envelope = perolink_pb2.Envelope()
             envelope.id = str(uuid.uuid4())
             envelope.source_id = "backend_main"
@@ -139,7 +134,7 @@ async def run_retry_background(log_id: int):
 async def retry_log_analysis(
     log_id: int,
     background_tasks: BackgroundTasks,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     log = await session.get(ConversationLog, log_id)
     if not log:
@@ -150,12 +145,12 @@ async def retry_log_analysis(
 
 
 @history_router.delete("/{log_id}")
-async def delete_chat_log(log_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_chat_log(log_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         service = MemoryService()
         await service.delete_log(session, log_id)
 
-        # Broadcast
+        # 广播
         try:
             envelope = perolink_pb2.Envelope()
             envelope.id = str(uuid.uuid4())
@@ -171,14 +166,14 @@ async def delete_chat_log(log_id: int, session: AsyncSession = Depends(get_sessi
 
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from None
 
 
 @history_router.patch("/{log_id}")
 async def update_chat_log(
     log_id: int,
-    payload: Dict[str, Any] = Body(...),
-    session: AsyncSession = Depends(get_session),
+    payload: Dict[str, Any] = Body(...),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     try:
         log = await session.get(ConversationLog, log_id)
@@ -189,7 +184,7 @@ async def update_chat_log(
         await session.commit()
         await session.refresh(log)
 
-        # Broadcast
+        # 广播
         try:
             envelope = perolink_pb2.Envelope()
             envelope.id = str(uuid.uuid4())
@@ -205,4 +200,4 @@ async def update_chat_log(
 
         return log
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from None

@@ -24,7 +24,7 @@ async def resume_task(session_id: str):
 
 
 @router.post("/{session_id}/inject")
-async def inject_instruction(session_id: str, payload: Dict[str, str] = Body(...)):
+async def inject_instruction(session_id: str, payload: Dict[str, str] = Body(...)):  # noqa: B008
     instruction = payload.get("instruction")
     if not instruction:
         raise HTTPException(status_code=400, detail="Instruction is required")
@@ -40,5 +40,5 @@ async def get_task_status(session_id: str):
     status = task_manager.get_status(session_id)
     if status:
         return {"status": status}
-    # If not found, assume idle/completed
+    # 未找到则假定idle/completed
     return {"status": "idle"}

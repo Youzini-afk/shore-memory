@@ -24,23 +24,23 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     service = get_social_service()
 
-    # Check if social mode is enabled
+    # 检查社交模式是否启用
     if not service.enabled:
         await websocket.close(code=1008, reason="Social mode disabled")
         return
 
-    # [Multi-Agent Support] Extract X-Self-ID from headers
-    # NapCat sends X-Self-ID to indicate which QQ account this connection belongs to.
+    # [多 Agent 支持] 从请求头中提取 X-Self-ID
+    # NapCat 发送 X-Self-ID 以指示此连接属于哪个 QQ 账号。
     x_self_id = websocket.headers.get("x-self-id")
 
-    # Register connection
+    # 注册连接
     service.register_connection(x_self_id, websocket)
 
     if x_self_id:
-        logger.info(f"[Social] WebSocket connected for QQ: {x_self_id}")
+        logger.info(f"[Social] WebSocket 已连接 QQ: {x_self_id}")
     else:
         logger.info(
-            "[Social] WebSocket connected (No X-Self-ID, using as default/fallback)."
+            "[Social] WebSocket 已连接 (无 X-Self-ID，作为默认/回退连接)。"
         )
 
     try:
@@ -91,14 +91,14 @@ async def websocket_endpoint(websocket: WebSocket):
                 except Exception:
                     logger.debug(f"[Social-WS] 收到数据: {len(data)} chars")
 
-            # Dispatch to service for async processing
+            # 分发给服务进行异步处理
             await service.handle_raw_event(data)
 
     except WebSocketDisconnect:
-        logger.info(f"[Social] WebSocket disconnected (QQ: {x_self_id}).")
+        logger.info(f"[Social] WebSocket 已断开连接 (QQ: {x_self_id})。")
         service.unregister_connection(x_self_id)
     except Exception as e:
-        logger.error(f"[Social] WebSocket error: {e}", exc_info=True)
+        logger.error(f"[Social] WebSocket 错误: {e}", exc_info=True)
         if x_self_id:
             service.unregister_connection(x_self_id)
         elif service.active_ws == websocket:

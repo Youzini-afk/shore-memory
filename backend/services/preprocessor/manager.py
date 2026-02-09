@@ -30,8 +30,8 @@ class PreprocessorManager:
                 current_context = await processor.process(current_context)
             except Exception as e:
                 logger.error(f"预处理器 {processor.name} 出错: {e}", exc_info=True)
-                # Decide whether to halt or continue. For now, we continue but log error.
-                # In a robust system, we might want to flag this in the context.
+                # 决定是停止还是继续。目前我们继续但记录错误。
+                # 在健壮的系统中，我们可能希望在上下文中标记这一点。
                 current_context["errors"] = current_context.get("errors", []) + [
                     f"{processor.name}: {str(e)}"
                 ]

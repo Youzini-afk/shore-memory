@@ -208,7 +208,7 @@ const toggleTTSMode = async (val) => {
       body: JSON.stringify({ enabled: val })
     })
     ElMessage.success(val ? 'TTS 已开启' : 'TTS 已关闭')
-  } catch (e) {
+  } catch {
     ElMessage.error('设置失败')
     ttsEnabled.value = !val // revert
     // 恢复原状

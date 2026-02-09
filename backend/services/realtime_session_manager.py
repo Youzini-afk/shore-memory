@@ -41,39 +41,39 @@ class RealtimeSessionManager:
         self.active_commands: dict[int, asyncio.Event] = {}
 
     def initialize(self):
-        """Initialize Gateway listeners"""
+        """初始化网关监听器"""
         gateway_client.on("stream", self.handle_stream)
         gateway_client.on("action:voice_interaction", self.handle_voice_interaction)
         gateway_client.on("action:confirm", self.handle_confirmation_response_action)
         logger.info("实时会话管理器已使用 GatewayClient 初始化")
 
     async def handle_stream(self, envelope):
-        """Handle incoming audio stream"""
-        # Currently we expect VAD to be done on client, receiving full speech segment?
-        # Or raw stream?
-        # If stream_id implies a session.
-        # For now, let's assume client sends a stream that represents a "speech_end" equivalent or raw chunks.
-        # But looking at previous logic: "speech_end" event contained base64 data.
-        # DataStream payload has bytes.
+        """处理传入的音频流"""
+        # 目前我们期望客户端完成 VAD，接收完整的语音片段？
+        # 还是原始流？
+        # 如果 stream_id 暗示一个会话。
+        # 目前，假设客户端发送的一个流代表一个“语音结束”等价物或原始块。
+        # 但查看之前的逻辑：“speech_end”事件包含 base64 数据。
+        # DataStream 负载包含字节。
 
-        # If it's a complete audio file (simulated stream):
+        # 如果它是完整的音频文件（模拟流）：
         if envelope.stream.is_end:
-            # Process as voice turn
+            # 作为语音轮次处理
             await self._process_voice_turn_gateway(
                 envelope.source_id, envelope.stream.data, envelope.trace_id
             )
 
     async def handle_voice_interaction(self, envelope):
-        """Handle voice control messages (text, status, etc)"""
+        """处理语音控制消息（文本、状态等）"""
         req = envelope.request
         msg_type = req.params.get("type")
 
         if msg_type == "text":
-            # Handle text input equivalent to voice
-            pass  # TODO
+            # 处理等同于语音的文本输入
+            pass  # 待办事项
 
     async def handle_confirmation_response_action(self, envelope):
-        """Handle confirmation response via ActionRequest"""
+        """通过 ActionRequest 处理确认响应"""
         req = envelope.request
         req_id = req.params.get("id")
         approved = req.params.get("approved") == "true"
@@ -105,7 +105,7 @@ class RealtimeSessionManager:
         return False
 
     async def broadcast_gateway(self, message: dict):
-        """Broadcast message via Gateway"""
+        """通过网关广播消息"""
         envelope = perolink_pb2.Envelope()
         envelope.id = str(uuid.uuid4())
         envelope.source_id = gateway_client.device_id
@@ -119,13 +119,13 @@ class RealtimeSessionManager:
         await gateway_client.send(envelope)
 
     async def broadcast(self, message: dict):
-        """[Deprecated] Forward legacy broadcast calls to Gateway"""
+        """[已弃用] 将旧版广播调用转发到网关"""
         await self.broadcast_gateway(message)
 
     async def send_audio_stream_gateway(
         self, target_id: str, trace_id: str, audio_path: str
     ):
-        """Send audio file as DataStream via Gateway"""
+        """通过网关以 DataStream 发送音频文件"""
         try:
             with open(audio_path, "rb") as f:
                 audio_data = f.read()
@@ -137,11 +137,11 @@ class RealtimeSessionManager:
             envelope.timestamp = int(time.time() * 1000)
             envelope.trace_id = trace_id
 
-            # Use DataStream
+            # 使用 DataStream
             envelope.stream.stream_id = str(uuid.uuid4())
             envelope.stream.data = audio_data
             envelope.stream.is_end = True
-            envelope.stream.content_type = "audio/mp3"  # or wav based on file
+            envelope.stream.content_type = "audio/mp3"  # 或基于文件的 wav
 
             await gateway_client.send(envelope)
         except Exception as e:
@@ -150,12 +150,12 @@ class RealtimeSessionManager:
     async def _process_voice_turn_gateway(
         self, source_id: str, audio_bytes: bytes, trace_id: str
     ):
-        """Handle voice turn via Gateway"""
+        """通过网关处理语音轮次"""
         import time
 
         start_turn_time = time.time()
 
-        # 1. Save temp file
+        # 1. 保存临时文件
         temp_audio_path = f"temp_voice_gw_{source_id}_{int(time.time())}.wav"
         try:
             print("\n" + "=" * 60)
@@ -193,7 +193,7 @@ class RealtimeSessionManager:
                 {"type": "transcription", "content": user_text}
             )
 
-            # Reset companion timer
+            # 重置陪伴计时器
             try:
                 from services.companion_service import companion_service
 
@@ -213,7 +213,7 @@ class RealtimeSessionManager:
 
             agent_start = time.time()
             async for session in get_session():
-                # Check native voice input
+                # 检查原生语音输入
                 enable_voice_input = False
                 try:
                     config_obj = (
@@ -271,18 +271,18 @@ class RealtimeSessionManager:
                         user_text_override=user_text,
                     ):
                         if chunk:
-                            # Filter out SSE events (internal signaling)
+                            # 过滤掉 SSE 事件（内部信号）
                             if chunk.startswith("data:"):
                                 continue
 
                             full_response += chunk
 
-                            # [Incremental Broadcast]
-                            # Try to clean the text to see if we have displayable content
+                            # [增量广播]
+                            # 尝试清理文本以查看是否有可显示的内容
                             current_ui_text = self._clean_text(
                                 full_response, for_tts=False
                             )
-                            # Broadcast only if content exists and has changed
+                            # 仅当内容存在且已更改时才广播
                             if (
                                 current_ui_text
                                 and current_ui_text != last_broadcasted_ui_text
@@ -304,7 +304,7 @@ class RealtimeSessionManager:
                     f"[Agent] 回复已生成 ({len(full_response)} 字符, {agent_duration:.2f}s)"
                 )
 
-                # 4. Process Response & TTS
+                # 4. 处理响应和 TTS
                 ui_response = self._clean_text(full_response, for_tts=False)
                 tts_response = self._clean_text(full_response, for_tts=True)
 
@@ -319,7 +319,7 @@ class RealtimeSessionManager:
                 if not tts_response:
                     tts_response = "..."
 
-                # Send text
+                # 发送文本
                 await self.broadcast_gateway({"type": "status", "content": "speaking"})
                 await self.broadcast_gateway(
                     {"type": "text_response", "content": ui_response}
@@ -358,10 +358,9 @@ class RealtimeSessionManager:
             await self.broadcast_gateway({"type": "error", "content": str(e)})
         finally:
             if os.path.exists(temp_audio_path):
-                try:
+                import contextlib
+                with contextlib.suppress(Exception):
                     os.remove(temp_audio_path)
-                except Exception:
-                    pass
 
     async def request_user_confirmation(
         self, command: str, risk_info: dict = None, is_high_risk: bool = False
@@ -482,7 +481,7 @@ class RealtimeSessionManager:
                     # 计划内容通常在下一个标题或双换行符处结束。
                     # 既然我们找到了最后一个标题，那么它之后的内容要么是该标题的内容，要么是最终回复。
 
-                    remaining = cleaned[last_match.start() :]
+                    cleaned[last_match.start() :]
 
                     # 启发式规则：如果是 Observation/Result/Action，我们要么不读它。
                     # 但如果它是剩下的唯一内容，也许我们什么都不应该读？

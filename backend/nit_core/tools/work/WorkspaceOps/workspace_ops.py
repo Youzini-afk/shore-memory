@@ -5,27 +5,27 @@ from utils.workspace_utils import get_workspace_root
 
 # Define the workspace root relative to this file
 # backend/nit_core/tools/work/WorkspaceOps/workspace_ops.py -> PeroCore/pero_workspace
-# [Refactor] Use dynamic workspace root
+# [重构] 使用动态工作空间根目录
 # BASE_DIR = ...
 # WORKSPACE_ROOT = ...
 
 
 def _ensure_workspace():
-    # Use active agent's workspace by default
+    # 默认使用活跃 Agent 的工作空间
     root = get_workspace_root()
     if not os.path.exists(root):
         os.makedirs(root)
 
 
 def _is_safe_path(file_path):
-    # Ensure the path is within the workspace
-    # Resolve relative paths
+    # 确保路径在工作空间内
+    # 解析相对路径
     try:
         workspace_root = get_workspace_root()
-        # Join workspace root with the provided path
-        # Note: os.path.join handles absolute paths in the second argument by discarding the first,
-        # so we must strip leading slashes or drive letters if present (though unlikely from LLM)
-        # But for safety, we treat it as relative.
+        # 将工作空间根目录与提供的路径连接
+        # 注意：os.path.join 处理第二个参数中的绝对路径时会丢弃第一个参数，
+        # 所以如果存在，我们必须去掉前导斜杠或盘符（虽然不太可能来自 LLM）
+        # 但为了安全起见，我们将其视为相对路径。
         file_path = file_path.lstrip("/\\")
         abs_path = os.path.abspath(os.path.join(workspace_root, file_path))
         return abs_path.startswith(workspace_root)
@@ -35,99 +35,99 @@ def _is_safe_path(file_path):
 
 def write_workspace_file(filename: str, content: str) -> str:
     """
-    Write content to a file in the workspace.
+    将内容写入工作空间中的文件。
     """
     _ensure_workspace()
     if not _is_safe_path(filename):
         return (
-            "Error: Access denied. You can only write to files within your workspace."
+            "错误: 拒绝访问。你只能写入工作空间内的文件。"
         )
 
     try:
         workspace_root = get_workspace_root()
         filename = filename.lstrip("/\\")
         full_path = os.path.join(workspace_root, filename)
-        # Create directories if they don't exist
+        # 如果目录不存在则创建
         os.makedirs(os.path.dirname(full_path), exist_ok=True)
 
         with open(full_path, "w", encoding="utf-8") as f:
             f.write(content)
-        return f"Successfully wrote to {filename}"
+        return f"成功写入 {filename}"
     except Exception as e:
-        return f"Error writing file: {str(e)}"
+        return f"写入文件错误: {str(e)}"
 
 
 def read_workspace_file(filename: str) -> str:
     """
-    Read content from a file in the workspace.
+    从工作空间中的文件读取内容。
     """
     _ensure_workspace()
     if not _is_safe_path(filename):
-        return "Error: Access denied. You can only read files within your workspace."
+        return "错误: 拒绝访问。你只能读取工作空间内的文件。"
 
     try:
         workspace_root = get_workspace_root()
         filename = filename.lstrip("/\\")
         full_path = os.path.join(workspace_root, filename)
         if not os.path.exists(full_path):
-            return "Error: File not found."
+            return "错误: 未找到文件。"
 
         with open(full_path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception as e:
-        return f"Error reading file: {str(e)}"
+        return f"读取文件错误: {str(e)}"
 
 
 def list_workspace_files(subdir: str = "") -> str:
     """
-    List files in the workspace.
+    列出工作空间中的文件。
     """
     _ensure_workspace()
     workspace_root = get_workspace_root()
 
     if subdir:
         if not _is_safe_path(subdir):
-            return "Error: Access denied."
+            return "错误: 拒绝访问。"
         target_dir = os.path.join(workspace_root, subdir.lstrip("/\\"))
     else:
         target_dir = workspace_root
 
     if not os.path.exists(target_dir):
-        return "Error: Directory not found."
+        return "错误: 目录未找到。"
 
     try:
         file_list = []
         for root, _, filenames in os.walk(target_dir):
             for filename in filenames:
-                # Get relative path from WORKSPACE_ROOT
+                # 获取相对于 WORKSPACE_ROOT 的相对路径
                 abs_file = os.path.join(root, filename)
                 rel_path = os.path.relpath(abs_file, workspace_root)
                 file_list.append(rel_path)
 
         if not file_list:
-            return "Workspace is empty."
+            return "工作空间为空。"
 
         return json.dumps(file_list, indent=2)
     except Exception as e:
-        return f"Error listing files: {str(e)}"
+        return f"列出文件错误: {str(e)}"
 
 
-# Definitions
+# 定义
 write_workspace_file_definition = {
     "type": "function",
     "function": {
         "name": "write_workspace_file",
-        "description": "Create or overwrite a text file in your personal workspace. Use this to save notes, code, or any text content.",
+        "description": "在你的个人工作空间中创建或覆盖文本文件。使用此功能保存笔记、代码或任何文本内容。",
         "parameters": {
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
-                    "description": "Relative path to the file (e.g., 'notes.txt' or 'code/script.py').",
+                    "description": "文件的相对路径 (例如 'notes.txt' 或 'code/script.py')。",
                 },
                 "content": {
                     "type": "string",
-                    "description": "The text content to write.",
+                    "description": "要写入的文本内容。",
                 },
             },
             "required": ["filename", "content"],
@@ -139,13 +139,13 @@ read_workspace_file_definition = {
     "type": "function",
     "function": {
         "name": "read_workspace_file",
-        "description": "Read the content of a file from your personal workspace.",
+        "description": "从你的个人工作空间读取文件内容。",
         "parameters": {
             "type": "object",
             "properties": {
                 "filename": {
                     "type": "string",
-                    "description": "Relative path to the file.",
+                    "description": "文件的相对路径。",
                 }
             },
             "required": ["filename"],
@@ -157,13 +157,13 @@ list_workspace_files_definition = {
     "type": "function",
     "function": {
         "name": "list_workspace_files",
-        "description": "List all files currently stored in your personal workspace.",
+        "description": "列出当前存储在你的个人工作空间中的所有文件。",
         "parameters": {
             "type": "object",
             "properties": {
                 "subdir": {
                     "type": "string",
-                    "description": "Optional subdirectory to list (default is root).",
+                    "description": "要列出的可选子目录 (默认为根目录)。",
                     "default": "",
                 }
             },

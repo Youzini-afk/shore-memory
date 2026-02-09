@@ -14,7 +14,7 @@ export class WebBridge {
 
   constructor(port: number = 9120) {
     this.port = port
-    // Default to serving dist (frontend build) if it exists, otherwise a placeholder
+    // 如果存在，默认提供 dist (前端构建)，否则使用占位符
     this.staticRoot = path.join(paths.app, 'dist')
 
     this.server = http.createServer(this.handleRequest.bind(this))
@@ -25,12 +25,12 @@ export class WebBridge {
 
   private setupWebSocket() {
     this.wss.on('connection', (ws) => {
-      // console.log('[WebBridge] Client connected')
+      // console.log('[WebBridge] 客户端已连接')
 
       ws.on('message', async (message) => {
         try {
           const data = JSON.parse(message.toString())
-          // Handle WS-based IPC invoke (optional, if we want full duplex via WS)
+          // 处理基于 WS 的 IPC 调用 (可选，如果我们想要通过 WS 实现全双工)
           if (data.type === 'invoke' && data.channel) {
             try {
               const result = await ipcRegistry.invoke(data.channel, ...(data.args || []))
@@ -51,15 +51,15 @@ export class WebBridge {
               )
             }
           }
-        } catch (e) {
-          // Ignore malformed
+        } catch {
+          // 忽略格式错误
         }
       })
     })
   }
 
   private async handleRequest(req: http.IncomingMessage, res: http.ServerResponse) {
-    // Enable CORS
+    // 启用 CORS
     res.setHeader('Access-Control-Allow-Origin', '*')
     res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type')
@@ -72,7 +72,7 @@ export class WebBridge {
 
     const url = new URL(req.url || '/', `http://${req.headers.host}`)
 
-    // API Routes
+    // API 路由
     if (url.pathname.startsWith('/api/ipc/')) {
       const channel = url.pathname.replace('/api/ipc/', '')
 
@@ -97,10 +97,10 @@ export class WebBridge {
       return
     }
 
-    // Static File Serving
+    // 静态文件服务
     const filePath = path.join(this.staticRoot, url.pathname === '/' ? 'index.html' : url.pathname)
 
-    // Security check: prevent directory traversal
+    // 安全检查：防止目录遍历
     if (!filePath.startsWith(this.staticRoot)) {
       res.writeHead(403)
       res.end('Forbidden')
@@ -112,7 +112,7 @@ export class WebBridge {
       res.writeHead(200, { 'Content-Type': contentType })
       fs.createReadStream(filePath).pipe(res)
     } else {
-      // SPA Fallback: serve index.html for non-API routes
+      // SPA 后备方案：为非 API 路由提供 index.html
       const indexPath = path.join(this.staticRoot, 'index.html')
       if (fs.existsSync(indexPath)) {
         res.writeHead(200, { 'Content-Type': 'text/html' })
@@ -124,7 +124,7 @@ export class WebBridge {
     }
   }
 
-  // Send message to all connected clients (simulating webContents.send)
+  // 向所有连接的客户端发送消息 (模拟 webContents.send)
   broadcast(channel: string, ...args: any[]) {
     const payload = JSON.stringify({
       type: 'event',
@@ -143,7 +143,7 @@ export class WebBridge {
     return new Promise<void>((resolve, reject) => {
       this.server
         .listen(this.port, () => {
-          console.log(`[WebBridge] Server running on http://localhost:${this.port}`)
+          console.log(`[WebBridge] 服务器运行在 http://localhost:${this.port}`)
           resolve()
         })
         .on('error', reject)

@@ -18,22 +18,22 @@ class GatewayClient:
         self.running = False
         self.device_id = f"python-backend-{str(uuid.uuid4())[:8]}"
         self.heartbeat_task = None
-        self.token = "python-token"  # Default, will be overwritten
+        self.token = "python-token"  # 默认值，将被覆盖
         self.listeners = {}  # event_name -> [callback]
 
     def set_token(self, token):
         self.token = token
 
     def on(self, event_name, callback):
-        """Register an event listener.
-        Events: 'request', 'action:{name}', 'stream', 'connect', 'disconnect'
+        """注册事件监听器。
+        事件: 'request', 'action:{name}', 'stream', 'connect', 'disconnect'
         """
         if event_name not in self.listeners:
             self.listeners[event_name] = []
         self.listeners[event_name].append(callback)
 
     def emit(self, event_name, *args, **kwargs):
-        """Emit an event to listeners."""
+        """向监听器发送事件。"""
         if event_name in self.listeners:
             for callback in self.listeners[event_name]:
                 if asyncio.iscoroutinefunction(callback):
@@ -46,7 +46,7 @@ class GatewayClient:
 
     async def start(self):
         self.running = True
-        # Run in background loop to avoid blocking startup if connection fails immediately
+        # 在后台循环中运行，以避免连接立即失败时阻塞启动
         while self.running:
             try:
                 logger.debug(f"正在连接到 Gateway {self.uri}...")
@@ -58,17 +58,17 @@ class GatewayClient:
                     await self.send_hello()
                     await self.send_test_broadcast()
 
-                    # Start heartbeat loop
+                    # 启动心跳循环
                     self.heartbeat_task = asyncio.create_task(self.heartbeat_loop())
 
-                    # Listen for messages
+                    # 监听消息
                     await self.listen()
             except Exception as e:
                 logger.error(f"Gateway 连接错误: {e}")
                 if self.heartbeat_task:
                     self.heartbeat_task.cancel()
                 self.websocket = None
-                await asyncio.sleep(3)  # Reconnect delay
+                await asyncio.sleep(3)  # 重连延迟
 
     def start_background(self):
         asyncio.create_task(self.start())
@@ -118,7 +118,7 @@ class GatewayClient:
         await self.send(envelope)
 
     async def broadcast_pet_state(self, state_dict: dict):
-        """Broadcast PetState update to all clients."""
+        """向所有客户端广播 PetState 更新。"""
         if not self.websocket or not self.running:
             return
 
@@ -131,7 +131,7 @@ class GatewayClient:
 
             envelope.request.action_name = "state_update"
 
-            # Convert all values to string for protobuf map
+            # 将所有值转换为字符串以用于 protobuf map
             for k, v in state_dict.items():
                 if v is not None:
                     envelope.request.params[k] = str(v)
@@ -142,7 +142,7 @@ class GatewayClient:
             logger.error(f"广播 PetState 失败: {e}")
 
     async def broadcast_text_response(self, content: str, target: str = "all"):
-        """Broadcast LLM text response to frontend clients."""
+        """向前端客户端广播 LLM 文本响应。"""
         if not self.websocket or not self.running:
             return
 
@@ -157,19 +157,19 @@ class GatewayClient:
             envelope.request.params["content"] = content
             envelope.request.params["target"] = target
 
-            # [Fix] Also send 'chat' event for legacy compatibility if needed
-            # But frontend listens to 'action:text_response', so this is fine.
-            # However, we must ensure content is not empty if we want to show bubble.
+            # [Fix] 如果需要，也发送 'chat' 事件以兼容旧版
+            # 但前端监听 'action:text_response'，所以这没问题。
+            # 但是，如果我们想要显示气泡，必须确保内容不为空。
 
             await self.send(envelope)
-            logger.debug(f"Broadcasted text_response: {content[:30]}...")
+            logger.debug(f"已广播文本响应: {content[:30]}...")
         except Exception as e:
             logger.error(f"广播文本响应失败: {e}")
 
     async def broadcast_error(
         self, message: str, title: str = "错误", error_type: str = "error"
     ):
-        """Broadcast error notification to frontend."""
+        """向前端广播错误通知。"""
         if not self.websocket or not self.running:
             return
 
@@ -219,7 +219,7 @@ class GatewayClient:
             await self.websocket.send(data)
 
     async def handle_envelope(self, envelope):
-        # logger.info(f"Received Envelope: {envelope.id} from {envelope.source_id}")
+        # logger.info(f"收到信封: {envelope.id} 来自 {envelope.source_id}")
 
         if envelope.HasField("request"):
             await self.handle_request(envelope)
@@ -232,16 +232,16 @@ class GatewayClient:
         req = envelope.request
         logger.debug(f"处理请求: {req.action_name} 参数={req.params}")
 
-        # Emit generic request event
+        # 发送通用请求事件
         self.emit("request", envelope)
-        # Emit specific action event
+        # 发送特定动作事件
         self.emit(f"action:{req.action_name}", envelope)
 
-        # Default handlers for basic diagnostics
+        # 基本诊断的默认处理程序
         resp_envelope = perolink_pb2.Envelope()
         resp_envelope.id = str(uuid.uuid4())
         resp_envelope.source_id = self.device_id
-        resp_envelope.target_id = envelope.source_id  # Reply to sender
+        resp_envelope.target_id = envelope.source_id  # 回复发送者
         resp_envelope.timestamp = int(time.time() * 1000)
         resp_envelope.trace_id = envelope.trace_id
 
@@ -255,7 +255,7 @@ class GatewayClient:
             resp_envelope.response.status = 0
             resp_envelope.response.data = f"Echo: {req.params.get('text', '')}"
             await self.send(resp_envelope)
-        # Removed hardcoded 'chat' handler to delegate to RealtimeSessionManager via event listener
+        # 移除了硬编码的 'chat' 处理程序，通过事件监听器委托给 RealtimeSessionManager
 
 
 gateway_client = GatewayClient()

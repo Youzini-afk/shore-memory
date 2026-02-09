@@ -1,7 +1,8 @@
+import contextlib
 import uuid
 from datetime import datetime
 
-# --- Original content of runtime.py (misplaced functions kept for compatibility) ---
+# --- runtime.py 的原始内容（为兼容性保留的错位函数） ---
 from sqlmodel import select
 
 from .ast_nodes import (
@@ -11,19 +12,21 @@ from .ast_nodes import (
     LiteralNode,
     VariableRefNode,
 )
-from .engine import NITRuntime
+
+# from .engine import NITRuntime
 
 try:
-    from models import Config, ConversationLog, Memory
+    from models import Config, ConversationLog
     from services.llm_service import LLMService
-    from services.mdp.manager import MDPManager
+
+    # from services.mdp.manager import MDPManager
     from services.memory_service import MemoryService
 except ImportError:
     from backend.models import Config, ConversationLog
     from backend.services.llm_service import LLMService
     from backend.services.memory_service import MemoryService
 
-# Try import AgentManager for multi-agent support
+# 尝试导入 AgentManager 以支持多 Agent
 try:
     from services.agent_manager import get_agent_manager
 except ImportError:
@@ -49,7 +52,7 @@ async def enter_work_mode(task_name: str = "Unknown Task") -> str:
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session:
-        return "Error: Database session not available."
+        return "错误: 数据库会话不可用。"
 
     try:
         # 1. 生成新 Session ID
@@ -81,7 +84,7 @@ async def enter_work_mode(task_name: str = "Unknown Task") -> str:
             config_task.value = task_name
 
         await session.commit()
-        return f"Entered Work Mode. New isolated session: {work_session_id}. Task: {task_name}"
+        return f"已进入工作模式。新隔离会话: {work_session_id}。任务: {task_name}"
 
     except Exception as e:
         await session.rollback()
@@ -96,7 +99,7 @@ async def exit_work_mode() -> str:
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session:
-        return "Error: Database session not available."
+        return "错误: 数据库会话不可用。"
 
     config_id = None
     try:
@@ -109,7 +112,7 @@ async def exit_work_mode() -> str:
         ).first()
 
         if not config_id or not config_id.value.startswith("work_"):
-            return "Error: Not currently in Work Mode."
+            return "错误: 当前不在工作模式。"
 
         work_session_id = config_id.value
         task_name = config_task.value if config_task else "Unnamed Task"
@@ -124,7 +127,7 @@ async def exit_work_mode() -> str:
         ).all()
 
         if not logs:
-            return "Exited Work Mode (No logs to summarize)."
+            return "已退出工作模式 (无日志可汇总)。"
 
         # 3. 通过 LLM 汇总
         global_config = {
@@ -161,13 +164,11 @@ async def exit_work_mode() -> str:
         summary = await llm.chat([{"role": "user", "content": prompt}])
         summary_content = summary["choices"][0]["message"]["content"]
 
-        # Get active agent
+        # 获取活跃 Agent
         agent_id = "pero"
         if get_agent_manager:
-            try:
+            with contextlib.suppress(Exception):
                 agent_id = get_agent_manager().active_agent_id
-            except Exception:
-                pass
 
         # 4. 保存到记忆 (长期)
         await MemoryService.save_memory(
@@ -180,11 +181,11 @@ async def exit_work_mode() -> str:
             source="system",
             agent_id=agent_id,
         )
-        return f"Exited Work Mode. \n\n[Summary Generated]:\n{summary_content}\n\n(Saved to Long-term Memory)"
+        return f"已退出工作模式。\n\n[已生成总结]:\n{summary_content}\n\n(已保存到长期记忆)"
 
     except Exception as e:
         await session.rollback()
-        return f"Error during Work Mode exit: {e}"
+        return f"退出工作模式时出错: {e}"
     finally:
         # 始终尝试将会话状态恢复为 'default'
         if config_id and config_id.value.startswith("work_"):
@@ -228,7 +229,7 @@ class NITRuntime:
         for name, node in call_node.args.items():
             args[name] = self.evaluate_value(node)
 
-        # Tool execution logic
+        # 工具执行逻辑
         result = await self.tool_executor(call_node.tool_name, args)
         return result
 
@@ -238,13 +239,13 @@ enter_work_mode_definition = {
     "type": "function",
     "function": {
         "name": "enter_work_mode",
-        "description": "Activate 'Work Mode' (Isolation Mode). Use this when starting a complex coding task or project. It isolates the conversation history to prevent polluting the daily chat context.",
+        "description": "激活“工作模式”（隔离模式）。在开始复杂的编码任务或项目时使用。它会隔离对话历史记录，以防止污染日常聊天上下文。",
         "parameters": {
             "type": "object",
             "properties": {
                 "task_name": {
                     "type": "string",
-                    "description": "The name or description of the task (e.g., 'Refactoring Memory Service').",
+                    "description": "任务的名称或描述（例如，“重构记忆服务”）。",
                 }
             },
             "required": ["task_name"],
@@ -256,7 +257,7 @@ exit_work_mode_definition = {
     "type": "function",
     "function": {
         "name": "exit_work_mode",
-        "description": "Deactivate 'Work Mode'. Use this when the task is done. It will automatically summarize the session into a 'Work Log' and save it to memory.",
+        "description": "停用“工作模式”。在任务完成时使用。它会自动将会话汇总为“工作日志”并保存到记忆中。",
         "parameters": {"type": "object", "properties": {}, "required": []},
     },
 }

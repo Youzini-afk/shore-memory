@@ -1,10 +1,10 @@
 import os
 
-# [Important] Set HuggingFace mirror before importing libraries that use it
-# This must be done at the very top of the file
+# [重要] 在导入使用它的库之前设置 HuggingFace 镜像
+# 这必须在文件的最顶部完成
 if "HF_ENDPOINT" not in os.environ:
     os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
-# Disable hf_transfer to avoid potential issues with specific system configurations
+# 禁用 hf_transfer 以避免特定系统配置的潜在问题
 if "HF_HUB_ENABLE_HF_TRANSFER" not in os.environ:
     os.environ["HF_HUB_ENABLE_HF_TRANSFER"] = "0"
 
@@ -23,13 +23,13 @@ from models import VoiceConfig
 
 class ASRService:
     def __init__(self):
-        # 统一使用缓存目录，与 EmbeddingService 保持一致
+        # 统一缓存目录，与EmbeddingService一致
         self.data_dir = os.environ.get(
             "PERO_DATA_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
         self.models_cache_dir = os.path.join(self.data_dir, "models_cache")
 
-        # Ensure cache directory exists
+        # 确保缓存目录存在
         if not os.path.exists(self.models_cache_dir):
             os.makedirs(self.models_cache_dir, exist_ok=True)
 
@@ -44,25 +44,22 @@ class ASRService:
                 await session.exec(
                     select(VoiceConfig)
                     .where(VoiceConfig.type == "stt")
-                    .where(VoiceConfig.is_active == True)
+                    .where(VoiceConfig.is_active)
                 )
             ).first()
         return None
 
     def _download_with_retry(self, model_name: str, max_retries: int = 3) -> str:
         """带有重试机制的模型下载"""
-        # 如果是本地路径，直接返回
-        if os.path.exists(model_name) or os.path.isabs(model_name):
-            # Verify if it's a valid model directory
-            if os.path.isdir(model_name) and os.path.exists(
-                os.path.join(model_name, "model.bin")
-            ):
-                return model_name
-            elif os.path.isfile(
-                model_name
-            ):  # Direct file path (unlikely for whisper, but possible)
-                return model_name
-            # If path exists but looks invalid, we might want to warn, but let's trust the user for now if it's explicit path
+        # 若路径存在但无效可警告，暂信任用户显式路径
+        if (os.path.exists(model_name) or os.path.isabs(model_name)) and (
+            (
+                os.path.isdir(model_name)
+                and os.path.exists(os.path.join(model_name, "model.bin"))
+            )
+            or os.path.isfile(model_name)
+        ):
+            return model_name
 
         last_error = None
         for attempt in range(max_retries):
@@ -71,12 +68,12 @@ class ASRService:
                     f"[ASR] 正在检查/下载模型 '{model_name}' (尝试 {attempt+1}/{max_retries})...",
                     flush=True,
                 )
-                # download_model returns the path to the model directory
+                # download_model返回模型目录路径
                 model_path = download_model(
                     model_name, output_dir=self.models_cache_dir
                 )
 
-                # Validation: Check if model.bin exists
+                # 验证：检查model.bin是否存在
                 if not os.path.exists(os.path.join(model_path, "model.bin")):
                     raise ValueError(
                         f"下载的模型路径 '{model_path}' 不包含 model.bin 文件"
@@ -87,10 +84,9 @@ class ASRService:
                 last_error = e
                 print(f"[ASR] 下载失败: {e}", flush=True)
 
-                # Cleanup potentially corrupted directory if it was a fresh download attempt
-                # Note: We need to be careful not to delete the whole cache root
-                # usually model_path will be a subdirectory.
-                # However, if error is connection timeout, model_path might not be set or might be invalid.
+                # 清理可能损坏的目录（若为新下载）。
+                # 注意：小心勿删整个缓存根目录。
+                # 通常model_path为子目录，但超时可能导致未设置或无效。
 
                 if attempt < max_retries - 1:
                     print("[ASR] 3秒后重试...", flush=True)
@@ -174,6 +170,20 @@ class ASRService:
         # 允许通过配置指定模型名称或路径，默认为 tiny
         model_name = config_json.get("model_path", "tiny")
 
+        # 检查配置是否变更，若变更则重置模型以便重新加载
+        if self._model is not None:
+            if (
+                getattr(self, "_current_model_name", None) != model_name
+                or getattr(self, "_current_device", None) != device
+                or getattr(self, "_current_compute_type", None) != compute_type
+            ):
+                print(f"[ASR] 配置已更改，正在重新加载模型...", flush=True)
+                self._model = None
+
+        self._current_model_name = model_name
+        self._current_device = device
+        self._current_compute_type = compute_type
+
         self._load_model(model_name, device, compute_type)
         segments, info = self._model.transcribe(
             audio_path, beam_size=5, language="zh", task="transcribe"
@@ -197,18 +207,18 @@ class ASRService:
 
             headers = {"Authorization": f"Bearer {config.api_key}"}
 
-            # Prepare multipart/form-data
+            # 准备 multipart/form-data
             data = {
                 "model": config.model or "whisper-1",
             }
 
-            # Read file content
+            # 读取文件内容
             if not os.path.exists(audio_path):
                 return None
 
             async with httpx.AsyncClient(timeout=60.0) as client:
                 with open(audio_path, "rb") as f:
-                    # 使用文件名作为 file 字段的 filename
+                    # 使用文件名作为 file 字段 filename
                     files = {"file": (os.path.basename(audio_path), f, "audio/wav")}
                     response = await client.post(
                         url, headers=headers, data=data, files=files

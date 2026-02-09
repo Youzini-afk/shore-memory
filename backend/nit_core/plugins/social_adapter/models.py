@@ -18,7 +18,7 @@ class SocialMessage:
     raw_event: dict = field(default_factory=dict)
     images: List[str] = field(default_factory=list)  # 图片 URL 列表
 
-    # [Internal] Pending download tasks for images (not persisted)
+    # [内部] 等待下载的图片任务（不持久化）
     image_tasks: List[Any] = field(default_factory=list)
 
 
@@ -48,10 +48,10 @@ class SocialSession:
     # 定时器句柄（如果新消息到达则取消）
     flush_timer_task: Optional[object] = None  # asyncio.Task
 
-    # [Preemption] 当前正在执行的主动搭话任务（如果用户发消息则取消）
+    # [抢占] 当前正在执行的主动搭话任务（如果用户发消息则取消）
     active_response_task: Optional[object] = None  # asyncio.Task
 
-    # [Scanner] 下次主动审视时间（用于私聊的独立周期）
+    # [扫描器] 下次主动审视时间（用于私聊的独立周期）
     next_scan_time: datetime = field(default_factory=datetime.now)
 
     def add_message(self, msg: SocialMessage):

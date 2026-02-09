@@ -1,26 +1,26 @@
 import { isElectron } from './env'
 
-// Define handler types
+// 定义处理程序类型
 type IpcHandler = (event: any, ...args: any[]) => Promise<any> | any
 type IpcListener = (event: any, ...args: any[]) => void
 
-// Global Registry for IPC Handlers in CLI Mode
+// CLI 模式下 IPC 处理程序的全局注册表
 class IpcRegistry {
   private handlers: Map<string, IpcHandler> = new Map()
   private listeners: Map<string, IpcListener[]> = new Map()
 
-  // Register a handler (ipcMain.handle)
+  // 注册处理程序 (ipcMain.handle)
   registerHandler(channel: string, handler: IpcHandler) {
     if (!isElectron) {
-      // console.log(`[IpcRegistry] Registered handler: ${channel}`)
+      // console.log(`[IpcRegistry] 已注册处理程序: ${channel}`)
       this.handlers.set(channel, handler)
     }
   }
 
-  // Register a listener (ipcMain.on)
+  // 注册监听器 (ipcMain.on)
   registerListener(channel: string, listener: IpcListener) {
     if (!isElectron) {
-      // console.log(`[IpcRegistry] Registered listener: ${channel}`)
+      // console.log(`[IpcRegistry] 已注册监听器: ${channel}`)
       if (!this.listeners.has(channel)) {
         this.listeners.set(channel, [])
       }
@@ -28,18 +28,18 @@ class IpcRegistry {
     }
   }
 
-  // Invoke a handler (called by WebBridge)
+  // 调用处理程序 (由 WebBridge 调用)
   async invoke(channel: string, ...args: any[]) {
     const handler = this.handlers.get(channel)
     if (handler) {
-      // Create a mock event object if needed
+      // 如果需要，创建模拟事件对象
       const event = { sender: { send: () => {} } }
       return await handler(event, ...args)
     }
-    throw new Error(`No handler registered for channel: ${channel}`)
+    throw new Error(`未注册频道的处理程序: ${channel}`)
   }
 
-  // Emit an event (simulating ipcMain.emit or internal events)
+  // 发出事件 (模拟 ipcMain.emit 或内部事件)
   emit(channel: string, ...args: any[]) {
     const listeners = this.listeners.get(channel)
     if (listeners) {

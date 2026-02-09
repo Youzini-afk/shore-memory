@@ -67,7 +67,7 @@ import { invoke } from '../../utils/ipcAdapter'
 import { Minus, Square, Copy, X, Briefcase, MessageSquare } from 'lucide-vue-next'
 import { APP_TITLE } from '../../config'
 
-const props = defineProps({
+defineProps({
   title: {
     type: String,
     default: APP_TITLE
@@ -85,7 +85,7 @@ const props = defineProps({
     default: false
   }
 })
-const emit = defineEmits(['toggle-mode'])
+defineEmits(['toggle-mode'])
 
 const isMaximized = ref(false)
 
@@ -99,7 +99,7 @@ const close = () => invoke('window-close')
 onMounted(async () => {
   try {
     isMaximized.value = await invoke('window-is-maximized')
-  } catch (e) {
+  } catch {
     // Fallback or ignore
     // 回退或忽略
   }

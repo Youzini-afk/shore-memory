@@ -15,7 +15,7 @@ router = APIRouter(prefix="/api/ide", tags=["ide"])
 class FileNode(BaseModel):
     name: str
     path: str
-    type: str  # "file" or "directory"
+    type: str  # "file" 或 "directory"
     children: Optional[List["FileNode"]] = None
 
 
@@ -67,7 +67,7 @@ async def skip_terminal_command(request: SkipCommandRequest):
 
 
 @router.post("/chat")
-async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session)):
+async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session)):  # noqa: B008
     from sqlmodel import select
 
     from models import Config
@@ -78,14 +78,14 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     agent_manager = get_agent_manager()
     agent_id = agent_manager.active_agent_id
 
-    # 检查我们是否处于工作模式，以及是否应覆盖 session_id
+    # 检查工作模式状态及是否覆盖session_id
     if request.session_id == "current_work_session":
         session_key = f"current_session_id_{agent_id}"
         config_id = (
             await session.exec(select(Config).where(Config.key == session_key))
         ).first()
 
-        # 如果未找到，回退到全局 (向后兼容)
+        # 未找到则回退到全局（兼容性）
         if not config_id:
             config_id = (
                 await session.exec(
@@ -98,13 +98,13 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
         else:
             request.session_id = "default"
 
-    # [Feature] 实时 ReAct 广播
-    # 我们使用 realtime_session_manager 的广播功能将“思考”状态发送到前端 (ChatInterface/PetView)
+    # [特性] 实时ReAct广播
+    # 广播思考状态至前端(ChatInterface/PetView)
     # 这确保了即使是 IDE 聊天，我们也能通过 WebSocket 获得实时可视化。
     from services.realtime_session_manager import realtime_session_manager
 
     async def on_status(status_type: str, content: str):
-        # 广播思考步骤到所有连接的客户端 (IDE, PetView 等)
+        # 广播思考步骤至所有客户端
         if status_type == "thinking":
             await realtime_session_manager.broadcast(
                 {
@@ -131,23 +131,22 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     return StreamingResponse(generate(), media_type="text/plain")
 
 
-# [Refactor] 使用 workspace_utils 支持多代理
-from utils.workspace_utils import get_workspace_root
+# [重构] 使用workspace_utils支持多代理
+from utils.workspace_utils import get_workspace_root  # noqa: E402
 
 # def get_workspace_root(): ... (Removed)
 
 
 @router.get("/image")
 async def get_workspace_image(path: str):
-    # 路径应相对于工作区，例如 "uploads/2026-01-21/xxx.png"
-    # 防止目录遍历攻击
+    # 路径相对于工作区 (如 uploads/...)
+    # 防止目录遍历
     safe_path = os.path.normpath(path)
     if safe_path.startswith("..") or os.path.isabs(safe_path):
         raise HTTPException(status_code=403, detail="Access denied")
 
-    # [Refactor] Uploads moved to backend/data/uploads
-    # Check if path starts with uploads (normalized)
-    # safe_path is like "uploads\2026...\..." on Windows
+    # [重构] 上传文件移至 backend/data/uploads
+    # 检查是否以uploads开头
     if safe_path.startswith("uploads") and (
         len(safe_path) == 7 or safe_path[7] in [os.sep, "/"]
     ):
@@ -155,7 +154,7 @@ async def get_workspace_image(path: str):
         backend_dir = os.path.dirname(current_dir)
         base_dir = os.environ.get("PERO_DATA_DIR", os.path.join(backend_dir, "data"))
     else:
-        # 对于其他图像，我们暂时坚持使用活跃代理的工作区
+        # 其他图像使用活跃代理工作区
         base_dir = get_workspace_root()
 
     target_path = os.path.join(base_dir, safe_path)
@@ -169,14 +168,13 @@ async def get_workspace_image(path: str):
 @router.get("/files", response_model=List[FileNode])
 async def list_files(path: Optional[str] = None):
     """
-    列出给定目录路径中的文件。
-    如果 path 为 None，则从工作区根目录列出。
+    列出目录文件，path为空则列出根目录。
     """
     base_dir = get_workspace_root()
 
     if path:
         target_dir = os.path.abspath(os.path.join(base_dir, path))
-        # 简单的安全检查以防止目录遍历
+        # 防目录遍历安全检查
         if not target_dir.startswith(base_dir):
             raise HTTPException(status_code=403, detail="Access denied")
     else:
@@ -189,7 +187,7 @@ async def list_files(path: Optional[str] = None):
     try:
         with os.scandir(target_dir) as entries:
             for entry in entries:
-                # 跳过隐藏文件和常见的忽略文件夹
+                # 跳过隐藏文件和忽略文件夹
                 if entry.name.startswith(".") or entry.name in [
                     "__pycache__",
                     "node_modules",
@@ -205,9 +203,9 @@ async def list_files(path: Optional[str] = None):
                 )
                 items.append(node)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from None
 
-    # 先对目录排序，然后是文件
+    # 目录优先排序
     items.sort(key=lambda x: (x.type != "directory", x.name.lower()))
     return items
 
@@ -224,7 +222,7 @@ async def read_file(request: ReadFileRequest):
         raise HTTPException(status_code=404, detail="File not found")
 
     try:
-        # Check file size (limit to 1MB for now to prevent freezing)
+        # 检查文件大小 (限1MB防卡死)
         if os.path.getsize(target_path) > 1024 * 1024:
             raise HTTPException(status_code=400, detail="File too large")
 
@@ -232,9 +230,9 @@ async def read_file(request: ReadFileRequest):
             content = f.read()
         return {"content": content}
     except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="Binary file not supported")
+        raise HTTPException(status_code=400, detail="Binary file not supported") from None
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from None
 
 
 @router.post("/file/create")
@@ -252,13 +250,13 @@ async def create_file_or_dir(request: CreateFileRequest):
         if request.is_directory:
             os.makedirs(target_path)
         else:
-            # Create parent dirs if needed
+            # 自动创建父目录
             os.makedirs(os.path.dirname(target_path), exist_ok=True)
             with open(target_path, "w", encoding="utf-8") as f:
                 f.write("")
         return {"status": "success", "path": request.path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/file/write")
@@ -270,13 +268,13 @@ async def write_file(request: WriteFileRequest):
         raise HTTPException(status_code=403, detail="Access denied")
 
     try:
-        # Create parent dirs if needed (just in case)
+        # 自动创建父目录
         os.makedirs(os.path.dirname(target_path), exist_ok=True)
         with open(target_path, "w", encoding="utf-8") as f:
             f.write(request.content)
         return {"status": "success", "path": request.path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/file/delete")
@@ -299,7 +297,7 @@ async def delete_file(request: DeleteFileRequest):
             os.remove(target_path)
         return {"status": "success", "path": request.path}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/file/rename")
@@ -327,14 +325,14 @@ async def rename_file(request: RenameFileRequest):
             "new_path": request.new_name,
         }
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.post("/work_mode/enter")
 async def api_enter_work_mode(
-    request: WorkModeRequest, session: AsyncSession = Depends(get_session)
+    request: WorkModeRequest, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
-    # Inject session into SessionOps context (as it relies on global context currently)
+    # 注入Session至SessionOps上下文
     from services.session_service import set_current_session_context
 
     set_current_session_context(session)
@@ -344,8 +342,8 @@ async def api_enter_work_mode(
 
 
 @router.post("/work_mode/exit")
-async def api_exit_work_mode(session: AsyncSession = Depends(get_session)):
-    # Inject session
+async def api_exit_work_mode(session: AsyncSession = Depends(get_session)):  # noqa: B008
+    # 注入Session
     from services.session_service import set_current_session_context
 
     set_current_session_context(session)
@@ -355,9 +353,9 @@ async def api_exit_work_mode(session: AsyncSession = Depends(get_session)):
 
 
 @router.post("/work_mode/abort")
-async def api_abort_work_mode(session: AsyncSession = Depends(get_session)):
+async def api_abort_work_mode(session: AsyncSession = Depends(get_session)):  # noqa: B008
     """
-    Exit work mode WITHOUT summarization (Quiet Exit).
+    退出工作模式不生成总结（静默退出）。
     """
     from sqlmodel import select
 
@@ -374,7 +372,7 @@ async def api_abort_work_mode(session: AsyncSession = Depends(get_session)):
             await session.exec(select(Config).where(Config.key == session_key))
         ).first()
 
-        # Fallback
+        # 兜底策略
         if not config_id:
             config_id = (
                 await session.exec(
@@ -386,14 +384,14 @@ async def api_abort_work_mode(session: AsyncSession = Depends(get_session)):
             config_id.value = "default"
             await session.commit()
 
-            # [NIT] Deactivate Work Toolchain
+            # [NIT] 停用工作工具链
             try:
                 get_nit_manager().set_category_status("work", False)
             except Exception as nit_e:
                 print(f"[IDE Router] 停用 NIT 工作分类失败: {nit_e}")
 
-            return {"message": "Work Mode aborted (No summary generated)."}
+            return {"message": "工作模式已中止（未生成总结）"}
         else:
-            return {"message": "Not in Work Mode."}
+            return {"message": "不在工作模式中"}
     except Exception as e:
-        return {"message": f"Error aborting Work Mode: {e}"}
+        return {"message": f"中止工作模式出错: {e}"}

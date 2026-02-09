@@ -18,7 +18,7 @@ class ScorerService:
         self.session = session
         self.memory_service = MemoryService()
 
-        # Initialize MDPManager
+        # 初始化 MDPManager
         self.mdp = mdp
 
     def _smart_clean_text(self, text: str) -> str:
@@ -179,11 +179,11 @@ class ScorerService:
         # 查找日志
         log = await self.session.get(ConversationLog, log_id)
         if not log:
-            print(f"[秘书] Log {log_id} not found")
+            print(f"[秘书] 未找到日志 {log_id}")
             return False
 
         if not log.pair_id:
-            print(f"[秘书] Log {log_id} has no pair_id, cannot retry")
+            print(f"[秘书] 日志 {log_id} 没有 pair_id，无法重试")
             return False
 
         # 查找配对
@@ -196,7 +196,7 @@ class ScorerService:
         assistant_msg = next((r for r in results if r.role == "assistant"), None)
 
         if not user_msg or not assistant_msg:
-            print(f"[秘书] Incomplete pair for {log.pair_id}")
+            print(f"[秘书] {log.pair_id} 的配对不完整")
             # 如果我们至少有一个，我们可能会尝试？但是 user_content 和 assistant_content 是必需的。
             # 如果只有一个存在，我们实际上无法进行“交互分析”。
             return False
@@ -225,7 +225,7 @@ class ScorerService:
         处理一次交互：调用秘书分析，然后存入 Memory
         """
         print(
-            f"[秘书] Starting interaction analysis... (pair_id: {pair_id}, agent_id: {agent_id})",
+            f"[秘书] 开始交互分析... (pair_id: {pair_id}, agent_id: {agent_id})",
             flush=True,
         )
 
@@ -258,10 +258,10 @@ class ScorerService:
         from services.agent_manager import AgentManager
 
         agent_manager = AgentManager()
-        # Use the passed agent_id to get the correct profile, fallback to active if not found (though agent_id should be correct)
+        # 使用传递的 agent_id 获取正确的 profile，如果未找到则回退到 active (尽管 agent_id 应该是正确的)
         agent_profile = agent_manager.agents.get(agent_id)
         if not agent_profile and agent_id == "pero":
-            # Fallback for legacy pero ID logic if needed
+            # 如果需要，为旧版 pero ID 逻辑回退
             agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
 
         bot_name = (

@@ -32,10 +32,10 @@ from services.preprocessor.implementations import (
     ConfigPreprocessor,
     GraphFlashbackPreprocessor,
     HistoryPreprocessor,
-    PerceptionPreprocessor,  # Added
+    PerceptionPreprocessor,  # 新增
     RAGPreprocessor,
     SystemPromptPreprocessor,
-    UserInputPreprocessor,  # Added
+    UserInputPreprocessor,  # 新增
 )
 from services.preprocessor.manager import PreprocessorManager
 from services.prompt_service import PromptManager
@@ -48,28 +48,27 @@ class AgentService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-        # Inject session and agent_id for tool ops
+        # 注入session和agent_id用于工具操作
         from services.agent_manager import get_agent_manager
 
         agent_id = "pero"
-        try:
+        import contextlib
+        with contextlib.suppress(Exception):
             agent_id = get_agent_manager().active_agent_id
-        except Exception:
-            pass
 
         set_current_session_context(session, agent_id)
         self.memory_service = MemoryService()
         self.scorer_service = ScorerService(session)
         self.prompt_manager = PromptManager()
 
-        # 初始化辅助 MDP (使用集中式 MDP)
+        # 初始化辅助MDP(集中式)
         self.mdp = self.prompt_manager.mdp
 
         # 初始化预处理器管道
         self.preprocessor_manager = PreprocessorManager()
         self.preprocessor_manager.register(UserInputPreprocessor())
         self.preprocessor_manager.register(HistoryPreprocessor())
-        # self.preprocessor_manager.register(WeeklyReportPreprocessor()) # 根据用户请求禁用 (文档现在是静态文件)
+        # 根据用户请求禁用WeeklyReportPreprocessor(文档已静态化)
         self.preprocessor_manager.register(RAGPreprocessor())
         self.preprocessor_manager.register(GraphFlashbackPreprocessor())
         self.preprocessor_manager.register(ConfigPreprocessor())
@@ -85,7 +84,7 @@ class AgentService:
 
     def _log_to_file(self, msg: str):
         try:
-            # 使用绝对路径以确保日志文件在 backend 目录下创建
+            # 使用绝对路径确保日志在backend目录创建
             data_dir = os.environ.get(
                 "PERO_DATA_DIR",
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -146,11 +145,9 @@ class AgentService:
     async def _analyze_file_results_with_aux(
         self, user_query: str, file_results: List[str]
     ) -> Optional[str]:
-        """
-        使用辅助模型分析文件搜索结果
-        """
+        """使用辅助模型分析文件搜索结果"""
         try:
-            # 1. 检查是否启用了辅助模型
+            # 1. 检查辅助模型启用状态
             aux_model_config = (
                 await self.session.exec(
                     select(AIModelConfig).where(AIModelConfig.name == "辅助模型")
@@ -166,7 +163,7 @@ class AgentService:
             )
 
             # 2. 准备 Prompt
-            # 限制文件数量以避免 Context Window 爆炸
+            # 限制文件数防Context Window爆炸
             preview_files = file_results[:50]
             files_text = "\n".join(preview_files)
 
@@ -187,8 +184,8 @@ class AgentService:
             ]
 
             # 3. 调用辅助模型
-            # 构造辅助 LLMService 实例
-            # 注意：需要从 Config 中获取全局 API Key/Base 如果辅助模型配置为使用全局
+            # 构造辅助LLMService实例
+            # 注意：若配置为全局需获取API Key/Base
             configs = {
                 c.key: c.value for c in (await self.session.exec(select(Config))).all()
             }
@@ -274,7 +271,7 @@ class AgentService:
             msg = "[Vision] 未配置 MCP 客户端。"
             print(msg, flush=True)
             self._log_to_file(msg)
-            # 调试：打印当前库中所有的配置键
+            # 调试：打印所有配置键
             try:
                 keys = (await self.session.exec(select(Config.key))).all()
                 print(f"[Vision] 可用的配置键: {keys}", flush=True)
@@ -283,10 +280,7 @@ class AgentService:
             return "❌ 视觉功能不可用：未配置 MCP 服务器。请在设置中添加支持视觉能力的 MCP 服务器配置（如 GLM-4V）。"
 
     async def _analyze_screen_with_mcp_deprecated(self) -> str:
-        """
-        [已弃用] 旧版 MCP 视觉分析方法
-        现已迁移至 NIT 架构，此方法保留仅为防止运行时 AttributeError，实际不应被调用。
-        """
+        """[已弃用] 旧版MCP视觉分析（已迁移NIT，保留防错）。"""
         return "⚠️ 此功能已迁移至 NIT 插件系统。"
 
     async def _run_reflection(
@@ -299,7 +293,7 @@ class AgentService:
 
         print("[Reflection] 触发反思机制...")
 
-        # 视觉分析已迁移至 NIT，反思逻辑暂不强依赖视觉预分析
+        # 视觉分析已迁移NIT，反思不强依赖预分析
         vision_analysis = None
         is_blind = not config.get("enable_vision")
 
@@ -310,7 +304,7 @@ class AgentService:
             provider=config.get("provider", "openai"),
         )
 
-        # 根据视觉能力状态动态调整 Prompt
+        # 根据视觉能力调整Prompt
         vision_prompt_name = "vision_enabled" if not is_blind else "vision_disabled"
         vision_instruction_block = "{{" + vision_prompt_name + "}}"
 
@@ -319,17 +313,17 @@ class AgentService:
         # 动态获取最新工具定义
         # current_tools_defs = plugin_manager.get_all_definitions()
 
-        # 改用符合 NIT 协议的筛选逻辑：必须经过 NIT Manager 的启用检查
+        # 使用NIT协议筛选逻辑（需NIT Manager启用）
         nit_manager = get_nit_manager()
         current_tools_defs = []
 
         for plugin_name, manifest in plugin_manager.plugins.items():
-            # 1. 检查分类开关 (Level 1)
+            # 1. 检查分类开关(Level 1)
             category = manifest.get("_category", "plugins")  # 默认为 plugins
             if not nit_manager.is_category_enabled(category):
                 continue
 
-            # 2. 检查插件开关 (Level 2)
+            # 2. 检查插件开关(Level 2)
             if not nit_manager.is_plugin_enabled(plugin_name):
                 continue
 
@@ -452,13 +446,13 @@ class AgentService:
             "api_key": final_api_key,
             "api_base": final_api_base,
             "model": model_config.model_id,
-            "provider": model_config.provider,  # Added provider
+            "provider": model_config.provider,  # 新增provider
             "temperature": model_config.temperature,
             "enable_vision": model_config.enable_vision,
         }
 
     async def _get_pet_state(self) -> PetState:
-        # [多 Agent] 按活跃 Agent 过滤 PetState
+        # [多Agent] 按活跃Agent过滤PetState
         from services.agent_manager import get_agent_manager
 
         agent_manager = get_agent_manager()
@@ -481,30 +475,26 @@ class AgentService:
         return state
 
     async def handle_proactive_observation(self, intent_description: str, score: float):
-        """
-        处理来自 AuraVision 的主动视觉观察结果。
-        """
+        """处理AuraVision主动视觉观察结果。"""
         # 1. 检查现在是否应该说话
-        # TODO: 实现更复杂的门控逻辑 (例如检查上次说话时间)
+        # TODO: 实现复杂门控逻辑（如检查间隔）
         print(f"[Agent] 收到主动观察结果: {intent_description} (评分: {score:.4f})")
 
         # 2. 构造内部感知 Prompt
-        internal_promptuser_prompt = self.mdp.render(
+        self.mdp.render(
             "tasks/perception/proactive_internal_sense",
             {"intent_description": intent_description, "score": f"{score:.4f}"},
         )
 
-        # 3. 触发特殊会话
-        # 这将涉及调用 self.process_request 并带有一个伪造的用户消息
-        # 但标记为内部触发。
+        # 3. 触发特殊会话（调用process_request带伪造用户消息，标记为内部触发）。
         pass
 
     async def _get_mcp_clients(self) -> List[McpClient]:
         """获取所有已启用的 MCP 客户端"""
         clients = []
-        # 1. 尝试从新版通用 MCP 配置表中获取
+        # 1. 尝试从通用MCP配置表获取
         try:
-            # 获取所有配置，无论是否启用，以此判断新表是否有数据
+            # 获取所有配置判断新表是否有数据
             all_mcp_configs = (await self.session.exec(select(MCPConfig))).all()
 
             if all_mcp_configs:
@@ -535,12 +525,12 @@ class AgentService:
                         client_config.update({"url": mcp_config_obj.url})
 
                     clients.append(McpClient(config=client_config))
-                # 只要新表有数据（即使全部被禁用），就以此为准，不再向下回退
+                # 新表有数据则以此为准不回退
                 return clients
         except Exception as e:
             print(f"[AgentService] 查询 MCPConfig 表错误: {e}")
 
-        # 只有当新表完全没数据时，才尝试获取旧版配置作为回退
+        # 新表无数据时回退旧配置
         # 2. 尝试获取完整 JSON 配置
         try:
             json_config = (
@@ -554,7 +544,7 @@ class AgentService:
                     config_data = json.loads(json_config.value)
                     if "mcpServers" in config_data:
                         for name, server_config in config_data["mcpServers"].items():
-                            # 检查是否启用 (默认为 True)
+                            # 检查启用状态(默认True)
                             if not server_config.get("enabled", True):
                                 print(
                                     f"[AgentService] 跳过已禁用的 MCP JSON 配置: {name}"
@@ -574,7 +564,7 @@ class AgentService:
         except Exception as e:
             print(f"[AgentService] 查询 mcp_config_json 错误: {e}")
 
-        # 3. 回退到旧的 URL/Key 配置 (仅当仍没有客户端时)
+        # 3. 回退旧URL/Key配置(若无客户端)
         if not clients:
             try:
                 url_config = (
@@ -616,12 +606,12 @@ class AgentService:
         expected_nit_id: str = None,
         allowed_tools: List[str] = None,
     ) -> List[Dict[str, Any]]:
-        """解析并保存 LLM 返回的元数据。现在主要负责 NIT 工具调用。"""
+        """解析保存LLM元数据，负责NIT工具调用。"""
         try:
-            # 1. 处理 NIT 工具调用 (核心逻辑)
+            # 1. 处理NIT工具调用(核心逻辑)
             nit_results = []
             if execute_nit:
-                # --- [安全门控] 针对手机端的 NIT 脚本硬隔离 ---
+                # --- [安全门控] 手机端NIT脚本硬隔离 ---
                 if source == "mobile":
                     sensitive_tool_keywords = [
                         "screenshot",
@@ -635,7 +625,7 @@ class AgentService:
                         "exec",
                         "write",
                     ]
-                    # 检查 text 中是否包含 <nit> 且内容涉及敏感词
+                    # 检查text含<nit>且涉敏感词
                     if "<nit" in text and any(
                         kw in text.lower() for kw in sensitive_tool_keywords
                     ):
@@ -653,7 +643,7 @@ class AgentService:
 
                 nit_dispatcher = get_dispatcher()
 
-                # 准备 MCP 插件 (如果存在)
+                # 准备MCP插件(若存在)
                 extra_plugins = None
                 if mcp_clients:
                     try:
@@ -674,9 +664,9 @@ class AgentService:
                 if nit_results:
                     print(f"[Agent] 执行了 {len(nit_results)} 个 NIT 工具调用")
 
-            # 2. 传统 XML 标签解析 (已弃用，仅保留框架以防未来扩展)
-            # 注意：状态更新 (PEROCUE, CLICK_MESSAGES 等) 已迁移至 UpdateStatusPlugin (NIT)
-            # 长记忆 (MEMORY) 已由 ScorerService 独立处理
+            # 2. 传统XML标签解析(弃用，保留框架防扩展)
+            # 注意：状态更新已迁移至UpdateStatusPlugin(NIT)
+            # 长记忆(MEMORY)由ScorerService独立处理
 
             await self.session.commit()
             return nit_results
@@ -688,10 +678,7 @@ class AgentService:
     async def preview_prompt(
         self, session_id: str, source: str, log_id: int
     ) -> Dict[str, Any]:
-        """
-        预览特定对话日志的完整 Prompt (系统 + 历史 + 用户)。
-        用于调试/仪表盘检查。
-        """
+        """预览特定日志完整Prompt(系统+历史+用户)，用于调试/Dashboard。"""
         # 1. 获取目标日志
         log = await self.session.get(ConversationLog, log_id)
         if not log:
@@ -702,7 +689,7 @@ class AgentService:
         history_before_id = None
 
         if log.role == "assistant":
-            # 查找此消息之前的最近一条用户消息
+            # 查找此前最近一条用户消息
             stmt = (
                 select(ConversationLog)
                 .where(ConversationLog.session_id == session_id)
@@ -714,11 +701,7 @@ class AgentService:
             )
             current_msg_log = (await self.session.exec(stmt)).first()
 
-            if current_msg_log:
-                history_before_id = current_msg_log.id
-            else:
-                # 回退：仅使用 log_id 之前的历史
-                history_before_id = log.id
+            history_before_id = current_msg_log.id if current_msg_log else log.id
 
         else:
             # 用户日志已选中
@@ -730,7 +713,7 @@ class AgentService:
         if current_msg_log:
             messages.append({"role": "user", "content": current_msg_log.content})
 
-        # 4. 运行预处理器管道 (空跑)
+        # 4. 运行预处理器管道(空跑)
         agent_id = log.agent_id or "pero"
 
         context = {
@@ -754,7 +737,7 @@ class AgentService:
 
         return {"messages": final_messages}
 
-    # [Legacy] social_chat method removed. Use chat(source='social') instead.
+    # [遗留] social_chat已移除，使用chat(source='social')。
 
     async def _run_scorer_background(
         self,
@@ -798,17 +781,15 @@ class AgentService:
                 engine, class_=AsyncSession, expire_on_commit=False
             )
             async with async_session() as session:
-                # Update last trigger time in Config
-                # [Note] Config is global, but maybe we should key it by agent_id too?
-                # For now, let's keep it global or key it if we want per-agent scheduling.
-                # Given user request is about memory isolation, scheduling isolation is less critical
-                # but good to have. Let's use a suffixed key.
+                # 更新Config中上次触发时间。
+                # [注] Config全局，但应按agent_id区分。
+                # 用户请求记忆隔离，调度隔离虽非关键但有益，使用后缀键。
 
                 config_key = f"last_dream_trigger_time_{agent_id}"
                 now_str = datetime.now().isoformat()
                 config_last_dream = await session.get(Config, config_key)
 
-                # Fallback to global key for backward compatibility or if first run
+                # 回退至全局键（兼容性或首次运行）
                 if not config_last_dream and agent_id == "pero":
                     config_last_dream = await session.get(
                         Config, "last_dream_trigger_time"
@@ -824,25 +805,22 @@ class AgentService:
 
                 service = ReflectionService(session)
 
-                # 1. 补录记忆 (Priority: Fix failures first)
-                # Scorer tasks are agent-agnostic in lookup but agent-specific in processing.
-                # However, backfill_failed_scorer_tasks iterates over logs which HAVE agent_id.
-                # Ideally we should filter tasks by agent_id too.
-                # But ReflectionService.backfill_failed_scorer_tasks doesn't support filtering yet.
-                # It's safe to run globally as it respects log.agent_id.
-                # UPDATE: Now it supports filtering to prevent log noise and potential race conditions.
+                # 1. 补录记忆(优先修复失败)
+                # Scorer任务查找无关Agent但处理相关。
+                # backfill_failed_scorer_tasks迭代含agent_id的日志。
+                # 现在支持过滤以防日志干扰和竞争条件。
                 await service.backfill_failed_scorer_tasks(agent_id=agent_id)
 
-                # 2. 孤独记忆扫描 (New Feature: Fix isolated memories)
+                # 2. 孤独记忆扫描(新特性：修复孤立记忆)
                 # 每次梦境周期扫描 3 个孤独记忆
                 await service.scan_lonely_memories(limit=3, agent_id=agent_id)
 
-                # 3. 关联挖掘 (High Priority)
+                # 3. 关联挖掘(高优先级)
                 await service.dream_and_associate(limit=10, agent_id=agent_id)
 
-                # 3. 记忆压缩 (Low Priority, 10% chance)
+                # 3. 记忆压缩(低优先级，10%概率)
                 if random.random() < 0.1:
-                    # 默认配置: 压缩3天前的低价值记忆
+                    # 默认：压缩3天前低价值记忆
                     await service.consolidate_memories(
                         lookback_days=3, importance_threshold=4, agent_id=agent_id
                     )
@@ -865,12 +843,12 @@ class AgentService:
         skip_system_prompt: bool = False,
         initial_variables: Dict[str, Any] = None,
     ) -> AsyncIterable[str]:
-        # [NIT 安全] 为此请求上下文生成 ID
+        # [NIT安全] 生成请求上下文ID
         current_nit_id = NITSecurityManager.generate_random_id()
 
-        # 通知 CompanionService 用户活动以防止中断
+        # 通知CompanionService用户活动防中断
         try:
-            # [Fix] 跳过 social/mobile 的陪伴更新
+            # [Fix] 跳过social/mobile陪伴更新
             if source not in ["social", "mobile"]:
                 from services.companion_service import companion_service
 
@@ -880,27 +858,27 @@ class AgentService:
         except Exception as e:
             print(f"[Agent] 更新陪伴活动失败: {e}")
 
-        # 取消任何待处理的“反应”任务，因为用户正在交互
+        # 用户交互时取消待处理“反应”任务
         if not system_trigger_instruction:
             try:
-                # [Multi-Agent] 仅取消当前 Agent 的任务
+                # [多Agent] 仅取消当前Agent任务
                 from services.agent_manager import get_agent_manager
 
                 current_agent_id = (
                     agent_id_override or get_agent_manager().active_agent_id
                 )
 
-                # 假设“反应”类型的任务是那些应该在交互时取消的任务
+                # 假设“反应”任务应在交互时取消
                 statement = (
                     select(ScheduledTask)
                     .where(ScheduledTask.type == "reaction")
-                    .where(ScheduledTask.is_triggered == False)
+                    .where(not ScheduledTask.is_triggered)
                     .where(ScheduledTask.agent_id == current_agent_id)
                 )
                 tasks_to_cancel = (await self.session.exec(statement)).all()
                 if tasks_to_cancel:
                     print(
-                        f"[Agent] 检测到用户交互。取消 {len(tasks_to_cancel)} 个待处理的反应任务。"
+                        f"[Agent] 用户交互，取消{len(tasks_to_cancel)}个反应任务"
                     )
                     for t in tasks_to_cancel:
                         await self.session.delete(t)
@@ -908,10 +886,10 @@ class AgentService:
             except Exception as e:
                 print(f"[Agent] 取消反应任务失败: {e}")
 
-        # [Work Mode] Session Override
-        # Check if we are in an active work session. If so, override the session_id to isolate history.
-        # [Fix] Disabled global override to prevent hijacking of 'default' (Pet) session.
-        # IdeChat handles session resolution via ide_router.
+        # [工作模式] 会话覆盖
+        # 检查是否处于工作会话以隔离历史。
+        # [Fix] 禁用全局覆盖以防劫持'default'(Pet)会话。
+        # IdeChat通过ide_router处理会话解析。
         # try:
         #     config_session = (await self.session.exec(select(Config).where(Config.key == "current_session_id"))).first()
         #     if config_session and config_session.value and config_session.value != "default":
@@ -925,14 +903,14 @@ class AgentService:
             f"[Agent] 收到聊天请求。来源: {source}, 消息数: {len(messages)}, 语音: {is_voice_mode}"
         )
 
-        # [功能] 多 Agent 支持
-        # 从 AgentManager 提取 agent_id (标准化)
+        # [功能] 多Agent支持
+        # 从AgentManager提取agent_id(标准化)
         from services.agent_manager import get_agent_manager
 
         agent_manager = get_agent_manager()
         current_agent_id = agent_id_override or agent_manager.active_agent_id
 
-        # 如果未设置，回退到 "pero" (尽管 AgentManager 应该处理这个问题)
+        # 未设置回退"pero"(尽管AgentManager应处理)
         if not current_agent_id:
             current_agent_id = "pero"
 
@@ -953,17 +931,17 @@ class AgentService:
             "skip_system_prompt": skip_system_prompt,  # 将跳过标志传递给预处理器
         }
 
-        # 如果配置缺失，回退 (如果 ConfigPreprocessor 运行则不应发生)
-        # [Refactor] 提前加载 Config 以支持工具计算
+        # 配置缺失回退(ConfigPreprocessor运行不应发生)
+        # [Refactor] 提前加载Config支持工具计算
         config = await self._get_llm_config()
 
-        # 5. 合并动态 MCP 工具
+        # 5. 合并动态MCP工具
         if on_status:
             await on_status("thinking", "正在加载工具...")
         print("[Agent] 正在加载 MCP 工具...")
 
         # --- 工具列表优化 ---
-        # [Refactor] Unified Tool Policy Enforcement
+        # [Refactor] 统一工具策略执行
         from core.plugin_manager import get_plugin_manager
         from services.agent_manager import get_agent_manager
 
@@ -971,7 +949,7 @@ class AgentService:
         agent_manager = get_agent_manager()
         agent_profile = agent_manager.get_agent(current_agent_id)
 
-        # 1. Determine Policy Mode
+        # 1. 确定策略模式
         policy_mode = "desktop"
         if source == "social":
             policy_mode = "social"
@@ -980,17 +958,17 @@ class AgentService:
         elif source == "lightweight" or (session_id and "companion" in session_id):
             policy_mode = "lightweight"
 
-        # 2. Get Policy Config
+        # 2. 获取策略配置
         policy = {}
         if agent_profile and agent_profile.tool_policies:
             policy = agent_profile.tool_policies.get(policy_mode, {})
             print(f"[Agent] 使用工具策略: {policy_mode} (Agent: {current_agent_id})")
 
-        # 3. Fallback Defaults (Backward Compatibility)
+        # 3. 回退默认(兼容性)
         if not policy:
-            print(f"[Agent] 未找到策略配置，使用默认回退策略: {policy_mode}")
+            print(f"[Agent] 未找到配置，使用默认策略: {policy_mode}")
             if policy_mode == "social":
-                # Default safe social policy
+                # 默认安全社交策略
                 policy = {
                     "strategy": "whitelist",
                     "allowed_prefixes": ["qq_"],
@@ -1001,7 +979,7 @@ class AgentService:
                     ],
                 }
             elif policy_mode == "work":
-                # Default work policy
+                # 默认工作策略
                 policy = {
                     "strategy": "whitelist",
                     "allowed_keywords": [
@@ -1108,7 +1086,7 @@ class AgentService:
 
         # 5.3 Plugin Tools (NIT Plugins)
         # Ensure plugins are also candidates so they can be whitelisted and exposed
-        existing_tool_names = set(t["function"]["name"] for t in candidate_tools)
+        existing_tool_names = {t["function"]["name"] for t in candidate_tools}
         for m in all_manifests:
             cmds = []
             if "capabilities" in m and "invocationCommands" in m["capabilities"]:
@@ -1340,8 +1318,10 @@ class AgentService:
                 print(f"[Agent] 开始 LLM 流 (第 {turn_count} 轮)...")
 
                 # Define Raw Stream Generator
-                async def raw_stream_source():
-                    nonlocal current_turn_text, full_response_text, has_tool_calls_in_this_turn, collected_tool_calls
+                async def raw_stream_source(
+                    tools_to_pass=tools_to_pass, collected_tool_calls=collected_tool_calls
+                ):
+                    nonlocal current_turn_text, full_response_text, has_tool_calls_in_this_turn
 
                     async for delta in llm.chat_stream_deltas(
                         final_messages, temperature=temperature, tools=tools_to_pass
@@ -2521,11 +2501,10 @@ class AgentService:
 
             # 最后的兜底处理，清理 MCP 客户端资源
             if "mcp_clients" in locals():
+                import contextlib
                 for client in mcp_clients:
-                    try:
+                    with contextlib.suppress(Exception):
                         await client.close()
-                    except Exception:
-                        pass
             pass
 
     async def _generate_and_stream_tts(self, text: str):

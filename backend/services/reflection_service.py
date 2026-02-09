@@ -40,7 +40,7 @@ class ReflectionService:
         api_key = configs.get("global_llm_api_key", "")
         api_base = configs.get("global_llm_api_base", "https://api.openai.com")
         model = (
-            "gpt-4o"  # Fallback if everything fails, but we try to use main model first
+            "gpt-4o"  # 如果一切都失败则回退，但我们首先尝试使用主模型
         )
 
         if reflection_model_id:
@@ -60,7 +60,7 @@ class ReflectionService:
                 )
                 model = model_config.model_id
         elif main_model_id:
-            # Use Main Model as fallback
+            # 使用主模型作为回退
             model_config = await self.session.get(AIModelConfig, int(main_model_id))
             if model_config:
                 api_key = (
@@ -125,7 +125,7 @@ class ReflectionService:
                 )
                 async with async_session_factory() as local_session:
                     print(f"[Reflection] 正在回填失败的任务 (ID: {task_id})...")
-                    # Local import to avoid circular dependency
+                    # 本地导入以避免循环依赖
                     from services.scorer_service import ScorerService
 
                     scorer_service = ScorerService(local_session)
@@ -206,7 +206,7 @@ class ReflectionService:
             if not summary_text:
                 continue
 
-            # Save to File (MD) - REMOVED per user request
+            # 保存到文件 (MD) - 根据用户请求移除
             # from utils.memory_file_manager import MemoryFileManager
             # file_path = await MemoryFileManager.save_log("periodic_summaries", f"{date_key}_Consolidated", summary_text)
 
@@ -248,7 +248,7 @@ class ReflectionService:
             await self.session.flush()  # 获取 ID
             await self.session.refresh(summary_mem)
 
-            # 更新链表 (Bypass the group)
+            # 更新链表 (跳过该组)
             # A -> [B -> ... -> D] -> E
             # 变为: A -> S -> E
 
@@ -333,7 +333,7 @@ class ReflectionService:
         chat_history = ""
         for log in logs:
             role_name = "主人" if log.role == "user" else agent_id
-            content = log.content[:200]  # Truncate simply
+            content = log.content[:200]  # 简单截断
             chat_history += (
                 f"[{log.timestamp.strftime('%H:%M')}] {role_name}: {content}\n"
             )
@@ -348,7 +348,7 @@ class ReflectionService:
             "agent_name": agent_id,
             "owner_name": owner_name,
             "date_str": date_str,
-            "chat_history": chat_history[:10000],  # Token limit safeguard
+            "chat_history": chat_history[:10000],  # Token 限制保护
         }
 
         from services.prompt_service import PromptManager
@@ -359,7 +359,7 @@ class ReflectionService:
 
         # 5. 调用 LLM
         config = await self._get_reflection_config()
-        # Ensure model is compatible with chat completion
+        # 确保模型与聊天完成兼容
         llm = LLMService(
             api_key=config["api_key"],
             api_base=config["api_base"],
@@ -367,7 +367,7 @@ class ReflectionService:
         )
 
         print("[Reflection] 正在撰写日记...", flush=True)
-        # Use simple chat completion
+        # 使用简单的聊天完成
         try:
             res = await llm.chat([{"role": "user", "content": prompt}], temperature=0.7)
             diary_content = res["choices"][0]["message"]["content"].strip()
@@ -381,11 +381,11 @@ class ReflectionService:
 
         # 6. 保存文件
         # Path: PeroCore-Electron/pero_workspace/[agent_id]/diaries/YYYY-MM-DD.md
-        # Locate workspace relative to this file or project root
-        # Assuming backend is at PeroCore-Electron/backend
-        # workspace is at PeroCore-Electron/pero_workspace
+        # 定位相对于此文件或项目根目录的 workspace
+        # 假设 backend 在 PeroCore-Electron/backend
+        # workspace 在 PeroCore-Electron/pero_workspace
 
-        # Robust path finding
+        # 健壮的路径查找
         current_file_dir = os.path.dirname(os.path.abspath(__file__))
         project_root = os.path.dirname(
             os.path.dirname(current_file_dir)
@@ -611,7 +611,7 @@ class ReflectionService:
                 if candidate.id == target_memory.id:
                     continue
 
-                # Check duplication
+                # 检查重复
                 existing = await self.session.exec(
                     select(MemoryRelation).where(
                         (
@@ -670,7 +670,7 @@ class ReflectionService:
             )
             content = response["choices"][0]["message"]["content"]
 
-            # Parse JSON (Simple)
+            # 解析 JSON (简单)
             if "```json" in content:
                 content = content.split("```json")[1].split("```")[0]
             elif "```" in content:

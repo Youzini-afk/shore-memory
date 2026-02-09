@@ -48,7 +48,7 @@ async def get_rust_engine(session: AsyncSession):
         while True:
             statement_mem = (
                 select(Memory.id, Memory.prev_id, Memory.next_id)
-                .where((Memory.prev_id != None) | (Memory.next_id != None))
+                .where((Memory.prev_id != None) | (Memory.next_id != None))  # noqa: E711
                 .offset(mem_offset)
                 .limit(BATCH_SIZE)
             )
@@ -89,7 +89,7 @@ class MemoryService:
         msg_timestamp: Optional[str] = None,
         source: str = "desktop",
         memory_type: str = "event",
-        agent_id: str = "pero",  # Multi-Agent Isolation
+        agent_id: str = "pero",  # 多 Agent 隔离
     ) -> Memory:
         from datetime import datetime
 
@@ -98,7 +98,7 @@ class MemoryService:
         from services.embedding_service import embedding_service
         from services.vector_service import vector_service
 
-        # 1. 查找上一条记忆 (The Tail of the Time-Axis)
+        # 1. 查找上一条记忆 (时间轴末尾)
         # 增加 agent_id 过滤，确保只链接到同一个 Agent 的记忆链
         statement = (
             select(Memory)
@@ -304,7 +304,7 @@ class MemoryService:
             if user_content and user_content.startswith("【系统触发】"):
                 user_role = "system"
 
-            # Use user_metadata if provided, else fall back to metadata (shared)
+            # 如果提供 user_metadata 则使用，否则回退到 metadata (共享)
             u_meta = user_metadata if user_metadata is not None else metadata
 
             # 创建用户消息记录
@@ -335,7 +335,7 @@ class MemoryService:
             await session.refresh(user_log)
             await session.refresh(assistant_log)
 
-            # [Feature] Broadcast new messages to Gateway (Event-Driven)
+            # [Feature] 向 Gateway 广播新消息 (事件驱动)
             try:
                 import time
                 import uuid
@@ -344,7 +344,7 @@ class MemoryService:
                 from services.gateway_client import gateway_client
 
                 async def broadcast_log(log):
-                    # [Privacy] Do NOT broadcast social mode logs to the global dashboard
+                    # [Privacy] 不要向全局仪表板广播社交模式日志
                     if log.source == "social":
                         return
 
@@ -393,8 +393,8 @@ class MemoryService:
         query: Optional[str] = None,
     ) -> List[ConversationLog]:
         """
-        Unified interface for querying conversation logs (list, filter, search).
-        Combines functionalities of previous get_recent_logs and search_logs.
+        查询对话日志的统一接口（列表、过滤、搜索）。
+        结合了之前 get_recent_logs 和 search_logs 的功能。
         """
         from datetime import datetime, time
 
@@ -402,38 +402,38 @@ class MemoryService:
 
         statement = select(ConversationLog).where(ConversationLog.agent_id == agent_id)
 
-        # 1. Source Filtering
+        # 1. 来源过滤
         if source != "all":
-            if "%" in source:  # Support wildcard from old search_logs
+            if "%" in source:  # 支持来自旧 search_logs 的通配符
                 statement = statement.where(ConversationLog.source.like(source))
-                # [Privacy] Even with wildcard (like "%"), exclude social logs unless explicitly targeting them
+                # [Privacy] 即使使用通配符（如 '%'），除非明确指定，否则排除社交日志
                 if not source.startswith("social"):
                     statement = statement.where(ConversationLog.source != "social")
             else:
                 statement = statement.where(ConversationLog.source == source)
         else:
-            # [Privacy] Default exclusion for "all" sources
-            # Exclude 'social' unless specifically requested
+            # [Privacy] 默认排除 'all' 来源
+            # 除非明确请求，否则排除 'social'
             statement = statement.where(ConversationLog.source != "social")
 
-        # 2. Session Filtering
+        # 2. 会话过滤
         if session_id != "all":
             statement = statement.where(ConversationLog.session_id == session_id)
         else:
-            # [Noise Reduction] When listing global history (all sessions),
-            # exclude temporary 'work_' sessions to keep the view clean.
-            # (Unless explicitly searching for them, but usually they are accessed via specific ID)
+            # [降噪] 列出全局历史记录（所有会话）时，
+            # 排除临时的 'work_' 会话以保持视图整洁。
+            # （除非明确搜索它们，但通常通过特定 ID 访问）
             statement = statement.where(~ConversationLog.session_id.startswith("work_"))
 
-        # 3. Content Search
+        # 3. 内容搜索
         if query:
             statement = statement.where(ConversationLog.content.contains(query))
 
-        # 4. Cursor Pagination
+        # 4. 游标分页
         if before_id:
             statement = statement.where(ConversationLog.id < before_id)
 
-        # 5. Date Filtering
+        # 5. 日期过滤
         if date_str:
             try:
                 target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
@@ -445,26 +445,26 @@ class MemoryService:
             except ValueError:
                 print(f"[MemoryService] Invalid date format: {date_str}")
 
-        # 6. Sorting
-        # Always order by timestamp DESC first to get "recent" logs.
+        # 6. 排序
+        # 始终首先按时间戳倒序排列以获取“最近”日志。
         statement = statement.order_by(
             desc(ConversationLog.timestamp), desc(ConversationLog.id)
         )
 
-        # 7. Pagination
+        # 7. 分页
         statement = statement.offset(offset).limit(limit)
 
         logs = (await session.exec(statement)).all()
 
-        # 8. Post-processing
-        # If sort="asc", we want chronological order (Old -> New)
-        # But we fetched the LATEST logs (New -> Old).
-        # So we reverse the list.
+        # 8. 后处理
+        # 如果 sort='asc'，我们需要按时间顺序（旧 -> 新）
+        # 但我们获取的是最新日志（新 -> 旧）。
+        # 所以我们反转列表。
         if sort == "asc":
             return list(reversed(logs))
 
-        # If sort="desc", we want reverse chronological order (New -> Old)
-        # Which is what we fetched.
+        # 如果 sort='desc'，我们需要按时间倒序（新 -> 旧）
+        # 这正是我们获取的。
         return list(logs)
 
     @staticmethod
@@ -573,7 +573,7 @@ class MemoryService:
 
             # 3. 提取关联结果 (排除锚点)
             associated_ids = [
-                mid for mid in flashback_scores.keys() if mid not in anchor_ids
+                mid for mid in flashback_scores if mid not in anchor_ids
             ]
             if not associated_ids:
                 associated_ids = anchor_ids
@@ -630,13 +630,11 @@ class MemoryService:
         [混合检索策略] 结合向量搜索、图遍历与簇排序
         """
         import math
-        import os
-        import re
 
         from services.embedding_service import embedding_service
         from services.vector_service import vector_service
 
-        # --- 0. 意图识别与簇感知 (Intent Detection) ---
+        # --- 0. 意图识别与簇感知 ---
         target_cluster = None
         cluster_keywords = {
             "逻辑推理簇": [
@@ -848,8 +846,6 @@ class MemoryService:
                     )
                     if target_id in activation_scores:
                         activation_scores[target_id] += base_score * rel.strength * 0.5
-        except Exception as e:
-            print(f"[Memory] Rust 引擎运行时错误: {e}. 回退到初始分数。")
 
         # 4. 综合排序 (Score = Sim*0.7 + ClusterBonus + Importance*0.3*Decay + Recency)
         final_candidates = []
@@ -906,10 +902,8 @@ class MemoryService:
             except Exception as e:
                 print(f"[Memory] 重排序失败: {e}。回退到初始分数。")
                 result_memories = top_candidates[:limit]
-            final_memories = result_memories
         else:
             result_memories = top_candidates[:limit]
-            final_memories = result_memories
 
         # [修复] 更新访问统计 (强化)
         # 只要被检索到并最终返回，就视为被"激活"了一次
@@ -981,7 +975,6 @@ class MemoryService:
         from services.vector_service import vector_service
 
         # 1. 搜索 VectorDB (获取更多候选以允许过滤)
-        # HACK: Rust 索引不支持预过滤，所以我们获取更多并进行后过滤。
         candidates = vector_service.search(
             query_vec, limit=limit * 5, agent_id=agent_id
         )

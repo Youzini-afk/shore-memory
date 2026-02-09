@@ -248,8 +248,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, computed } from 'vue'
-import { Search, User, Bell, Settings, Plus, Users } from 'lucide-vue-next'
+import { ref, onMounted } from 'vue'
+import { Search, Bell, Settings, Plus, Users } from 'lucide-vue-next'
 import ChatInterface from '../components/chat/ChatInterface.vue'
 
 const API_BASE = 'http://127.0.0.1:9120' // 使用 IP 避免 localhost 解析问题
@@ -335,15 +335,6 @@ const switchGroup = (group) => {
   activeMode.value = 'group'
   activeGroupId.value = group.id
   activeGroupName.value = group.name
-}
-
-const toggleMember = (agentId) => {
-  const idx = newGroupMembers.value.indexOf(agentId)
-  if (idx === -1) {
-    newGroupMembers.value.push(agentId)
-  } else {
-    newGroupMembers.value.splice(idx, 1)
-  }
 }
 
 const createGroup = async () => {

@@ -1,7 +1,7 @@
 """
-AuraVision Service - 视觉意图感知服务 (V3.0 多模态版)
+AuraVision Service - 视觉意图感知服务(V3.0多模态版)
 
-使用 Rust 原生推理引擎，实现技术文档设计的完整链路：
+使用Rust原生推理引擎实现完整链路：
 - 视觉编码 -> 384D 向量
 - EMA 时序平滑
 - 意图锚点匹配
@@ -28,10 +28,9 @@ from loguru import logger
 from services.mdp.manager import mdp
 from services.screenshot_service import screenshot_manager
 
-# 多模态协调器 (V3.0)
+# 多模态协调器(V3.0)
 try:
     from services.multimodal_trigger_service import (
-        MultimodalTriggerCoordinator,
         TriggerMode,
         multimodal_coordinator,
     )
@@ -42,7 +41,7 @@ except ImportError as e:
     MULTIMODAL_AVAILABLE = False
     multimodal_coordinator = None
 
-# 尝试导入 Rust 核心模块
+# 尝试导入Rust核心模块
 try:
     from pero_memory_core import VisionIntentMemoryManager, VisionProcessResult
 
@@ -56,14 +55,7 @@ except ImportError as e:
 
 
 class AuraVisionService:
-    """
-    视觉意图感知服务
-
-    核心功能:
-    1. 定期截取屏幕 -> 脱敏处理 -> 意图编码
-    2. 匹配意图锚点 -> 触发扩散激活 -> 唤醒相关记忆
-    3. 饱和度检测 -> 决定是否主动对话
-    """
+    """视觉意图感知服务：截屏脱敏编码->锚点匹配->扩散激活->饱和度检测。"""
 
     _instance = None
 
@@ -107,12 +99,7 @@ class AuraVisionService:
         logger.info("[AuraVision] 服务初始化完成")
 
     def initialize(self) -> bool:
-        """
-        初始化 Rust 视觉引擎
-
-        Returns:
-            bool: 是否初始化成功
-        """
+        """初始化Rust视觉引擎"""
         if not RUST_VISION_AVAILABLE:
             logger.error("[AuraVision] Rust 模块不可用，无法初始化")
             return False
@@ -136,7 +123,7 @@ class AuraVisionService:
                 saturation_threshold=self.saturation_threshold,
             )
 
-            # 尝试加载已保存的锚点
+            # 尝试加载已保存锚点
             if os.path.exists(self.anchors_path):
                 try:
                     self.manager.load_anchors(self.anchors_path)
@@ -158,20 +145,7 @@ class AuraVisionService:
         return self.manager is not None and self.manager.is_model_loaded()
 
     def load_intent_anchors(self, anchors: List[Dict[str, Any]]) -> int:
-        """
-        加载意图锚点
-
-        Args:
-            anchors: 锚点列表，每个锚点包含:
-                - id: int
-                - vector: List[float] (384维)
-                - description: str
-                - importance: float (0-1, 可选)
-                - tags: str (可选)
-
-        Returns:
-            int: 成功加载的锚点数量
-        """
+        """加载意图锚点"""
         if not self.manager:
             logger.error("[AuraVision] 管理器未初始化")
             return 0
@@ -202,12 +176,7 @@ class AuraVisionService:
         return count
 
     def load_memory_connections(self, connections: List[tuple]) -> None:
-        """
-        加载记忆关联边 (用于扩散激活)
-
-        Args:
-            connections: [(source_id, target_id, weight), ...]
-        """
+        """加载记忆关联边(用于扩散激活)"""
         if not self.manager:
             return
 
@@ -215,48 +184,23 @@ class AuraVisionService:
         logger.info(f"[AuraVision] 加载了 {len(connections)} 条记忆关联")
 
     def _preprocess_screenshot(self, img_bgr: np.ndarray) -> List[float]:
-        """
-        预处理截图为模型输入
-
-        流程:
-        1. 缩放到 64x64
-        2. 灰度化
-        3. Canny 边缘检测 (隐私脱敏)
-        4. 归一化到 [-1, 1]
-
-        Args:
-            img_bgr: BGR 格式的图像 (OpenCV 默认)
-
-        Returns:
-            List[float]: 4096 个像素值
-        """
+        """预处理截图为模型输入(缩放/灰度/Canny边缘/归一化)。"""
         # 1. 缩放
         img_resized = cv2.resize(img_bgr, (64, 64), interpolation=cv2.INTER_AREA)
 
         # 2. 灰度化
         img_gray = cv2.cvtColor(img_resized, cv2.COLOR_BGR2GRAY)
 
-        # 3. Canny 边缘检测 (隐私脱敏的关键步骤)
+        # 3. Canny边缘检测(隐私脱敏关键)
         img_edges = cv2.Canny(img_gray, 100, 200)
 
-        # 4. 归一化到 [-1, 1]
+        # 4. 归一化[-1, 1]
         pixels = (img_edges.astype(np.float32) / 255.0 - 0.5) / 0.5
 
         return pixels.flatten().tolist()
 
     async def process_current_screen(self) -> Optional[VisionProcessResult]:
-        """
-        处理当前屏幕并返回视觉感知结果
-
-        Returns:
-            VisionProcessResult: 处理结果，包含:
-                - triggered: 是否应触发主动对话
-                - top_anchor_id: 最匹配的锚点 ID
-                - top_similarity: 匹配相似度
-                - top_description: 锚点描述
-                - activated_memory_ids: 唤醒的记忆 ID 列表
-                - saturation: 上下文饱和度
-        """
+        """处理当前屏幕返回视觉感知结果"""
         if not self.is_ready():
             logger.debug("[AuraVision] 服务未就绪，跳过处理")
             return None
@@ -268,7 +212,7 @@ class AuraVisionService:
                 logger.debug("[AuraVision] 截图失败")
                 return None
 
-            # 2. 解码 Base64
+            # 2. 解码Base64
             img_data = base64.b64decode(shot_data["base64"])
             nparr = np.frombuffer(img_data, np.uint8)
             img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
@@ -280,7 +224,7 @@ class AuraVisionService:
             # 3. 预处理
             pixels = self._preprocess_screenshot(img)
 
-            # 4. Rust 引擎处理
+            # 4. Rust引擎处理
             result = self.manager.process_visual_input(
                 pixels=pixels, propagation_steps=2, propagation_decay=0.5
             )
@@ -292,12 +236,7 @@ class AuraVisionService:
             return None
 
     async def start_vision_loop(self, interval: int = None):
-        """
-        启动视觉感知循环 (V3.0 多模态版)
-
-        Args:
-            interval: 初始观察间隔 (秒)，之后会自适应调整
-        """
+        """启动视觉感知循环(V3.0多模态版)"""
         if self.is_running:
             logger.warning("[AuraVision] 循环已在运行")
             return
@@ -320,7 +259,7 @@ class AuraVisionService:
                 result = await self.process_current_screen()
 
                 if result and MULTIMODAL_AVAILABLE:
-                    # V3.0: 使用多模态协调器进行决策
+                    # V3.0: 使用多模态协调器决策
                     decision = await self._multimodal_decision(result)
 
                     if decision.should_trigger:
@@ -331,7 +270,7 @@ class AuraVisionService:
                             f"理由: {decision.reasoning}"
                         )
 
-                        # 异步触发主动对话 (使用协调器生成的上下文)
+                        # 异步触发主动对话(使用协调器上下文)
                         asyncio.create_task(
                             self._trigger_proactive_dialogue_v3(decision)
                         )
@@ -352,7 +291,7 @@ class AuraVisionService:
                     )
 
                 elif result:
-                    # 降级到 V2.0 逻辑
+                    # 降级V2.0逻辑
                     if result.triggered:
                         logger.info(
                             f"[AuraVision] 🎯 触发主动感知! "
@@ -381,16 +320,8 @@ class AuraVisionService:
             self.is_running = False
 
     async def _multimodal_decision(self, visual_result):
-        """
-        使用多模态协调器进行决策
-
-        Args:
-            visual_result: VisionProcessResult 对象
-
-        Returns:
-            MultimodalDecision: 融合决策结果
-        """
-        # 转换 VisionProcessResult 为 dict
+        """使用多模态协调器决策"""
+        # 转换VisionProcessResult为dict
         visual_dict = {
             "top_similarity": visual_result.top_similarity,
             "top_description": visual_result.top_description,
@@ -399,7 +330,7 @@ class AuraVisionService:
             "activated_memory_ids": visual_result.activated_memory_ids,
         }
 
-        # 构建语义扩散分数 (从激活的记忆 ID)
+        # 构建语义扩散分数(从激活记忆ID)
         activated_ids = visual_result.activated_memory_ids
         semantic_scores = dict.fromkeys(activated_ids, 0.5)  # 简化: 统一激活分数
 
@@ -414,11 +345,7 @@ class AuraVisionService:
         return decision
 
     async def _trigger_proactive_dialogue_v3(self, decision):
-        """
-        V3.0 多模态版主动对话触发
-
-        使用协调器生成的完整上下文
-        """
+        """V3.0多模态主动对话触发(使用协调器上下文)。"""
         try:
             from database import get_session
             from services.agent_service import AgentService
@@ -446,7 +373,7 @@ class AuraVisionService:
                         f"[AuraVision] Agent 主动发言: {response_text[:100]}..."
                     )
 
-                    # 清空感知日志 (已经转化为对话)
+                    # 清空感知日志(已转对话)
                     if MULTIMODAL_AVAILABLE:
                         multimodal_coordinator.clear_perception_log()
 
@@ -456,11 +383,7 @@ class AuraVisionService:
             logger.error(f"[AuraVision] V3 触发对话失败: {e}")
 
     async def _trigger_proactive_dialogue(self, result: VisionProcessResult):
-        """
-        触发主动对话
-
-        将视觉感知结果转化为 AgentService 可理解的内部提示
-        """
+        """触发主动对话(转为AgentService内部提示)。"""
         try:
             from database import get_session
             from services.agent_service import AgentService
@@ -517,15 +440,7 @@ class AuraVisionService:
         similarity_threshold: float = None,
         saturation_threshold: float = None,
     ):
-        """
-        配置服务参数
-
-        Args:
-            observation_interval: 观察间隔 (秒)
-            ema_alpha: EMA 平滑系数 (0-1)
-            similarity_threshold: 相似度触发阈值 (0-1)
-            saturation_threshold: 饱和度抑制阈值 (0-1)
-        """
+        """配置服务参数"""
         if observation_interval is not None:
             self.observation_interval = observation_interval
 

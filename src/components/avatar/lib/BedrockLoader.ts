@@ -139,7 +139,7 @@ export class BedrockLoader {
     material: THREE.Material,
     rootGroup: THREE.Group,
     isMain: boolean,
-    fetchFn: Function = fetch
+    fetchFn: (input: string) => Promise<Response> = fetch
   ) {
     try {
       const response = await fetchFn(path)

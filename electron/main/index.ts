@@ -21,26 +21,24 @@ import {
 import { checkEsInstalled, installEs } from './services/everything.js'
 import { setupUpdater } from './services/updater.js'
 import { windowManager } from './windows/manager.js'
-import { createTray, destroyTray } from './services/tray.js'
+import { createTray } from './services/tray.js'
 import { registerShortcuts } from './services/shortcuts.js'
-import { fileURLToPath } from 'url'
-import { dirname } from 'path'
 import axios from 'axios'
 import { parseArgs } from './utils/args'
 import { startCli } from '../cli/index'
 import { logger } from './utils/logger'
 
-// Check for CLI mode immediately
+// 立即检查 CLI 模式
 const args = parseArgs(process.argv)
 
 if (args.cliMode) {
-  // CLI Mode: Start ServiceManager and avoid GUI
-  logger.info('Main', 'Detected CLI mode flag. Starting in Headless Mode...')
+  // CLI 模式：启动 ServiceManager 并避免 GUI
+  logger.info('Main', '检测到 CLI 模式标志。正在以无头模式启动...')
   startCli()
-  // In CLI mode, we rely on Node's event loop (via readline) to keep running.
-  // We do NOT hook into Electron's app lifecycle for window creation.
+  // 在 CLI 模式下，我们依赖 Node 的事件循环（通过 readline）来保持运行。
+  // 我们不挂钩 Electron 的应用程序生命周期来创建窗口。
 } else {
-  // GUI Mode (Original Logic)
+  // GUI 模式（原始逻辑）
 
   // 禁用 Windows 7 的 GPU 加速
   if (release().startsWith('6.1')) app.disableHardwareAcceleration()
@@ -56,8 +54,7 @@ if (args.cliMode) {
   app.commandLine.appendSwitch('disable-features', 'Autofill')
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
-  // Set application name for Windows 10+ notifications
-  // 设置 Windows 10+ 通知的应用程序名称
+  // 为 Windows 10+ 通知设置应用程序名称
   if (process.platform === 'win32') app.setAppUserModelId(app.getName())
 
   if (!app.requestSingleInstanceLock()) {
@@ -67,47 +64,44 @@ if (args.cliMode) {
 
   process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
-  async function createWindow() {
+  const createWindow = async () => {
     const win = windowManager.createLauncherWindow()
 
-    // Setup auto updater
+    // 设置自动更新
     setupUpdater()
 
-    // Create system tray
     // 创建系统托盘
     createTray()
 
-    // Register global shortcuts
     // 注册全局快捷键
     registerShortcuts()
 
-    // Test active push message to Renderer-process
-    // 测试向渲染进程主动推送消息
+    // 测试主动向渲染进程推送消息
     win.webContents.on('did-finish-load', () => {
       try {
         if (!win.isDestroyed())
           win.webContents.send('main-process-message', new Date().toLocaleString())
-      } catch (e) {}
+      } catch {
+        // 忽略
+      }
     })
   }
 
   app.whenReady().then(createWindow)
 
   app.on('window-all-closed', () => {
-    // Do nothing, keep app running in tray
     // 什么都不做，保持应用在托盘中运行
     if (process.platform === 'darwin') return
   })
 
   app.on('before-quit', () => {
-    stopBackend() // Ensure backend is killed // 确保后端被杀死
-    stopGateway() // Ensure gateway is killed // 确保网关被杀死
+    stopBackend() // 确保后端被杀死
+    stopGateway() // 确保网关被杀死
   })
 
   app.on('second-instance', () => {
     const win = windowManager.launcherWin
     if (win) {
-      // Focus on the main window if the user tried to open another
       // 如果用户尝试打开另一个窗口，则聚焦主窗口
       if (win.isMinimized()) win.restore()
       win.focus()
@@ -123,7 +117,7 @@ if (args.cliMode) {
     }
   })
 
-  // IPC Handlers - Log from Renderer
+  // IPC 处理程序 - 来自渲染进程的日志
   ipcMain.on('log-from-renderer', (_, message) => {
     logger.info('Renderer', message)
   })
@@ -141,7 +135,6 @@ if (args.cliMode) {
         win.setResizable(true)
         win.setMinimumSize(200, 200) // 重置限制
 
-        // Use setBounds for better atomic update
         // 使用 setBounds 进行更好的原子更新
         const bounds = win.getBounds()
         win.setBounds({
@@ -151,7 +144,6 @@ if (args.cliMode) {
           height: Math.round(height)
         })
 
-        // Revert resizable state
         // 恢复可调整大小状态
         win.setResizable(false)
         return true
@@ -198,7 +190,6 @@ if (args.cliMode) {
     }
   })
 
-  // IPC Handlers - Tauri Adapter
   // IPC 处理程序 - Tauri 适配器
   logger.info('Main', '主进程: 正在注册 IPC 处理程序...')
   ipcMain.handle('get_diagnostics', async () => {
@@ -206,14 +197,13 @@ if (args.cliMode) {
   })
 
   ipcMain.handle('start_backend', async (_, args) => {
-    // Tauri invoke passes args as object { enableSocialMode: true }
     // Tauri invoke 将 args 作为对象传递 { enableSocialMode: true }
     const win = windowManager.launcherWin
     if (!win) return
     try {
-      // Start Gateway first
+      // 首先启动网关
       await startGateway(win)
-      // Then start Backend
+      // 然后启动后端
       await startBackend(win, args?.enableSocialMode ?? false)
       return null // Ok(())
     } catch (e: any) {
@@ -251,20 +241,16 @@ if (args.cliMode) {
 
   ipcMain.handle('save_config', (_, args) => {
     logger.info('Main', `IPC: save_config 收到数据: ${JSON.stringify(args)}`)
-    // Frontend sends { config: ... } to match Tauri signature
     // 前端发送 { config: ... } 以匹配 Tauri 签名
     let config = args.config || args
 
-    // Robust unwrapping/cleaning logic
     // 健壮的解包/清理逻辑
     if (config && typeof config === 'object' && 'config' in config) {
       const keys = Object.keys(config)
-      // If config has other keys, 'config' property is likely garbage
       // 如果 config 有其他键，'config' 属性可能是垃圾数据
       if (keys.length > 1) {
         delete config.config
       } else {
-        // If config ONLY has 'config' property, it is likely a wrapper
         // 如果 config 只有 'config' 属性，它可能是一个包装器
         config = config.config
       }
@@ -275,7 +261,6 @@ if (args.cliMode) {
     return null
   })
 
-  // Mocks for missing handlers to prevent errors
   // 缺失处理程序的模拟，以防止错误
   ipcMain.handle('get_plugins', async () => {
     return await getPlugins()
@@ -291,27 +276,25 @@ if (args.cliMode) {
   })
 
   ipcMain.handle('save_agent_launch_config', async (_, args) => {
-    // Check if arguments match the global config signature: { enabledAgents, activeAgent }
     // 检查参数是否匹配全局配置签名: { enabledAgents, activeAgent }
     if (args && Array.isArray(args.enabledAgents) && typeof args.activeAgent === 'string') {
       return await saveGlobalLaunchConfig(args.enabledAgents, args.activeAgent)
     }
 
-    // Fallback or specific agent config: { agentId, config }
     // 后备或特定代理配置: { agentId, config }
     if (args && args.agentId && args.config) {
       return await saveAgentLaunchConfig(args.agentId, args.config)
     }
 
-    throw new Error('Invalid arguments for save_agent_launch_config')
+    throw new Error('save_agent_launch_config 参数无效')
   })
 
-  // [Fix] Add missing handler for save_global_launch_config called by LauncherView
+  // [修复] 添加 LauncherView 调用的 save_global_launch_config 的缺失处理程序
   ipcMain.handle('save_global_launch_config', async (_, args) => {
     if (args && Array.isArray(args.enabledAgents) && typeof args.activeAgent === 'string') {
       return await saveGlobalLaunchConfig(args.enabledAgents, args.activeAgent)
     }
-    throw new Error('Invalid arguments for save_global_launch_config')
+    throw new Error('save_global_launch_config 参数无效')
   })
 
   ipcMain.handle('install_es', async () => {
@@ -325,7 +308,7 @@ if (args.cliMode) {
     if (!win) return false
     try {
       return await installNapCat(win)
-    } catch (e: any) {
+    } catch {
       return false
     }
   })
@@ -349,7 +332,6 @@ if (args.cliMode) {
   })
 
   ipcMain.handle('send_napcat_command_wrapper', (_, args) => {
-    // Check if args is string or object { command: string }
     // 检查 args 是字符串还是对象 { command: string }
     const cmd = typeof args === 'string' ? args : args?.command
     if (cmd) sendNapCatCommand(cmd)
@@ -398,14 +380,11 @@ if (args.cliMode) {
 
     if (dragInterval) clearInterval(dragInterval)
 
-    // Cache size for setBounds optimization (smoother on Windows)
     // 缓存大小以进行 setBounds 优化 (在 Windows 上更平滑)
     const { width, height } = window.getBounds()
 
-    // Polling mouse position in main process to move window directly
-    // This avoids IPC latency loop and provides native-like smoothness
     // 在主进程中轮询鼠标位置以直接移动窗口
-    // 避免 IPC 延迟，提供原生般流畅体验
+    // 避免 IPC 延迟循环，并提供了类似原生的流畅度
     dragInterval = setInterval(() => {
       try {
         if (window.isDestroyed()) {
@@ -414,7 +393,6 @@ if (args.cliMode) {
         }
 
         const cursor = screen.getCursorScreenPoint()
-        // Use setBounds which is often atomic and smoother than setPosition
         // 使用 setBounds，它通常是原子的，并且比 setPosition 更平滑
         window.setBounds({
           x: cursor.x - Math.round(offsetX),
@@ -426,7 +404,7 @@ if (args.cliMode) {
         logger.error('Main', `拖拽错误: ${e}`)
         if (dragInterval) clearInterval(dragInterval)
       }
-    }, 1) // 1ms interval (max smoothness) // 1ms 间隔 (最大平滑度)
+    }, 1) // 1ms 间隔 (最大平滑度)
   })
 
   ipcMain.on('window-drag-end', () => {
@@ -436,7 +414,6 @@ if (args.cliMode) {
     }
   })
 
-  // Keep old handlers for compatibility or fallback
   // 保留旧的处理程序以实现兼容性或回退
   ipcMain.on('window-move-fast', (event, { x, y }) => {
     const window = BrowserWindow.fromWebContents(event.sender)
@@ -448,12 +425,11 @@ if (args.cliMode) {
   ipcMain.handle('window-move', (event, { x, y }) => {
     const window = BrowserWindow.fromWebContents(event.sender)
     if (window) {
-      // console.log(`[IPC] Moving window to: ${x}, ${y}`)
+      // console.log(`[IPC] 移动窗口到: ${x}, ${y}`)
       window.setPosition(Math.round(x), Math.round(y))
     }
   })
 
-  // Window Controls
   // 窗口控制
   ipcMain.handle('window-minimize', (event) => {
     const window = BrowserWindow.fromWebContents(event.sender)
@@ -506,7 +482,6 @@ if (args.cliMode) {
   })
 
   ipcMain.handle('open-win', (_, arg) => {
-    // Use window manager later? For now simple implementation
     // 稍后使用窗口管理器？目前是简单的实现
     const childWindow = new BrowserWindow({
       webPreferences: {

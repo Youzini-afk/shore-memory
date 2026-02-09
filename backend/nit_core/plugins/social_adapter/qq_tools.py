@@ -7,7 +7,7 @@ logger = logging.getLogger(__name__)
 
 async def qq_send_group_msg(group_id: str, message: str):
     """
-    Send a message to a QQ group.
+    发送消息到 QQ 群。
     """
     service = get_social_service()
     try:
@@ -20,7 +20,7 @@ async def qq_send_group_msg(group_id: str, message: str):
 
 async def qq_send_private_msg(user_id: str, content: str):
     """
-    Send a private message to a QQ user.
+    发送私聊消息给 QQ 用户。
     """
     service = get_social_service()
     if not service.enabled:
@@ -97,7 +97,7 @@ async def qq_get_friend_list() -> str:
 
 async def qq_get_group_list() -> str:
     """
-    Get the list of groups.
+    获取群组列表。
     """
     service = get_social_service()
     if not service.enabled:
@@ -113,7 +113,7 @@ async def qq_get_group_list() -> str:
             group_id = g.get("group_id", "")
             group_name = g.get("group_name", "")
             member_count = g.get("member_count", 0)
-            result += f"- [{group_id}] {group_name} ({member_count} members)\n"
+            result += f"- [{group_id}] {group_name} ({member_count} 成员)\n"
 
         return result
     except Exception as e:
@@ -136,7 +136,7 @@ async def qq_get_stranger_info(user_id: str):
 
 async def qq_get_group_info(group_id: str):
     """
-    Get info of a group.
+    获取群组信息。
     """
     service = get_social_service()
     try:
@@ -176,7 +176,7 @@ async def qq_get_group_history(group_id: str, count: int = 20):
 
 async def read_social_memory(query: str, filter: str = ""):
     """
-    Read Pero's social memory logs (QQ chats).
+    阅读 Pero 的社交记忆日志（QQ 聊天记录）。
     """
     service = get_social_service()
     try:
@@ -199,7 +199,7 @@ async def read_agent_memory(query: str):
 
 async def qq_notify_master(content: str, importance: str = "medium"):
     """
-    Proactively report important social events to the master.
+    主动向主人报告重要的社交事件。
     """
     service = get_social_service()
     try:

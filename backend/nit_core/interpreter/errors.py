@@ -2,7 +2,7 @@ from typing import Optional
 
 
 class NITError(Exception):
-    """Base class for NIT interpreter errors."""
+    """NIT 解释器错误基类。"""
 
     def __init__(
         self, message: str, line: int, column: int, source: Optional[str] = None
@@ -15,7 +15,7 @@ class NITError(Exception):
 
     def format_error(self) -> str:
         error_msg = (
-            f"NIT Error at line {self.line}, col {self.column}: {self.message}\n"
+            f"NIT 错误 (第 {self.line} 行, 第 {self.column} 列): {self.message}\n"
         )
         if self.source:
             lines = self.source.split("\n")
@@ -29,18 +29,18 @@ class NITError(Exception):
 
 
 class NITLexerError(NITError):
-    """Errors during lexical analysis."""
+    """词法分析过程中的错误。"""
 
     pass
 
 
 class NITParserError(NITError):
-    """Errors during parsing."""
+    """解析过程中的错误。"""
 
     pass
 
 
 class NITRuntimeError(NITError):
-    """Errors during execution."""
+    """执行过程中的错误。"""
 
     pass

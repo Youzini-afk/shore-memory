@@ -39,7 +39,7 @@ class CompanionService:
             cls._instance.task = None
             cls._instance.vision_task = None
             cls._instance.prompt_manager = PromptManager()
-            # Initialize MDPManager
+            # 初始化 MDPManager
             mdp_dir = os.path.join(os.path.dirname(__file__), "mdp", "prompts")
             cls._instance.mdp = MDPManager(mdp_dir)
             cls._instance.tts_service = TTSService()
@@ -265,7 +265,8 @@ class CompanionService:
                 # 仅在当前未处理响应时执行此操作
                 # 并且如果用户空闲超过 15 秒（以避免覆盖活动聊天）
                 if not first_run and elapsed > 15:
-                    try:
+                    import contextlib
+                    with contextlib.suppress(Exception):
                         # 我们在此处不发送 status:idle 以避免中断动画，仅发送文本
                         await realtime_session_manager.broadcast(
                             {
@@ -274,8 +275,6 @@ class CompanionService:
                                 "target": "pet_view_only",
                             }
                         )
-                    except Exception:
-                        pass
 
                 # 1. 检查是否已启用
                 enabled = await self._is_enabled()
@@ -292,7 +291,7 @@ class CompanionService:
                     await asyncio.sleep(sleep_time)
                     continue
 
-                # Reset first run flag
+                # 重置首次运行标志
                 first_run = False
 
                 logger.info("[Companion] 触发主动对话...")
@@ -420,7 +419,7 @@ class CompanionService:
                 )
             )
 
-            llm = LLMService(api_key, api_base, model_config.model_id)
+            LLMService(api_key, api_base, model_config.model_id)
 
             # 获取当前 Agent 名称
             config_mgr = get_config_manager()
@@ -501,7 +500,7 @@ class CompanionService:
                     session_id="companion_mode",
                     on_status=on_status_update,
                     skip_save=True,
-                    # skip_nit_filter=True  <-- Removed: AgentService.chat does not support this arg
+                    # skip_nit_filter=True  <-- 已移除：AgentService.chat 不支持此参数
                 ):
                     if chunk:
                         full_content += chunk
@@ -636,10 +635,9 @@ class CompanionService:
                         pygame.mixer.quit()
 
                         # 清理
-                        try:
+                        import contextlib
+                        with contextlib.suppress(Exception):
                             os.remove(audio_path)
-                        except Exception:
-                            pass
                     except Exception as e:
                         logger.error(f"[Companion] 音频播放错误: {e}")
             except Exception as e:

@@ -7,7 +7,7 @@ import time
 from collections import deque
 from typing import Dict, List, Optional
 
-# Optional import for pyautogui
+# pyautogui 的可选导入
 try:
     import pyautogui
 except ImportError:

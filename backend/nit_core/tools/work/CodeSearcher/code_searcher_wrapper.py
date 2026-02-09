@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import json
 import os
 from typing import Optional
@@ -65,10 +66,8 @@ async def code_search(
                 search_process.communicate(input=encoded_input_json), timeout=30.0
             )
         except asyncio.TimeoutError:
-            try:
+            with contextlib.suppress(Exception):
                 search_process.kill()
-            except Exception:
-                pass
             return json.dumps(
                 {"status": "error", "error": "代码搜索任务执行超时（超过 30 秒）。"}
             )

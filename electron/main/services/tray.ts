@@ -9,19 +9,17 @@ import { stopGateway } from './gateway.js'
 let tray: Tray | null = null
 
 export function createTray() {
-  // Determine icon based on platform
   // 根据平台确定图标
   const iconName = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
 
-  // Icon search paths
   // 图标搜索路径
   const paths = [
-    join(process.cwd(), 'public', iconName), // Dev
-    join(process.cwd(), 'resources', iconName), // Prod
-    join(process.resourcesPath, iconName), // Prod resources
-    join(__dirname, '../../../public', iconName), // Relative dev
-    join(__dirname, '../../../dist', iconName), // Relative prod
-    join(__dirname, '../../', iconName) // Fallback
+    join(process.cwd(), 'public', iconName), // 开发环境
+    join(process.cwd(), 'resources', iconName), // 生产环境
+    join(process.resourcesPath, iconName), // 生产环境资源
+    join(__dirname, '../../../public', iconName), // 相对路径开发环境
+    join(__dirname, '../../../dist', iconName), // 相对路径生产环境
+    join(__dirname, '../../', iconName) // 后备
   ]
 
   let iconPath = ''
@@ -42,7 +40,6 @@ export function createTray() {
 
   try {
     const icon = nativeImage.createFromPath(iconPath)
-    // Resize if needed
     // 如需调整大小
     // icon.resize({ width: 16, height: 16 })
 

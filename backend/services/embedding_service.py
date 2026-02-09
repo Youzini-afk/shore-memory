@@ -1,3 +1,4 @@
+import contextlib
 import os
 from typing import List, Optional
 
@@ -14,10 +15,10 @@ os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 # 同时设置 HF_HOME，确保 huggingface_hub也能找到缓存
 os.environ["HF_HOME"] = os.environ["SENTENCE_TRANSFORMERS_HOME"]
 
-# --- Suppress Logging & Progress Bars ---
-# Disable tqdm progress bars globally (e.g. for model loading)
+# --- 禁止日志和进度条 ---
+# 全局禁用 tqdm 进度条（例如用于模型加载）
 os.environ["TQDM_DISABLE"] = "1"
-# Suppress transformers info/warning logs
+# 禁止 transformers 信息/警告日志
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 # ----------------------------------------
 
@@ -34,18 +35,18 @@ class EmbeddingService:
 
     def _resolve_local_path(self, model_name: str) -> Optional[str]:
         """
-        Manually resolve model path from cache to bypass huggingface_hub issues
+        手动从缓存解析模型路径以绕过 huggingface_hub 问题
         """
         try:
-            # List of directories to search for the model
+            # 要搜索模型的目录列表
             search_dirs = []
 
-            # 1. Custom configured path
+            # 1. 自定义配置路径
             custom_cache = os.environ.get("SENTENCE_TRANSFORMERS_HOME")
             if custom_cache:
                 search_dirs.append(custom_cache)
 
-            # 2. Standard HuggingFace Hub cache
+            # 2. 标准 HuggingFace Hub 缓存
             hf_home = os.environ.get("HF_HOME")
             if hf_home and hf_home not in search_dirs:
                 search_dirs.append(hf_home)
@@ -56,7 +57,7 @@ class EmbeddingService:
             if default_hf_cache not in search_dirs:
                 search_dirs.append(default_hf_cache)
 
-            # 3. Old SentenceTransformers cache
+            # 3. 旧版 SentenceTransformers 缓存
             default_st_cache = os.path.join(
                 os.path.expanduser("~"), ".cache", "torch", "sentence_transformers"
             )
@@ -71,7 +72,7 @@ class EmbeddingService:
                 if not os.path.exists(cache_dir):
                     continue
 
-                # Check paths to look into (root and hub subdir)
+                # 检查路径（根目录和 hub 子目录）
                 candidate_base_paths = [
                     os.path.join(cache_dir, repo_id),
                     os.path.join(cache_dir, "hub", repo_id),
@@ -100,7 +101,7 @@ class EmbeddingService:
                             # else:
                             # print(f"[Embedding] Debug: Config not found at {config_path}", flush=True)
 
-                    # 策略 2 (Legacy): 检查 refs/main
+                    # 策略 2 (旧版): 检查 refs/main
                     ref_path = os.path.join(base_path, "refs", "main")
                     if os.path.exists(ref_path):
                         try:
@@ -123,10 +124,10 @@ class EmbeddingService:
             print("[Embedding] 正在加载嵌入模型 (all-MiniLM-L6-v2)...", flush=True)
             from sentence_transformers import SentenceTransformer
 
-            # Strategy: Try Manual Path Resolution First (Most Robust) -> Then Library Cache -> Then Online
+            # 策略：首先尝试手动路径解析（最稳健）-> 然后是库缓存 -> 然后是在线
             model_name = "sentence-transformers/all-MiniLM-L6-v2"
 
-            # 1. Try manual path resolution
+            # 1. 尝试手动路径解析
             local_path = self._resolve_local_path(model_name)
             if local_path:
                 try:
@@ -137,7 +138,7 @@ class EmbeddingService:
                 except Exception as manual_e:
                     print(f"[Embedding] 手动路径加载失败: {manual_e}", flush=True)
 
-            # 2. Try library local load (fallback)
+            # 2. 尝试库本地加载（回退）
             try:
                 self._model = SentenceTransformer(
                     "all-MiniLM-L6-v2", local_files_only=True
@@ -152,7 +153,7 @@ class EmbeddingService:
 
             print("[Embedding] 正在从镜像下载...", flush=True)
             try:
-                # 3. Download from mirror
+                # 3. 从镜像下载
                 self._model = SentenceTransformer(
                     "all-MiniLM-L6-v2", local_files_only=False
                 )
@@ -169,10 +170,10 @@ class EmbeddingService:
             )
             from sentence_transformers import CrossEncoder
 
-            # Strategy: Try Manual Path Resolution First
+            # 策略：首先尝试手动路径解析
             model_name = "BAAI/bge-reranker-v2-m3"
 
-            # 1. Try manual path resolution
+            # 1. 尝试手动路径解析
             local_path = self._resolve_local_path(model_name)
             if local_path:
                 try:
@@ -183,48 +184,18 @@ class EmbeddingService:
                 except Exception as manual_e:
                     print(f"[Embedding] 手动路径加载失败: {manual_e}", flush=True)
 
-            # 2. Try library local load (fallback) with Strict Local Mode
-            try:
-                # Use model_kwargs instead of automodel_args (deprecated)
-                # Ensure local_files_only=True is passed to the underlying transformer
-                self._cross_encoder = CrossEncoder(
-                    "BAAI/bge-reranker-v2-m3",
-                    automodel_args={
-                        "local_files_only": True
-                    },  # Keep for backward compatibility
-                    # model_kwargs={"local_files_only": True} # Newer versions might use this?
-                    # Actually CrossEncoder init signature:
-                    # def __init__(self, model_name, ..., automodel_args=None, ...)
-                    # It seems it doesn't accept model_kwargs in init directly in some versions?
-                    # But the warning said: "The CrossEncoder `automodel_args` argument was renamed and is now deprecated, please use `model_kwargs` instead."
-                    # So we should pass model_kwargs if possible. But to be safe, let's try to pass it if automodel_args is what we have.
-                    # Wait, if I pass BOTH, it might be safer or might error.
-                    # Let's trust the warning message.
-                )
-                # Re-reading the warning: "please use `model_kwargs` instead."
-                # But does the constructor accept `model_kwargs`?
-                # If I look at the source code of sentence-transformers, it likely captures **kwargs and passes them?
-                # Or it has a specific argument.
-                # Let's try passing both via kwargs if possible, or just follow the instruction.
-
-                # Let's try constructing with the new argument name as a keyword argument
+            # 2. 尝试库本地加载（回退）严格本地模式
+            with contextlib.suppress(Exception):
+                # 使用 model_kwargs 代替 automodel_args（已弃用）
+                # 确保将 local_files_only=True 传递给底层 transformer
                 self._cross_encoder = CrossEncoder(
                     "BAAI/bge-reranker-v2-m3",
                     trust_remote_code=True,
-                    automodel_args={"local_files_only": True},  # Legacy
-                    # model_kwargs={"local_files_only": True}  # Future-proof?
-                    # If I pass undefined kwarg it might crash.
-                    # Let's stick to automodel_args for now but add local_files_only to the constructor if supported?
-                    # No, CrossEncoder doesn't support local_files_only directly.
+                    automodel_args={"local_files_only": True},  # 旧版
                 )
-                # Wait, if I want to be 100% sure, I should check if I can modify the call.
-                # The user saw the warning, so the library version is NEW.
-                # If the library is new, it supports model_kwargs.
-            except Exception:
-                pass
 
             try:
-                # Let's try the "New Way" based on the warning
+                # 尝试基于警告的“新方法”
                 print("[Embedding] 尝试使用 model_kwargs 加载...", flush=True)
                 self._cross_encoder = CrossEncoder(
                     "BAAI/bge-reranker-v2-m3", model_kwargs={"local_files_only": True}
@@ -238,7 +209,7 @@ class EmbeddingService:
                 print(f"[Embedding] model_kwargs 加载失败: {e}", flush=True)
 
             try:
-                # Fallback to "Old Way"
+                # 回退到“旧方法”
                 print("[Embedding] 尝试使用 automodel_args 加载...", flush=True)
                 self._cross_encoder = CrossEncoder(
                     "BAAI/bge-reranker-v2-m3", automodel_args={"local_files_only": True}
@@ -257,7 +228,7 @@ class EmbeddingService:
             )
 
             try:
-                # 3. Download from mirror
+                # 3. 从镜像下载
                 self._cross_encoder = CrossEncoder(
                     "BAAI/bge-reranker-v2-m3", local_files_only=False
                 )
@@ -272,7 +243,7 @@ class EmbeddingService:
         """
         print("[Embedding] 正在预热模型...", flush=True)
 
-        # 1. Warm up Embedding Model
+        # 1. 预热嵌入模型
         try:
             self._load_model()
             # 进行一次简单的推理以确保 GPU/CPU 内存完全加载
@@ -281,7 +252,7 @@ class EmbeddingService:
         except Exception as e:
             print(f"[Embedding] 嵌入模型预热失败: {e}", flush=True)
 
-        # 2. Warm up Reranker Model
+        # 2. 预热重排序模型
         try:
             self._load_reranker()
             if self._cross_encoder:
@@ -304,7 +275,7 @@ class EmbeddingService:
             # 转换为 list
             return embeddings.tolist()
         except Exception as e:
-            print(f"[Embedding] Rerank 失败: {e}", flush=True)
+            print(f"[Embedding] 生成向量失败: {e}", flush=True)
             return []
 
     def encode_one(self, text: str) -> List[float]:

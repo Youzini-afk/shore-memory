@@ -33,11 +33,11 @@ async def get_sync_config():
 
 @router.post("/config")
 async def update_sync_config(
-    config: SyncConfig, session: Session = Depends(get_session)
+    config: SyncConfig, session: Session = Depends(get_session)  # noqa: B008
 ):
     """更新同步配置"""
     try:
-        # Update Database
+        # 更新数据库
         configs_to_update = {
             "cloud_sync_enabled": str(config.enabled).lower(),
             "cloud_sync_mode": config.mode,
@@ -56,16 +56,16 @@ async def update_sync_config(
 
         session.commit()
 
-        # Reload ConfigManager (memory cache)
+        # 重载配置管理器（内存缓存）
         cm = get_config_manager()
         await cm.load_from_db()
 
-        # Reload SyncService
+        # 重载同步服务
         await sync_service.reload()
 
         return {"status": "success", "message": "Config updated and service reloaded"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from None
 
 
 @router.get("/status")
@@ -76,21 +76,21 @@ async def get_sync_status():
         if sync_service.mode == "server":
             status = "listening"
         elif sync_service.client and sync_service.client.websocket:
-            # Basic check, ideally gateway_client should expose is_connected property
+            # 基础检查，建议gateway_client暴露is_connected
             status = "connected"
 
     return {
         "running": sync_service.running,
         "mode": sync_service.mode,
         "status": status,
-        "last_sync": "N/A",  # TODO: Track sync time
+        "last_sync": "N/A",  # TODO: 追踪同步时间
     }
 
 
 @router.get("/server-info")
 async def get_server_info():
-    """(Server Mode) 获取本机连接信息"""
-    # Read local gateway token
+    """(Server模式) 获取本机连接信息"""
+    # 读取本地Gateway Token
     token = ""
     try:
         token_path = os.path.join(os.getcwd(), "data", "gateway_token.json")
@@ -101,6 +101,5 @@ async def get_server_info():
     except Exception:
         pass
 
-    # Guess IP (Frontend should probably just show localhost or ask user)
-    # But returning port is useful
+    # 猜测IP（前端应显示localhost或询问用户），返回端口很有用
     return {"port": 14747, "token": token}

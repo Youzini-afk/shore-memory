@@ -87,7 +87,7 @@
                 <span
                   v-if="pendingConfirmation.riskInfo?.level >= 2"
                   class="px-2 py-0.5 bg-red-500 text-white text-[10px] rounded-full uppercase tracking-wide font-bold"
-                  >高风险 (High Risk)</span
+                  >高风险</span
                 >
               </h3>
               <p class="text-xs text-slate-500 dark:text-slate-400">
@@ -224,14 +224,14 @@
                 <div class="flex gap-2 justify-end mt-2 pt-2 border-t border-white/20">
                   <button
                     class="p-1 hover:bg-white/20 rounded text-white"
-                    title="Save"
+                    title="保存"
                     @click="saveEdit(msg)"
                   >
                     <Check class="w-4 h-4" />
                   </button>
                   <button
                     class="p-1 hover:bg-white/20 rounded text-white"
-                    title="Cancel"
+                    title="取消"
                     @click="cancelEdit"
                   >
                     <X class="w-4 h-4" />
@@ -460,7 +460,7 @@
                     >
                       <div class="flex items-center gap-2 text-xs font-bold">
                         <MessageSquareQuote class="w-3.5 h-3.5" />
-                        <span>内心独白 (Inner Monologue)</span>
+                        <span>内心独白</span>
                       </div>
                       <span
                         class="text-[10px] transition-transform duration-200"
@@ -826,8 +826,6 @@ import {
   Brain,
   MessageSquareQuote,
   Terminal,
-  Play,
-  Pause,
   Square,
   Clock,
   Edit2,
@@ -934,7 +932,7 @@ const highlightCommand = (command, highlight) => {
       regex,
       '<span class="bg-red-500/30 text-red-200 font-bold px-1 rounded">$1</span>'
     )
-  } catch (e) {
+  } catch {
     return command
   }
 }
@@ -1416,7 +1414,7 @@ const handleCommandRunning = (data) => {
   }
 }
 
-const handleCommandFinished = (data) => {
+const handleCommandFinished = () => {
   activeCommand.value = null
 }
 
@@ -1848,6 +1846,7 @@ const sendMessage = async () => {
     const reader = res.body.getReader()
     const decoder = new TextDecoder()
 
+    // eslint-disable-next-line no-constant-condition
     while (true) {
       const { done, value } = await reader.read()
       if (done) break

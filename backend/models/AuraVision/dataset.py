@@ -91,7 +91,7 @@ class AuraVisionDataset(Dataset):
         pos_img = self._load_img(self.samples[pos_idx]["img_path"])
 
         # 3. Negative
-        other_labels = [l for l in self.labels if l != anchor_label]
+        other_labels = [label for label in self.labels if label != anchor_label]
         if not other_labels:
             neg_idx = index
         else:

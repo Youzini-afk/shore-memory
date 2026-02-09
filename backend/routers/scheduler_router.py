@@ -14,29 +14,24 @@ router = APIRouter()
 
 
 @router.post("/sync")
-async def sync_reminders(payload: Dict[str, Any] = Body(...)):
+async def sync_reminders(payload: Dict[str, Any] = Body(...)):  # noqa: B008
     """
-    接收移动端/其他端同步过来的 XML 解析结果，将其注册到后端调度器。
-    Payload example:
+    接收同步结果注册至调度器。
+    Payload示例:
     {
         "source": "mobile",
-        "reminders": [
-            {
-                "content": "提醒我喝水",
-                "time": "2024-01-01 12:00:00"
-            }
-        ]
+        "reminders": [{"content": "提醒我喝水", "time": "2024-01-01 12:00:00"}]
     }
     """
     reminders = payload.get("reminders", [])
-    source = payload.get("source", "unknown")
+    payload.get("source", "unknown")
 
     results = []
 
     for item in reminders:
         content = item.get("content")
         time_str = item.get("time")
-        repeat = item.get("repeat")  # Optional repeat rule
+        repeat = item.get("repeat")  # 可选重复规则
 
         if not content or not time_str:
             continue
@@ -68,16 +63,16 @@ async def sync_reminders(payload: Dict[str, Any] = Body(...)):
 
 @router.get("/tasks", response_model=List[ScheduledTask])
 async def get_tasks(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)
+    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
-    statement = select(ScheduledTask).where(ScheduledTask.is_triggered == False)
+    statement = select(ScheduledTask).where(not ScheduledTask.is_triggered)
     if agent_id:
         statement = statement.where(ScheduledTask.agent_id == agent_id)
     return (await session.exec(statement)).all()
 
 
 @router.delete("/tasks/{task_id}")
-async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         task = await session.get(ScheduledTask, task_id)
         if not task:
@@ -86,15 +81,15 @@ async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)
         await session.commit()
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from None
 
 
 @router.post("/check")
-async def check_tasks(session: AsyncSession = Depends(get_session)):
+async def check_tasks(session: AsyncSession = Depends(get_session)):  # noqa: B008
     now = datetime.now()
     tasks = (
         await session.exec(
-            select(ScheduledTask).where(ScheduledTask.is_triggered == False)
+            select(ScheduledTask).where(not ScheduledTask.is_triggered)
         )
     ).all()
     triggered_prompts = []
@@ -135,8 +130,7 @@ async def check_tasks(session: AsyncSession = Depends(get_session)):
                 session.add(t)
 
     if not triggered_prompts:
-        # Check for idle time? (Logic from main.py)
-        # But this function returns prompts for triggering chat.
+        # 检查空闲时间（逻辑源自main.py）
         pass
 
     await session.commit()

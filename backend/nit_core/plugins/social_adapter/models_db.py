@@ -59,7 +59,7 @@ class SocialMemory(SQLModel, table=True):
 
 class SocialMemoryRelation(SQLModel, table=True):
     """
-    社交记忆关联表 (The Social Web)
+    社交记忆关联表（社交网络）
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)

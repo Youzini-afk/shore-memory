@@ -5,7 +5,6 @@ import { logger } from '../utils/logger'
 
 function getRootPath() {
   if (isDev && isElectron) {
-    // Dev: dist-electron/main/services -> PeroCore-Electron
     // 开发环境: dist-electron/main/services -> PeroCore-Electron
     return path.resolve(__dirname, '../../..')
   } else {
@@ -15,8 +14,6 @@ function getRootPath() {
 
 export async function scanLocalAgents() {
   const root = getRootPath()
-  // Backend structure: backend/services/mdp/agents
-  // In prod, backend is likely in resources/backend
   // 后端结构: backend/services/mdp/agents
   // 生产环境中，后端可能位于 resources/backend
   const backendAgentsDir = path.join(root, 'backend/services/mdp/agents')
@@ -30,7 +27,6 @@ export async function scanLocalAgents() {
     return []
   }
 
-  // Load global config
   // 加载全局配置
   let globalConfig = { enabled_agents: [] as string[], active_agent: '' }
   try {
@@ -52,7 +48,6 @@ export async function scanLocalAgents() {
     try {
       const stat = await fs.stat(agentDir)
       if (stat.isDirectory()) {
-        // Check for config.json
         // 检查 config.json
         const configPath = path.join(agentDir, 'config.json')
         if (await fs.pathExists(configPath)) {
@@ -60,7 +55,6 @@ export async function scanLocalAgents() {
             const config = await fs.readJson(configPath)
             const id = file
 
-            // Merge with global status
             // 合并全局状态
             const isEnabled = globalConfig.enabled_agents.includes(id)
             const isActive = globalConfig.active_agent === id
@@ -81,8 +75,7 @@ export async function scanLocalAgents() {
           }
         }
       }
-    } catch (e) {
-      // Ignore access errors
+    } catch {
       // 忽略访问错误
     }
   }
@@ -91,24 +84,22 @@ export async function scanLocalAgents() {
 
 export async function getPlugins() {
   const root = getRootPath()
-  // Backend structure: backend/nit_core/plugins
   // 后端结构: backend/nit_core/plugins
   const pluginsDir = path.join(root, 'backend/nit_core/plugins')
 
   logger.info('Plugin', `[插件] 正在扫描插件，路径: ${pluginsDir}`)
 
   if (!(await fs.pathExists(pluginsDir))) {
-    logger.warn('Plugin', `[Plugins] Directory not found: ${pluginsDir}`)
+    logger.warn('Plugin', `[插件] 未找到目录: ${pluginsDir}`)
     return []
   }
 
   const plugins = []
   try {
     const files = await fs.readdir(pluginsDir)
-    logger.info('Plugin', `[Plugins] Files found: ${files.join(', ')}`)
+    logger.info('Plugin', `[插件] 发现文件: ${files.join(', ')}`)
 
     for (const file of files) {
-      // Skip hidden/cache files
       // 跳过隐藏/缓存文件
       if (file.startsWith('__') || file.startsWith('.')) {
         continue
@@ -118,7 +109,6 @@ export async function getPlugins() {
       try {
         const stat = await fs.stat(pluginDir)
         if (stat.isDirectory()) {
-          // Check description.json
           // 检查 description.json
           const descPath = path.join(pluginDir, 'description.json')
           if (await fs.pathExists(descPath)) {
@@ -129,27 +119,26 @@ export async function getPlugins() {
                 valid: true,
                 ...desc
               })
-              logger.info('Plugin', `[Plugins] Loaded ${file}`)
+              logger.info('Plugin', `[插件] 已加载 ${file}`)
             } catch (e) {
-              logger.error('Plugin', `[Plugins] Failed to parse description.json for ${file}: ${e}`)
-              plugins.push({ name: file, valid: false, description: 'Invalid config' })
+              logger.error('Plugin', `[插件] 解析 ${file} 的 description.json 失败: ${e}`)
+              plugins.push({ name: file, valid: false, description: '无效配置' })
             }
           } else {
-            // Guess or list
             // 猜测或列出
-            logger.info('Plugin', `[Plugins] ${file} missing description.json`)
-            plugins.push({ name: file, valid: true, description: 'Custom Plugin' })
+            logger.info('Plugin', `[插件] ${file} 缺少 description.json`)
+            plugins.push({ name: file, valid: true, description: '自定义插件' })
           }
         }
       } catch (e) {
-        logger.error('Plugin', `[Plugins] Error processing ${file}: ${e}`)
+        logger.error('Plugin', `[插件] 处理 ${file} 时出错: ${e}`)
       }
     }
   } catch (e) {
-    logger.error('Plugin', `[Plugins] Failed to read plugins dir: ${e}`)
+    logger.error('Plugin', `[插件] 读取插件目录失败: ${e}`)
   }
 
-  logger.info('Plugin', `[Plugins] Returned ${plugins.length} plugins`)
+  logger.info('Plugin', `[插件] 返回了 ${plugins.length} 个插件`)
   return plugins
 }
 
@@ -185,10 +174,9 @@ export async function saveAgentLaunchConfig(agentId: string, config: any) {
   const configPath = path.join(agentDir, 'config.json')
 
   if (!(await fs.pathExists(configPath))) {
-    throw new Error(`Agent config not found: ${configPath}`)
+    throw new Error(`未找到 Agent 配置: ${configPath}`)
   }
 
-  // Merge existing with new
   // 合并现有配置和新配置
   const current = await fs.readJson(configPath)
   const newConfig = { ...current, ...config }

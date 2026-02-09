@@ -1,7 +1,7 @@
 """
-[LEGACY] Python-based Lexer Implementation.
-NOTE: This module is used as a fallback when the Rust extension (nit_rust_runtime) is not available.
-Main implementation: rust_binding/src/lexer.rs
+[LEGACY] 基于 Python 的词法分析器实现。
+注意：当 Rust 扩展 (nit_rust_runtime) 不可用时，此模块用作回退。
+主要实现：rust_binding/src/lexer.rs
 """
 
 from dataclasses import dataclass
@@ -117,13 +117,13 @@ class Lexer:
                 self.advance()
                 continue
 
-            # Skip comments #
+            # 跳过评论 #
             if char == "#":
                 while self.peek() != "\n" and self.peek() != "":
                     self.advance()
                 continue
 
-            self.error(f"Unexpected character: {char}")
+            self.error(f"意外字符: {char}")
 
         self.tokens.append(Token(TokenType.EOF, None, self.line, self.column))
         return self.tokens
@@ -132,7 +132,7 @@ class Lexer:
         # $var
         start_line = self.line
         start_col = self.column
-        self.advance()  # skip $
+        self.advance()  # 跳过 $
 
         name = ""
         while self.peek().isalnum() or self.peek() == "_":
@@ -157,13 +157,13 @@ class Lexer:
     def read_string(self, quote_char: str) -> Token:
         start_line = self.line
         start_col = self.column
-        self.advance()  # skip quote
+        self.advance()  # 跳过引号
 
         val = ""
         while self.peek() != quote_char and self.peek() != "":
             if self.peek() == "\\":
                 self.advance()
-                # Simple escape handling
+                # 简单的转义处理
                 if self.peek() == "n":
                     val += "\n"
                 elif self.peek() == "t":
@@ -178,7 +178,7 @@ class Lexer:
         if self.peek() == quote_char:
             self.advance()
         else:
-            self.error("Unterminated string")
+            self.error("未闭合的字符串")
 
         return Token(TokenType.STRING, val, start_line, start_col)
 

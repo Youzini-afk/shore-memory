@@ -27,22 +27,22 @@ async def finish_task(
     **kwargs,
 ) -> str:
     """
-    Updates the character's emotion, motion, and interactive messages, THEN terminates the current task loop.
-    Note: In this project, state updates are merged into finish_task.
-    Calling this (or its alias update_character_status) will both update the state and end the ReAct cycle.
+    更新角色的情绪、动作和交互消息，然后终止当前任务循环。
+    注意：在该项目中，状态更新已合并到 finish_task 中。
+    调用此函数（或其别名 update_character_status）将同时更新状态并结束 ReAct 循环。
 
     Args:
-        summary (str): The final response message to the user.
-        status (str): "success" or "failure".
-        mood (str): Current mood (e.g., happy, sad, angry).
-        vibe (str): Current vibe/action (e.g., active, idle).
-        mind (str): Inner monologue.
-        click_*_msgs (str/list): Interactive messages.
-        idle_msgs (str/list): Idle messages.
-        back_msgs (str/list): Welcome back messages.
+        summary (str): 给用户的最终响应消息。
+        status (str): "success" 或 "failure"。
+        mood (str): 当前情绪 (例如 happy, sad, angry)。
+        vibe (str): 当前氛围/动作 (例如 active, idle)。
+        mind (str): 内心独白。
+        click_*_msgs (str/list): 交互消息。
+        idle_msgs (str/list): 闲置消息。
+        back_msgs (str/list): 欢迎回来消息。
     """
 
-    # --- Part 1: Update Character Status ---
+    # --- 第一部分：更新角色状态 ---
     try:
         triggers = {}
         state_data = {}
@@ -109,7 +109,7 @@ async def finish_task(
             elif isinstance(back_msgs, list):
                 triggers["back_messages"] = back_msgs
 
-        # Database Logic
+        # 数据库逻辑
         session = _CURRENT_SESSION_CONTEXT.get("db_session")
         agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
 
@@ -130,8 +130,8 @@ async def finish_task(
             if mind:
                 pet_state.mind = mind
 
-            # Map correctly to model fields (based on the original code's pattern)
-            # In PeroCore-Electron, the model might use click_messages_json or similar
+            # 正确映射到模型字段（基于原始代码模式）
+            # 在 PeroCore-Electron 中，模型可能使用 click_messages_json 或类似字段
             if click_data:
                 field_name = (
                     "click_messages_json"
@@ -177,7 +177,7 @@ async def finish_task(
             session.add(pet_state)
             await session.commit()
 
-            # Gateway Broadcast
+            # 网关广播
             try:
                 try:
                     import time
@@ -227,14 +227,14 @@ async def finish_task(
                     await gateway_client.broadcast_pet_state(pet_state.model_dump())
 
             except Exception as e:
-                print(f"[TaskLifecycle] Failed to broadcast state update: {e}")
+                print(f"[TaskLifecycle] 广播状态更新失败: {e}")
 
         else:
             print(
-                "[TaskLifecycle] Warning: No database session available. Changes not persisted."
+                "[TaskLifecycle] 警告: 无可用数据库会话。更改未持久化。"
             )
 
-        # Realtime Broadcast
+        # 实时广播
         if triggers:
             try:
                 try:
@@ -250,23 +250,23 @@ async def finish_task(
                     {"type": "triggers", "data": triggers}
                 )
             except Exception as e:
-                print(f"[TaskLifecycle] Failed to broadcast triggers: {e}")
+                print(f"[TaskLifecycle] 广播触发器失败: {e}")
 
     except Exception as e:
         import traceback
 
         traceback.print_exc()
-        print(f"[TaskLifecycle] Error updating status: {str(e)}")
+        print(f"[TaskLifecycle] 更新状态错误: {str(e)}")
 
-    # --- Part 2: Return Finish Message ---
-    return f"[System] Task finished with status: {status}. Summary: {summary}"
+    # --- 第二部分：返回完成消息 ---
+    return f"[System] 任务已完成，状态: {status}。摘要: {summary}"
 
 
-# Alias for backward compatibility and Agent "hallucinations"
+# 向后兼容和 Agent "幻觉" 的别名
 async def update_character_status(**kwargs) -> str:
     """
-    Alias for finish_task. In this project, updating status implies finishing the task.
-    If 'summary' is missing, it uses 'mind' or a default message.
+    finish_task 的别名。在该项目中，更新状态意味着完成任务。
+    如果缺少 'summary'，则使用 'mind' 或默认消息。
     """
     if "summary" not in kwargs:
         kwargs["summary"] = kwargs.get("mind", "状态已更新。")

@@ -29,16 +29,16 @@ class SchedulerService:
         if self.scheduler:
             return
 
-        # Configure job stores
-        # We use the existing SQLAlchemy engine but APScheduler needs a URL or engine
-        # SQLAlchemyJobStore works best with a direct URL string usually, but let's try engine if supported or separate
-        # To avoid conflict with async engine, we might need a sync URL or a separate connection.
-        # For simplicity in MVP, let's use MemoryJobStore or SQLite file for now if async engine is tricky.
-        # But Phase 2 requires persistence.
+        # 配置作业存储
+        # 我们使用现有的 SQLAlchemy 引擎，但 APScheduler 需要 URL 或引擎
+        # SQLAlchemyJobStore 通常最适合直接使用 URL 字符串，但如果是支持的或分开的，我们也可以尝试引擎
+        # 为了避免与异步引擎冲突，我们可能需要一个同步 URL 或单独的连接。
+        # 为了 MVP 的简单性，如果异步引擎很棘手，我们暂时使用 MemoryJobStore 或 SQLite 文件。
+        # 但第二阶段需要持久化。
 
-        # NOTE: APScheduler 3.x SQLAlchemyJobStore is synchronous.
-        # We need to provide a sync database URL.
-        # Assuming sqlite:///./backend/data/pero.db
+        # 注意: APScheduler 3.x SQLAlchemyJobStore 是同步的。
+        # 我们需要提供一个同步数据库 URL。
+        # 假设 sqlite:///./backend/data/pero.db
 
         db_path = os.path.join(
             os.path.dirname(os.path.dirname(__file__)), "data", "pero.db"
@@ -83,11 +83,11 @@ class SchedulerService:
                     second=trigger_time.second,
                 )
             elif repeat.startswith("cron:"):
-                # Simple cron parsing "cron: * * * * *"
+                # 简单的 cron 解析 "cron: * * * * *"
                 cron_str = repeat[5:].strip()
                 trigger = CronTrigger.from_crontab(cron_str)
             else:
-                # Fallback to date trigger if unknown repeat format or if it's just a one-time request
+                # 如果未知重复格式或只是一次性请求，回退到日期触发器
                 trigger = DateTrigger(run_date=trigger_time)
         else:
             trigger = DateTrigger(run_date=trigger_time)
@@ -103,7 +103,7 @@ class SchedulerService:
             f"已添加提醒任务 {job.id} 于 {trigger_time} (重复: {repeat}, Agent: {agent_id})"
         )
 
-        # Broadcast update
+        # 广播更新
         self._broadcast_update(
             "add",
             {
@@ -125,7 +125,7 @@ class SchedulerService:
         if agent_id:
             filtered_jobs = []
             for job in all_jobs:
-                # job.args format: [content, agent_id]
+                # job.args 格式: [content, agent_id]
                 if len(job.args) >= 2 and job.args[1] == agent_id:
                     filtered_jobs.append(job)
             return filtered_jobs
@@ -151,9 +151,9 @@ class SchedulerService:
             from peroproto import perolink_pb2
             from services.gateway_client import gateway_client
 
-            # Ensure we are in an event loop (this might be called from sync code)
-            # APScheduler callbacks are usually in thread pool if sync, but here we are in service methods.
-            # Assuming add_reminder is called from async context (FastAPI).
+            # 确保我们在事件循环中 (这可能从同步代码调用)
+            # APScheduler 回调如果是同步的通常在线程池中，但这里我们在服务方法中。
+            # 假设 add_reminder 从异步上下文 (FastAPI) 调用。
 
             async def _send():
                 envelope = perolink_pb2.Envelope()
@@ -166,16 +166,16 @@ class SchedulerService:
                 envelope.request.params["operation"] = operation
                 envelope.request.params["data"] = str(
                     data
-                )  # Simple JSON string or just fields
+                )  # 简单的 JSON 字符串或仅字段
 
                 await gateway_client.send(envelope)
 
-            # Check if there is a running loop
+            # 检查是否有正在运行的循环
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(_send())
             except RuntimeError:
-                # No running loop, create one (rare case for service methods called from scripts)
+                # 没有运行的循环，创建一个 (对于从脚本调用的服务方法的罕见情况)
                 asyncio.run(_send())
         except Exception as e:
             logger.error(f"广播调度更新失败: {e}")
@@ -200,7 +200,7 @@ class SchedulerService:
         envelope.target_id = "broadcast"
         envelope.timestamp = int(time.time() * 1000)
 
-        # Construct ActionRequest for reminder
+        # 构造提醒的 ActionRequest
         envelope.request.action_name = "reminder_trigger"
         envelope.request.params["content"] = content
         envelope.request.params["timestamp"] = datetime.now().isoformat()

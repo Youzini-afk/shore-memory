@@ -50,10 +50,9 @@ class BrowserBridgeService:
             self.connected_clients.remove(websocket)
         if websocket in self.client_activity:
             del self.client_activity[websocket]
-        try:
+        import contextlib
+        with contextlib.suppress(Exception):
             await websocket.close()
-        except Exception:
-            pass
 
     async def connect(self, websocket: WebSocket):
         import time
@@ -97,7 +96,7 @@ class BrowserBridgeService:
 
             if msg_type == "pageInfoUpdate":
                 self.latest_page_info = data
-                # 如果正在等待页面更新，则解决它
+                # 若等待页面更新则解决
                 if self.page_update_future and not self.page_update_future.done():
                     self.page_update_future.set_result(data)
 
@@ -143,15 +142,15 @@ class BrowserBridgeService:
             },
         }
 
-        # 创建一个 Future 以等待结果
+        # 创建Future等待结果
         loop = asyncio.get_event_loop()
         future = loop.create_future()
         self.pending_commands[request_id] = future
 
-        # 如果需要，准备等待页面更新
+        # 若需则准备等待页面更新
         if wait_for_page_info:
-            # 如果存在旧的 Future，则取消它以避免泄漏？
-            # 实际上只需创建一个新的。
+            # 若存旧Future则取消防泄漏。
+            # 仅需创建新Future。
             if self.page_update_future and not self.page_update_future.done():
                 self.page_update_future.cancel()
             self.page_update_future = loop.create_future()
@@ -160,17 +159,17 @@ class BrowserBridgeService:
             await client.send_text(json.dumps(payload))
             logger.info(f"[BrowserBridge] 发送命令: {command} (ID: {request_id})")
 
-            # 等待命令结果（30 秒后超时）
+            # 等待命令结果(30秒超时)
             result = await asyncio.wait_for(future, timeout=30.0)
 
-            # 如果命令成功且我们想要等待页面更新
+            # 若命令成功且需等待页面更新
             if (
                 result.get("status") == "success"
                 and wait_for_page_info
                 and self.page_update_future
             ):
                 try:
-                    # 最多等待 5 秒以获取页面更新
+                    # 最多等待5秒获取页面更新
                     await asyncio.wait_for(self.page_update_future, timeout=5.0)
                 except asyncio.TimeoutError:
                     logger.warning("[BrowserBridge] 等待 pageInfoUpdate 超时。")
@@ -185,7 +184,7 @@ class BrowserBridgeService:
         finally:
             if request_id in self.pending_commands:
                 del self.pending_commands[request_id]
-            # 重置页面更新 Future
+            # 重置页面更新Future
             self.page_update_future = None
 
     def get_status(self) -> Dict[str, Any]:

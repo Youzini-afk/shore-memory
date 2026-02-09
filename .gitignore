@@ -34,6 +34,8 @@ builder-effective-config.yaml
 
 # Python
 __pycache__/
+.ruff_cache/
+backend/.ruff_cache/
 *.py[cod]
 *$py.class
 *.so
@@ -44,6 +46,7 @@ backend/venv_fix/
 backend/scripts/
 backend/build/
 backend/dist/
+*.egg-info/
 *.spec
 .env
 .venv
@@ -96,9 +99,9 @@ PeroLauncher/src-tauri/bin/*.exe
 PeroLauncher/src-tauri/bin/*.dll
 PeroLauncher/target/
 **/target/
+resources/
 *.msi
 *.exe
-resources/python/
 
 # Local Config
 backend/config.json
@@ -106,8 +109,6 @@ backend/data/config.json
 
 # Private Docs
 绝密文档/
-
-
 
 # Plugins - NapCat
 backend/nit_core/plugins/social_adapter/NapCat/

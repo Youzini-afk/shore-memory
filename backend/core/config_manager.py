@@ -8,7 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-# Import engine directly to create sessions
+# 直接导入引擎以创建会话
 try:
     from database import engine, get_session
     from models import Config
@@ -36,13 +36,13 @@ class ConfigManager:
         self.env_loaded_keys: Set[str] = set()
 
         # 从环境变量加载 (覆盖默认值)
-        for key in self.config.keys():
+        for key in self.config:
             env_key = key.upper()
             env_val = os.environ.get(env_key)
             if env_val is not None:
                 self.config[key] = self._parse_value(env_val)
                 self.env_loaded_keys.add(key)
-                logger.info(f"Loaded config from ENV: {key}={self.config[key]}")
+                logger.info(f"已从环境变量加载配置: {key}={self.config[key]}")
 
         # 从命令行参数加载 (最高优先级，覆盖环境变量)
         # 支持格式: --key=value (例如 --enable-social-mode=true)

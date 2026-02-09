@@ -662,12 +662,10 @@ function onMouseMove(event: MouseEvent) {
 // 全局鼠标输入存储
 let mouseInputX = 0
 let mouseInputY = 0
-let isLeftMouseDown = false
 
 function onMouseDown(event: MouseEvent) {
   if (event.button === 0) {
     // Left button // 左键
-    isLeftMouseDown = true
 
     // Check click intersection immediately for rapid response
     // 立即检查点击相交以获得快速响应
@@ -778,7 +776,6 @@ function onMouseDown(event: MouseEvent) {
 
 function onMouseUp(event: MouseEvent) {
   if (event.button === 0) {
-    isLeftMouseDown = false
     isPetting = false // Reset petting state on release // 释放时重置抚摸状态
   }
 }

@@ -1,7 +1,6 @@
-import { BrowserWindow, app, shell, screen } from 'electron'
+import { BrowserWindow, shell, screen } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
-import { is } from '@electron-toolkit/utils'
 import { logger } from '../utils/logger'
 
 export class WindowManager {
@@ -28,15 +27,15 @@ export class WindowManager {
   }
 
   private getIconPath(): string {
-    // Prefer ICO on Windows for better quality/compatibility
+    // 在 Windows 上优先使用 ICO 以获得更好的质量/兼容性
     const iconName = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
     const paths = [
-      join(process.cwd(), 'public', iconName), // Dev
-      join(process.cwd(), 'resources', iconName), // Prod
-      join(process.resourcesPath, iconName), // Prod resources
-      join(__dirname, '../../public', iconName), // Relative dev
-      join(__dirname, '../../../public', iconName), // Relative dev deep
-      join(__dirname, '../../', iconName) // Fallback
+      join(process.cwd(), 'public', iconName), // 开发环境
+      join(process.cwd(), 'resources', iconName), // 生产环境
+      join(process.resourcesPath, iconName), // 生产环境资源
+      join(__dirname, '../../public', iconName), // 相对路径开发环境
+      join(__dirname, '../../../public', iconName), // 相对路径深层开发环境
+      join(__dirname, '../../', iconName) // 后备
     ]
     for (const p of paths) {
       if (existsSync(p)) {
@@ -87,7 +86,7 @@ export class WindowManager {
     if (process.platform === 'win32') {
       try {
         this.launcherWin.setBackgroundMaterial('acrylic')
-      } catch (e) {
+      } catch {
         // 忽略错误
       }
     }
@@ -104,7 +103,6 @@ export class WindowManager {
       logger.error('Main', `Failed to load: ${errorDescription} (${errorCode})`)
     })
 
-    // Handle external links
     // 处理外部链接
     this.launcherWin.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https:')) shell.openExternal(url)
@@ -122,9 +120,7 @@ export class WindowManager {
       return this.petWin
     }
 
-    // Get screen size to position pet initially (e.g. bottom right)
     // 获取屏幕尺寸以初始定位宠物 (例如右下角)
-    const { screen } = require('electron')
     const primaryDisplay = screen.getPrimaryDisplay()
     const { width, height } = primaryDisplay.workAreaSize
 
@@ -148,7 +144,7 @@ export class WindowManager {
         nodeIntegration: true,
         contextIsolation: true,
         backgroundThrottling: false,
-        webSecurity: false // Allow loading local resources via fetch
+        webSecurity: false // 允许通过 fetch 加载本地资源
       }
     })
 
@@ -189,7 +185,6 @@ export class WindowManager {
   private startMouseTracking() {
     if (this.mouseTrackInterval) return
 
-    // 30 FPS mouse tracking
     // 30 FPS 鼠标追踪
     this.mouseTrackInterval = setInterval(() => {
       if (!this.petWin || this.petWin.isDestroyed()) {
@@ -201,12 +196,10 @@ export class WindowManager {
         const point = screen.getCursorScreenPoint()
         const bounds = this.petWin.getBounds()
 
-        // Calculate relative position
         // 计算相对位置
         const relativeX = point.x - bounds.x
         const relativeY = point.y - bounds.y
 
-        // Send to renderer
         // 发送到渲染进程
         this.petWin.webContents.send('global-mouse-move', { x: relativeX, y: relativeY })
       } catch (e) {
@@ -239,7 +232,7 @@ export class WindowManager {
       center: true,
       transparent: true,
       hasShadow: true,
-      backgroundColor: '#00000000', // Allow acrylic to show through // 允许亚克力效果透出
+      backgroundColor: '#00000000', // 允许亚克力效果透出
       webPreferences: {
         preload: this.getPreloadPath(),
         nodeIntegration: true,
@@ -251,33 +244,31 @@ export class WindowManager {
     if (process.platform === 'win32') {
       try {
         this.dashboardWin.setBackgroundMaterial('acrylic')
-      } catch (e) {
-        // Ignore
+      } catch {
         // 忽略
       }
     }
 
     this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
-    logger.info('Main', `Dashboard loading URL: ${this.getPageUrl('/dashboard')}`)
+    logger.info('Main', `Dashboard 正在加载 URL: ${this.getPageUrl('/dashboard')}`)
 
     this.dashboardWin.on('ready-to-show', () => {
       logger.info('Main', 'Dashboard ready-to-show')
       this.dashboardWin?.show()
     })
 
-    // Force show if ready-to-show doesn't fire (e.g. renderer crash or slow load)
+    // 如果 ready-to-show 未触发 (例如渲染器崩溃或加载缓慢)，则强制显示
     setTimeout(() => {
       if (this.dashboardWin && !this.dashboardWin.isDestroyed() && !this.dashboardWin.isVisible()) {
-        logger.info('Main', 'Force showing Dashboard (timeout)')
+        logger.info('Main', '强制显示 Dashboard (超时)')
         this.dashboardWin.show()
       }
     }, 2000)
 
     this.dashboardWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-      logger.error('Main', `Dashboard failed to load: ${errorDescription} (${errorCode})`)
+      logger.error('Main', `Dashboard 加载失败: ${errorDescription} (${errorCode})`)
     })
 
-    // Handle external links
     // 处理外部链接
     this.dashboardWin.webContents.setWindowOpenHandler(({ url }) => {
       if (url.startsWith('https:')) shell.openExternal(url)
@@ -315,7 +306,9 @@ export class WindowManager {
     if (process.platform === 'win32') {
       try {
         this.ideWin.setBackgroundMaterial('acrylic')
-      } catch (e) {}
+      } catch {
+        // ignore
+      }
     }
 
     this.ideWin.loadURL(this.getPageUrl('/ide'))

@@ -49,6 +49,7 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     PYTHONPATH: pythonPathEnv,
     PYTHONNOUSERSITE: '1',
     PYTHONUNBUFFERED: '1',
+    PYTHONUTF8: '1',
     PORT: '9120',
     ENABLE_SOCIAL_MODE: enableSocialMode.toString(),
     PERO_DATA_DIR: dataDir,
@@ -66,19 +67,21 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
   })
 
   child.on('error', (err) => {
-    logger.error('Backend', `Failed to spawn python process: ${err.message}`)
+    logger.error('Backend', `启动 Python 进程失败: ${err.message}`)
     try {
       if (window && !window.isDestroyed()) {
         window.webContents.send('system-error', `后端启动失败 (Spawn Error): ${err.message}`)
       }
-    } catch (e) {}
+    } catch {
+      // 忽略
+    }
   })
 
   // 批量日志发送器以防止 IPC 洪水
   let logBatch: string[] = []
   let batchTimer: NodeJS.Timeout | null = null
   const BATCH_INTERVAL = 300 // 300ms
-  const MAX_BATCH_SIZE = 500 // Max 500 lines
+  const MAX_BATCH_SIZE = 500 // 最大 500 行
 
   const sendBatch = () => {
     if (logBatch.length === 0) return
@@ -88,8 +91,8 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
         // 作为数组发送以减少 IPC 开销
         window.webContents.send('backend-log-batch', [...logBatch])
       }
-    } catch (e) {
-      // Ignore
+    } catch {
+      // 忽略
     }
     logBatch = []
     batchTimer = null
@@ -162,7 +165,7 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
         }
       }
     } catch (err) {
-      logger.error('Backend', `Log processing error: ${err}`)
+      logger.error('Backend', `日志处理错误: ${err}`)
     } finally {
       isProcessingLogs = false
       // 检查是否有新日志
@@ -187,7 +190,7 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
 
       logger.error('Backend', line)
 
-      // Queue error for batch sending (prefixed)
+      // 将错误加入队列以进行批量发送 (带前缀)
       queueLog(`[ERROR] ${line}`)
 
       if (logHistory.length >= MAX_LOGS) logHistory.shift()
@@ -198,8 +201,8 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
           if (window && !window.isDestroyed()) {
             window.webContents.send('system-error', `后端错误: ${line}`)
           }
-        } catch (e) {
-          // Ignore
+        } catch {
+          // 忽略
         }
       }
     })
@@ -217,10 +220,10 @@ import treeKill from 'tree-kill'
 
 export function stopBackend() {
   if (backendProcess) {
-    logger.info('Backend', 'Stopping Backend...')
+    logger.info('Backend', '正在停止后端...')
     if (backendProcess.pid) {
       treeKill(backendProcess.pid, 'SIGKILL', (err) => {
-        if (err) logger.error('Backend', `Error killing backend process tree: ${err}`)
+        if (err) logger.error('Backend', `杀死后端进程树时出错: ${err}`)
       })
     } else {
       backendProcess.kill()

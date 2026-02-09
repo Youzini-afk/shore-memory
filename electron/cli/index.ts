@@ -3,10 +3,10 @@ import { parseArgs } from '../main/utils/args'
 import { TuiManager } from './tui/tuiManager'
 
 export function startCli() {
-  // Override console to prevent interference with TUI
-  // We mute console output because services (python.ts, etc.) use console.log
-  // which would corrupt the TUI layout.
-  // We rely on ServiceManager events for logs.
+  // 覆盖 console 以防止干扰 TUI
+  // 我们静音控制台输出，因为服务 (python.ts 等) 使用 console.log
+  // 这会破坏 TUI 布局。
+  // 我们依赖 ServiceManager 事件来获取日志。
   console.log = () => {}
   console.error = () => {}
   console.warn = () => {}
@@ -15,19 +15,19 @@ export function startCli() {
   const args = parseArgs(process.argv)
   const manager = new ServiceManager()
 
-  // Initialize TUI
+  // 初始化 TUI
   const tui = new TuiManager(manager)
 
-  tui.log('PeroCore CLI Mode Initializing...')
-  tui.log(`Args: ${JSON.stringify(args)}`)
+  tui.log('PeroCore CLI 模式正在初始化...')
+  tui.log(`参数: ${JSON.stringify(args)}`)
 
-  // Start Services
+  // 启动服务
   manager.startAll(args).catch((err) => {
-    tui.log(`Startup Error: ${err.message}`)
+    tui.log(`启动错误: ${err.message}`)
   })
 }
 
-// Auto-start if running directly via Node
+// 如果直接通过 Node 运行，则自动启动
 if (require.main === module) {
   startCli()
 }

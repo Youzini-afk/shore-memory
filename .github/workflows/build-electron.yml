@@ -37,8 +37,25 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: PeroCore-Electron/package.json
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+          run_install: false
+
+      - name: Get pnpm store directory
+        shell: bash
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Setup pnpm cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('PeroCore-Electron/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-store-
 
       - name: Setup Python for Dependency Installation
         uses: actions/setup-python@v5
@@ -66,21 +83,24 @@ jobs:
           $Content = $Content -replace "#import site", "import site"
           $Content | Set-Content $PthFile
           
-          # 3. Install Dependencies
+          # 3. Install Dependencies via uv
            echo "Installing dependencies..."
            $SitePackages = "$Dest/Lib/site-packages"
            New-Item -ItemType Directory -Force -Path $SitePackages
            
-           # Use the runner's pip to install into the embedded python's site-packages
-           # We force cpu-only torch to reduce size (unless user wants cuda)
-           # We install torch first with the CPU index
+           # Use pip to install uv first
+           pip install uv
+
+           # Install torch first (CPU only)
+           uv pip install --target $SitePackages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --system
            
-           pip install --target $SitePackages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-           
-           # Then install the rest
-           pip install --target $SitePackages -r PeroCore-Electron/backend/requirements.txt --no-warn-script-location
+           # Install dependencies from pyproject.toml
+           # Note: uv pip install . needs to run where pyproject.toml is
+           cd PeroCore-Electron/backend
+           uv pip install --target $SitePackages . --system
           
           # Clean up
+           cd ../..
            Remove-Item $ZipPath
 
       - name: Setup Rust
@@ -180,42 +200,54 @@ jobs:
       - name: Install Dependencies
         run: |
           cd PeroCore-Electron
-          npm install
+          pnpm install
 
       - name: Build Electron App
         run: |
           cd PeroCore-Electron
-          npm run build:electron
+          pnpm run build:electron
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Package Browser Extension
+        shell: powershell
+        run: |
+          $EXT_DIR = "PeroCore-Electron/browser_extension"
+          $ZIP_NAME = "PeroCore-Browser-Extension.zip"
+          Compress-Archive -Path "$EXT_DIR/*" -DestinationPath $ZIP_NAME -Force
+          echo "Browser extension packaged at $ZIP_NAME"
 
       - name: Upload Artifacts
         uses: actions/upload-artifact@v4
         with:
           name: PeroCore-Windows
-          path: PeroCore-Electron/dist_electron/*.exe
+          path: |
+            PeroCore-Electron/dist_electron/*.exe
+            PeroCore-Browser-Extension.zip
 
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
         with:
-          files: PeroCore-Electron/dist_electron/*.exe
+          files: |
+            PeroCore-Electron/dist_electron/*.exe
+            PeroCore-Browser-Extension.zip
           name: PeroCore 版本 ${{ github.ref_name }}
           body: |
-            ## 🎉 更新内容 v0.5.12
+            ## 🎉 更新内容 ${{ github.ref_name }}
 
-            ### ✨ 新增功能
-            - **提示词个性化**: 全量替换提示词模板中的“用户/user”为 `{{user}}` 占位符，支持渲染用户在 Dashboard 自定义的名字（如“秋佑空”），增强互动亲密度。
-            - **人设动态注入**: 实现了周报、日记、社交日报等总结任务的人设占位符自动注入，告别硬编码人设。
+            ### ✨ 核心修复与优化
+            - **NapCat 服务增强**: 修复了由于 `pnpm` 迁移导致的依赖缺失问题，优化了启动检查逻辑。
+            - **遥测屏蔽**: 彻底禁用了 OpenTelemetry (OTEL) 遥测，修复了 libprotobuf 导致的 UTF-8 序列化报错，提升了服务稳定性。
+            - **数据库自动修复**: 修正了社交适配器 (social_adapter) 的数据库初始化逻辑，解决了 `qqmessage` 等表无法自动创建的问题。
 
-            ### 🔧 修复与优化
-            - **代码质量提升**: 完成全量 Ruff 扫描并修复了所有 Error 级别的代码报错（F821 等）。
-            - **自动任务触发**: 修复了社交日报和每日日记不自动生成的 Bug，现在每晚 22:00 会准时触发总结任务。
-            - **记忆检索优化**: 修正了记忆服务中的 `top_candidates` 未定义报错，并清理了冗余的本地文件读取逻辑。
-            - **配置管理增强**: `owner_name` 变量现在会优先从本地数据库配置中动态读取，不再使用硬编码默认值。
+            ### 🔧 细节改动
+            - **项目规范化**: 更新了 `.gitignore` 以忽略 Python 构建生成的 `.egg-info` 目录。
+            - **版本迭代**: 全面升级至 v0.5.13。
 
             ### 📦 包含文件
             - `PeroCore-Setup-*.exe`: Windows 安装程序
+            - `PeroCore-Browser-Extension.zip`: 浏览器扩展插件（手动安装包）
 
             _此 Release 由 GitHub Actions 自动生成_
           draft: false

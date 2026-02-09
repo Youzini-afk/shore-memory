@@ -15,16 +15,16 @@ router = APIRouter(prefix="/api/config", tags=["config"])
 
 
 @router.get("")
-async def get_all_configs(session: AsyncSession = Depends(get_session)):
+async def get_all_configs(session: AsyncSession = Depends(get_session)):  # noqa: B008
     configs = (await session.exec(select(Config))).all()
     return {c.key: c.value for c in configs}
 
 
 @router.post("")
 async def update_configs(
-    configs: Dict[str, str], session: AsyncSession = Depends(get_session)
+    configs: Dict[str, str], session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
-    # [Check] Block enabling incompatible modes if in Work Mode
+    # 检查：工作模式下禁止启用不兼容功能
     try:
         current_session = (
             await session.exec(select(Config).where(Config.key == "current_session_id"))
@@ -37,7 +37,7 @@ async def update_configs(
                 "companion_mode",
                 "aura_vision_enabled",
             ]
-            # Map keys to Chinese names
+            # 键名中文映射
             name_map = {
                 "lightweight_mode": "轻量模式",
                 "companion_mode": "陪伴模式",
@@ -46,7 +46,7 @@ async def update_configs(
 
             for key, value in configs.items():
                 if key in blocking_modes:
-                    # Check if user is trying to enable it (value is true)
+                    # 检查是否尝试启用
                     is_enabling = str(value).lower() == "true"
                     if is_enabling:
                         raise HTTPException(
@@ -70,7 +70,7 @@ async def update_configs(
     return {"status": "success"}
 
 
-# 1. Lightweight Mode
+# 1. 轻量模式
 @router.get("/lightweight_mode")
 async def get_lightweight_mode():
     return {"enabled": get_config_manager().get("lightweight_mode", False)}
@@ -82,7 +82,7 @@ async def set_lightweight_mode(enabled: bool = Body(..., embed=True)):
     return {"status": "success", "enabled": enabled}
 
 
-# 2. Aura Vision
+# 2. 主动视觉
 @router.get("/aura_vision")
 async def get_aura_vision_mode():
     return {"enabled": get_config_manager().get("aura_vision_enabled", False)}
@@ -109,7 +109,7 @@ async def set_aura_vision_mode(enabled: bool = Body(..., embed=True)):
     return {"status": "success", "enabled": enabled}
 
 
-# 3. TTS
+# 3. 语音合成
 @router.get("/tts")
 async def get_tts_mode():
     return {"enabled": get_config_manager().get("tts_enabled", True)}
@@ -121,7 +121,7 @@ async def set_tts_mode(enabled: bool = Body(..., embed=True)):
     return {"status": "success", "enabled": enabled}
 
 
-# 4. Social Mode
+# 4. 社交模式
 @router.get("/social_mode")
 async def get_social_mode():
     return {"enabled": get_nit_manager().is_plugin_enabled("social_adapter")}
@@ -129,22 +129,22 @@ async def get_social_mode():
 
 @router.post("/social_mode")
 async def set_social_mode(enabled: bool = Body(..., embed=True)):
-    # 1. Update NIT & Config
+    # 1. 更新NIT及配置
     get_nit_manager().set_plugin_status("social_adapter", enabled)
     await get_config_manager().set("enable_social_mode", enabled)
 
-    # 2. Update Service
+    # 2. 更新服务状态
     social_service = get_social_service()
 
-    # 3. Refresh NIT Tools
+    # 3. 刷新NIT工具
     try:
         from nit_core.dispatcher import get_dispatcher
 
         dispatcher = get_dispatcher()
         dispatcher.reload_tools()
-        print(f"[Config] NIT tools reloaded (Social Mode: {enabled})")
+        print(f"[Config] NIT工具已重载 (社交模式: {enabled})")
     except Exception as e:
-        print(f"[Config] Failed to reload NIT tools: {e}")
+        print(f"[Config] NIT工具重载失败: {e}")
 
     if enabled:
         await social_service.start()
@@ -158,7 +158,7 @@ async def set_social_mode(enabled: bool = Body(..., embed=True)):
     }
 
 
-# 5. Companion Mode
+# 5. 陪伴模式
 @router.get("/companion_mode")
 async def get_companion_mode():
     return {"enabled": get_config_manager().get("companion_mode_enabled", False)}
@@ -166,7 +166,7 @@ async def get_companion_mode():
 
 @router.post("/companion_mode")
 async def set_companion_mode(enabled: bool = Body(..., embed=True)):
-    # Check lightweight mode dependency
+    # 检查依赖：需先开启轻量模式
     config_mgr = get_config_manager()
     if enabled and not config_mgr.get("lightweight_mode", False):
         raise HTTPException(

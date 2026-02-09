@@ -16,7 +16,7 @@ try:
 except ImportError:
     RUST_AVAILABLE = False
 
-    # Define dummy class to prevent NameError in type hints
+    # 定义虚拟类以防止类型提示中的 NameError
     class SemanticVectorIndex:
         pass
 
@@ -47,12 +47,12 @@ class VectorStoreService:
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir, exist_ok=True)
 
-        # [Multi-Agent Refactor]
+        # [多 Agent 重构]
         # 不再使用单一的 memory_index_path，而是维护一个 agent_id -> Index 的映射
         self.indices: Dict[str, SemanticVectorIndex] = {}
 
         # Tags 索引目前是全局共享还是隔离？
-        # 考虑到 Tags 是对概念的抽象，建议保持全局共享 (Global Concept Space)
+        # 考虑到 Tags 是对概念的抽象，建议保持全局共享
         # 或者也进行隔离。为了架构一致性，我们暂且保持 Tags 为全局，因为它们通常是通用的。
         self.tag_index_path = os.path.join(self.data_dir, "tags.index")
         self.tag_map_path = os.path.join(self.data_dir, "tags.json")
@@ -68,7 +68,7 @@ class VectorStoreService:
 
         self._initialized = True
         self._lazy_loaded = False
-        self.deleted_ids: Dict[str, set] = {}  # agent_id -> set of deleted memory_ids
+        self.deleted_ids: Dict[str, set] = {}  # agent_id -> 已删除的 memory_id 集合
 
     def _get_agent_index_path(self, agent_id: str) -> str:
         """获取指定 Agent 的索引文件路径"""
@@ -90,7 +90,7 @@ class VectorStoreService:
                     self.indices[agent_id] = index
                 except Exception as e:
                     print(f"[VectorStore] 加载 {agent_id} 的索引失败: {e}")
-                    # Backup and recreate
+                    # 备份并重建
                     try:
                         import shutil
 
@@ -170,19 +170,19 @@ class VectorStoreService:
         if not RUST_AVAILABLE or not self._lazy_loaded:
             return
         try:
-            # Save all loaded agent indices
+            # 保存所有已加载的 Agent 索引
             for agent_id, index in self.indices.items():
                 path = self._get_agent_index_path(agent_id)
 
-                # [Optimization] Apply physical deletion before saving
+                # [优化] 保存前应用物理删除
                 pending_deletions = self.deleted_ids.get(agent_id, set())
                 temp_path = path + ".tmp"
 
                 if pending_deletions:
-                    # 1. Save current state (including logically deleted)
+                    # 1. 保存当前状态（包括逻辑删除的数据）
                     index.persist_index(temp_path)
 
-                    # 2. Physically remove from JSON
+                    # 2. 从 JSON 中物理移除
                     try:
                         with open(temp_path, "r", encoding="utf-8") as f:
                             data = json.load(f)
@@ -198,14 +198,14 @@ class VectorStoreService:
                             with open(temp_path, "w", encoding="utf-8") as f:
                                 json.dump(new_data, f, ensure_ascii=False)
 
-                            # 3. Reload index to sync memory state
-                            # Rust core doesn't support hot-reload, so we create a new instance
+                            # 3. 重新加载索引以同步内存状态
+                            # Rust 核心不支持热重载，所以我们需要创建一个新实例
                             new_index = SemanticVectorIndex.load_index(
                                 temp_path, self.dimension
                             )
                             self.indices[agent_id] = new_index
 
-                            # Clear pending deletions
+                            # 清除待删除列表
                             self.deleted_ids[agent_id] = set()
                             print(
                                 f"[VectorStore] Agent {agent_id} 物理清理了 {original_len - len(new_data)} 条向量。"
@@ -220,7 +220,7 @@ class VectorStoreService:
                 else:
                     os.rename(temp_path, path)
 
-            # Atomic save for tag index
+            # 原子保存标签索引
             temp_tag_path = self.tag_index_path + ".tmp"
             self.tag_index.persist_index(temp_tag_path)
             if os.path.exists(self.tag_index_path):
@@ -228,7 +228,7 @@ class VectorStoreService:
             else:
                 os.rename(temp_tag_path, self.tag_index_path)
 
-            # Atomic save for tag map
+            # 原子保存标签映射
             temp_map_path = self.tag_map_path + ".tmp"
             with open(temp_map_path, "w", encoding="utf-8") as f:
                 json.dump(
@@ -244,7 +244,7 @@ class VectorStoreService:
         except Exception as e:
             print(f"[VectorStore] 保存失败: {e}")
 
-    # --- Memory Operations ---
+    # --- 记忆操作 ---
 
     def add_memory(
         self, memory_id: int, embedding: List[float], metadata: Dict[str, Any] = None
@@ -265,7 +265,7 @@ class VectorStoreService:
 
         try:
             index.insert_vector(memory_id, embedding)
-            self.save()  # TODO: Optimize save frequency
+            self.save()  # TODO: 优化保存频率
         except Exception as e:
             print(f"[VectorStore] 为 {agent_id} 添加记忆失败: {e}")
 
@@ -304,12 +304,12 @@ class VectorStoreService:
             return []
 
         try:
-            # Fetch more candidates to account for deleted ones
+            # 获取更多候选项以应对已删除的项
             candidates = index.search_similar_vectors(
                 query_vector, limit + len(self.deleted_ids.get(agent_id, set())) + 5
             )
 
-            # Filter logically deleted
+            # 过滤逻辑删除的项
             deleted = self.deleted_ids.get(agent_id, set())
             results = []
             for r in candidates:
@@ -331,7 +331,7 @@ class VectorStoreService:
             return 0
         return index.size()
 
-    # --- Tag Operations ---
+    # --- 标签操作 ---
 
     def add_tag(self, tag_name: str, embedding: List[float]):
         self._ensure_loaded()
@@ -367,7 +367,7 @@ class VectorStoreService:
             output = []
             for tid, score in results:
                 tag_name = self.tag_map_rev.get(tid, f"Unknown_{tid}")
-                # Rust core returns cosine similarity directly
+                # Rust 核心直接返回余弦相似度
                 output.append({"tag": tag_name, "score": max(0.0, float(score))})
             return output
         except Exception as e:

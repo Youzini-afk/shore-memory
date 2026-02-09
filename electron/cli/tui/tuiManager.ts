@@ -1,14 +1,5 @@
-import {
-  TUI,
-  ProcessTerminal,
-  Container,
-  Text,
-  Editor,
-  Key,
-  matchesKey
-} from '@mariozechner/pi-tui'
+import { TUI, ProcessTerminal, Container, Text, Editor } from '@mariozechner/pi-tui'
 import chalk from 'chalk'
-import si from 'systeminformation'
 import { ServiceManager } from '../serviceManager'
 
 // Theme Configuration
@@ -45,48 +36,48 @@ export class TuiManager {
   constructor(serviceManager: ServiceManager) {
     this.serviceManager = serviceManager
 
-    // 1. Initialize TUI Engine (pi-tui)
+    // 1. 初始化 TUI 引擎 (pi-tui)
     this.tui = new TUI(new ProcessTerminal())
 
-    // 2. Build Layout
+    // 2. 构建布局
     const root = new Container()
 
-    // Header (Status Bar)
+    // 头部 (状态栏)
     this.header = new Text(theme.header(' PeroCore CLI '), 1, 0)
     root.addChild(this.header)
 
-    // Log Area (Main Content)
+    // 日志区域 (主要内容)
     this.logContainer = new Container()
     root.addChild(this.logContainer)
 
-    // Input Area
+    // 输入区域
     this.input = new Editor(this.tui, editorTheme)
-    // Note: pi-tui Editor doesn't support 'prompt' property directly.
-    // We rely on the UI layout or custom rendering if needed.
+    // 注意: pi-tui Editor 不直接支持 'prompt' 属性。
+    // 如果需要，我们依赖 UI 布局或自定义渲染。
     root.addChild(this.input)
 
-    // Add Root to TUI
+    // 添加根节点到 TUI
     this.tui.addChild(root)
     this.tui.setFocus(this.input)
 
-    // 3. Setup Logic
+    // 3. 设置逻辑
     this.setupEvents()
     this.setupInput()
 
-    // 4. Initial Message
-    this.log(theme.accent('PeroCore CLI (pi-tui edition) started.'))
-    this.log(theme.dim('Type /help for commands.'))
+    // 4. 初始消息
+    this.log(theme.accent('PeroCore CLI (pi-tui 版) 已启动。'))
+    this.log(theme.dim('输入 /help 查看命令。'))
 
-    // 5. Start TUI Loop
+    // 5. 启动 TUI 循环
     this.tui.start()
   }
 
   public log(text: string) {
-    // Limit history to 200 lines to prevent memory issues
+    // 限制历史记录为 200 行以防止内存问题
     if (this.logContainer.children.length > 200) {
       this.logContainer.children.shift()
     }
-    // Add new log line (Height 1, Width 0=Full)
+    // 添加新日志行 (高度 1, 宽度 0=全宽)
     this.logContainer.addChild(new Text(text, 1, 0))
   }
 
@@ -103,7 +94,7 @@ export class TuiManager {
   }
 
   private setupInput() {
-    // Editor onSubmit callback
+    // 编辑器 onSubmit 回调
     this.input.onSubmit = (text: string) => {
       const cmd = text.trim()
       if (!cmd) return
@@ -122,7 +113,7 @@ export class TuiManager {
 
     switch (command) {
       case '/exit':
-        this.log(theme.error('Exiting...'))
+        this.log(theme.error('正在退出...'))
         this.shutdown()
         break
       case '/clear':
@@ -134,30 +125,30 @@ export class TuiManager {
       case '/restart':
         if (args[0]) {
           this.serviceManager.restartService(args[0])
-          this.log(theme.accent(`Restarting ${args[0]}...`))
+          this.log(theme.accent(`正在重启 ${args[0]}...`))
         } else {
-          this.log(theme.error('Usage: /restart <service>'))
+          this.log(theme.error('用法: /restart <service>'))
         }
         break
       case '/stop':
         this.serviceManager.stopAll()
-        this.log(theme.accent('Stopping all services...'))
+        this.log(theme.accent('正在停止所有服务...'))
         break
       case '/help':
         this.showHelp()
         break
       default:
-        this.log(theme.error(`Unknown command: ${command}`))
+        this.log(theme.error(`未知命令: ${command}`))
     }
   }
 
   private showHelp() {
     const commands = [
-      '/status - Show service status',
-      '/restart <service> - Restart a service',
-      '/stop - Stop all services',
-      '/clear - Clear logs',
-      '/exit - Exit CLI'
+      '/status - 显示服务状态',
+      '/restart <service> - 重启服务',
+      '/stop - 停止所有服务',
+      '/clear - 清除日志',
+      '/exit - 退出 CLI'
     ]
     commands.forEach((c) => this.log(theme.accentSoft(c)))
   }

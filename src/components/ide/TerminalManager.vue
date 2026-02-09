@@ -201,7 +201,7 @@ const startResize = (e) => {
 }
 
 const onResize = (e) => {
-  const delta = startY - e.clientY // Dragging up increases height // 向上拖动增加高度
+  const delta = startY - e.clientY // 向上拖动增加高度
   height.value = Math.max(150, Math.min(window.innerHeight - 100, startHeight + delta))
 }
 

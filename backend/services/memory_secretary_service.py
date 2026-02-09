@@ -18,7 +18,7 @@ class MemorySecretaryService:
         self.deleted_data = []
         self.modified_data = []
 
-        # Use singleton MDP manager
+        # 使用单例 MDP 管理器
         self.mdp = mdp_manager
 
     async def _get_llm_service(self) -> LLMService:
@@ -80,7 +80,7 @@ class MemorySecretaryService:
             )
 
     async def run_maintenance(self) -> Dict[str, Any]:
-        """运行增强版记忆整理任务 (Multi-Agent Support)"""
+        """运行增强版记忆整理任务（多 Agent 支持）"""
         llm = await self._get_llm_service()
         self.created_ids = []
         self.deleted_data = []
@@ -100,12 +100,12 @@ class MemorySecretaryService:
         }
 
         try:
-            # 0. Identify Agents
+            # 0. 识别 Agent
             from sqlalchemy import distinct
 
             stmt = select(distinct(Memory.agent_id))
             agent_ids = (await self.session.exec(stmt)).all()
-            # Ensure at least 'pero' is processed if DB is empty or has nulls
+            # 如果 DB 为空或包含 null，确保至少处理 'pero'
             agent_ids = [aid for aid in agent_ids if aid]
             if not agent_ids:
                 agent_ids = ["pero"]
@@ -150,7 +150,7 @@ class MemorySecretaryService:
                     agent_id
                 )
 
-            # 6. 自动更新动态台词 (Welcome & System) - per agent
+            # 6. 自动更新动态台词 (Welcome & System) - 每个 Agent
             report["waifu_texts_updated"] += await self._update_waifu_texts(
                 llm, agent_id
             )
@@ -254,7 +254,7 @@ class MemorySecretaryService:
             {"id": m.id, "content": m.content, "type": m.type} for m in memories
         ]
 
-        # Use agent_id as name if not Pero
+        # 如果不是 Pero，使用 agent_id 作为名字
         bot_name = await self._get_bot_name()
         if agent_id != "pero":
             bot_name = agent_id.capitalize()
@@ -396,7 +396,7 @@ class MemorySecretaryService:
             select(Memory)
             .where(
                 Memory.agent_id == agent_id,
-                (Memory.clusters == None) | (Memory.clusters == ""),
+                (Memory.clusters is None) | (Memory.clusters == ""),
             )
             .order_by(desc(Memory.timestamp))
             .limit(50)
@@ -440,7 +440,7 @@ class MemorySecretaryService:
                         elif isinstance(clusters, str):
                             m.clusters = clusters
 
-                        # [Fix] 簇变更后更新向量元数据
+                        # [修复] 簇变更后更新向量元数据
                         try:
                             from services.embedding_service import embedding_service
                             from services.vector_service import vector_service
@@ -649,7 +649,7 @@ class MemorySecretaryService:
                     await self.session.flush()
                     self.created_ids.append(new_mem.id)
 
-                    # [Fix] 立即生成并同步向量，确保新节点可被检索
+                    # [修复] 立即生成并同步向量，确保新节点可被检索
                     try:
                         from services.embedding_service import embedding_service
                         from services.vector_service import vector_service
@@ -681,7 +681,7 @@ class MemorySecretaryService:
                     except Exception as ve:
                         print(f"[MemorySecretary] 警告: 新合并记忆向量生成失败: {ve}")
 
-                    # [Enhancement] 关系迁移：将旧节点的连接继承给新节点
+                    # [增强] 关系迁移：将旧节点的连接继承给新节点
                     try:
                         # 1. 查找所有涉及 valid_ids 的关系
                         stmt_rel = select(MemoryRelation).where(
@@ -783,7 +783,7 @@ class MemorySecretaryService:
                     date_groups[date_str].append(mem)
 
             total_deleted = 0
-            for date_str, mem_list in date_groups.items():
+            for _, mem_list in date_groups.items():
                 if len(mem_list) > 1:
                     # 按 ID 排序，保留最新的（ID 最大的）
                     mem_list.sort(key=lambda x: x.id)
@@ -826,10 +826,9 @@ class MemorySecretaryService:
             current_config = await self.session.get(Config, config_key)
             current_texts = {}
             if current_config:
-                try:
+                import contextlib
+                with contextlib.suppress(Exception):
                     current_texts = json.loads(current_config.value)
-                except Exception:
-                    pass
 
             # 如果没有动态配置，尝试读取静态文件作为初始参考
             if not current_texts:
@@ -936,10 +935,7 @@ class MemorySecretaryService:
                 # 贪婪匹配 {.*} 确实容易把前文包含进去。
                 # 简单修复：如果贪婪匹配失败，尝试寻找第一个 { 和最后一个 }
                 json_match = re.search(r"\{[\s\S]*\}", content)
-                if json_match:
-                    json_str = json_match.group(0)
-                else:
-                    json_str = None
+                json_str = json_match.group(0) if json_match else None
 
             if json_str:
                 new_texts = json.loads(json_str)
@@ -956,9 +952,9 @@ class MemorySecretaryService:
                     self.session.add(current_config)
                 else:
                     current_config.value = json.dumps(new_texts, ensure_ascii=False)
-                    self.session.add(current_config)  # Ensure it's marked for update
+                    self.session.add(current_config)  # 确保它被标记为更新
 
-                # 6. [Feature] 同步更新 PetState (Idle/Back/Click)
+                # 6. [特性] 同步更新 PetState (Idle/Back/Click)
                 # 这样前端 PetView 通过 get_pet_state 就能获取到最新的动态台词
                 from models import PetState
 
@@ -968,19 +964,19 @@ class MemorySecretaryService:
                     )
                 ).first()
                 if not state:
-                    # Create if not exists (though usually it should exist)
+                    # 如果不存在则创建（虽然通常应该存在）
                     state = PetState(agent_id=agent_id)
                     self.session.add(state)
 
                 if state:
-                    # Update Back Messages (visibilityBack -> back_messages_json)
+                    # 更新回来时的消息
                     if "visibilityBack" in new_texts:
-                        # PetState expects a JSON list string
+                        # PetState 期望 JSON 列表字符串
                         state.back_messages_json = json.dumps(
                             [new_texts["visibilityBack"]], ensure_ascii=False
                         )
 
-                    # Update Idle Messages
+                    # 更新空闲消息
                     if "idleMessages" in new_texts:
                         msgs = new_texts["idleMessages"]
                         if isinstance(msgs, str):
@@ -990,14 +986,14 @@ class MemorySecretaryService:
                                 msgs, ensure_ascii=False
                             )
 
-                    # Note: Click messages are complex (head/body/chest), currently prompt doesn't generate them structurely.
-                    # We skip click_messages for now or add them later.
+                    # 注意：点击消息很复杂（头/身体/胸部），目前提示词不会结构化生成它们。
+                    # 我们暂时跳过 click_messages 或稍后添加。
 
                     self.session.add(state)
 
                 await self.session.commit()
 
-                # [Feature] Broadcast State Update via Gateway
+                # [特性] 通过 Gateway 广播状态更新
                 if state:
                     try:
                         from services.gateway_client import gateway_client

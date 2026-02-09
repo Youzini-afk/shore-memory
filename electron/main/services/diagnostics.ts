@@ -1,7 +1,6 @@
 import path from 'path'
 import fs from 'fs-extra'
-import { spawn, execSync } from 'child_process'
-import winreg from 'winreg'
+import { execSync } from 'child_process'
 import which from 'which'
 import { checkNapCatInstalled } from './napcat.js'
 import { isDev, paths, isElectron } from '../utils/env'
@@ -27,7 +26,7 @@ export interface DiagnosticReport {
 }
 
 const workspaceRoot = isDev
-  ? path.resolve(__dirname, '../../..') // dist-electron/main -> electron -> root
+  ? path.resolve(__dirname, '../../..') // dist-electron/main -> electron -> 根目录
   : isElectron
     ? path.dirname(paths.exe)
     : paths.app
@@ -55,9 +54,17 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
 
   // 检查开发环境虚拟环境
   const devVenvPython = path.join(workspaceRoot, 'backend/venv/Scripts/python.exe')
+  const dotVenvPython = path.join(workspaceRoot, 'backend/.venv/Scripts/python.exe')
+
+  logger.info('Main', `[诊断] 检查虚拟环境路径: ${devVenvPython} 和 ${dotVenvPython}`)
+  
   if (await fs.pathExists(devVenvPython)) {
     devVenvPythonExists = true
     pythonPath = devVenvPython
+    pythonExists = true
+  } else if (await fs.pathExists(dotVenvPython)) {
+    devVenvPythonExists = true
+    pythonPath = dotVenvPython
     pythonExists = true
   } else {
     // 检查发布资源（多个位置）
@@ -75,7 +82,6 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     }
   }
 
-  // Fallback: System Python
   // 后备方案: 系统 Python
   if (!pythonExists) {
     try {
@@ -84,14 +90,16 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         pythonPath = systemPython
         pythonExists = true
       }
-    } catch (e) {
+    } catch {
       try {
         const systemPython3 = await which('python3')
         if (systemPython3) {
           pythonPath = systemPython3
           pythonExists = true
         }
-      } catch (e2) {}
+      } catch {
+        // 忽略
+      }
     }
   }
 
@@ -102,16 +110,16 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
   let coreAvailable = false
 
   if (pythonExists) {
-    logger.info('Main', `[Diagnostics] Python found at: ${pythonPath}`)
+    logger.info('Main', `[诊断] Python 发现于: ${pythonPath}`)
     try {
       const versionOutput = execSync(`"${pythonPath}" --version`, {
         encoding: 'utf8',
         stdio: 'pipe'
       }).trim()
       pythonVersion = versionOutput
-      logger.info('Main', `[Diagnostics] Python Version: ${pythonVersion}`)
+      logger.info('Main', `[诊断] Python 版本: ${pythonVersion}`)
     } catch (e: any) {
-      logger.error('Main', `[Diagnostics] Python version check failed: ${e.message}`)
+      logger.error('Main', `[诊断] Python 版本检查失败: ${e.message}`)
       errors.push('Python 解释器无法运行，可能缺少系统组件 (如 VCRUNTIME140.dll)')
     }
 
@@ -123,22 +131,18 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
       if (coreCheck.includes('OK')) {
         coreAvailable = true
       } else {
-        logger.warn(
-          'Main',
-          `[Diagnostics] pero_memory_core import failed: output did not contain OK`
-        )
+        logger.warn('Main', `[诊断] pero_memory_core 导入失败: 输出未包含 OK`)
         // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // 不阻塞启动
       }
     } catch (e: any) {
-      logger.warn('Main', `[Diagnostics] pero_memory_core check failed: ${e.message}`)
-      // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // Don't block startup
+      logger.warn('Main', `[诊断] pero_memory_core 检查失败: ${e.message}`)
+      // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // 不阻塞启动
     }
   } else {
-    logger.error('Main', `[Diagnostics] No Python found.`)
+    logger.error('Main', `[诊断] 未找到 Python。`)
     errors.push(`Python 解释器未找到。探测路径: ${pythonPath}`)
   }
 
-  // 2. Script Path
   // 2. 脚本路径
   let scriptPath = ''
   const scriptTrials = [
@@ -146,7 +150,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     path.join(resourceDir, 'backend/main.py'),
     path.join(resourceDir, 'main.py'),
     path.join(resourceDir, '_up_/backend/main.py'),
-    path.join(process.resourcesPath, 'backend/main.py') // Add explicit resourcesPath check for packaged app
+    path.join(process.resourcesPath, 'backend/main.py') // 为打包后的应用添加明确的 resourcesPath 检查
   ]
 
   for (const trial of scriptTrials) {
@@ -161,9 +165,6 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     errors.push(`后端主脚本未找到: ${scriptPath}`)
   }
 
-  // 3. Port 9120 Check
-  // In Node, we can try to start a server or use net.connect.
-  // Simple check: try to connect, if successful then port is taken.
   // 3. 检查端口 9120
   // 在 Node 中，我们可以尝试启动服务器或使用 net.connect。
   // 简单检查：尝试连接，如果成功则端口被占用。
@@ -172,13 +173,14 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     errors.push('端口 9120 已被占用，请检查是否有其他 PeroCore 实例在运行')
   }
 
-  // 4. Data Dir
   // 4. 数据目录
   let dataDir = ''
   if (!devVenvPythonExists) {
     dataDir = path.join(paths.userData, 'data')
+    logger.info('Main', `[诊断] 使用生产环境数据目录: ${dataDir}`)
   } else {
     dataDir = path.join(workspaceRoot, 'backend/data')
+    logger.info('Main', `[诊断] 使用开发环境数据目录: ${dataDir}`)
   }
   dataDir = fixPath(dataDir)
   await fs.ensureDir(dataDir)
@@ -189,16 +191,16 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     await fs.writeFile(testFile, '')
     await fs.remove(testFile)
     dataDirWritable = true
-  } catch (e) {
+  } catch {
     errors.push(`数据目录不可写: ${dataDir}`)
   }
 
-  // 5. VC++ Redist (Windows Only)
+  // 5. VC++ Redist (仅限 Windows)
   let vcRedistInstalled = true
   if (process.platform === 'win32') {
     const systemRoot = process.env.SystemRoot || 'C:\\Windows'
     const vcRuntime = path.join(systemRoot, 'System32/vcruntime140.dll')
-    const vcRuntime1 = path.join(systemRoot, 'System32/vcruntime140_1.dll') // Python 3.10+ needs this
+    const vcRuntime1 = path.join(systemRoot, 'System32/vcruntime140_1.dll') // Python 3.10+ 需要此文件
     const sysWow64 = path.join(systemRoot, 'SysWOW64/vcruntime140.dll')
 
     vcRedistInstalled = (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
@@ -208,19 +210,16 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
       errors.push('关键系统组件缺失: VCRUNTIME140.dll。请安装 Visual C++ Redistributable。')
     }
     if (!vcRedist1Installed) {
-      logger.warn('Main', '[Diagnostics] vcruntime140_1.dll not found in System32')
+      logger.warn('Main', '[诊断] 在 System32 中未找到 vcruntime140_1.dll')
       errors.push('关键系统组件缺失: VCRUNTIME140_1.dll。请安装最新版 Visual C++ Redistributable。')
     }
   }
 
-  // 6. Node.js Check
   // 6. 检查 Node.js
   let nodePath = ''
   let nodeExists = false
   let nodeVersion = 'Unknown'
 
-  // NapCat usually bundles node, or we look for system node
-  // Note: NapCat logic will be separate, but here we check generic node availability
   // NapCat 通常捆绑了 node，或者我们查找系统 node
   // 注意：NapCat 逻辑将是分开的，但这里我们检查通用的 node 可用性
   const nodeTrials = [
@@ -241,8 +240,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     try {
       nodePath = await which('node')
       nodeExists = true
-    } catch (e) {
-      // Not found in path
+    } catch {
       // 在路径中未找到
     }
   }
@@ -250,17 +248,18 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
   if (nodeExists) {
     try {
       nodeVersion = execSync(`"${nodePath}" --version`, { encoding: 'utf8' }).trim()
-    } catch (e) {}
+    } catch {
+      // 忽略
+    }
   }
 
-  // Check NapCat
   // 检查 NapCat
   let napcatInstalled = false
   try {
     napcatInstalled = checkNapCatInstalled()
-    logger.info('Main', `[Diagnostics] checkNapCatInstalled result: ${napcatInstalled}`)
+    logger.info('Main', `[诊断] checkNapCatInstalled 结果: ${napcatInstalled}`)
   } catch (e) {
-    logger.error('Main', `[Diagnostics] checkNapCatInstalled error: ${e}`)
+    logger.error('Main', `[诊断] checkNapCatInstalled 错误: ${e}`)
   }
 
   return {
@@ -275,7 +274,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     core_available: coreAvailable,
     vc_redist_installed: vcRedistInstalled,
     napcat_installed: napcatInstalled,
-    webview2_installed: true, // Electron bundles Chromium
+    webview2_installed: true, // Electron 捆绑了 Chromium
     node_exists: nodeExists,
     node_path: nodePath,
     node_version: nodeVersion,
@@ -291,7 +290,7 @@ function checkPortFree(port: number): Promise<boolean> {
       if (err.code === 'EADDRINUSE') {
         resolve(false)
       } else {
-        resolve(true) // Other errors considered free
+        resolve(true) // 其他错误视为端口空闲
       }
     })
     server.once('listening', () => {

@@ -26,13 +26,13 @@ except ImportError:
 
 
 def find_es_executable() -> Optional[str]:
-    """Find the 'es.exe' executable in common paths."""
-    # 1. Check PATH
+    """在常用路径中查找 'es.exe' 可执行文件。"""
+    # 1. 检查 PATH 环境变量
     path_in_env = shutil.which("es")
     if path_in_env:
         return path_in_env
 
-    # 2. Check common installation directories and local tools
+    # 2. 检查常用安装目录和本地工具
     current_dir = os.path.dirname(os.path.abspath(__file__))
     # Assuming file_search.py is in backend/tools/, we look in backend/tools/ and backend/bin/
     # And also check standard program files
@@ -56,15 +56,15 @@ def fast_search_fallback(
     query: str, root_dir: str, limit: int = 50, timeout: float = 10.0
 ) -> List[str]:
     """
-    Multithreaded recursive file search with timeout.
-    Scans top-level directories of root_dir in parallel.
+    带超时的多线程递归文件搜索。
+    并行扫描 root_dir 的顶级目录。
     """
     results = []
     dirs_to_scan = []
     stop_event = threading.Event()
 
     try:
-        # Get top level entries
+        # 获取顶级条目
         with os.scandir(root_dir) as it:
             for entry in it:
                 if entry.name.startswith(".") or entry.name.startswith("$"):
@@ -72,16 +72,15 @@ def fast_search_fallback(
 
                 if entry.is_dir():
                     dirs_to_scan.append(entry.path)
-                elif entry.is_file():
-                    if query.lower() in entry.name.lower():
-                        results.append(entry.path)
+                elif entry.is_file() and query.lower() in entry.name.lower():
+                    results.append(entry.path)
     except (PermissionError, OSError):
         pass
 
     if len(results) >= limit:
         return results
 
-    # Helper function for threads
+    # 线程辅助函数
     def scan_tree(path):
         local_res = []
         try:
@@ -90,7 +89,7 @@ def fast_search_fallback(
                 if stop_event.is_set():
                     return local_res
 
-                # Optimization: Modify dirs in-place to skip hidden ones
+                # 优化：原地修改 dirs 以跳过隐藏目录
                 dirs[:] = [
                     d for d in dirs if not d.startswith(".") and not d.startswith("$")
                 ]
@@ -104,12 +103,12 @@ def fast_search_fallback(
             pass
         return local_res
 
-    # Use ThreadPoolExecutor for parallel scanning
+    # 使用 ThreadPoolExecutor 进行并行扫描
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as executor:
         future_to_path = {executor.submit(scan_tree, d): d for d in dirs_to_scan}
 
         try:
-            # Wait for results with a global timeout
+            # 等待结果（全局超时）
             for future in concurrent.futures.as_completed(
                 future_to_path, timeout=timeout
             ):
@@ -130,29 +129,29 @@ def fast_search_fallback(
 
 def search_files(query: str, limit: int = 50) -> str:
     """
-    Search for files on the computer.
-    First tries to use 'Everything' command line tool (es.exe) if available for instant global search.
-    If not available, falls back to searching the User's Home directory using parallel search with timeout.
+    在计算机上搜索文件。
+    如果可用，首先尝试使用 'Everything' 命令行工具 (es.exe) 进行即时全局搜索。
+    如果不可用，则回退到使用并行搜索（带超时）在用户主目录中搜索。
 
     Args:
-        query: The filename or pattern to search for.
-        limit: Max number of results to return.
+        query: 要搜索的文件名或模式。
+        limit: 返回的最大结果数。
 
     Returns:
-        JSON string containing list of file paths.
+        包含文件路径列表的 JSON 字符串。
     """
     results = []
 
     es_path = find_es_executable()
 
-    # 1. Try 'Everything' (es.exe)
+    # 1. 尝试 'Everything' (es.exe)
     if es_path:
         try:
-            # -n <limit> to limit results
-            # -utf8 to force UTF-8 output
+            # -n <limit> 限制结果
+            # -utf8 强制输出 UTF-8
             cmd = [es_path, query, "-n", str(limit), "-utf8"]
 
-            # Using STARTUPINFO to hide console window properly on Windows
+            # 使用 STARTUPINFO 在 Windows 上正确隐藏控制台窗口
             startupinfo = None
             if os.name == "nt":
                 startupinfo = subprocess.STARTUPINFO()
@@ -162,13 +161,13 @@ def search_files(query: str, limit: int = 50) -> str:
             raw_output = subprocess.check_output(
                 cmd,
                 startupinfo=startupinfo,
-                stderr=subprocess.STDOUT,  # Capture stderr for better debugging
+                stderr=subprocess.STDOUT,  # 捕获 stderr 以便更好地调试
                 stdin=subprocess.DEVNULL,
                 creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
-                timeout=10,  # [Fix] Prevent hanging indefinitely
+                timeout=10,  # [修复] 防止无限挂起
             )
 
-            # Try UTF-8 first (since we passed -utf8), then fallback to system encoding
+            # 先尝试 UTF-8（因为传递了 -utf8），然后回退到系统编码
             try:
                 output = raw_output.decode("utf-8")
             except UnicodeDecodeError:
@@ -191,7 +190,7 @@ def search_files(query: str, limit: int = 50) -> str:
                 )
             pass  # Fallback
 
-    # 2. Fallback: Search User Home Directory with Parallel Search
+    # 2. 回退：在用户主目录中使用并行搜索
     user_home = os.path.expanduser("~")
     # Using 10s timeout for fallback to keep Pero responsive
     print(
@@ -200,38 +199,38 @@ def search_files(query: str, limit: int = 50) -> str:
 
     results = fast_search_fallback(query, user_home, limit, timeout=10.0)
 
-    # Return pure JSON for backend processing
+    # 返回纯 JSON 供后端处理
     return json.dumps(results, ensure_ascii=False)
 
 
 def read_file_content(file_path: str, max_length: int = 10000) -> str:
     """
-    Read the content of a file. Supports text files, PDF, DOCX, and PPTX.
+    读取文件内容。支持文本文件、PDF、DOCX 和 PPTX。
 
     Args:
-        file_path: Absolute path to the file.
-        max_length: Maximum number of characters to read (default 10000).
+        file_path: 文件的绝对路径。
+        max_length: 读取的最大字符数 (默认 10000)。
 
     Returns:
-        String content of the file or error message.
+        文件内容字符串或错误消息。
     """
     try:
-        # Check if file exists
+        # 检查文件是否存在
         if not os.path.exists(file_path):
             return f"Error: File not found: {file_path}"
 
-        # Check if it's a file
+        # 检查是否为文件
         if not os.path.isfile(file_path):
             return f"Error: Path is not a file: {file_path}"
 
-        # Check size to avoid reading massive files
+        # 检查大小以避免读取超大文件
         file_size = os.path.getsize(file_path)
-        if file_size > 10 * 1024 * 1024:  # 10MB hard limit for safety
+        if file_size > 10 * 1024 * 1024:  # 为了安全起见，硬限制 10MB
             return f"Error: File is too large ({file_size} bytes). Max allowed size is 10MB."
 
         ext = os.path.splitext(file_path)[1].lower()
 
-        # 1. Handle PDF
+        # 1. 处理 PDF
         if ext == ".pdf":
             if not pypdf:
                 return "Error: pypdf is not installed. Cannot read PDF files."
@@ -248,7 +247,7 @@ def read_file_content(file_path: str, max_length: int = 10000) -> str:
             except Exception as e:
                 return f"Error reading PDF: {str(e)}"
 
-        # 2. Handle DOCX
+        # 2. 处理 DOCX
         elif ext == ".docx":
             if not docx:
                 return "Error: python-docx is not installed. Cannot read DOCX files."
@@ -264,7 +263,7 @@ def read_file_content(file_path: str, max_length: int = 10000) -> str:
             except Exception as e:
                 return f"Error reading DOCX: {str(e)}"
 
-        # 3. Handle PPTX
+        # 3. 处理 PPTX
         elif ext == ".pptx":
             if not Presentation:
                 return "Error: python-pptx is not installed. Cannot read PPTX files."
@@ -282,7 +281,7 @@ def read_file_content(file_path: str, max_length: int = 10000) -> str:
             except Exception as e:
                 return f"Error reading PPTX: {str(e)}"
 
-        # 4. Handle Plain Text (Default)
+        # 4. 处理纯文本（默认）
         try:
             with open(file_path, "r", encoding="utf-8") as f:
                 content = f.read(max_length)
@@ -290,7 +289,7 @@ def read_file_content(file_path: str, max_length: int = 10000) -> str:
                     content += "\n...[Content Truncated]..."
                 return content
         except UnicodeDecodeError:
-            # Try a few common encodings
+            # 尝试几种常见编码
             for enc in ["gbk", "latin1"]:
                 try:
                     with open(file_path, "r", encoding=enc) as f:
@@ -308,19 +307,19 @@ def read_file_content(file_path: str, max_length: int = 10000) -> str:
 
 def list_directory(path: str = None, dir_path: str = None) -> str:
     """
-    List files and subdirectories in a given directory.
-    Supports both 'path' and 'dir_path' arguments for flexibility.
+    列出给定目录中的文件和子目录。
+    支持 'path' 和 'dir_path' 参数以提高灵活性。
 
     Args:
-        path: Absolute path to the directory (alias for dir_path).
-        dir_path: Absolute path to the directory.
+        path: 目录的绝对路径 (dir_path 的别名)。
+        dir_path: 目录的绝对路径。
 
     Returns:
-        JSON string of directory contents.
+        目录内容的 JSON 字符串。
     """
     target_path = dir_path if dir_path else path
     if not target_path:
-        target_path = "."  # Default to current directory if nothing provided
+        target_path = "."  # 如果未提供，则默认为当前目录
 
     try:
         if not os.path.exists(target_path):
@@ -347,13 +346,13 @@ def list_directory(path: str = None, dir_path: str = None) -> str:
 
 def get_file_info(file_path: str) -> str:
     """
-    Get metadata information about a file.
+    获取有关文件的元数据信息。
 
     Args:
-        file_path: Absolute path to the file.
+        file_path: 文件的绝对路径。
 
     Returns:
-        JSON string containing file metadata.
+        包含文件元数据的 JSON 字符串。
     """
     try:
         if not os.path.exists(file_path):
@@ -379,14 +378,14 @@ def get_file_info(file_path: str) -> str:
 
 def show_file_results(files: List[str]) -> str:
     """
-    Display a UI to the user with the list of found files.
-    Use this when you have found files and want to present them to the user for selection.
+    向用户显示包含找到文件列表的 UI。
+    当你找到文件并希望将其展示给用户供选择时使用此功能。
 
     Args:
-        files: List of absolute file paths to show.
+        files: 要显示的绝对文件路径列表。
     """
-    # We return instructions to the LLM to output the tag.
-    # The frontend only parses tags in the Assistant's message.
+    # 我们返回指令给 LLM 以输出标签。
+    # 前端仅解析助手消息中的标签。
     return f"UI Data prepared. To display the file list UI to the user, you MUST include this exact tag in your final response:\n<FILE_RESULTS>{json.dumps(files, ensure_ascii=False)}</FILE_RESULTS>"
 
 
@@ -395,17 +394,17 @@ search_files_definition = {
     "type": "function",
     "function": {
         "name": "search_files",
-        "description": "Search for files by FILENAME on the entire computer. Use this when you need to find WHERE a file is located based on its name. (For searching INSIDE code files, use 'code_search' instead).",
+        "description": "在整台计算机上按文件名搜索文件。当你需要根据文件名查找文件位置时使用此功能。(要在代码文件内部搜索，请改用 'code_search')。",
         "parameters": {
             "type": "object",
             "properties": {
                 "query": {
                     "type": "string",
-                    "description": "The filename or keyword to search for.",
+                    "description": "要搜索的文件名或关键字。",
                 },
                 "limit": {
                     "type": "integer",
-                    "description": "Maximum number of results to return (default 50).",
+                    "description": "返回的最大结果数 (默认 50)。",
                     "default": 50,
                 },
             },
@@ -418,17 +417,17 @@ read_file_definition = {
     "type": "function",
     "function": {
         "name": "read_file_content",
-        "description": "Read the FULL content of a document or text file. Best for reading .pdf, .docx, .pptx, or general text files. (For searching patterns across multiple code files, use 'code_search').",
+        "description": "读取文档或文本文件的完整内容。最适合读取 .pdf, .docx, .pptx 或一般文本文件。(要跨多个代码文件搜索模式，请使用 'code_search')。",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The absolute path of the file to read.",
+                    "description": "要读取的文件的绝对路径。",
                 },
                 "max_length": {
                     "type": "integer",
-                    "description": "Max characters to read (default 10000).",
+                    "description": "读取的最大字符数 (默认 10000)。",
                     "default": 10000,
                 },
             },
@@ -441,13 +440,13 @@ list_directory_definition = {
     "type": "function",
     "function": {
         "name": "list_directory",
-        "description": "List all files and subdirectories in a specific folder. Useful for exploring file structure.",
+        "description": "列出特定文件夹中的所有文件和子目录。用于探索文件结构。",
         "parameters": {
             "type": "object",
             "properties": {
                 "dir_path": {
                     "type": "string",
-                    "description": "The absolute path of the directory to list.",
+                    "description": "要列出的目录的绝对路径。",
                 }
             },
             "required": ["dir_path"],
@@ -459,13 +458,13 @@ get_file_info_definition = {
     "type": "function",
     "function": {
         "name": "get_file_info",
-        "description": "Get metadata (size, dates, type) about a file or directory.",
+        "description": "获取关于文件或目录的元数据 (大小, 日期, 类型)。",
         "parameters": {
             "type": "object",
             "properties": {
                 "file_path": {
                     "type": "string",
-                    "description": "The absolute path of the file or directory.",
+                    "description": "文件或目录的绝对路径。",
                 }
             },
             "required": ["file_path"],
@@ -477,14 +476,14 @@ show_file_results_definition = {
     "type": "function",
     "function": {
         "name": "show_file_results",
-        "description": "Show a list of files to the user in a UI overlay. Call this after finding files with search_files.",
+        "description": "在 UI 覆盖层中向用户显示文件列表。在使用 search_files 找到文件后调用此功能。",
         "parameters": {
             "type": "object",
             "properties": {
                 "files": {
                     "type": "array",
                     "items": {"type": "string"},
-                    "description": "List of file paths to display.",
+                    "description": "要显示的文件路径列表。",
                 }
             },
             "required": ["files"],

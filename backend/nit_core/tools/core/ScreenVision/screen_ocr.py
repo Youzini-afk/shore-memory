@@ -29,7 +29,7 @@ def _is_server_mode():
 def get_screenshot_base64():
     """获取当前屏幕截图并返回 base64 编码的字符串"""
     if _is_server_mode() or not pyautogui:
-        return "Error: Server mode or missing dependencies."
+        return "错误: 服务器模式或缺少依赖。"
 
     try:
         screenshot = pyautogui.screenshot()
@@ -48,7 +48,7 @@ def save_screenshot():
 
     try:
         # 创建临时文件
-        # [Refactor] 统一移动到 backend/data/temp_vision
+        # [重构] 统一移动到 backend/data/temp_vision
         backend_dir = os.path.dirname(
             os.path.dirname(
                 os.path.dirname(
@@ -60,17 +60,16 @@ def save_screenshot():
         temp_dir = os.path.join(data_dir, "temp_vision")
         os.makedirs(temp_dir, exist_ok=True)
 
-        temp_file = tempfile.NamedTemporaryFile(
+        with tempfile.NamedTemporaryFile(
             suffix=".png", dir=temp_dir, delete=False
-        )
-        temp_path = temp_file.name
-        temp_file.close()
+        ) as temp_file:
+            temp_path = temp_file.name
 
         screenshot = pyautogui.screenshot()
         screenshot.save(temp_path)
         return temp_path
     except Exception as e:
-        print(f"Error saving screenshot: {e}")
+        print(f"保存截图错误: {e}")
         return None
 
 
@@ -82,7 +81,7 @@ def screen_ocr(return_detail=False):
     if _is_server_mode() or not pyautogui or not easyocr:
         if return_detail:
             return []
-        return "Error: Server mode or missing OCR dependencies."
+        return "错误: 服务器模式或缺少 OCR 依赖。"
 
     global _reader
     try:

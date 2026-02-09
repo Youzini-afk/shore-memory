@@ -1,3 +1,4 @@
+# ruff: noqa: E402
 #  ██████╗ ███████╗██████╗  ██████╗
 #  ██╔══██╗██╔════╝██╔══██╗██╔═══██╗
 #  ██████╔╝█████╗  ██████╔╝██║   ██║
@@ -12,67 +13,68 @@
 #
 
 import asyncio
+import base64
+import io
+import json
+import logging
 import os
+import re
+import secrets
+import subprocess
 import sys
+import time
+import uuid
 import warnings
+from contextlib import asynccontextmanager, suppress
+from datetime import datetime
+from typing import Any, Dict, List, Optional
 
-# --- Suppress Logging & Progress Bars (MUST BE FIRST) ---
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.traceback import install as install_rich_traceback
+
+# --- 1. Rich 全局初始化 (最优先执行) ---
+
+# 强制 stdout 使用 UTF-8 编码，防止在 Windows 终端出现乱码
+if sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except AttributeError:
+        import io
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+# 安装 Rich 的 traceback handler，使报错信息美观易读
+install_rich_traceback(show_locals=True, width=120)
+
+# 初始化 Rich Console
+console = Console()
+
+# 配置全局 logging 使用 RichHandler
+logging.basicConfig(
+    level="INFO",
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(console=console, rich_tracebacks=True, markup=True)],
+)
+
+# 获取 logger
+logger = logging.getLogger("rich")
+
+# --- 抑制日志和进度条（必须放在最前面） ---
 os.environ["TQDM_DISABLE"] = "1"
 os.environ["TRANSFORMERS_VERBOSITY"] = "error"
 os.environ["HF_HUB_DISABLE_PROGRESS_BARS"] = "1"
 
-# Suppress warnings
-warnings.filterwarnings("ignore", category=UserWarning)  # General user warnings
-# Specifically ignore CryptographyDeprecationWarning from pypdf/cryptography
-try:
+# 忽略警告
+warnings.filterwarnings("ignore", category=UserWarning)  # 通用用户警告
+# 忽略来自 pypdf/cryptography 的 CryptographyDeprecationWarning
+with suppress(ImportError):
     from cryptography.utils import CryptographyDeprecationWarning
 
     warnings.filterwarnings("ignore", category=CryptographyDeprecationWarning)
-except ImportError:
-    pass
 # --------------------------------------------------------
 
-# 路径防御：确保打包后或不同目录下启动都能正确找到模块
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
-
-import base64
-import io
-import json
-import re
-import secrets
-import time
-import uuid
-from datetime import datetime
-from typing import Any, Dict, List, Optional
-
 import psutil
-
-if os.name == "nt":
-    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
-    if sys.stdout is not None:
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
-    if sys.stderr is not None:
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
-
-# Initialize Logging
-import logging
-
-from utils.logging_config import configure_logging
-
-log_file = os.environ.get("PERO_LOG_FILE")
-configure_logging(log_file=log_file)
-
-logger = logging.getLogger(__name__)
-
-# [DEBUG] Print startup args and env for troubleshooting
-# print(f"[启动调试] sys.argv: {sys.argv}")
-# print(f"[启动调试] ENABLE_SOCIAL_MODE 环境变量: {os.environ.get('ENABLE_SOCIAL_MODE')}")
-
-import subprocess
-from contextlib import asynccontextmanager
-
 import uvicorn
 from fastapi import (
     Body,
@@ -91,6 +93,11 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlmodel import delete, desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
+
+# 路径防御：确保打包后或不同目录下启动都能正确找到模块
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
 
 from core.config_manager import get_config_manager
 from database import get_session, init_db
@@ -130,10 +137,29 @@ from services.screenshot_service import screenshot_manager
 from services.sync_service import sync_service
 from services.tts_service import get_tts_service
 
+if os.name == "nt":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+    if sys.stdout is not None:
+        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+    if sys.stderr is not None:
+        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
+
+# 初始化日志
+from utils.logging_config import configure_logging
+
+log_file = os.environ.get("PERO_LOG_FILE")
+configure_logging(log_file=log_file)
+
+logger = logging.getLogger(__name__)
+
+# [DEBUG] 打印启动参数和环境变量以进行故障排除
+# print(f"[启动调试] sys.argv: {sys.argv}")
+# print(f"[启动调试] ENABLE_SOCIAL_MODE 环境变量: {os.environ.get('ENABLE_SOCIAL_MODE')}")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup Logo
+    # 启动 Logo
     print(r"""
 ██████╗ ███████╗██████╗  ██████╗  ██████╗ ██████╗ ██████╗ ███████╗
 ██╔══██╗██╔════╝██╔══██╗██╔═══██╗██╔════╝██╔═══██╗██╔══██╗██╔════╝
@@ -147,15 +173,15 @@ async def lifespan(app: FastAPI):
     print(f"📅 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📂 数据目录: {os.environ.get('PERO_DATA_DIR', 'Default')}")
 
-    # Check Rust Core
+    # 检查 Rust 核心
     try:
-        from pero_memory_core import SemanticVectorIndex
+        import pero_memory_core  # noqa: F401
 
         print("🧠 记忆引擎: [就绪] (pero_memory_core 已加载)")
     except ImportError:
         print("🧠 记忆引擎: [禁用] (未找到 pero_memory_core)")
 
-    # Check Vector Store
+    # 检查向量存储
     from services.vector_store_service import VectorStoreService
 
     vs = VectorStoreService()
@@ -164,13 +190,13 @@ async def lifespan(app: FastAPI):
     )
     print("=" * 50)
 
-    # Startup
+    # 启动初始化
     await init_db()
 
-    # Load Config from DB
+    # 从数据库加载配置
     await get_config_manager().load_from_db()
 
-    # [Debug] Print loaded critical configs
+    # [Debug] 打印加载的关键配置
     cm = get_config_manager()
     print("🔧 当前配置状态:")
     print(f"   - 轻量模式: {cm.get('lightweight_mode')}")
@@ -182,7 +208,6 @@ async def lifespan(app: FastAPI):
     await companion_service.start()
     screenshot_manager.start_background_task()
 
-    # [Optimization] Disabled aggressive warm-up to improve startup performance and reduce lag
     # [优化] 禁用了激进的预热以提高启动性能并减少卡顿
     # 异步预热 Embedding 模型
     # asyncio.create_task(asyncio.to_thread(embedding_service.warm_up))
@@ -191,17 +216,17 @@ async def lifespan(app: FastAPI):
     # asr_service = get_asr_service()
     # asyncio.create_task(asyncio.to_thread(asr_service.warm_up))
 
-    # Start Social Service (if enabled)
+    # 启动社交服务（如果已启用）
     social_service = get_social_service()
     await social_service.start()
 
-    # Start Gateway Client
+    # 启动网关客户端
     gateway_client.start_background()
 
-    # Initialize Scheduler
+    # 初始化调度器
     scheduler_service.initialize()
 
-    # Initialize RealtimeSessionManager with Gateway
+    # 初始化实时会话管理器
     realtime_session_manager.initialize()
 
     # Start AuraVision (if enabled)
@@ -230,12 +255,9 @@ async def lifespan(app: FastAPI):
                     now = time.time()
                     for f in os.listdir(temp_vision):
                         f_path = os.path.join(temp_vision, f)
-                        if os.path.isfile(f_path):
-                            if now - os.path.getmtime(f_path) > 3600:  # 1 hour
-                                try:
-                                    os.remove(f_path)
-                                except Exception:
-                                    pass
+                        if os.path.isfile(f_path) and now - os.path.getmtime(f_path) > 3600:  # 1 hour
+                            with suppress(Exception):
+                                os.remove(f_path)
             except Exception as e:
                 print(f"[Main] 清理任务错误: {e}")
             await asyncio.sleep(3600)
@@ -363,10 +385,8 @@ async def lifespan(app: FastAPI):
 
                     last_trigger_time = datetime.min
                     if config:
-                        try:
+                        with suppress(Exception):
                             last_trigger_time = datetime.fromisoformat(config.value)
-                        except Exception:
-                            pass
 
                     if last_trigger_time < latest_scheduled:
                         print(
@@ -417,10 +437,8 @@ async def lifespan(app: FastAPI):
 
                     last_time = datetime.min
                     if config:
-                        try:
+                        with suppress(Exception):
                             last_time = datetime.fromisoformat(config.value)
-                        except Exception:
-                            pass
 
                     if last_time < latest_scheduled:
                         print(
@@ -597,7 +615,7 @@ async def lifespan(app: FastAPI):
                     tasks = (
                         await session.exec(
                             select(ScheduledTask).where(
-                                ScheduledTask.is_triggered == False
+                                not ScheduledTask.is_triggered
                             )
                         )
                     ).all()
@@ -828,8 +846,8 @@ class ChatRequest(BaseModel):
 
 
 async def verify_token(
-    authorization: Optional[str] = Header(None),
-    session: AsyncSession = Depends(get_session),
+    authorization: Optional[str] = Header(None),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """
     验证前端传来的 Token。实现“前端不可信”原则的第一步。
@@ -961,7 +979,7 @@ async def websocket_browser_endpoint(websocket: WebSocket):
 
 
 @app.get("/api/pet/state")
-async def get_pet_state(session: AsyncSession = Depends(get_session)):
+async def get_pet_state(session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         # Get active agent info FIRST
         from services.agent_manager import get_agent_manager
@@ -993,7 +1011,7 @@ async def get_pet_state(session: AsyncSession = Depends(get_session)):
 
         return response_data
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/ping")
@@ -1048,7 +1066,7 @@ async def resume_task(session_id: str):
 
 
 @app.post("/api/task/{session_id}/inject")
-async def inject_instruction(session_id: str, payload: Dict[str, str] = Body(...)):
+async def inject_instruction(session_id: str, payload: Dict[str, str] = Body(...)):  # noqa: B008
     instruction = payload.get("instruction")
     if not instruction:
         raise HTTPException(status_code=400, detail="Instruction is required")
@@ -1070,7 +1088,7 @@ async def get_task_status(session_id: str):
 
 @app.post("/api/companion/toggle")
 async def toggle_companion(
-    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)
+    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     # [Requirement] Companion mode depends on Lightweight mode
     config_mgr = get_config_manager()
@@ -1101,7 +1119,7 @@ async def toggle_companion(
 
 # --- Social Mode APIs ---
 @app.get("/api/social/status")
-async def get_social_status(session: AsyncSession = Depends(get_session)):
+async def get_social_status(session: AsyncSession = Depends(get_session)):  # noqa: B008
     config = await session.get(Config, "enable_social_mode")
     enabled = config.value == "true" if config else False
     return {"enabled": enabled}
@@ -1109,7 +1127,7 @@ async def get_social_status(session: AsyncSession = Depends(get_session)):
 
 @app.post("/api/social/toggle")
 async def toggle_social(
-    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)
+    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     # 1. Update DB & Memory
     await get_config_manager().set("enable_social_mode", enabled)
@@ -1137,16 +1155,16 @@ async def toggle_social(
 
 @app.get("/api/tasks", response_model=List[ScheduledTask])
 async def get_tasks(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)
+    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
-    statement = select(ScheduledTask).where(ScheduledTask.is_triggered == False)
+    statement = select(ScheduledTask).where(not ScheduledTask.is_triggered)
     if agent_id:
         statement = statement.where(ScheduledTask.agent_id == agent_id)
     return (await session.exec(statement)).all()
 
 
 @app.delete("/api/tasks/{task_id}")
-async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         task = await session.get(ScheduledTask, task_id)
         if not task:
@@ -1155,15 +1173,15 @@ async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)
         await session.commit()
         return {"status": "success"}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/tasks/check")
-async def check_tasks(session: AsyncSession = Depends(get_session)):
+async def check_tasks(session: AsyncSession = Depends(get_session)):  # noqa: B008
     now = datetime.now()
     tasks = (
         await session.exec(
-            select(ScheduledTask).where(ScheduledTask.is_triggered == False)
+            select(ScheduledTask).where(not ScheduledTask.is_triggered)
         )
     ).all()
     triggered_prompts = []
@@ -1220,14 +1238,14 @@ async def check_tasks(session: AsyncSession = Depends(get_session)):
 
 
 @app.get("/api/configs")
-async def get_configs(session: AsyncSession = Depends(get_session)):
+async def get_configs(session: AsyncSession = Depends(get_session)):  # noqa: B008
     configs = (await session.exec(select(Config))).all()
     return {c.key: c.value for c in configs}
 
 
 @app.post("/api/configs")
 async def update_config(
-    configs: Dict[str, str], session: AsyncSession = Depends(get_session)
+    configs: Dict[str, str], session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     # [Check] Block enabling incompatible modes if in Work Mode
     try:
@@ -1275,13 +1293,13 @@ async def update_config(
 
 
 @app.get("/api/models", response_model=List[AIModelConfig])
-async def get_models(session: AsyncSession = Depends(get_session)):
+async def get_models(session: AsyncSession = Depends(get_session)):  # noqa: B008
     return (await session.exec(select(AIModelConfig))).all()
 
 
 @app.post("/api/models", response_model=AIModelConfig)
 async def create_model(
-    model_data: Dict[str, Any] = Body(...), session: AsyncSession = Depends(get_session)
+    model_data: Dict[str, Any] = Body(...), session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     model_data.pop("id", None)
     model = AIModelConfig(**model_data)
@@ -1294,8 +1312,8 @@ async def create_model(
 @app.put("/api/models/{model_id}", response_model=AIModelConfig)
 async def update_model(
     model_id: int,
-    model_data: Dict[str, Any] = Body(...),
-    session: AsyncSession = Depends(get_session),
+    model_data: Dict[str, Any] = Body(...),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     db_model = await session.get(AIModelConfig, model_id)
     if not db_model:
@@ -1311,7 +1329,7 @@ async def update_model(
 
 
 @app.delete("/api/models/{model_id}")
-async def delete_model(model_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_model(model_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     db_model = await session.get(AIModelConfig, model_id)
     if not db_model:
         raise HTTPException(status_code=404, detail="Model not found")
@@ -1321,13 +1339,13 @@ async def delete_model(model_id: int, session: AsyncSession = Depends(get_sessio
 
 
 @app.get("/api/mcp", response_model=List[MCPConfig])
-async def get_mcps(session: AsyncSession = Depends(get_session)):
+async def get_mcps(session: AsyncSession = Depends(get_session)):  # noqa: B008
     return (await session.exec(select(MCPConfig))).all()
 
 
 @app.post("/api/mcp", response_model=MCPConfig)
 async def create_mcp(
-    mcp_data: Dict[str, Any] = Body(...), session: AsyncSession = Depends(get_session)
+    mcp_data: Dict[str, Any] = Body(...), session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     mcp_data.pop("id", None)
     mcp_data.pop("created_at", None)
@@ -1342,8 +1360,8 @@ async def create_mcp(
 @app.put("/api/mcp/{mcp_id}", response_model=MCPConfig)
 async def update_mcp(
     mcp_id: int,
-    mcp_data: Dict[str, Any] = Body(...),
-    session: AsyncSession = Depends(get_session),
+    mcp_data: Dict[str, Any] = Body(...),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     db_mcp = await session.get(MCPConfig, mcp_id)
     if not db_mcp:
@@ -1359,7 +1377,7 @@ async def update_mcp(
 
 
 @app.delete("/api/mcp/{mcp_id}")
-async def delete_mcp(mcp_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_mcp(mcp_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     db_mcp = await session.get(MCPConfig, mcp_id)
     if not db_mcp:
         raise HTTPException(status_code=404, detail="MCP not found")
@@ -1369,7 +1387,7 @@ async def delete_mcp(mcp_id: int, session: AsyncSession = Depends(get_session)):
 
 
 @app.get("/api/nit/status")
-async def get_nit_status(session: AsyncSession = Depends(get_session)):
+async def get_nit_status(session: AsyncSession = Depends(get_session)):  # noqa: B008
     from nit_core.dispatcher import get_dispatcher
 
     dispatcher = get_dispatcher()
@@ -1380,7 +1398,7 @@ async def get_nit_status(session: AsyncSession = Depends(get_session)):
 
     # Get enabled MCPs count
     mcp_count = len(
-        (await session.exec(select(MCPConfig).where(MCPConfig.enabled == True))).all()
+        (await session.exec(select(MCPConfig).where(MCPConfig.enabled))).all()
     )
 
     return {
@@ -1403,7 +1421,7 @@ async def list_memories(
     tags: str = None,
     type: str = None,  # Allow filtering by memory type
     agent_id: Optional[str] = None,  # Add agent_id param
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     service = MemoryService()
     # Pass agent_id to get_all_memories
@@ -1424,7 +1442,7 @@ async def list_memories(
 async def get_memory_graph(
     limit: int = 100,
     agent_id: Optional[str] = None,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     service = MemoryService()
     target_agent = agent_id if agent_id else "pero"
@@ -1432,7 +1450,7 @@ async def get_memory_graph(
 
 
 @app.delete("/api/memories/orphaned_edges")
-async def delete_orphaned_edges(session: AsyncSession = Depends(get_session)):
+async def delete_orphaned_edges(session: AsyncSession = Depends(get_session)):  # noqa: B008
     service = MemoryService()
     count = await service.delete_orphaned_edges(session)
     return {"status": "success", "deleted_count": count}
@@ -1440,7 +1458,7 @@ async def delete_orphaned_edges(session: AsyncSession = Depends(get_session)):
 
 @app.post("/api/memories/scan_lonely")
 async def scan_lonely_memories(
-    limit: int = 5, session: AsyncSession = Depends(get_session)
+    limit: int = 5, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     from services.reflection_service import ReflectionService
 
@@ -1450,7 +1468,7 @@ async def scan_lonely_memories(
 
 
 @app.post("/api/memories/maintenance")
-async def run_maintenance(session: AsyncSession = Depends(get_session)):
+async def run_maintenance(session: AsyncSession = Depends(get_session)):  # noqa: B008
     from services.memory_secretary_service import MemorySecretaryService
 
     service = MemorySecretaryService(session)
@@ -1459,7 +1477,7 @@ async def run_maintenance(session: AsyncSession = Depends(get_session)):
 
 
 @app.post("/api/memories/dream")
-async def trigger_dream(limit: int = 10, session: AsyncSession = Depends(get_session)):
+async def trigger_dream(limit: int = 10, session: AsyncSession = Depends(get_session)):  # noqa: B008
     from services.reflection_service import ReflectionService
 
     service = ReflectionService(session)
@@ -1469,7 +1487,7 @@ async def trigger_dream(limit: int = 10, session: AsyncSession = Depends(get_ses
 
 @app.get("/api/memories/tags")
 async def get_tag_cloud(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)
+    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     service = MemoryService()
     target_agent = agent_id if agent_id else "pero"
@@ -1477,14 +1495,14 @@ async def get_tag_cloud(
 
 
 @app.get("/api/voice-configs", response_model=List[VoiceConfig])
-async def get_voice_configs(session: AsyncSession = Depends(get_session)):
+async def get_voice_configs(session: AsyncSession = Depends(get_session)):  # noqa: B008
     return (await session.exec(select(VoiceConfig))).all()
 
 
 @app.post("/api/voice-configs", response_model=VoiceConfig)
 async def create_voice_config(
-    config_data: Dict[str, Any] = Body(...),
-    session: AsyncSession = Depends(get_session),
+    config_data: Dict[str, Any] = Body(...),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     try:
         # 检查重名
@@ -1525,14 +1543,14 @@ async def create_voice_config(
         import traceback
 
         print(f"创建语音配置时出错: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"创建失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"创建失败: {str(e)}") from e
 
 
 @app.put("/api/voice-configs/{config_id}", response_model=VoiceConfig)
 async def update_voice_config(
     config_id: int,
-    config_data: Dict[str, Any] = Body(...),
-    session: AsyncSession = Depends(get_session),
+    config_data: Dict[str, Any] = Body(...),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     try:
         db_config = await session.get(VoiceConfig, config_id)
@@ -1582,12 +1600,12 @@ async def update_voice_config(
         import traceback
 
         print(f"更新语音配置时出错: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}") from e
 
 
 @app.delete("/api/voice-configs/{config_id}")
 async def delete_voice_config(
-    config_id: int, session: AsyncSession = Depends(get_session)
+    config_id: int, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     try:
         db_config = await session.get(VoiceConfig, config_id)
@@ -1606,14 +1624,14 @@ async def delete_voice_config(
         import traceback
 
         print(f"删除语音配置时出错: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}") from e
 
 
 @app.post("/api/chat")
 async def chat(
     request: ChatRequest,
-    token: str = Depends(verify_token),
-    session: AsyncSession = Depends(get_session),
+    token: str = Depends(verify_token),  # noqa: B008
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     # 将 Pydantic 模型转换为 Dict，但仅提取后端信任的字段
     messages = [m.model_dump() for m in request.messages]
@@ -1644,31 +1662,8 @@ async def chat(
                     }
                 )
 
-            async def run_chat():
-                try:
-                    async for chunk in agent.chat(
-                        messages,
-                        source=source,
-                        session_id=session_id,
-                        on_status=status_callback,
-                        skip_save=False,
-                    ):
-                        if chunk:
-                            await queue.put({"type": "text", "payload": chunk})
-                except Exception as e:
-                    import traceback
-
-                    traceback.print_exc()
-                    await queue.put({"type": "error", "payload": str(e)})
-                finally:
-                    await queue.put({"type": "done"})
-
-            # 启动异步任务执行聊天逻辑
-            # asyncio.create_task(run_chat()) # Moved below
-
-            # TTS Buffer & Delimiters
-            # tts_buffer = "" # Moved to run_tts
-            # tts_delimiters = re.compile(r'[。！？\.\!\?\n]+') # Moved to run_tts
+            # TTS Queue
+            tts_queue = asyncio.Queue()
 
             async def generate_tts_chunk(text_chunk):
                 try:
@@ -1724,24 +1719,15 @@ async def chat(
                                 )
 
                             # Clean up file immediately
-                            try:
+                            with suppress(Exception):
                                 os.remove(audio_path)
-                            except Exception:
-                                pass
 
                             return audio_data
                 except Exception as e:
                     print(f"TTS 分块错误: {e}")
                 return None
 
-            # TTS Queue
-            tts_queue = asyncio.Queue()
-
             async def run_tts():
-                import asyncio
-                import os
-                import re
-
                 tts_buffer = ""
                 # 恢复分段机制，实现流式播放 (。！？.!?)
                 tts_delimiters = re.compile(r"([。！？\.\!\?\n]+)")
@@ -1786,32 +1772,22 @@ async def chat(
 
                                 # 优先尝试读取本地缓存
                                 if os.path.exists(filler_cache_path):
-                                    try:
-                                        with open(filler_cache_path, "rb") as f:
-                                            # 读取二进制并转为 base64 字符串，与 generate_tts_chunk 输出保持一致
-                                            audio_data = base64.b64encode(
-                                                f.read()
-                                            ).decode("utf-8")
-                                    except Exception as e:
-                                        logger.error(
-                                            f"Failed to read local filler: {e}"
-                                        )
+                                    with suppress(Exception), open(filler_cache_path, "rb") as f:
+                                        # 读取二进制并转为 base64 字符串，与 generate_tts_chunk 输出保持一致
+                                        audio_data = base64.b64encode(
+                                            f.read()
+                                        ).decode("utf-8")
 
                                 # 如果没有缓存，则生成并保存
                                 if not audio_data:
                                     audio_data = await generate_tts_chunk(filler_phrase)
                                     if audio_data:
-                                        try:
+                                        with suppress(Exception), open(filler_cache_path, "wb") as f:
                                             # audio_data 是 base64 字符串，保存为二进制音频文件
-                                            with open(filler_cache_path, "wb") as f:
-                                                f.write(base64.b64decode(audio_data))
-                                            logger.info(
-                                                f"Saved filler to cache: {filler_cache_path}"
-                                            )
-                                        except Exception as e:
-                                            logger.error(
-                                                f"Failed to save filler cache: {e}"
-                                            )
+                                            f.write(base64.b64decode(audio_data))
+                                        logger.info(
+                                            f"Saved filler to cache: {filler_cache_path}"
+                                        )
 
                                 if audio_data:
                                     await queue.put(
@@ -1970,7 +1946,7 @@ async def chat(
 
 
 @app.post("/api/system/reset")
-async def reset_system(session: AsyncSession = Depends(get_session)):
+async def reset_system(session: AsyncSession = Depends(get_session)):  # noqa: B008
     """一键恢复出厂设置：清理所有记忆、对话记录、状态和任务，但保留模型配置"""
     try:
         # 1. 清理记忆关联 (FK to Memory)
@@ -2007,7 +1983,7 @@ async def reset_system(session: AsyncSession = Depends(get_session)):
         import traceback
 
         print(f"重置系统时出错: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"恢复出厂设置失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"恢复出厂设置失败: {str(e)}") from e
 
 
 @app.get("/health")
@@ -2016,13 +1992,13 @@ async def health_check():
 
 
 @app.post("/api/maintenance/run")
-async def run_maintenance_api(session: AsyncSession = Depends(get_session)):
+async def run_maintenance_api(session: AsyncSession = Depends(get_session)):  # noqa: B008
     service = MemorySecretaryService(session)
     return await service.run_maintenance()
 
 
 @app.post("/api/open-path")
-async def open_path(payload: Dict[str, str] = Body(...)):
+async def open_path(payload: Dict[str, str] = Body(...)):  # noqa: B008
     """打开本地文件或文件夹"""
     path = payload.get("path")
     if not path:
@@ -2054,7 +2030,7 @@ async def open_path(payload: Dict[str, str] = Body(...)):
                 os.startfile(path)
             except Exception as inner_e:
                 print(f"打开路径 {path} 时出错: {inner_e}")
-                raise HTTPException(status_code=500, detail=str(inner_e))
+                raise HTTPException(status_code=500, detail=str(inner_e)) from inner_e
     else:
         # Non-Windows fallback (though Pero is Windows focused)
         subprocess.Popen(["xdg-open", path])
@@ -2070,7 +2046,7 @@ async def open_path(payload: Dict[str, str] = Body(...)):
 
 
 @app.post("/api/voice/asr")
-async def voice_asr(file: UploadFile = File(...)):
+async def voice_asr(file: UploadFile = File(...)):  # noqa: B008
     """语音转文字接口"""
     try:
         # Save temp file
@@ -2091,21 +2067,19 @@ async def voice_asr(file: UploadFile = File(...)):
         text = await asr.transcribe(temp_path)
 
         # Cleanup
-        try:
+        with suppress(Exception):
             os.remove(temp_path)
-        except Exception:
-            pass
 
         if not text:
             raise HTTPException(status_code=500, detail="ASR failed")
 
         return {"text": text}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/voice/tts")
-async def voice_tts(payload: Dict[str, str] = Body(...)):
+async def voice_tts(payload: Dict[str, str] = Body(...)):  # noqa: B008
     """文字转语音接口"""
     text = payload.get("text", "")
     if not text:
@@ -2167,7 +2141,7 @@ async def delete_audio(filename: str):
 
 
 @app.get("/api/configs/waifu-texts")
-async def get_waifu_texts(session: AsyncSession = Depends(get_session)):
+async def get_waifu_texts(session: AsyncSession = Depends(get_session)):  # noqa: B008
     """获取动态生成的 Live2D 台词配置 (Agent 专属)"""
     try:
         # 1. 获取当前活跃 Agent
@@ -2195,7 +2169,7 @@ async def get_waifu_texts(session: AsyncSession = Depends(get_session)):
 
         return {}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.get("/api/memories")
@@ -2203,7 +2177,7 @@ async def get_memories(
     query: str = None,
     limit: int = 20,
     offset: int = 0,
-    session: AsyncSession = Depends(get_session),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """获取记忆列表"""
     try:
@@ -2216,12 +2190,12 @@ async def get_memories(
         memories = (await session.exec(stmt)).all()
         return memories
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/memories", response_model=Memory)
 async def add_memory(
-    payload: Dict[str, Any], session: AsyncSession = Depends(get_session)
+    payload: Dict[str, Any], session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     """手动添加记忆"""
     try:
@@ -2236,11 +2210,11 @@ async def add_memory(
             memory_type=payload.get("type", "event"),
         )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.delete("/api/memories/{memory_id}")
-async def delete_memory(memory_id: int, session: AsyncSession = Depends(get_session)):
+async def delete_memory(memory_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     """删除记忆"""
     try:
         memory = await session.get(Memory, memory_id)
@@ -2251,11 +2225,11 @@ async def delete_memory(memory_id: int, session: AsyncSession = Depends(get_sess
         await session.commit()
         return {"status": "success", "id": memory_id}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @app.post("/api/models/remote")
-async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):
+async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):  # noqa: B008
     """获取远程服务商提供的模型列表"""
     api_key = payload.get("api_key", "")
     api_base = payload.get("api_base", "https://api.openai.com")
@@ -2271,7 +2245,7 @@ async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):
 
 @app.post("/api/maintenance/undo/{record_id}")
 async def undo_maintenance_api(
-    record_id: int, session: AsyncSession = Depends(get_session)
+    record_id: int, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     service = MemorySecretaryService(session)
     success = await service.undo_maintenance(record_id)
@@ -2281,7 +2255,7 @@ async def undo_maintenance_api(
 
 
 @app.get("/api/maintenance/records")
-async def get_maintenance_records(session: AsyncSession = Depends(get_session)):
+async def get_maintenance_records(session: AsyncSession = Depends(get_session)):  # noqa: B008
     """获取最近的维护记录"""
     from sqlmodel import desc
 
@@ -2293,7 +2267,7 @@ async def get_maintenance_records(session: AsyncSession = Depends(get_session)):
 
 @app.get("/api/stats/overview")
 async def get_overview_stats(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)
+    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     """
     获取概览页面的统计数据（总数），解耦渲染数量和显示数量。
@@ -2339,7 +2313,7 @@ async def get_gateway_token_api():
                 return {"token": data.get("token")}
         raise HTTPException(status_code=404, detail="Token not found")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 if __name__ == "__main__":

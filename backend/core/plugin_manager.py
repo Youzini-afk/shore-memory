@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, List, Optional
 from core.config_manager import get_config_manager
 from core.nit_manager import get_nit_manager
 
-# Configure logging
+# 配置日志
 logger = logging.getLogger(__name__)
 
 
@@ -149,10 +149,7 @@ class PluginManager:
         """
         entry_point = manifest["entryPoint"]
         module_file = entry_point
-        if module_file.endswith(".py"):
-            module_name = module_file[:-3]
-        else:
-            module_name = module_file
+        module_name = module_file[:-3] if module_file.endswith(".py") else module_file
 
         # 构建导入路径
         # 尝试基于分类的动态路径构建
@@ -245,7 +242,7 @@ class PluginManager:
 
     def get_all_definitions(self) -> List[Dict[str, Any]]:
         definitions = []
-        for plugin_name, manifest in self.plugins.items():
+        for _plugin_name, manifest in self.plugins.items():
             # 检查 invocationCommands (NIT 格式标准)
             if (
                 "capabilities" in manifest
@@ -281,5 +278,5 @@ def get_plugin_manager() -> PluginManager:
     return _instance
 
 
-# Global instance for easier access
+# 全局实例，便于访问
 plugin_manager = get_plugin_manager()

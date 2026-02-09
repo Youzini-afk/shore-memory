@@ -21,16 +21,16 @@ class GroupChatService:
         )
         self.session.add(room)
 
-        # Add creator (if not in member_ids)
+        # 添加创建者（如果不在 member_ids 中）
         if creator_id not in member_ids:
             self.session.add(
                 GroupChatMember(room_id=room_id, agent_id=creator_id, role="admin")
             )
 
-        # Add members
+        # 添加成员
         for member_id in member_ids:
             role = "admin" if member_id == creator_id else "member"
-            # Check if already added
+            # 检查是否已添加
             existing = (
                 await self.session.exec(
                     select(GroupChatMember).where(
@@ -65,8 +65,10 @@ class GroupChatService:
         sender_id: str,
         content: str,
         role: str = "user",
-        mentions: List[str] = [],
+        mentions: List[str] = None,
     ) -> GroupChatMessage:
+        if mentions is None:
+            mentions = []
         msg = GroupChatMessage(
             room_id=room_id,
             sender_id=sender_id,
@@ -78,18 +80,18 @@ class GroupChatService:
         await self.session.commit()
         await self.session.refresh(msg)
 
-        # Inject Memory (Independent Memory for each Agent)
+        # 注入记忆（每个 Agent 独立的记忆）
         if content.strip():
             members = await self.get_room_members(room_id)
             from services.memory_service import MemoryService
 
             for member in members:
-                # Do not inject for user, only for agents
+                # 不对用户注入，仅对 Agent 注入
                 if member.agent_id == "user":
                     continue
 
-                # Contextualize
-                # If sender is self, mark as "I said"
+                # 上下文处理
+                # 如果发送者是自己，标记为 "I said"
                 prefix = (
                     "I said" if member.agent_id == sender_id else f"{sender_id} said"
                 )
@@ -123,7 +125,7 @@ class GroupChatService:
 
     @staticmethod
     async def trigger_group_response(room_id: str):
-        """Static method to trigger group response in background with fresh session"""
+        """静态方法：在后台使用新会话触发群组响应"""
         import asyncio
 
         asyncio.create_task(GroupChatService._run_group_response_task(room_id))
@@ -136,7 +138,7 @@ class GroupChatService:
         from database import engine
 
         try:
-            # Create a new session for the background task
+            # 为后台任务创建新会话
             async_session = sessionmaker(
                 engine, class_=AsyncSession, expire_on_commit=False
             )
@@ -147,26 +149,26 @@ class GroupChatService:
             print(f"[GroupChat] 后台任务失败: {e}")
 
     async def process_group_response_logic(self, room_id: str):
-        """Trigger responses from all agents in the group."""
+        """触发群组中所有 Agent 的响应。"""
         from services.agent_service import AgentService
 
         members = await self.get_room_members(room_id)
-        # Filter out user and get agent IDs
+        # 过滤掉用户并获取 Agent ID
         agent_ids = [m.agent_id for m in members if m.agent_id != "user"]
 
         if not agent_ids:
             return
 
-        # Fetch recent history for context
+        # 获取最近的历史记录作为上下文
         history_msgs = await self.get_history(room_id, limit=20)
 
         async def respond_for_agent(agent_id: str):
             try:
-                # 1. Format messages for this agent
-                # Perspective Shifting:
-                # - If msg.sender_id == agent_id, it is 'assistant'
-                # - If msg.sender_id == 'user', it is 'user'
-                # - If msg.sender_id == other_agent, it is 'user' (external) but prefixed
+                # 1. 为该 Agent 格式化消息
+                # 视角转换：
+                # - 如果 msg.sender_id == agent_id，则为 'assistant'
+                # - 如果 msg.sender_id == 'user'，则为 'user'
+                # - 如果 msg.sender_id == other_agent，则为 'user'（外部），但带有前缀
 
                 formatted_msgs = []
                 for m in history_msgs:
@@ -178,34 +180,34 @@ class GroupChatService:
                     elif m.sender_id == "user":
                         role = "user"
                     else:
-                        # Other agent speaking
+                        # 其他 Agent 发言
                         role = "user"
                         content = f"[{m.sender_id}]: {content}"
 
                     formatted_msgs.append({"role": role, "content": content})
 
-                # 2. Call AgentService
-                # We need a NEW session to avoid conflicts if running in parallel?
-                # Actually, self.session is async session, sharing it might be okay for reads,
-                # but AgentService writes to DB. Sharing one session across concurrent tasks is risky.
-                # Ideally we should spawn new session.
-                # But for MVP let's try sequential execution if session sharing is hard,
-                # OR use the same session but be careful.
-                # Let's run sequentially for safety first.
+                # 2. 调用 AgentService
+                # 我们需要一个新的会话来避免并行运行时的冲突吗？
+                # 实际上，self.session 是异步会话，共享它进行读取可能没问题，
+                # 但 AgentService 会写入数据库。在并发任务之间共享一个会话是有风险的。
+                # 理想情况下，我们应该生成新会话。
+                # 但对于 MVP，如果会话共享很难，让我们尝试顺序执行，
+                # 或者使用同一个会话但要小心。
+                # 为了安全起见，让我们先顺序运行。
 
                 agent_service = AgentService(self.session)
                 response_content = ""
 
-                # Use a specific source 'group_chat'
+                # 使用特定来源 'group_chat'
                 async for chunk in agent_service.chat(
                     messages=formatted_msgs,
                     source="group_chat",
-                    session_id=f"group_{room_id}",  # Isolate history (though we pass explicit messages)
+                    session_id=f"group_{room_id}",  # 隔离历史记录（虽然我们传递了显式消息）
                     agent_id_override=agent_id,
                 ):
                     response_content += chunk
 
-                # 3. Add response to group chat
+                # 3. 将响应添加到群聊
                 if response_content:
                     await self.add_message(
                         room_id, agent_id, response_content, role="assistant"
@@ -214,6 +216,6 @@ class GroupChatService:
             except Exception as e:
                 print(f"[GroupChat] {agent_id} 响应失败: {e}")
 
-        # Run sequentially to avoid DB session conflicts
+        # 顺序运行以避免 DB 会话冲突
         for aid in agent_ids:
             await respond_for_agent(aid)

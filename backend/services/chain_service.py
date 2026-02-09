@@ -9,10 +9,10 @@ if backend_dir not in sys.path:
     sys.path.append(backend_dir)
 
 # from services.vector_service import VectorService # 已弃用
-from core.config_manager import get_config_manager
-from services.embedding_service import embedding_service
-from services.mdp.manager import mdp
-from services.memory_service import MemoryService
+from core.config_manager import get_config_manager  # noqa: E402
+from services.embedding_service import embedding_service  # noqa: E402
+from services.mdp.manager import mdp  # noqa: E402
+from services.memory_service import MemoryService  # noqa: E402
 
 
 class ThinkingChainService:
@@ -128,7 +128,7 @@ class ThinkingChainService:
         if chain_name not in self.chains:
             # 如果未找到链，回退到简单搜索
             print(f"[ThinkingChain] 未找到思维链 '{chain_name}'。返回空。")
-            return {"chain_name": chain_name, "steps": [], "error": "Chain not found"}
+            return {"chain_name": chain_name, "steps": [], "error": "未找到思维链"}
 
         chain_steps = self.chains[chain_name]
         query_embedding = self.embedding_service.encode_one(query)
@@ -229,7 +229,6 @@ class ThinkingChainService:
             f"报告周期: {datetime.fromtimestamp(one_week_ago/1000).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}"
         )
 
-        has_content = False
         all_weekly_contents = []  # 存储用于历史搜索
 
         for cluster in clusters_to_review:
@@ -253,7 +252,6 @@ class ThinkingChainService:
             if not memories:
                 continue
 
-            has_content = True
             output.append(f"\n#### [{cluster}] (本周)")
 
             # 按重要性（如果元数据中可用）降序排序
@@ -262,7 +260,7 @@ class ThinkingChainService:
                 key=lambda x: x.get("metadata", {}).get("importance", 1), reverse=True
             )
 
-            for i, mem in enumerate(memories, 1):
+            for _i, mem in enumerate(memories, 1):
                 content = mem.get("document", "")
                 if len(content) > 300:
                     content = content[:300] + "..."  # 截断长内容
@@ -346,7 +344,7 @@ class ThinkingChainService:
             safe_output = []
             safe_output.extend(output[:5])  # Header + Date
 
-            # Calculate remaining budget
+            # 计算剩余预算
             remaining_chars = 9000 - len("\n".join(safe_output))
 
             # 获取回响（通常是最后几项，查找 "历史回响"）
@@ -407,7 +405,7 @@ class ThinkingChainService:
         model_config = result.first()
 
         if not model_config:
-            # Fallback: get first available model
+            # 回退：获取第一个可用模型
             result = await session.exec(select(AIModelConfig))
             model_config = result.first()
 
@@ -429,9 +427,9 @@ class ThinkingChainService:
         config_manager = get_config_manager()
         bot_name = config_manager.get("bot_name", "Pero")
 
-        # Get Agent Profile for dynamic persona injection
+        # 获取 Agent Profile 以进行动态人设注入
         agent_manager = AgentManager()
-        agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
+        agent_manager.agents.get(agent_manager.active_agent_id)
 
         variables = {"agent_name": bot_name, "current_time": now_str, "context": context}
         from services.prompt_service import PromptManager

@@ -1752,7 +1752,10 @@
               <div v-if="segment.type === 'thinking'" class="segment-content thinking-content">
                 {{ segment.content }}
               </div>
-              <div v-else-if="segment.type === 'monologue'" class="segment-content monologue-content">
+              <div
+                v-else-if="segment.type === 'monologue'"
+                class="segment-content monologue-content"
+              >
                 {{ segment.content }}
               </div>
               <div v-else-if="segment.type === 'nit'" class="segment-content nit-content">
@@ -1767,41 +1770,52 @@
 
         <!-- 模式 2: 完整提示词 & ReAct -->
         <div v-else-if="debugViewMode === 'prompt'" class="prompt-view-container">
-          <div v-if="isLoadingPrompt" class="loading-state" style="padding: 40px; text-align: center">
+          <div
+            v-if="isLoadingPrompt"
+            class="loading-state"
+            style="padding: 40px; text-align: center"
+          >
             <div class="animate-spin text-2xl text-indigo-500 mb-2">⟳</div>
             <div class="text-slate-500">正在从后端获取完整 Context...</div>
           </div>
-          
-          <div v-else>
-             <!-- 统计信息 -->
-             <div class="debug-meta-info" style="margin-bottom: 15px; padding: 10px; background: #ecf5ff; border-radius: 4px; border: 1px solid #d9ecff;">
-                <div style="display: flex; gap: 20px; font-size: 13px; color: #409eff;">
-                   <div>
-                      <strong>Total Messages:</strong> {{ currentPromptMessages.length }}
-                   </div>
-                   <div>
-                      <strong>Total Length (Chars):</strong> {{ totalPromptLength }}
-                   </div>
-                   <div>
-                      <strong>Est. Tokens:</strong> ~{{ Math.ceil(totalPromptLength / 3.5) }}
-                   </div>
-                </div>
-             </div>
 
-             <!-- 消息列表 -->
-             <div class="prompt-preview-container">
-                <div v-for="(msg, idx) in currentPromptMessages" :key="idx" class="prompt-message-item">
-                   <div :class="['prompt-role-badge', msg.role]">
-                      {{ msg.role.toUpperCase() }}
-                      <span style="opacity: 0.7; font-weight: normal; margin-left: 10px">
-                         {{ (msg.content || '').length }} chars
-                      </span>
-                   </div>
-                   <div class="prompt-content-box">
-                      <pre>{{ msg.content }}</pre>
-                   </div>
+          <div v-else>
+            <!-- 统计信息 -->
+            <div
+              class="debug-meta-info"
+              style="
+                margin-bottom: 15px;
+                padding: 10px;
+                background: #ecf5ff;
+                border-radius: 4px;
+                border: 1px solid #d9ecff;
+              "
+            >
+              <div style="display: flex; gap: 20px; font-size: 13px; color: #409eff">
+                <div><strong>Total Messages:</strong> {{ currentPromptMessages.length }}</div>
+                <div><strong>Total Length (Chars):</strong> {{ totalPromptLength }}</div>
+                <div><strong>Est. Tokens:</strong> ~{{ Math.ceil(totalPromptLength / 3.5) }}</div>
+              </div>
+            </div>
+
+            <!-- 消息列表 -->
+            <div class="prompt-preview-container">
+              <div
+                v-for="(msg, idx) in currentPromptMessages"
+                :key="idx"
+                class="prompt-message-item"
+              >
+                <div :class="['prompt-role-badge', msg.role]">
+                  {{ msg.role.toUpperCase() }}
+                  <span style="opacity: 0.7; font-weight: normal; margin-left: 10px">
+                    {{ (msg.content || '').length }} chars
+                  </span>
                 </div>
-             </div>
+                <div class="prompt-content-box">
+                  <pre>{{ msg.content }}</pre>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -1815,8 +1829,6 @@ import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { listen, invoke } from '@/utils/ipcAdapter'
 import VoiceConfigPanel from './VoiceConfigPanel.vue'
 import AsyncMarkdown from '../components/AsyncMarkdown.vue'
-import { marked } from 'marked'
-import dompurify from 'dompurify'
 import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -1830,22 +1842,16 @@ import {
   Edit,
   Delete,
   Search,
-  Check,
-  Close,
-  MoreFilled,
   User,
   SwitchButton,
   Microphone,
   Warning,
-  ArrowLeft,
   View,
   ChatDotSquare,
   Monitor,
   Tools,
-  Aim,
   Picture,
   ArrowDown,
-  Document,
   Upload
 } from '@element-plus/icons-vue'
 import TerminalPanel from '../components/TerminalPanel.vue'
@@ -1870,7 +1876,6 @@ const isGlobalRefreshing = ref(false)
 const isCompanionEnabled = ref(false)
 const isTogglingCompanion = ref(false)
 const isSocialEnabled = ref(false)
-const isTogglingSocial = ref(false)
 const isLightweightEnabled = ref(false)
 const isTogglingLightweight = ref(false)
 const isAuraVisionEnabled = ref(false)
@@ -1883,7 +1888,6 @@ const isDreaming = ref(false)
 const showDebugDialog = ref(false)
 const currentDebugLog = ref(null)
 const debugSegments = ref([])
-const showPromptDialog = ref(false)
 const currentPromptMessages = ref([])
 const isLoadingPrompt = ref(false)
 
@@ -1944,7 +1948,7 @@ const checkForUpdates = async () => {
   isCheckingUpdate.value = true
   try {
     await invoke('check_update')
-  } catch (e) {
+  } catch {
     ElMessage.error('检查更新失败')
     isCheckingUpdate.value = false
   }
@@ -2161,14 +2165,6 @@ const handleDebugModeChange = async (val) => {
   }
 }
 
-const openPromptDialog = async (log) => {
-  // Deprecated or can be kept as alias
-  currentDebugLog.value = log
-  showDebugDialog.value = true
-  debugViewMode.value = 'prompt'
-  handleDebugModeChange('prompt')
-}
-
 const parseDebugContent = (content) => {
   if (!content) {
     debugSegments.value = []
@@ -2273,21 +2269,6 @@ const lastSyncedSessionId = ref(null) // Track last synced session from backend 
 const selectedDate = ref('')
 const selectedSort = ref('desc')
 
-const openIdeWorkspace = async () => {
-  console.log('[仪表盘] 用户点击打开 IDE 工作区')
-  try {
-    if (window.electron && window.electron.invoke) {
-      await window.electron.invoke('open_ide_window')
-    } else {
-      throw new Error('Electron environment not detected')
-    }
-  } catch (e) {
-    console.error('打开 IDE 窗口失败:', e)
-    const errorMsg = e instanceof Error ? e.message : JSON.stringify(e)
-    ElMessage.error('无法打开 IDE 窗口: ' + errorMsg)
-  }
-}
-
 // --- Polling State ---
 // --- 轮询状态 ---
 const pollingInterval = ref(null)
@@ -2385,23 +2366,6 @@ const topTags = computed(() => {
     .map(([tag, count]) => ({ tag, count }))
 })
 
-const currentTabName = computed(() => {
-  const map = {
-    overview: '总览',
-    logs: '对话日志',
-    terminal: '系统终端',
-    memories: '核心记忆',
-    tasks: '待办任务',
-    model_config: '模型配置',
-    voice_config: '语音配置',
-    mcp_config: 'MCP 连接',
-    user_settings: '用户设定',
-    napcat: 'NapCat 终端',
-    system_reset: '危险区域'
-  }
-  return map[currentTab.value] || 'Dashboard'
-})
-
 const getMemoryTagType = (type) => {
   if (type === 'preference') return 'danger'
   if (type === 'event' || type === 'summary' || type === 'interaction_summary') return 'primary'
@@ -2444,7 +2408,7 @@ const getLogMetadata = (log) => {
   if (!log) return {}
   try {
     return JSON.parse(log.metadata_json || '{}')
-  } catch (e) {
+  } catch {
     return {}
   }
 }
@@ -2507,41 +2471,6 @@ const switchAgent = async (agentId) => {
 
 // --- Methods ---
 
-const checkBackendStatus = async () => {
-  // 简单的单次检查，用于UI状态指示
-  try {
-    await fetchWithTimeout(`${API_BASE}/pet/state`, { silent: true }, 2000)
-    isBackendOnline.value = true
-
-    // Check NapCat Status as well
-    await checkNapCatStatus()
-  } catch (e) {
-    isBackendOnline.value = false
-  }
-}
-
-const checkNapCatStatus = async () => {
-  try {
-    const res = await fetchWithTimeout(`${API_BASE}/social/status`, { silent: true }, 2000)
-    if (res.ok) {
-      const data = await res.json()
-      if (data.enabled) {
-        napCatStatus.value = {
-          ws_connected: data.ws_connected,
-          api_responsive: data.api_responsive,
-          latency_ms: data.latency_ms,
-          disabled: false
-        }
-      } else {
-        napCatStatus.value = { ...napCatStatus.value, disabled: true }
-      }
-    }
-  } catch (e) {
-    console.warn('NapCat status check failed', e)
-    // Keep default or set error state
-  }
-}
-
 const waitForBackend = async () => {
   // 启动时的轮询等待
   const maxRetries = 60 // 等待60秒
@@ -2556,7 +2485,7 @@ const waitForBackend = async () => {
         await fetchAllData() // 后端上线后，拉取所有数据
         return
       }
-    } catch (e) {
+    } catch {
       // 忽略启动时的连接错误，静默重试
     }
 
@@ -2581,7 +2510,7 @@ onMounted(() => {
     if (agentId) {
       console.log('[Dashboard] Detected agent change:', agentId)
       // Refresh active agent info first
-      fetchActiveAgent().then(() => {
+      fetchAgents().then(() => {
         // Then refresh all data dependent on agent
         fetchAllData()
       })
@@ -2623,15 +2552,6 @@ onMounted(() => {
   })
 })
 
-const formatBytes = (bytes, decimals = 1) => {
-  if (bytes === 0) return '0 B'
-  const k = 1024
-  const dm = decimals < 0 ? 0 : decimals
-  const sizes = ['B', 'KB', 'MB', 'GB', 'TB', 'PB', 'EB', 'ZB', 'YB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i]
-}
-
 const fetchStats = async () => {
   try {
     let url = `${API_BASE}/stats/overview`
@@ -2641,8 +2561,8 @@ const fetchStats = async () => {
     const res = await fetchWithTimeout(url, {}, 2000)
     const data = await res.json()
     stats.value = data
-  } catch (e) {
-    console.error('获取统计信息失败:', e)
+  } catch {
+    console.error('获取统计信息失败')
   }
 }
 
@@ -2653,8 +2573,8 @@ const fetchAllData = async () => {
   // 1. 先加载核心状态，确保 UI 基础信息立即可用
   try {
     await Promise.all([fetchPetState(), fetchConfig(), fetchStats(), fetchAgents()])
-  } catch (e) {
-    console.error('核心数据获取错误:', e)
+  } catch {
+    console.error('核心数据获取错误')
   }
 
   // 2. 稍微延迟后加载次要配置，避免一次性涌入过多数据更新
@@ -2669,8 +2589,8 @@ const fetchAllData = async () => {
         fetchAuraVisionStatus(),
         fetchNitStatus()
       ])
-    } catch (e) {
-      console.error('次要数据获取错误:', e)
+    } catch {
+      console.error('次要数据获取错误')
     }
   }, 100)
 
@@ -2689,8 +2609,8 @@ const fetchAllData = async () => {
 
       fetchTagCloud()
       ElMessage.success('所有数据已同步')
-    } catch (e) {
-      console.error('标签页数据获取错误:', e)
+    } catch {
+      console.error('标签页数据获取错误')
       ElMessage.error('部分数据刷新失败')
     } finally {
       isGlobalRefreshing.value = false
@@ -2704,8 +2624,8 @@ const fetchNitStatus = async () => {
   try {
     const res = await fetchWithTimeout(`${API_BASE}/nit/status`, {}, 2000)
     nitStatus.value = await res.json()
-  } catch (e) {
-    console.error('NIT 状态获取错误:', e)
+  } catch {
+    console.error('NIT 状态获取错误')
   } finally {
     fetchNitStatus.isLoading = false
   }
@@ -2717,8 +2637,8 @@ const fetchTagCloud = async () => {
   try {
     const res = await fetchWithTimeout(`${API_BASE}/memories/tags`, {}, 3000)
     tagCloud.value = await res.json()
-  } catch (e) {
-    console.error('标签云获取错误:', e)
+  } catch {
+    console.error('标签云获取错误')
   } finally {
     fetchTagCloud.isLoading = false
   }
@@ -2743,8 +2663,8 @@ const fetchMemoryGraph = async () => {
         requestAnimationFrame(() => initGraph())
       })
     }
-  } catch (e) {
-    console.error('记忆图谱获取错误:', e)
+  } catch {
+    console.error('记忆图谱获取错误')
   } finally {
     isLoadingGraph.value = false
   }
@@ -3079,7 +2999,7 @@ const toggleCompanion = async (val) => {
       isCompanionEnabled.value = !val // revert // 恢复
       ElMessage.warning(errorData.detail || '切换失败')
     }
-  } catch (e) {
+  } catch {
     isCompanionEnabled.value = !val // revert // 恢复
     ElMessage.error('网络错误')
   } finally {
@@ -3094,37 +3014,8 @@ const fetchSocialStatus = async () => {
       const data = await res.json()
       isSocialEnabled.value = data.enabled
     }
-  } catch (e) {
-    console.error('Failed to fetch social status', e)
-  }
-}
-
-const toggleSocial = async (val) => {
-  try {
-    isTogglingSocial.value = true
-    const res = await fetchWithTimeout(
-      `${API_BASE}/social/toggle`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: val })
-      },
-      5000
-    )
-
-    if (res.ok) {
-      const data = await res.json()
-      isSocialEnabled.value = data.enabled
-      ElMessage.success(data.enabled ? '已开启社交模式' : '已关闭社交模式')
-    } else {
-      isSocialEnabled.value = !val // revert // 恢复
-      ElMessage.error('切换失败')
-    }
-  } catch (e) {
-    isSocialEnabled.value = !val // revert // 恢复
-    ElMessage.error('网络错误')
-  } finally {
-    isTogglingSocial.value = false
+  } catch {
+    console.error('Failed to fetch social status')
   }
 }
 
@@ -3135,8 +3026,8 @@ const fetchLightweightStatus = async () => {
       const data = await res.json()
       isLightweightEnabled.value = data.enabled
     }
-  } catch (e) {
-    console.error('Failed to fetch lightweight status', e)
+  } catch {
+    console.error('Failed to fetch lightweight status')
   }
 }
 
@@ -3161,7 +3052,7 @@ const toggleLightweight = async (val) => {
       isLightweightEnabled.value = !val // revert // 恢复
       ElMessage.error('切换失败')
     }
-  } catch (e) {
+  } catch {
     isLightweightEnabled.value = !val // revert // 恢复
     ElMessage.error('网络错误')
   } finally {
@@ -3204,7 +3095,7 @@ const toggleAuraVision = async (val) => {
       isAuraVisionEnabled.value = !val // revert // 恢复
       ElMessage.error('切换失败')
     }
-  } catch (e) {
+  } catch {
     isAuraVisionEnabled.value = !val // revert // 恢复
     ElMessage.error('网络错误')
   } finally {
@@ -3222,8 +3113,8 @@ const handleQuitApp = () => {
     .then(async () => {
       try {
         await invoke('quit_app')
-      } catch (e) {
-        console.error('Failed to quit app', e)
+      } catch {
+        console.error('Failed to quit app')
       }
     })
     .catch(() => {})
@@ -3235,8 +3126,8 @@ const fetchMcps = async () => {
   try {
     const res = await fetchWithTimeout(`${API_BASE}/mcp`, {}, 5000)
     mcps.value = await res.json()
-  } catch (e) {
-    console.error(e)
+  } catch {
+    console.error('Failed to fetch MCPs')
   } finally {
     fetchMcps.isLoading = false
   }
@@ -3255,7 +3146,7 @@ const fetchPetState = async () => {
     if (res.ok) {
       petState.value = await res.json()
     }
-  } catch (e) {
+  } catch {
     // Silent fail for polling, no need to log Failed to fetch
     // 轮询静默失败，无需记录获取失败
   } finally {
@@ -3790,7 +3681,9 @@ const fetchRemoteModels = async () => {
       try {
         const errData = await res.json()
         errorDetail = errData.detail || errData.message || JSON.stringify(errData)
-      } catch (ignore) {}
+      } catch {
+        // ignore
+      }
       throw new Error(errorDetail || `Status ${res.status}`)
     }
 
@@ -3912,96 +3805,6 @@ const activateModel = async (id, configKey) => {
 // 日志逻辑
 
 // Cloud Sync State
-const syncConfig = ref({
-  enabled: false,
-  mode: 'client',
-  url: '',
-  token: ''
-})
-
-const syncStatus = ref({
-  running: false,
-  mode: 'client',
-  status: 'disconnected'
-})
-
-const serverInfo = ref({
-  port: 14747,
-  token: ''
-})
-
-const fetchSyncConfig = async () => {
-  try {
-    const res = await fetchWithTimeout(`${API_BASE}/sync/config`, {}, 3000)
-    if (res.ok) {
-      const data = await res.json()
-      syncConfig.value = data
-    }
-  } catch (e) {
-    console.error('Failed to fetch sync config:', e)
-  }
-}
-
-const fetchSyncStatus = async () => {
-  try {
-    const res = await fetchWithTimeout(`${API_BASE}/sync/status`, {}, 3000)
-    if (res.ok) {
-      const data = await res.json()
-      syncStatus.value = data
-
-      // If server mode, fetch server info
-      if (data.mode === 'server') {
-        const infoRes = await fetchWithTimeout(`${API_BASE}/sync/server-info`, {}, 3000)
-        if (infoRes.ok) {
-          serverInfo.value = await infoRes.json()
-        }
-      }
-    }
-  } catch (e) {
-    console.error('Failed to fetch sync status:', e)
-  }
-}
-
-const saveSyncConfig = async () => {
-  try {
-    await fetchWithTimeout(
-      `${API_BASE}/sync/config`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(syncConfig.value)
-      },
-      5000
-    )
-    ElMessage.success('云端同步配置已更新')
-    await fetchSyncStatus()
-  } catch (e) {
-    ElMessage.error('保存失败: ' + e.message)
-  }
-}
-
-const copyToClipboard = (text) => {
-  if (navigator.clipboard) {
-    navigator.clipboard
-      .writeText(text)
-      .then(() => {
-        ElMessage.success('已复制到剪贴板')
-      })
-      .catch((err) => {
-        ElMessage.error('复制失败: ' + err)
-      })
-  } else {
-    // Fallback
-    const textArea = document.createElement('textarea')
-    textArea.value = text
-    document.body.appendChild(textArea)
-    textArea.select()
-    document.execCommand('copy')
-    document.body.removeChild(textArea)
-    ElMessage.success('已复制到剪贴板')
-  }
-}
-
 const initSessionAndFetchLogs = async () => {
   // 不在这里设置 isLogsFetching，而是交给 fetchLogs 统一管理
   // 仅负责初始化 session ID
@@ -4089,76 +3892,6 @@ const fetchLogs = async () => {
   }
 }
 
-const renderMessage = (content) => {
-  if (!content) return ''
-  let formatted = content
-
-  // 仅保留少数仍在使用的功能性 XML 标签 (如核心记忆)
-  const triggers = [{ tag: 'MEMORY', title: '核心记忆', icon: '💾' }]
-
-  const replacements = []
-
-  // 1. 先提取触发器，替换为占位符，避免被 marked 误解析
-  triggers.forEach(({ tag, title, icon }) => {
-    const regex = new RegExp(`<\\s*${tag}\\s*>([\\s\\S]*?)<\\s*/\\s*${tag}\\s*>`, 'gi')
-    formatted = formatted.replace(regex, (match, jsonStr) => {
-      try {
-        const cleanJson = jsonStr
-          .trim()
-          .replace(/&quot;/g, '"')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&amp;/g, '&')
-
-        const data = JSON.parse(cleanJson)
-        let detailsHtml = ''
-
-        if (tag.toUpperCase() === 'MEMORY') {
-          const tagHtml = (data.tags || [])
-            .map((t) => `<span class="pero-tag">${t}</span>`)
-            .join('')
-          detailsHtml = `
-            <div class="pero-memory-content">${data.content || ''}</div>
-            <div class="pero-tag-cloud">${tagHtml}</div>
-          `
-        }
-
-        const placeholder = `PERO_TRIG_${replacements.length}_ID`
-        replacements.push({
-          placeholder,
-          html: `<div class="trigger-block ${tag.toLowerCase()}">
-            <details>
-              <summary class="trigger-header">
-                <span class="trigger-icon">${icon}</span>
-                <span class="trigger-title">${title}</span>
-                <span class="expand-arrow">▶</span>
-              </summary>
-              <div class="trigger-body">${detailsHtml}</div>
-            </details>
-          </div>`
-        })
-        return placeholder
-      } catch (e) {
-        return match // 解析失败则保持原样
-      }
-    })
-  })
-
-  // 1.5 移除通用 XML 标签的块状格式化（因为 Pero 已转向 NIT 协议）
-  // 不再主动将 <TAG> 内容转化为折叠面板，让其作为普通文本显示，或在后续版本中适配 NIT 渲染
-
-  // 2. 解析 Markdown
-  let html = marked.parse(formatted)
-
-  // 3. 将占位符替换回美化后的 HTML
-  replacements.forEach((r) => {
-    const safeHtml = r.html.replace(/\$/g, '$$$$')
-    html = html.split(r.placeholder).join(safeHtml)
-  })
-
-  return dompurify.sanitize(html, { ADD_TAGS: ['details', 'summary'] })
-}
-
 const startLogEdit = (log) => {
   editingLogId.value = log.id
   editingContent.value = log.content
@@ -4188,6 +3921,7 @@ const saveLogEdit = async (logId) => {
     } else ElMessage.error('修改失败')
   } catch (e) {
     ElMessage.error('网络错误')
+    console.error(e)
   }
 }
 
@@ -4251,7 +3985,6 @@ const retryLogAnalysis = async (log) => {
     if (log.analysis_status === 'processing') return
 
     // 乐观更新 UI
-    const originalStatus = log.analysis_status
     updateLogStatus(log.id, 'processing')
 
     const url = `${API_BASE}/history/${log.id}/retry_analysis`
@@ -4359,21 +4092,21 @@ const deleteTask = async (taskId) => {
 }
 
 // Handler for state updates via Gateway
-const handleStateUpdate = (payload) => {
+const handleStateUpdate = () => {
   if (currentTab.value === 'overview') {
     fetchPetState()
   }
 }
 
 // Handler for schedule updates via Gateway
-const handleScheduleUpdate = (payload) => {
+const handleScheduleUpdate = () => {
   if (currentTab.value === 'tasks') {
     fetchTasks()
   }
 }
 
 // Handler for agent changes via Gateway
-const handleAgentChanged = (payload) => {
+const handleAgentChanged = () => {
   fetchAgents()
 }
 
@@ -4401,8 +4134,8 @@ onMounted(async () => {
   try {
     const v = await invoke('get_app_version')
     if (v) appVersion.value = v
-  } catch (e) {
-    console.warn('Failed to get app version', e)
+  } catch {
+    console.warn('Failed to get app version')
   }
 
   // Listen for real-time updates

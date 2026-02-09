@@ -8,7 +8,7 @@ from sqlmodel import col, select
 from .database import get_social_db_session
 from .models_db import QQMessage, SocialDailyReport, SocialMemory, SocialMemoryRelation
 
-# 独立的 Vector Service (Social 专用)
+# 独立的向量服务（社交专用）
 # 暂时复用 embedding_service，未来可迁移至独立索引
 # 假设有一个独立的 social_vector_store 目录
 
@@ -105,7 +105,7 @@ class SocialMemoryService:
         """
         # 1. 保存到数据库
         async for session in get_social_db_session():
-            # Embedding (调用 Core 的 EmbeddingService)
+            # Embedding（调用核心的 EmbeddingService）
             vec = []
             try:
                 from services.embedding_service import embedding_service
@@ -128,7 +128,7 @@ class SocialMemoryService:
             await session.commit()
             await session.refresh(memory)
 
-            # 2. 自动串线 (Auto-Linking)
+            # 2. 自动串线（Auto-Linking）
             related_ids = set()
             for kw in keywords:
                 kw = kw.strip()
@@ -179,7 +179,7 @@ class SocialMemoryService:
             if self._rust_engine and new_relations:
                 self._rust_engine.batch_add_connections(new_relations)
 
-            # 4. 写入独立 Vector Store (TODO)
+            # 4. 写入独立向量存储（TODO）
 
             return memory
 
@@ -191,7 +191,7 @@ class SocialMemoryService:
         """
         # 简单实现：仅基于关键词匹配 + 扩散
 
-        # 1. 提取 Query 关键词 (Mock)
+        # 1. 提取查询关键词（模拟）
         entry_points = []
         for kw, mids in self.keyword_index.items():
             if kw in query:
@@ -204,7 +204,7 @@ class SocialMemoryService:
         activated_ids = set(entry_points)
         if self._rust_engine:
             try:
-                # Rust 引擎返回 dict {id: energy}
+                # Rust 引擎返回字典 {id: energy}
                 entry_point_ids = [int(mid) for mid in entry_points]
                 spread_result = self._rust_engine.spread(entry_point_ids, 2, 0.5)
                 activated_ids = set(spread_result.keys())
@@ -228,7 +228,7 @@ class SocialMemoryService:
             if not memories:
                 return ""
 
-            # 过滤：优先显示非当前 Session 的记忆
+            # 过滤：优先显示非当前会话的记忆
             result = "【相关记忆回忆】:\n"
             for mem in memories:
                 source_label = (
@@ -279,7 +279,7 @@ class SocialMemoryService:
             )
             active_groups = (await session.exec(group_stmt)).all()
 
-            # 新加好友 (Mock)
+            # 新加好友（模拟）
             new_friends = 0
 
             # 3. 汇总当日生成的记忆总结
@@ -294,7 +294,7 @@ class SocialMemoryService:
             if daily_memories:
                 summary_content = "\n".join([f"- {m.content}" for m in daily_memories])
 
-            # 4. 生成日报内容 (LLM)
+            # 4. 生成日报内容（LLM）
             try:
                 from core.config_manager import get_config_manager
 
@@ -303,11 +303,11 @@ class SocialMemoryService:
             except Exception:
                 bot_name = "Pero"
 
-            # Get Agent Profile for dynamic persona injection
+            # 获取 Agent 配置文件以进行动态角色注入
             from services.agent_manager import AgentManager
 
             agent_manager = AgentManager()
-            agent_profile = agent_manager.agents.get(agent_id)
+            agent_manager.agents.get(agent_id)
 
             from services.mdp.manager import mdp
 
@@ -328,7 +328,7 @@ class SocialMemoryService:
                 messages=[{"role": "user", "content": report_prompt}], temperature=0.7
             )
 
-            # Save report
+            # 保存报告
             report = SocialDailyReport(
                 date_str=date_str,
                 content=report_text,

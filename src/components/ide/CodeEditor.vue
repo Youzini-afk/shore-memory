@@ -14,9 +14,9 @@ import { ref, watch, shallowRef } from 'vue'
 import { VueMonacoEditor } from '@guolao/vue-monaco-editor'
 
 const props = defineProps({
-  initialContent: String,
-  language: String,
-  filePath: String
+  initialContent: { type: String, default: '' },
+  language: { type: String, default: 'plaintext' },
+  filePath: { type: String, default: '' }
 })
 
 const emit = defineEmits(['save', 'change'])

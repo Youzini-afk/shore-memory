@@ -29,11 +29,11 @@
 <script setup>
 import { onMounted, onUnmounted } from 'vue'
 
-const props = defineProps({
+defineProps({
   visible: Boolean,
-  x: Number,
-  y: Number,
-  items: Array // [{ label, action, type: 'item'|'separator', disabled, shortcut }]
+  x: { type: Number, default: 0 },
+  y: { type: Number, default: 0 },
+  items: { type: Array, default: () => [] } // [{ label, action, type: 'item'|'separator', disabled, shortcut }]
   // [{ label: 标签, action: 动作, type: 'item'|'separator' 类型, disabled: 禁用, shortcut: 快捷键 }]
 })
 

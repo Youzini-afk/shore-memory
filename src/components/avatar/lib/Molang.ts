@@ -100,7 +100,7 @@ export const molangContext: any = {
 }
 
 export class Molang {
-  cache: Map<string, Function>
+  cache: Map<string, (...args: any[]) => any>
 
   constructor() {
     this.cache = new Map()
@@ -161,7 +161,7 @@ export class Molang {
                 }
             `
 
-      const func = new Function('context', funcBody)
+      const func = new Function('context', funcBody) as (...args: any[]) => any
       this.cache.set(expression, func)
       return func
     } catch (e) {

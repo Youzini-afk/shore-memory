@@ -2,6 +2,7 @@ import os
 import shutil
 from pathlib import Path
 
+from sqlalchemy import event, text
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import sessionmaker
 from sqlmodel import SQLModel
@@ -12,6 +13,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 env_db_path = os.environ.get("PERO_DATABASE_PATH")
 if env_db_path:
     db_path = Path(env_db_path)
+    print(f"[Database] 使用环境变量指定的数据库路径: {db_path}")
 else:
     # 自动定位逻辑
     BASE_DIR = Path(__file__).resolve().parent
@@ -48,7 +50,6 @@ if os.name == "nt":
         path_str = "/" + path_str
     DATABASE_URL = f"sqlite+aiosqlite://{path_str}"
 
-from sqlalchemy import event, text
 
 engine = create_async_engine(
     DATABASE_URL,

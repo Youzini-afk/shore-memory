@@ -1,3 +1,4 @@
+import contextlib
 import os
 
 from sqlalchemy import text
@@ -18,36 +19,35 @@ DATABASE_URL = f"sqlite+aiosqlite:///{DATABASE_FILE}"
 social_engine = create_async_engine(
     DATABASE_URL,
     echo=False,
-    connect_args={"check_same_thread": False},  # Allow multi-threading for SQLite
-    pool_size=20,  # Increase pool size
+    connect_args={"check_same_thread": False},  # 允许 SQLite 多线程
+    pool_size=20,  # 增加连接池大小
     max_overflow=10,
-    pool_timeout=30,  # Timeout for getting connection
+    pool_timeout=30,  # 获取连接超时
 )
 
 
 async def init_social_db():
     """初始化社交数据库表"""
+    # [Fix] Import models to ensure they are registered with SQLModel.metadata
+    from . import models_db  # noqa: F401
+
     async with social_engine.begin() as conn:
-        # Enable WAL mode for better concurrency
+        # 启用 WAL 模式以获得更好的并发性能
         await conn.execute(text("PRAGMA journal_mode=WAL;"))
         await conn.run_sync(SQLModel.metadata.create_all)
 
-        # [Migration] Add agent_id column if missing (Safe migration)
-        try:
+        # [迁移] 如果缺少 agent_id 列则添加（安全迁移）
+        with contextlib.suppress(Exception):
             await conn.execute(
                 text("ALTER TABLE qqmessage ADD COLUMN agent_id VARCHAR DEFAULT 'pero'")
             )
-        except Exception:
-            pass  # Column likely exists
 
-        try:
+        with contextlib.suppress(Exception):
             await conn.execute(
                 text(
                     "ALTER TABLE socialmemory ADD COLUMN agent_id VARCHAR DEFAULT 'pero'"
                 )
             )
-        except Exception:
-            pass
 
 
 async def get_social_db_session():

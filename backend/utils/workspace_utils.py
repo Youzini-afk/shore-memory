@@ -21,10 +21,7 @@ def get_workspace_root(agent_id: str = None) -> str:
         try:
             manager = get_agent_manager()
             agent = manager.get_active_agent()
-            if agent:
-                agent_id = agent.id
-            else:
-                agent_id = "pero"  # Fallback
+            agent_id = agent.id if agent else "pero"
         except Exception:
             agent_id = "pero"  # Fallback if manager fails (e.g. during init)
 
@@ -42,8 +39,8 @@ def get_workspace_root(agent_id: str = None) -> str:
 
 def get_global_workspace_root() -> str:
     """
-    Get the physical root of the workspace folder (parent of all agent folders).
-    Useful for system-level operations.
+    获取工作空间文件夹的物理根目录（所有 Agent 文件夹的父目录）。
+    对于系统级操作很有用。
     """
     if not os.path.exists(GLOBAL_WORKSPACE_ROOT):
         os.makedirs(GLOBAL_WORKSPACE_ROOT, exist_ok=True)

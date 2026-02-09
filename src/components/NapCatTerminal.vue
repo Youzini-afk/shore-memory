@@ -136,6 +136,7 @@ const ansiToHtml = (text) => {
 
   // Very basic implementation
   // 非常基础的实现
+  // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\[(\d+)m/g, (match, code) => {
     const className = colors[code]
     if (className === 'reset') return '</span>'
@@ -148,7 +149,6 @@ const ansiToHtml = (text) => {
 
 onMounted(async () => {
   try {
-    const invoke = (cmd, args) => import('@/utils/ipcAdapter').then((m) => m.invoke(cmd, args))
     // 1. Fetch history first to show past logs (including QR code)
     // 1. 首先获取历史记录以显示过去的日志（包括二维码）
     const history = await (await import('@/utils/ipcAdapter')).invoke('get_napcat_logs')

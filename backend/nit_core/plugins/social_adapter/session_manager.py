@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import hashlib
 import logging
 import os
@@ -95,10 +96,8 @@ class ImageCacheManager:
             # 删除多余的
             num_to_delete = len(files) - self.max_files
             for i in range(num_to_delete):
-                try:
+                with contextlib.suppress(Exception):
                     os.remove(files[i])
-                except Exception:
-                    pass
         except Exception as e:
             logger.warning(f"[ImageCache] 清理失败: {e}")
 
@@ -298,7 +297,7 @@ class SocialSessionManager:
 
             # [Critical Fix] Use run_in_executor to avoid blocking the event loop with synchronous DB calls
             # Even though db_session.exec is awaitable, the underlying aiosqlite/sqlite driver might be blocking the GIL or thread
-            loop = asyncio.get_running_loop()
+            asyncio.get_running_loop()
 
             def run_sync_query():
                 # This function will run in a separate thread
@@ -412,11 +411,9 @@ class SocialSessionManager:
             raw_user_id = event.get("user_id")
             sender_id = str(raw_user_id)
 
-            is_self = False
-            if sender_id == self_id and self_id:
-                is_self = True
-            elif self.bot_id and sender_id == self.bot_id:
-                is_self = True
+            is_self = (sender_id == self_id and self_id) or (
+                self.bot_id and sender_id == self.bot_id
+            )
 
             if is_self:
                 logger.debug(
@@ -555,7 +552,7 @@ class SocialSessionManager:
                     buffer_duration = 7 if msg_type == "private" else 15
 
                     logger.info(
-                        f"[{session_id}] Summoned by mention ({msg_type})! Starting {buffer_duration}s accumulation timer."
+                        f"[{session_id}] 被提及唤醒 ({msg_type})！启动 {buffer_duration}秒 累积计时器。"
                     )
 
                     # Cancel any existing inactivity timer
@@ -570,11 +567,11 @@ class SocialSessionManager:
                 else:
                     # Already summoned: Do nothing (Accumulate)
                     logger.info(
-                        f"[{session_id}] Mentioned again while accumulating. Continuing wait."
+                        f"[{session_id}] 在累积期间再次被提及。继续等待。"
                     )
 
             elif len(session.buffer) >= self.BUFFER_MAX_SIZE:
-                logger.info(f"[{session_id}] Buffer full!")
+                logger.info(f"[{session_id}] 缓冲区已满！")
                 await self._trigger_flush(session, reason="buffer_full")
             else:
                 # Normal message

@@ -93,7 +93,7 @@ const render = () => {
           </div>`
         })
         return placeholder
-      } catch (e) {
+      } catch {
         return match
       }
     })

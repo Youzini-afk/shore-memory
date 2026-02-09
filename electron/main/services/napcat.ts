@@ -70,7 +70,7 @@ async function getQQPath(): Promise<string> {
         if (await fs.pathExists(qqInBin)) return qqInBin
         if (await fs.pathExists(qqInRoot)) return path.normalize(qqInRoot)
       }
-    } catch (e) {
+    } catch {
       // 忽略注册表错误
     }
   }
@@ -102,13 +102,17 @@ export async function startNapCat(window: WindowLike) {
     try {
       if (!window.isDestroyed())
         window.webContents.send('napcat-log', `[系统] 在以下位置找到 QQ: ${qqPath}`)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
     console.log(`[NapCat] 在以下位置找到 QQ: ${qqPath}`)
   } else {
     try {
       if (!window.isDestroyed())
         window.webContents.send('system-error', '未找到 QQ。NapCat 需要安装 QQ。')
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
     throw new Error('默认路径或注册表中未找到 QQ。')
   }
 
@@ -127,6 +131,12 @@ export async function startNapCat(window: WindowLike) {
   let cmd = ''
   let args: string[] = []
   const env = { ...process.env }
+
+  // [Fix] Disable OpenTelemetry to prevent libprotobuf UTF-8 errors
+  env.OTEL_SDK_DISABLED = 'true'
+  env.OTEL_TRACES_EXPORTER = 'none'
+  env.OTEL_METRICS_EXPORTER = 'none'
+  env.OTEL_LOGS_EXPORTER = 'none'
 
   if (fs.existsSync(shellExe)) {
     cmd = shellExe
@@ -157,7 +167,9 @@ export async function startNapCat(window: WindowLike) {
   console.log(`[NapCat] 正在启动: ${cmd} ${args.join(' ')} 在 ${napcatDir}`)
   try {
     if (!window.isDestroyed()) window.webContents.send('napcat-log', `[系统] 正在启动 NapCat...`)
-  } catch (e) {}
+  } catch {
+    // ignore
+  }
 
   napcatProcess = spawn(cmd, args, {
     cwd: napcatDir,
@@ -173,7 +185,9 @@ export async function startNapCat(window: WindowLike) {
     if (napcatLogs.length > 2000) napcatLogs.shift()
     try {
       if (!window.isDestroyed()) window.webContents.send('napcat-log', line)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
   })
 
   napcatProcess.stderr?.on('data', (data) => {
@@ -182,7 +196,9 @@ export async function startNapCat(window: WindowLike) {
     console.error(`[NapCat 错误] ${line}`)
     try {
       if (!window.isDestroyed()) window.webContents.send('napcat-log', `[错误] ${line}`)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
   })
 
   napcatProcess.on('close', (code) => {
@@ -191,7 +207,9 @@ export async function startNapCat(window: WindowLike) {
     try {
       if (!window.isDestroyed())
         window.webContents.send('napcat-log', `[系统] NapCat 已退出 (代码: ${code})`)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
   })
 }
 
@@ -228,7 +246,9 @@ export async function installNapCat(window: WindowLike) {
     console.log(`[NapCat 安装程序] ${msg}`)
     try {
       if (!window.isDestroyed()) window.webContents.send('napcat-log', msg)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
   }
 
   emit(`正在检查 NapCat: ${dir}`)
@@ -244,7 +264,7 @@ export async function installNapCat(window: WindowLike) {
   const version = 'v4.12.8'
   const assetName = 'NapCat.Shell.Windows.Node.zip'
 
-  // List of mirrors to try
+  // 要尝试的镜像列表
   const mirrors = [
     `https://gh-proxy.com/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
     `https://mirror.ghproxy.com/https://github.com/NapNeko/NapCatQQ/releases/download/${version}/${assetName}`,
@@ -257,7 +277,7 @@ export async function installNapCat(window: WindowLike) {
       method: 'get',
       url: downloadUrl,
       responseType: 'arraybuffer',
-      timeout: 60000, // Increased timeout to 60s // 增加超时至 60s
+      timeout: 60000, // 增加超时至 60s
       headers: {
         'User-Agent':
           'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
@@ -269,11 +289,13 @@ export async function installNapCat(window: WindowLike) {
             if (!window.isDestroyed()) {
               window.webContents.send('napcat-download-progress', {
                 percent,
-                status: `Downloading... ${percent}%`,
+                status: `正在下载... ${percent}%`,
                 url: downloadUrl
               })
             }
-          } catch (e) {}
+          } catch {
+            // 忽略
+          }
         }
       }
     })
@@ -285,7 +307,7 @@ export async function installNapCat(window: WindowLike) {
   for (const url of mirrors) {
     try {
       emit(`尝试下载: ${url}`)
-      // Reset progress
+      // 重置进度
       try {
         if (!window.isDestroyed())
           window.webContents.send('napcat-download-progress', {
@@ -293,7 +315,9 @@ export async function installNapCat(window: WindowLike) {
             status: 'Connecting...',
             url
           })
-      } catch (e) {}
+      } catch {
+        // 忽略
+      }
 
       zipBuffer = await download(url)
       if (zipBuffer) break
@@ -305,7 +329,7 @@ export async function installNapCat(window: WindowLike) {
 
   if (!zipBuffer) {
     emit('所有镜像下载失败。')
-    // Emit failure
+    // 发送失败
     try {
       if (!window.isDestroyed())
         window.webContents.send('napcat-download-progress', {
@@ -313,7 +337,9 @@ export async function installNapCat(window: WindowLike) {
           status: 'Download Failed',
           error: true
         })
-    } catch (e) {}
+    } catch {
+      // 忽略
+    }
     throw new Error('所有镜像下载失败。')
   }
 
@@ -322,16 +348,17 @@ export async function installNapCat(window: WindowLike) {
     if (!window.isDestroyed())
       window.webContents.send('napcat-download-progress', {
         percent: 100,
-        status: 'Unzipping...',
+        status: '正在解压...',
         processing: true
       })
-  } catch (e) {}
+  } catch {
+    // ignore
+  }
 
   try {
     const zip = new AdmZip(zipBuffer)
     zip.extractAllTo(dir, true)
 
-    // Handle nested folder logic
     // 处理嵌套文件夹逻辑
     const shellExe = path.join(dir, 'NapCat.Shell.exe')
     const nodeMjs = path.join(dir, 'napcat.mjs')
@@ -345,7 +372,6 @@ export async function installNapCat(window: WindowLike) {
           const nestedNode = path.join(nestedPath, 'napcat.mjs')
 
           if ((await fs.pathExists(nestedShell)) || (await fs.pathExists(nestedNode))) {
-            // Move content up
             // 将内容向上移动
             await fs.copy(nestedPath, dir, { overwrite: true })
             await fs.remove(nestedPath)
@@ -363,7 +389,9 @@ export async function installNapCat(window: WindowLike) {
           status: 'Installed',
           completed: true
         })
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
     return true
   } catch (e: any) {
     emit(`安装失败: ${e.message}`)
@@ -371,10 +399,12 @@ export async function installNapCat(window: WindowLike) {
       if (!window.isDestroyed())
         window.webContents.send('napcat-download-progress', {
           percent: 0,
-          status: 'Install Failed',
+          status: '安装失败',
           error: true
         })
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
     return false
   }
 }

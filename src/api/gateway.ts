@@ -22,7 +22,7 @@ export class GatewayClient {
     { resolve: (data: any) => void; reject: (err: any) => void; onProgress?: (data: any) => void }
   > = new Map()
   private token: string = ''
-  private listeners: Map<string, Function[]> = new Map()
+  private listeners: Map<string, ((...args: any[]) => void)[]> = new Map()
 
   constructor(url?: string) {
     if (url) {
@@ -35,14 +35,14 @@ export class GatewayClient {
     }
   }
 
-  on(event: string, callback: Function) {
+  on(event: string, callback: (...args: any[]) => void) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, [])
     }
     this.listeners.get(event)!.push(callback)
   }
 
-  off(event: string, callback: Function) {
+  off(event: string, callback: (...args: any[]) => void) {
     if (!this.listeners.has(event)) return
     const callbacks = this.listeners.get(event)!
     const index = callbacks.indexOf(callback)
@@ -98,7 +98,7 @@ export class GatewayClient {
       }
 
       // Store promise
-      this.pendingRequests.set(envelope.id, { resolve, reject })
+      this.pendingRequests.set(envelope.id, { resolve, reject, onProgress })
 
       // Set timeout
       setTimeout(() => {
@@ -154,7 +154,7 @@ export class GatewayClient {
       } else {
         logToMain('Warning: Received empty token')
       }
-    } catch (e) {
+    } catch {
       logToMain('Failed to get token')
     }
 
@@ -207,7 +207,7 @@ export class GatewayClient {
         setTimeout(() => this.connect(), this.reconnectInterval)
       }
 
-      this.ws.onerror = (error) => {
+      this.ws.onerror = () => {
         // Only log error if not in reconnect loop to avoid spam
         // logToMain('WebSocket Error', error);
         this.ws?.close()

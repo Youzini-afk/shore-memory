@@ -1,7 +1,7 @@
 import { autoUpdater } from 'electron-updater'
 import { ipcMain, BrowserWindow } from 'electron'
 
-// Logger
+// 日志记录器
 autoUpdater.logger = console
 
 export function setupUpdater() {
@@ -40,7 +40,7 @@ export function setupUpdater() {
     sendToAll('update-message', { type: 'downloaded', info })
   })
 
-  // Remove existing handlers to avoid duplicates
+  // 移除现有的处理程序以避免重复
   ipcMain.removeHandler('check_update')
   ipcMain.removeHandler('download_update')
   ipcMain.removeHandler('quit_and_install')

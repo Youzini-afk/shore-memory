@@ -131,7 +131,7 @@ class McpClient:
                 break
 
     async def _stdio_reader(self):
-        """Background task to read from stdout of the subprocess"""
+        """从子进程 stdout 读取的后台任务"""
         while True:
             try:
                 line = await self.process.stdout.readline()
@@ -142,13 +142,13 @@ class McpClient:
                 if not line_str:
                     continue
 
-                # logger.debug(f"[MCP-STDIO] {line_str}") # Enable for raw debug
+                # logger.debug(f"[MCP-STDIO] {line_str}") # 启用原始调试
                 print(f"[MCP-STDIO] {line_str}")
 
                 try:
                     data = json.loads(line_str)
 
-                    # Handle Response
+                    # 处理响应
                     if "id" in data and data["id"] in self.pending_requests:
                         future = self.pending_requests.pop(data["id"])
                         if not future.done():
@@ -157,7 +157,7 @@ class McpClient:
                             else:
                                 future.set_result(data.get("result"))
 
-                    # Handle Notification (logging for now)
+                    # 处理通知（目前仅记录日志）
                     elif "method" in data:
                         logger.debug(f"[MCP] Notification: {data}")
 
@@ -196,7 +196,7 @@ class McpClient:
             except asyncio.TimeoutError:
                 if req_id in self.pending_requests:
                     del self.pending_requests[req_id]
-                raise TimeoutError(f"MCP 请求 {method} 超时")
+                raise TimeoutError(f"MCP 请求 {method} 超时") from None
 
         else:  # SSE / HTTP
             try:

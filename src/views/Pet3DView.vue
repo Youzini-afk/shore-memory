@@ -258,9 +258,6 @@ const avatarRef = ref(null)
 let bubbleTimer = null
 
 // Debug refs
-const debugGlobalX = ref(0)
-const debugGlobalY = ref(0)
-const showDebug = ref(false)
 
 const isContentOverflowing = ref(false)
 const bubbleScrollArea = ref(null)
@@ -317,7 +314,7 @@ const parsedBubbleContent = computed(() => {
 
   const segments = []
   const regex =
-    /(?:【(Thinking|Error|Reflection|Monologue)[:：]?\s*([\s\S]*?)】)|(?:\n|^)\s*\*([\s\S]+?)\*|(?:\n|^)\s*(Thought|Action)[:：]\s*([\s\S]+?)(?=\n\s*(?:Thought|Action)[:：]|\n\s*\*|【(?:Thinking|Error|Reflection|Monologue)|$)|(?:<(nit(?:-[a-zA-Z0-9-]+)?)>[\s\S]*?<\/\1>)|(?:\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\])/gi
+    /(?:【(Thinking|Error|Reflection|Monologue)[:：]?\s*([\s\S]*?)】)|(?:\n|^)\s*\*([\s\S]+?)\*|(?:\n|^)\s*(Thought|Action)[:：]\s*([\s\S]+?)(?=\n\s*(?:Thought|Action)[:：]|\n\s*\*|【(?:Thinking|Error|Reflection|Monologue)|$)|(?:<(nit(?:-[a-zA-Z0-9-]+)?)>[\s\S]*?<\/\6>)|(?:\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\])/gi
 
   let lastIndex = 0
   let match
@@ -382,7 +379,6 @@ watch([currentText, isThinking], ([newText, newThinking]) => {
 
   // 只有在非思考状态且有文字时，才启动自动消失定时器
   if (newText && !newThinking) {
-    const isLongText = newText.length > 50
     // 根据文字长度调整停留时间 (5s - 30s)
     const duration = Math.min(Math.max(5000, newText.length * 200), 30000)
 
@@ -720,7 +716,6 @@ const handleAudioStream = (stream) => {
 }
 
 // Removed handleVoiceMessage (Legacy WS)
-const handleVoiceMessage = (event) => {}
 
 const stopAudioPlayback = (clearQueue = false) => {
   stopLipSync() // Stop lip sync immediately
@@ -732,7 +727,7 @@ const stopAudioPlayback = (clearQueue = false) => {
   if (currentAudioSource.value) {
     try {
       currentAudioSource.value.stop()
-    } catch (e) {
+    } catch {
       // ignore
     }
     currentAudioSource.value = null
@@ -1042,7 +1037,9 @@ onMounted(async () => {
                 ? clickData.default[0]
                 : clickData.default
             localTexts.value = { ...curTexts }
-          } catch (e) {}
+          } catch {
+            // ignore
+          }
         }
       }
     } catch (e) {
@@ -1128,7 +1125,7 @@ onMounted(async () => {
   unlistenFunctions.push(unlistenSearch)
 
   // Status Updates (from Gateway)
-  gatewayClient.on('action:agent_changed', async (data) => {
+  gatewayClient.on('action:agent_changed', async () => {
     console.log('[Pet3DView] Detected agent change, refreshing state...')
 
     // 1. Refresh Active Agent Name
@@ -1181,7 +1178,9 @@ onMounted(async () => {
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) curTexts = JSON.parse(saved)
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
 
     let updated = false
 
@@ -1191,7 +1190,9 @@ onMounted(async () => {
       if (typeof clickData === 'string') {
         try {
           clickData = JSON.parse(clickData)
-        } catch (e) {}
+        } catch {
+          // ignore
+        }
       }
 
       if (typeof clickData === 'object') {
@@ -1221,7 +1222,9 @@ onMounted(async () => {
       if (typeof msgs === 'string') {
         try {
           msgs = JSON.parse(msgs)
-        } catch (e) {}
+        } catch {
+          // ignore
+        }
       }
 
       if (Array.isArray(msgs)) {
@@ -1402,7 +1405,6 @@ const onPet = (event) => {
   // Random horizontal offset (-10% to 10%)
   // Since we use translate(-50%, 0), adding margin-left or just changing left is easiest.
   // Let's use calc for left: 50% + offset
-  const randomLeftOffset = Math.random() * 40 - 20 // -20px to 20px approx equivalent in %
   // Actually let's use pixels for horizontal shift to be safe with narrow bubbles
   // Or just percentage: -5% to 5%
   const randomLeftPct = Math.random() * 10 - 5

@@ -138,7 +138,7 @@ class GroupChatMessage(SQLModel, table=True):
     content: str = Field(sa_column=Column(Text))
     role: str  # user, assistant, system
     timestamp: datetime = Field(default_factory=get_local_now)
-    mentions_json: str = "[]"  # List of mentioned agent_ids
+    mentions_json: str = "[]"  # 提及的 agent_id 列表
 
     updated_at: datetime = Field(default_factory=get_local_now)
 
@@ -191,9 +191,9 @@ class AIModelConfig(SQLModel, table=True):
     top_p: Optional[float] = None
     max_tokens: Optional[int] = None
     stream: bool = True
-    is_multimodal: bool = False  # Deprecated: Use enable_vision instead
+    is_multimodal: bool = False  # 已弃用：请改用 enable_vision
     enable_vision: bool = Field(default=False)
-    enable_voice: bool = Field(default=False)  # Voice Input
+    enable_voice: bool = Field(default=False)  # 语音输入
     enable_video: bool = Field(default=False)
 
     created_at: datetime = Field(default_factory=datetime.utcnow)

@@ -108,7 +108,7 @@ class MDPManager:
                                     if content.startswith("---"):
                                         _, _, content = content.split("---", 2)
 
-                                    # Strip HTML comments
+                                    # 去除 HTML 注释
                                     content = re.sub(r"<!--[\s\S]*?-->", "", content)
 
                                 prompts_content_map[key] = content.strip()
@@ -150,8 +150,8 @@ class MDPManager:
             except yaml.YAMLError as e:
                 logger.error(f"文件 {file_path} 中存在 YAML 错误: {e}")
         else:
-            # Fallback: Try to parse metadata from HTML comments if frontmatter is missing
-            # Pattern: description: "..." or version: "..." inside comments
+            # 回退：如果 frontmatter 缺失，尝试从 HTML 注释中解析元数据
+            # 模式：注释中的 description: "..." 或 version: "..."
             desc_match = re.search(r'description:\s*["\'](.*?)["\']', raw_content)
             if desc_match:
                 metadata["description"] = desc_match.group(1)
@@ -160,7 +160,7 @@ class MDPManager:
             if ver_match:
                 metadata["version"] = ver_match.group(1)
 
-        # Strip HTML comments (IMPORTANT: This ensures comments don't leak into the prompt)
+        # 去除 HTML 注释 (重要：这确保注释不会泄漏到提示词中)
         content = re.sub(r"<!--[\s\S]*?-->", "", content)
 
         return MDPrompt(key, content.strip(), metadata, key)

@@ -1,3 +1,4 @@
+import contextlib
 import datetime
 import json
 import logging
@@ -5,7 +6,7 @@ import os
 
 from sqlmodel import desc, select
 
-# Try imports for Database access
+# 尝试导入数据库访问模块
 try:
     from models import MaintenanceRecord, Memory, ScheduledTask
     from services.memory_service import MemoryService
@@ -22,7 +23,7 @@ except ImportError:
         from backend.models import MaintenanceRecord, Memory, ScheduledTask
         from backend.services.memory_service import MemoryService
 
-        # Try to import session context from SessionOps
+        # 尝试从 SessionOps 导入会话上下文
         try:
             from backend.services.session_service import _CURRENT_SESSION_CONTEXT
         except ImportError:
@@ -31,18 +32,18 @@ except ImportError:
             except ImportError:
                 from services.session_service import _CURRENT_SESSION_CONTEXT
     except ImportError:
-        # Fallback for dev/testing without full backend context
-        # This might fail in production if paths are wrong, but we'll handle it gracefully
+        # 开发/测试环境的回退（无完整后端上下文）
+        # 如果路径错误，这在生产环境中可能会失败，但我们会优雅地处理它
         logging.warning(
-            "MemoryOps: Failed to import backend modules. Database features may not work."
-        )
+                "MemoryOps: 无法导入后端模块。数据库功能可能无法工作。"
+            )
         _CURRENT_SESSION_CONTEXT = {}
         Memory = None
         MaintenanceRecord = None
         ScheduledTask = None
         MemoryService = None
 
-# Try import AgentManager for multi-agent support
+# 尝试导入 AgentManager 以支持多 Agent
 try:
     from services.agent_manager import get_agent_manager
 except ImportError:
@@ -53,7 +54,7 @@ except ImportError:
 
 # 配置日志存储路径 (作为备份/兼容)
 # Assuming file is in backend/nit_core/tools/core/MemoryOps/memory_ops.py
-# Root is backend (4 levels up)
+# 根目录是 backend (向上 4 级)
 MEMORY_DIR = os.path.join(
     os.path.dirname(
         os.path.dirname(
@@ -72,11 +73,11 @@ def _ensure_memory_dir():
         try:
             os.makedirs(MEMORY_DIR)
         except Exception as e:
-            logger.error(f"Failed to create memory directory: {e}")
+            logger.error(f"创建记忆目录失败: {e}")
 
 
 def _load_reflections_local():
-    """Load reflections from local JSON file (Legacy/Backup)"""
+    """从本地 JSON 文件加载反思记录（遗留/备份）"""
     _ensure_memory_dir()
     if not os.path.exists(REFLECTION_FILE):
         return []
@@ -89,13 +90,13 @@ def _load_reflections_local():
 
 
 def _save_reflections_local(logs):
-    """Save reflections to local JSON file (Legacy/Backup)"""
+    """保存反思记录到本地 JSON 文件（遗留/备份）"""
     _ensure_memory_dir()
     try:
         with open(REFLECTION_FILE, "w", encoding="utf-8") as f:
             json.dump(logs, f, indent=2, ensure_ascii=False)
     except Exception as e:
-        logger.error(f"Failed to save reflection log: {e}")
+        logger.error(f"保存反思日志失败: {e}")
 
 
 # --- Reflection Operations ---
@@ -107,7 +108,7 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
     优先写入数据库 (Memory Table, type='reflection', cluster='[反思簇]')。
     同时备份到本地 JSON 文件。
     """
-    # 1. Save to Database (Primary)
+    # 1. 保存到数据库（主要）
     db_status = ""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
 
@@ -116,13 +117,11 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
             importance_map = {"info": 3, "warning": 6, "critical": 9}
             imp = importance_map.get(level, 3)
 
-            # Get active agent
+            # 获取活跃 Agent
             agent_id = "pero"
             if get_agent_manager:
-                try:
+                with contextlib.suppress(Exception):
                     agent_id = get_agent_manager().active_agent_id
-                except Exception:
-                    pass
 
             await MemoryService.save_memory(
                 session=session,
@@ -133,7 +132,7 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
                 base_importance=float(imp),
                 memory_type="reflection",
                 source="MemoryOps",
-                sentiment="neutral",  # Reflection is usually neutral/objective
+                sentiment="neutral",  # 反思通常是中性/客观的
                 agent_id=agent_id,
             )
             db_status = "(已同步至记忆数据库)"
@@ -143,7 +142,7 @@ async def log_reflection(category: str, content: str, level: str = "info") -> st
     else:
         db_status = "(未连接数据库，仅本地存储)"
 
-    # 2. Save to Local File (Backup)
+    # 2. 保存到本地文件（备份）
     try:
         logs = _load_reflections_local()
         entry = {
@@ -175,16 +174,14 @@ async def read_reflections(limit: int = 5) -> str:
     logs_text = ""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
 
-    # Try DB first
+    # 优先尝试数据库
     if session and Memory:
         try:
-            # Get active agent
+            # 获取活跃 Agent
             agent_id = "pero"
             if get_agent_manager:
-                try:
+                with contextlib.suppress(Exception):
                     agent_id = get_agent_manager().active_agent_id
-                except Exception:
-                    pass
 
             statement = (
                 select(Memory)
@@ -198,7 +195,7 @@ async def read_reflections(limit: int = 5) -> str:
             if memories:
                 logs_text = "【我的错题本 (来自记忆数据库)】\n"
                 for m in memories:
-                    # Parse tags to find level/category if possible, or just use content
+                    # 解析标签以查找级别/类别（如果可能），否则仅使用内容
                     # tags format: reflection,category,level
                     level_tag = "INFO"
                     if m.tags:
@@ -212,7 +209,7 @@ async def read_reflections(limit: int = 5) -> str:
         except Exception as e:
             logger.error(f"MemoryOps Read DB Error: {e}")
 
-    # Fallback to local file
+    # 回退到本地文件
     logs = _load_reflections_local()
     recent_logs = logs[:limit]
 
@@ -242,13 +239,11 @@ async def read_diary(limit: int = 5) -> str:
 
     try:
         # source='secretary_merge' 是我们在 memory_secretary_service.py 中看到的
-        # Get active agent
+        # 获取活跃 Agent
         agent_id = "pero"
         if get_agent_manager:
-            try:
+            with contextlib.suppress(Exception):
                 agent_id = get_agent_manager().active_agent_id
-            except Exception:
-                pass
 
         statement = (
             select(Memory)
@@ -325,13 +320,11 @@ async def read_memory_by_cluster(cluster_name: str, limit: int = 10) -> str:
 
     try:
         # 使用 contains 来匹配，因为 clusters 可能是逗号分隔的字符串
-        # Get active agent
+        # 获取活跃 Agent
         agent_id = "pero"
         if get_agent_manager:
-            try:
+            with contextlib.suppress(Exception):
                 agent_id = get_agent_manager().active_agent_id
-            except Exception:
-                pass
 
         statement = (
             select(Memory)
@@ -359,74 +352,74 @@ async def read_memory_by_cluster(cluster_name: str, limit: int = 10) -> str:
 
 async def add_schedule_task(time: str, content: str, type: str = "reminder") -> str:
     """
-    Add a scheduled task (reminder or topic).
+    添加定时任务（提醒或主题）。
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
-        return "Error: Database session not available."
+        return "错误: 数据库会话不可用。"
 
     try:
-        # Validate time format
+        # 验证时间格式
         datetime.datetime.strptime(time, "%Y-%m-%d %H:%M:%S")
 
         task = ScheduledTask(time=time, content=content, type=type, is_triggered=False)
         session.add(task)
         await session.commit()
-        return f"Successfully added {type}: '{content}' at {time} (ID: {task.id})"
+        return f"成功添加 {type}: '{content}' 于 {time} (ID: {task.id})"
     except ValueError:
-        return "Error: Invalid time format. Please use 'YYYY-MM-DD HH:mm:ss'."
+        return "错误: 无效的时间格式。请使用 'YYYY-MM-DD HH:mm:ss'。"
     except Exception as e:
-        return f"Error adding task: {str(e)}"
+        return f"添加任务错误: {str(e)}"
 
 
 async def list_pending_tasks() -> str:
-    """List all pending scheduled tasks."""
+    """列出所有待处理的定时任务。"""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
-        return "Error: Database session not available."
+        return "错误: 数据库会话不可用。"
 
     tasks = (
         await session.exec(
-            select(ScheduledTask).where(ScheduledTask.is_triggered == False)
+            select(ScheduledTask).where(not ScheduledTask.is_triggered)
         )
     ).all()
     if not tasks:
-        return "No pending tasks."
+        return "没有待处理的任务。"
 
-    result = "Pending Tasks:\n"
+    result = "待处理的任务:\n"
     for t in tasks:
         result += f"- [ID: {t.id}] {t.type.upper()} at {t.time}: {t.content}\n"
     return result
 
 
 async def delete_schedule_task(task_id: int) -> str:
-    """Delete a scheduled task by ID."""
+    """按 ID 删除定时任务。"""
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
-        return "Error: Database session not available."
+        return "错误: 数据库会话不可用。"
 
     task = await session.get(ScheduledTask, task_id)
     if not task:
-        return f"Error: Task with ID {task_id} not found."
+        return f"错误: 未找到 ID 为 {task_id} 的任务。"
 
     await session.delete(task)
     await session.commit()
-    return f"Successfully deleted task {task_id}."
+    return f"成功删除任务 {task_id}。"
 
 
 async def add_pre_action(delay_seconds: int, content: str) -> str:
     """
-    Add a pre-action (reaction) task.
-    These tasks are triggered after a delay, but WILL BE CANCELLED if the user interacts before the timer expires.
+    添加预动作（反应）任务。
+    这些任务在延迟后触发，但如果用户在计时器到期前进行交互，则会被取消。
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session or not ScheduledTask:
-        return "Error: Database session not available."
+        return "错误: 数据库会话不可用。"
 
     try:
         delay_seconds = int(delay_seconds)
         if delay_seconds <= 0:
-            return "Error: delay_seconds must be positive."
+            return "错误: delay_seconds 必须为正数。"
 
         trigger_time = datetime.datetime.now() + datetime.timedelta(
             seconds=delay_seconds
@@ -436,11 +429,11 @@ async def add_pre_action(delay_seconds: int, content: str) -> str:
         task = ScheduledTask(
             time=time_str,
             content=content,
-            type="reaction",  # Special type that gets cancelled on user input
+            type="reaction",  # 特殊类型，如果用户输入则会被取消
             is_triggered=False,
         )
         session.add(task)
         await session.commit()
-        return f"Successfully added reaction: '{content}' in {delay_seconds} seconds (at {time_str}). Note: This will be cancelled if the user speaks."
+        return f"成功添加反应: '{content}' 于 {delay_seconds} 秒后 (在 {time_str})。注意: 如果用户说话，此任务将被取消。"
     except Exception as e:
-        return f"Error adding pre-action: {str(e)}"
+        return f"添加预动作错误: {str(e)}"

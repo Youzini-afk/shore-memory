@@ -7,7 +7,7 @@ from typing import Any, Dict, List, Optional
 logger = logging.getLogger(__name__)
 
 
-@dataclass
+@dataclass(frozen=True)
 class AgentProfile:
     """
     表示已加载的代理配置文件。
@@ -210,9 +210,9 @@ class AgentManager:
             self.active_agent_id = agent_id.lower()
             logger.info(f"已切换活跃代理为: {agent_id}")
 
-            # Broadcast change
+            # 广播变更
             self._broadcast_agent_change(self.active_agent_id)
-            # [Fix] Broadcast state immediately to update UI (Status Bar)
+            # [修复] 立即广播状态以更新 UI (状态栏)
             self._broadcast_current_state(self.active_agent_id)
 
             return True
@@ -220,7 +220,7 @@ class AgentManager:
         return False
 
     def _broadcast_current_state(self, agent_id: str):
-        """Broadcast the current PetState for the agent"""
+        """广播代理当前的 PetState"""
         try:
             import asyncio
 
@@ -234,12 +234,12 @@ class AgentManager:
 
             async def _do_broadcast():
                 try:
-                    # Create a temporary session to fetch state
+                    # 创建临时会话以获取状态
                     async_session = sessionmaker(
                         engine, class_=AsyncSession, expire_on_commit=False
                     )
                     async with async_session() as session:
-                        # Fetch latest state for this agent
+                        # 获取该代理的最新状态
                         stmt = (
                             select(PetState)
                             .where(PetState.agent_id == agent_id)
@@ -256,7 +256,7 @@ class AgentManager:
                                 "mind": state.mind,
                             }
                         else:
-                            # Default state if not found
+                            # 如果未找到则使用默认状态
                             state_dict = {
                                 "mood": "happy",
                                 "vibe": "active",
@@ -272,8 +272,8 @@ class AgentManager:
                 loop = asyncio.get_running_loop()
                 loop.create_task(_do_broadcast())
             except RuntimeError:
-                # If no loop is running (rare in this context), we might skip or run sync?
-                # But database access is async.
+                # 如果没有运行循环（在此上下文中很少见），我们可能会跳过或同步运行？
+                # 但数据库访问是异步的。
                 pass
 
         except Exception as e:
@@ -301,7 +301,7 @@ class AgentManager:
 
                 await gateway_client.send(envelope)
 
-            # Check if there is a running loop
+            # 检查是否有正在运行的循环
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(_send())

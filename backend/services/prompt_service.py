@@ -1,7 +1,5 @@
 import logging
 import os
-
-logger = logging.getLogger(__name__)
 import re
 from datetime import datetime
 from typing import Any, Dict, List
@@ -15,6 +13,8 @@ from nit_core.dispatcher import get_dispatcher
 from services.agent_manager import get_agent_manager
 from services.mdp.manager import mdp
 
+logger = logging.getLogger(__name__)
+
 
 class PromptManager:
     """
@@ -23,7 +23,7 @@ class PromptManager:
     """
 
     def __init__(self):
-        # Use singleton MDP manager
+        # 使用单例 MDP 管理器
         self.mdp = mdp
         self.agent_manager = get_agent_manager()
 
@@ -125,7 +125,7 @@ class PromptManager:
         if is_social_mode or is_lightweight:
             variables["chain_logic"] = ""
 
-        # [Multi-Agent Integration]
+        # [多 Agent 集成]
         # 获取当前活跃 Agent 的配置，并将其合并到 variables 中
         # 注意：variables 中的临时变量（如用户输入）优先级高于 Agent 配置
         active_agent = self.agent_manager.get_active_agent()
@@ -158,7 +158,7 @@ class PromptManager:
             # 如果启用了感官（视觉/语音），我们保留这些能力，因为 Pero 仍然可能“看到”聊天中发送的图像
             # 但我们抑制复杂的工具描述
 
-            # [Fix] 注入表情包列表 (Sticker List Injection)
+            # [修复] 注入表情包列表 (表情包列表注入)
             sticker_list_str = "（无可用表情包）"
             agent_id = variables.get("agent_id") or config.get("agent_id", "pero")
             agent_profile = self.agent_manager.get_agent(str(agent_id))
@@ -226,7 +226,7 @@ class PromptManager:
                 if prompt:
                     abilities_parts.append(prompt.content)
             else:
-                # Note: voice_placeholder might not exist in components yet if it wasn't in core/abilities
+                # 注意：如果 voice_placeholder 之前不在 core/abilities 中，它可能尚未存在于 components 中
                 prompt = self.mdp.get_prompt("components/abilities/voice_placeholder")
                 if prompt:
                     abilities_parts.append(prompt.content)
@@ -239,7 +239,7 @@ class PromptManager:
 
         variables["ability_sensory"] = "\n".join(abilities_parts)
 
-        # [Core Abilities Loading]
+        # [核心能力加载]
         # 显式加载 ability 和 ability_nit，以支持新版目录结构 (components/abilities/...)
         if "ability" not in variables:
             prompt = self.mdp.get_prompt("components/abilities/workspace")
@@ -249,7 +249,7 @@ class PromptManager:
             prompt = self.mdp.get_prompt("components/abilities/nit")
             variables["ability_nit"] = prompt.content if prompt else ""
 
-        # [Core Rules Loading]
+        # [核心规则加载]
         if "system_core" not in variables:
             prompt = self.mdp.get_prompt("components/rules/system_core")
             variables["system_core"] = prompt.content if prompt else ""
@@ -258,7 +258,7 @@ class PromptManager:
             prompt = self.mdp.get_prompt("components/output/output_constraint")
             variables["output_constraint"] = prompt.content if prompt else ""
 
-        # [Social Identity Injection]
+        # [社交身份注入]
         default_name = config.get("bot_name", "Pero")
         bot_name = default_name
         try:
@@ -284,13 +284,13 @@ class PromptManager:
             "agent_name", bot_name
         )  # 仅当未设定时使用 bot_name 作为 agent_name
 
-        # [Work Mode Decoupling]
+        # [工作模式解耦]
         # 优先使用 Agent 配置文件中定义的 work_custom_persona，如果没有则回退到全局配置
         variables["custom_persona"] = variables.get(
             "work_custom_persona"
         ) or config.get("work_custom_persona", "你是一个全能的 AI 助手，你的名字是 {{ agent_name }}。")
 
-        # [Social Mode Fix]
+        # [社交模式修正]
         # 如果是社交模式，使用 social_custom_persona 覆盖 custom_persona
         if is_social_mode:
             variables["custom_persona"] = (
@@ -298,7 +298,7 @@ class PromptManager:
                 or "你是一个活跃在社交平台的赛博女孩。"
             )
 
-        # [Persona Loading]
+        # [人设加载]
         agent_id = variables.get("agent_id") or config.get("agent_id", "pero")
         agent_id = str(agent_id).lower()
         persona_template = config.get("persona_template", f"{agent_id}/system_prompt")
@@ -313,7 +313,7 @@ class PromptManager:
 
         # 注入工具描述 (如果尚未由 AgentService 注入)
         if "available_tools_desc" not in variables:
-            # [Refactor] 优先从 Context 动态生成，避免依赖已废弃的 Dispatcher 方法
+            # [重构] 优先从 Context 动态生成，避免依赖已废弃的 Dispatcher 方法
             dynamic_tools = variables.get("dynamic_tools")
 
             if dynamic_tools and isinstance(dynamic_tools, list):
@@ -547,8 +547,8 @@ class PromptManager:
             "mood": clean_state_field(state.mood, "mood") or "开心",
             "vibe": clean_state_field(state.vibe, "vibe") or "活泼",
             "mind": clean_state_field(state.mind, "mind") or "正在想主人...",
-            "memory_context": "",  # Companion mode doesn't need complex RAG for now
-            "graph_context": "",  # Placeholder for Knowledge Graph context
+            "memory_context": "",  # 陪伴模式目前不需要复杂的 RAG
+            "graph_context": "",  # 知识图谱上下文占位符
         }
 
         return self.build_system_prompt(variables, is_social_mode=is_social_mode)
@@ -592,7 +592,7 @@ class PromptManager:
             base_prompt = blocks.get("header", "")
             instruction_prompt = blocks.get("footer", "")
 
-            # Fallback if blocks not defined (legacy template)
+            # 如果未定义块则回退（旧版模板）
             if not base_prompt and not instruction_prompt:
                 base_prompt = self.mdp.render("templates/social", variables)
 
@@ -601,7 +601,7 @@ class PromptManager:
             if history:
                 messages.extend(history)
 
-            # Append instruction footer after history
+            # 在历史记录后追加指令尾部
             if instruction_prompt.strip():
                 messages.append({"role": "system", "content": instruction_prompt})
 

@@ -8,7 +8,7 @@ except ImportError:
 
 
 async def _wrap_result_with_content(result: dict) -> str:
-    """Helper to append current page content to the command result."""
+    """帮助函数：将当前页面内容附加到命令结果中。"""
     content = browser_bridge_service.get_current_page_markdown()
 
     # 构造 NIT 格式的反馈：先给出执行状态，再给出页面内容供 AI 下一步决策
@@ -27,8 +27,8 @@ async def _wrap_result_with_content(result: dict) -> str:
 
 async def browser_fetch_text(url: str, **kwargs) -> str:
     """
-    Fetch the content of a web page and return the text using a lightweight HTTP client.
-    Use this for quick reading of articles or static pages without visual interaction.
+    使用轻量级 HTTP 客户端获取网页内容并返回文本。
+    用于快速阅读文章或静态页面，无需视觉交互。
     """
     if not url.startswith("http"):
         url = "https://" + url
@@ -43,11 +43,11 @@ async def browser_fetch_text(url: str, **kwargs) -> str:
 
             # Encoding
             if response.encoding is None:
-                response.encoding = "utf-8"  # Default fallback
+                response.encoding = "utf-8"  # 默认回退
 
             soup = BeautifulSoup(response.text, "html.parser")
 
-            # Remove junk
+            # 移除垃圾内容
             for script in soup(
                 ["script", "style", "nav", "footer", "header", "iframe", "noscript"]
             ):
@@ -55,7 +55,7 @@ async def browser_fetch_text(url: str, **kwargs) -> str:
 
             text = soup.get_text()
 
-            # Clean text
+            # 清理文本
             lines = (line.strip() for line in text.splitlines())
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = "\n".join(chunk for chunk in chunks if chunk)
@@ -70,19 +70,19 @@ async def browser_fetch_text(url: str, **kwargs) -> str:
 
 async def browser_open_url(url: str = None, target: str = None, **kwargs) -> str:
     """
-    Control the connected browser to open a specific URL.
+    控制连接的浏览器打开指定的 URL。
 
     Args:
-        url (str): The URL to open.
-        target (str): Alias for url, for compatibility.
+        url (str): 要打开的 URL。
+        target (str): url 的别名，用于兼容性。
 
     Returns:
-        str: Execution status and the new page content.
+        str: 执行状态和新页面内容。
     """
-    # Compatibility handling: if url is missing but target is provided
+    # 兼容性处理：如果缺少 url 但提供了 target
     final_url = url or target
     if not final_url:
-        return "❌ Error: Please provide a URL (parameter 'url' or 'target')."
+        return "❌ 错误: 请提供 URL (参数 'url' or 'target')。"
 
     if not final_url.startswith("http"):
         final_url = "https://" + final_url
@@ -94,7 +94,7 @@ async def browser_open_url(url: str = None, target: str = None, **kwargs) -> str
 async def _retry_command(
     command: str, max_retries: int = 3, delay: float = 1.0, **kwargs
 ) -> dict:
-    """Helper to retry commands that might fail due to timing issues (e.g. element not ready)."""
+    """帮助函数：重试可能因时序问题（如元素未就绪）而失败的命令。"""
     import asyncio
 
     last_result = {"status": "error", "error": "Unknown error"}
@@ -104,7 +104,7 @@ async def _retry_command(
         if last_result.get("status") == "success":
             return last_result
 
-        # Don't sleep on the last attempt
+        # 最后一次尝试不休眠
         if i < max_retries - 1:
             await asyncio.sleep(delay)
 
@@ -113,41 +113,41 @@ async def _retry_command(
 
 async def browser_click(target: str, **kwargs) -> str:
     """
-    Click an element (button, link, etc.) on the current page.
+    点击当前页面上的元素（按钮、链接等）。
 
     Args:
-        target (str): The text or identifier of the element to click.
+        target (str): 要点击的元素的文本或标识符。
 
     Returns:
-        str: Execution status and the updated page content.
+        str: 执行状态和更新后的页面内容。
     """
-    # Use retry logic for click as elements might load dynamically
+    # 点击操作使用重试逻辑，因为元素可能动态加载
     result = await _retry_command("click", target=target)
     return await _wrap_result_with_content(result)
 
 
 async def browser_type(target: str, text: str, **kwargs) -> str:
     """
-    Type text into an input field.
+    在输入框中输入文本。
 
     Args:
-        target (str): The label, placeholder, or identifier of the input field.
-        text (str): The text to type.
+        target (str): 输入字段的标签、占位符或标识符。
+        text (str): 要输入的文本。
 
     Returns:
-        str: Execution status and the updated page content.
+        str: 执行状态和更新后的页面内容。
     """
-    # Use retry logic for type as elements might load dynamically
+    # 输入操作使用重试逻辑，因为元素可能动态加载
     result = await _retry_command("type", target=target, text=text)
     return await _wrap_result_with_content(result)
 
 
 async def browser_get_content(**kwargs) -> str:
     """
-    Get the current page content from the connected browser.
+    从连接的浏览器获取当前页面内容。
 
     Returns:
-        str: The simplified Markdown content of the current page.
+        str: 当前页面的简化 Markdown 内容。
     """
     content = browser_bridge_service.get_current_page_markdown()
     if content.startswith("Error:"):
@@ -157,13 +157,13 @@ async def browser_get_content(**kwargs) -> str:
 
 async def browser_scroll(direction: str = "down", **kwargs) -> str:
     """
-    Scroll the current page up or down.
+    向上或向下滚动当前页面。
 
     Args:
-        direction (str): "up" or "down". Default is "down".
+        direction (str): "up" 或 "down"。默认为 "down"。
 
     Returns:
-        str: Execution status and updated page content.
+        str: 执行状态和更新后的页面内容。
     """
     result = await browser_bridge_service.send_command("scroll", text=direction)
     return await _wrap_result_with_content(result)
@@ -171,10 +171,10 @@ async def browser_scroll(direction: str = "down", **kwargs) -> str:
 
 async def browser_back(**kwargs) -> str:
     """
-    Go back to the previous page in history.
+    返回历史记录中的上一页。
 
     Returns:
-        str: Execution status and updated page content.
+        str: 执行状态和更新后的页面内容。
     """
     result = await browser_bridge_service.send_command("back")
     return await _wrap_result_with_content(result)
@@ -182,10 +182,10 @@ async def browser_back(**kwargs) -> str:
 
 async def browser_refresh(**kwargs) -> str:
     """
-    Refresh the current page.
+    刷新当前页面。
 
     Returns:
-        str: Execution status and updated page content.
+        str: 执行状态和更新后的页面内容。
     """
     result = await browser_bridge_service.send_command("refresh")
     return await _wrap_result_with_content(result)

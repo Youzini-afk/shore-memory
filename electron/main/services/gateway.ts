@@ -23,15 +23,15 @@ export async function startGateway(window: WindowLike) {
   const execName = isWin ? 'gateway.exe' : 'gateway'
 
   if (isPackaged) {
-    // Production: resources/bin/gateway(.exe)
+    // 生产环境: resources/bin/gateway(.exe)
     gatewayPath = path.join(paths.resources, 'bin', execName)
   } else {
-    // Development: 优先查找 ../PeroLink/gateway(.exe)
+    // 开发环境: 优先查找 ../PeroLink/gateway(.exe)
     // process.cwd() 通常是项目根目录 (PeroCore-Electron)
 
-    // Priority 1: ../PeroLink/gateway.exe
+    // 优先级 1: ../PeroLink/gateway.exe
     const path1 = path.join(process.cwd(), '../PeroLink', execName)
-    // Priority 2: ./gateway/gateway.exe
+    // 优先级 2: ./gateway/gateway.exe
     const path2 = path.join(process.cwd(), 'gateway', execName)
 
     if (await fs.pathExists(path1)) {
@@ -43,9 +43,9 @@ export async function startGateway(window: WindowLike) {
     }
   }
 
-  // Check if gateway exists
+  // 检查 Gateway 是否存在
   if (!(await fs.pathExists(gatewayPath))) {
-    // Dev Fallback: 尝试在其他常见位置查找
+    // 开发环境回退: 尝试在其他常见位置查找
     const altPaths = [
       path.join(__dirname, '../../../../PeroLink', execName),
       path.join(__dirname, '../../../../PeroCore-Electron/gateway', execName),
@@ -66,19 +66,21 @@ export async function startGateway(window: WindowLike) {
       logger.error('Gateway', error)
       try {
         if (!window.isDestroyed()) window.webContents.send('system-error', error)
-      } catch (e) {}
+      } catch {
+        // ignore
+      }
       throw new Error(error)
     }
   }
 
   logger.info('Gateway', `正在从以下路径启动 Gateway: ${gatewayPath}`)
 
-  // Define token path explicitly to ensure consistency
+  // 明确定义令牌路径以确保一致性
   const tokenPath = isPackaged
     ? path.join(paths.userData, 'data/gateway_token.json')
     : path.join(process.cwd(), 'data/gateway_token.json')
 
-  // Ensure directory exists
+  // 确保目录存在
   await fs.ensureDir(path.dirname(tokenPath))
 
   // 删除旧的令牌文件防止读取过时数据
@@ -87,11 +89,11 @@ export async function startGateway(window: WindowLike) {
       await fs.remove(tokenPath)
     }
   } catch (e) {
-    logger.warn('Gateway', `Failed to remove old token file: ${e}`)
+    logger.warn('Gateway', `删除旧令牌文件失败: ${e}`)
   }
   logger.info('Gateway', `Gateway Token Path: ${tokenPath}`)
 
-  // Spawn Gateway
+  // 启动 Gateway
   gatewayProcess = spawn(gatewayPath, [], {
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
@@ -102,13 +104,13 @@ export async function startGateway(window: WindowLike) {
     }
   })
 
-  // Wait for token file to be created
+  // 等待令牌文件创建
   let retries = 0
   let tokenCreated = false
   while (retries < 50) {
-    // Wait up to 5 seconds
+    // 最多等待 5 秒
     if (await fs.pathExists(tokenPath)) {
-      // Give it a tiny bit more time to ensure write is complete
+      // 再多给一点时间以确保写入完成
       await new Promise((r) => setTimeout(r, 100))
       tokenCreated = true
       break
@@ -120,7 +122,7 @@ export async function startGateway(window: WindowLike) {
   if (!tokenCreated) {
     const error = `Gateway 启动超时或失败: 无法生成令牌文件 (${tokenPath})`
     logger.error('Gateway', error)
-    // Check if process exited
+    // 检查进程是否已退出
     if (gatewayProcess.exitCode !== null) {
       logger.error('Gateway', `Gateway process exited with code ${gatewayProcess.exitCode}`)
     }
@@ -134,7 +136,7 @@ export async function startGateway(window: WindowLike) {
       if (!trimmed) return
 
       logger.info('Gateway', trimmed)
-      // Optional: send to frontend if needed
+      // 可选: 如果需要，发送到前端
       // window.webContents.send('gateway-log', line)
 
       if (logHistory.length >= MAX_LOGS) logHistory.shift()
@@ -148,8 +150,8 @@ export async function startGateway(window: WindowLike) {
       const trimmed = line.trim()
       if (!trimmed) return
 
-      // Go log.Println outputs to stderr by default. We need to distinguish actual errors from logs.
-      // Heuristic: Check for common error keywords.
+      // Go 的 log.Println 默认输出到 stderr。我们需要区分实际错误和普通日志。
+      // 启发式：检查常见的错误关键字。
       const lowerLine = trimmed.toLowerCase()
       const isError =
         lowerLine.includes('error') ||
@@ -157,7 +159,7 @@ export async function startGateway(window: WindowLike) {
         lowerLine.includes('fail') ||
         lowerLine.includes('fatal') ||
         lowerLine.includes('exception') ||
-        lowerLine.includes('invalid') // Token errors often have 'invalid'
+        lowerLine.includes('invalid') // 令牌错误通常包含 'invalid'
 
       if (isError) {
         logger.error('Gateway', trimmed)
@@ -175,7 +177,7 @@ export async function startGateway(window: WindowLike) {
     gatewayProcess = null
   })
 
-  // Give it a moment to start
+  // 给它一点时间启动
   return new Promise((resolve) => setTimeout(resolve, 500))
 }
 
@@ -183,10 +185,10 @@ import treeKill from 'tree-kill'
 
 export function stopGateway() {
   if (gatewayProcess) {
-    logger.info('Gateway', 'Stopping Gateway...')
+    logger.info('Gateway', '正在停止 Gateway...')
     if (gatewayProcess.pid) {
       treeKill(gatewayProcess.pid, 'SIGKILL', (err) => {
-        if (err) logger.error('Gateway', `Error killing gateway process tree: ${err}`)
+        if (err) logger.error('Gateway', `杀死 Gateway 进程树时出错: ${err}`)
       })
     } else {
       gatewayProcess.kill()

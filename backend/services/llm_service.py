@@ -284,10 +284,9 @@ class LLMService:
             )
 
             content_text = ""
-            try:
+            import contextlib
+            with contextlib.suppress(Exception):
                 content_text = response.text
-            except Exception:
-                pass
 
             message = {"role": "assistant", "content": content_text}
 
@@ -652,7 +651,7 @@ class LLMService:
                     elif isinstance(m, dict) and "name" in m:
                         ids.append(m["name"])
 
-                return sorted(list(set(ids)))
+                return sorted(set(ids))
         except Exception as e:
             print(f"获取模型列表错误: {e}")
             return []
@@ -684,7 +683,7 @@ class LLMService:
             else self.provider
         )
 
-        # [Debug] Print Payload for Stream Mode (Fix missing logs)
+        # [Debug] 打印流式模式的 Payload (修复缺失日志)
         debug_payload = {
             "model": model_id,
             "messages": messages,
@@ -694,14 +693,14 @@ class LLMService:
         if tools:
             debug_payload["tools"] = tools
 
-        # Temporarily swap provider for logging if it differs
+        # 如果 provider 不同，临时交换以进行日志记录
         original_provider = self.provider
         if provider != self.provider:
             self.provider = provider
 
         self._debug_print_payload(debug_payload)
 
-        # Restore provider
+        # 恢复 provider
         self.provider = original_provider
 
         # 动态更新 api_base 如果需要默认值
@@ -821,7 +820,7 @@ class LLMService:
                     )
                     if retry_count >= max_retries:
                         print(
-                            f"[LLM Stream] Error: All connection attempts failed after {max_retries} tries."
+                            f"[LLM Stream] 错误: 所有连接尝试在 {max_retries} 次尝试后失败。"
                         )
                         asyncio.create_task(
                             gateway_client.broadcast_error(
@@ -835,7 +834,7 @@ class LLMService:
                         return
                     await asyncio.sleep(1 * retry_count)  # 线性退避
                 except Exception as e:
-                    print(f"[LLM Stream] Error: {e}")
+                    print(f"[LLM Stream] 错误: {e}")
                     asyncio.create_task(
                         gateway_client.broadcast_error(
                             message=f"流式请求发生未知错误: {str(e)}",
@@ -964,12 +963,10 @@ class LLMService:
 
             async with client.messages.stream(**kwargs) as stream:
                 async for event in stream:
-                    if event.type == "content_block_delta":
-                        if event.delta.type == "text_delta":
-                            yield {"content": event.delta.text}
-                    # SDK handles complicated tool events, but mapping them to OpenAI delta format
-                    # requires careful handling. For now we focus on text.
-                    # TODO: Implement full tool stream mapping if needed.
+                    if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                        yield {"content": event.delta.text}
+                    # SDK 处理复杂的工具事件，但将其映射到 OpenAI delta 格式需要小心处理。目前我们专注于文本。
+                    # TODO: 如果需要，实现完整的工具流映射。
         except Exception as e:
             print(f"[Anthropic Stream] 错误: {e}")
             asyncio.create_task(

@@ -15,9 +15,9 @@ class MemoryFileManager:
     @staticmethod
     def get_agent_log_root(agent_id: str = None) -> str:
         """
-        Get the log root directory for a specific agent.
-        Updated: Now points to the agent's workspace root directly, flattening the structure.
-        e.g. pero_workspace/pero/
+        获取特定 Agent 的日志根目录。
+        更新：现在直接指向 Agent 的工作空间根目录，扁平化结构。
+        例如: pero_workspace/pero/
         """
         return get_workspace_root(agent_id)
 

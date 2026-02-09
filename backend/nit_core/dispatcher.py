@@ -104,7 +104,7 @@ class NITStreamFilter:
         return output
 
     def flush(self) -> str:
-        """Clear buffer at the end"""
+        """在最后清除缓冲区"""
         res = ""
         if not self.in_nit_block:
             res = self.buffer
@@ -132,7 +132,7 @@ class XMLStreamFilter:
 
         while self.buffer:
             if not self.in_block:
-                # Look for any start tag
+                # 查找任何开始标签
                 found_tag = None
                 found_idx = -1
                 for tag in self.tag_names:
@@ -142,7 +142,7 @@ class XMLStreamFilter:
                         found_tag = tag
 
                 if found_idx == -1:
-                    # No start tag, safe to output most of it
+                    # 没有开始标签，安全输出大部分内容
                     safe_len = max(0, len(self.buffer) - 20)
                     output += self.buffer[:safe_len]
                     self.buffer = self.buffer[safe_len:]
@@ -243,8 +243,8 @@ class NITDispatcher:
     def __init__(self):
         self.pm = get_plugin_manager()
         self.nm = get_nit_manager()
-        self.category_map = {}  # Map[norm_plugin_name] -> List[tool_names]
-        self.tool_to_manifest = {}  # Map[norm_tool_name] -> Manifest
+        self.category_map = {}  # 映射[norm_plugin_name] -> List[tool_names]
+        self.tool_to_manifest = {}  # 映射[norm_tool_name] -> Manifest
         # 初始化时加载工具
         self._load_tools()
         self._register_browser_bridge()
@@ -252,17 +252,17 @@ class NITDispatcher:
     def _load_tools(self):
         """从 PluginManager 加载所有工具"""
         try:
-            # 1. Register standard tool names
+            # 1. 注册标准工具名称
             tools = self.pm.get_all_tools_map()
 
-            # 2. Register PluginName.ToolName aliases for namespaced calls
+            # 2. 注册 PluginName.ToolName 别名以用于命名空间调用
             manifests = self.pm.get_all_manifests()
             for manifest in manifests:
                 plugin_name = manifest.get("name")
                 if not plugin_name:
                     continue
 
-                # Register to category map
+                # 注册到类别映射
                 norm_plugin_name = normalize_nit_key(plugin_name)
                 if norm_plugin_name not in self.category_map:
                     self.category_map[norm_plugin_name] = []
@@ -282,20 +282,20 @@ class NITDispatcher:
                 for cmd in commands:
                     cmd_id = cmd.get("commandIdentifier")
                     if cmd_id and cmd_id in tools:
-                        # Map tool to manifest
+                        # 将工具映射到清单
                         norm_tool_name = normalize_nit_key(cmd_id)
                         self.tool_to_manifest[norm_tool_name] = manifest
 
-                        # Add to category map
+                        # 添加到类别映射
                         self.category_map[norm_plugin_name].append(cmd_id)
 
-                        # Register standard name
+                        # 注册标准名称
                         self._register_tool(cmd_id, tools[cmd_id])
 
-                        # Register "PluginName.ToolName"
+                        # 注册 "PluginName.ToolName"
                         namespaced_name = f"{plugin_name}.{cmd_id}"
                         self._register_tool(namespaced_name, tools[cmd_id])
-                        # Also map namespaced name to manifest
+                        # 同时将命名空间名称映射到清单
                         self.tool_to_manifest[normalize_nit_key(namespaced_name)] = (
                             manifest
                         )
@@ -308,18 +308,18 @@ class NITDispatcher:
     def reload_tools(self):
         """重新加载所有工具"""
         logger.info("正在 Dispatcher 中重新加载工具...")
-        # Clear existing registry and map
+        # 清除现有注册表和映射
         global PLUGIN_REGISTRY
         PLUGIN_REGISTRY.clear()
         self.category_map.clear()
         self.tool_to_manifest.clear()
 
-        # Reload from PM
+        # 从 PM 重新加载
         self.pm.reload_plugins()
         self._load_tools()
 
     def _register_tool(self, name: str, func: Callable):
-        """Helper to register a tool with normalization"""
+        """辅助函数：注册带归一化的工具"""
         norm_name = normalize_nit_key(name)
 
         # 创建适配器
@@ -361,7 +361,7 @@ class NITDispatcher:
 
     def list_plugins(self) -> List[str]:
         """获取所有已注册的插件名称"""
-        return sorted(list(PLUGIN_REGISTRY.keys()))
+        return sorted(PLUGIN_REGISTRY.keys())
 
     def get_tools_description(self, category_filter: str = "core") -> str:
         """
@@ -395,10 +395,10 @@ class NITDispatcher:
         results = []
 
         # 1. 优先处理 NIT 2.0 脚本 (<nit>...</nit>)
-        # Regex to capture <nit> or <nit-XXXX>
-        # group(1): full tag name (e.g. "nit" or "nit-A9B2")
-        # group(2): ID part only (e.g. "A9B2") if present
-        # group(3): content
+        # 正则表达式捕获 <nit> 或 <nit-XXXX>
+        # group(1): 完整标签名 (例如 "nit" 或 "nit-A9B2")
+        # group(2): 仅 ID 部分 (例如 "A9B2") 如果存在
+        # group(3): 内容
         nit_pattern = r"<(nit(?:-([0-9a-fA-F]{4}))?)>(.*?)</\1>"
         nit_matches = list(re.finditer(nit_pattern, text, re.DOTALL | re.IGNORECASE))
 
@@ -408,7 +408,7 @@ class NITDispatcher:
             # 用于在闭包中捕获当前 block 执行过的工具
             current_block_tools = []
 
-            # Pre-calculate normalized allowed tools set for performance
+            # 为了性能，预先计算归一化的允许工具集
             normalized_allowed = None
             if allowed_tools is not None:
                 normalized_allowed = {normalize_nit_key(t) for t in allowed_tools}
@@ -418,7 +418,7 @@ class NITDispatcher:
                 # --- Whitelist Check ---
                 if normalized_allowed is not None:
                     norm_name = normalize_nit_key(name)
-                    # Also check against direct name just in case
+                    # 同时检查直接名称以防万一
                     if (
                         norm_name not in normalized_allowed
                         and name not in allowed_tools
@@ -475,7 +475,7 @@ class NITDispatcher:
                             "status": "success",
                             "output": output,
                             "raw_block": full_tag,
-                            "executed_tools": list(current_block_tools),  # Copy list
+                            "executed_tools": list(current_block_tools),  # 复制列表
                         }
                     )
                 except Exception as e:
@@ -484,11 +484,11 @@ class NITDispatcher:
                         {
                             "plugin": "NIT_Script",
                             "status": "error",
-                            "output": f"Script Error: {str(e)}",
+                            "output": f"脚本错误: {str(e)}",
                             "raw_block": full_tag,
                             "executed_tools": list(
                                 current_block_tools
-                            ),  # Copy partial list
+                            ),  # 复制部分列表
                         }
                     )
 
@@ -525,17 +525,16 @@ class NITDispatcher:
 
             # 轻量模式检查
             config = get_config_manager()
-            if config.get("lightweight_mode", False):
-                if plugin_id not in ["ScreenVision", "TaskLifecycle", "MemoryOps"]:
-                    logger.warning(f"轻量模式拦截: {plugin_name}")
-                    return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。"
+            if config.get("lightweight_mode", False) and plugin_id not in ["ScreenVision", "TaskLifecycle", "MemoryOps"]:
+                logger.warning(f"轻量模式拦截: {plugin_name}")
+                return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。"
 
             if not self.nm.is_category_enabled(category):
                 return f"错误: 类别 '{category}' 已禁用。"
             if not self.nm.is_plugin_enabled(plugin_id):
                 return f"错误: 插件 '{plugin_id}' 已禁用。"
 
-        # 查找 Handler (Extra -> Global -> Auto-Route)
+        # 查找处理程序 (额外 -> 全局 -> 自动路由)
         handler = None
         if extra_plugins:
             handler = extra_plugins.get(norm_name) or next(

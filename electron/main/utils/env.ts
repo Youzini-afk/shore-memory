@@ -8,22 +8,23 @@ let appPath: string
 let appExe: string
 
 if (isElectron) {
-  // Dynamic require to avoid issues when running in pure Node.js
-  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  // 动态 require 以避免在纯 Node.js 中运行时出现问题
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
   const { app } = require('electron')
   appUserData = app.getPath('userData')
   appPath = app.getAppPath()
   appExe = app.getPath('exe')
 } else {
-  // CLI / Docker Environment
+  // CLI / Docker 环境
   const HOME = os.homedir()
-  // Default to ~/.perocore or respect env var
+  // 默认为 ~/.perocore 或遵循环境变量
   appUserData = process.env.PERO_USER_DATA || path.join(HOME, '.perocore')
   appPath = process.cwd()
   appExe = process.execPath
 
-  // Ensure the directory exists in CLI mode
+  // 确保目录在 CLI 模式下存在
   try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     const fs = require('fs')
     if (!fs.existsSync(appUserData)) {
       fs.mkdirSync(appUserData, { recursive: true })
@@ -40,18 +41,18 @@ export const paths = {
   userData: appUserData,
   app: appPath,
   exe: appExe,
-  resources: isElectron ? process.resourcesPath : appPath, // Fallback for CLI
+  resources: isElectron ? process.resourcesPath : appPath, // CLI 的后备方案
   data: path.join(appUserData, 'data'),
   logs: path.join(appUserData, 'logs')
 }
 
 /**
- * Safe wrapper for Electron's app object.
- * Returns null if not running in Electron.
+ * Electron app 对象的安全包装器。
+ * 如果未在 Electron 中运行，则返回 null。
  */
 export function getApp() {
   if (isElectron) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     return require('electron').app
   }
   return null
@@ -60,15 +61,15 @@ export function getApp() {
 import { ipcRegistry } from './ipcRegistry'
 
 /**
- * Safe wrapper for Electron's ipcMain.
- * Returns a mock or null if not running in Electron.
+ * Electron ipcMain 的安全包装器。
+ * 如果未在 Electron 中运行，则返回模拟对象或 null。
  */
 export function getIpcMain() {
   if (isElectron) {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
     return require('electron').ipcMain
   }
-  // Connected to IpcRegistry for CLI mode
+  // 连接到 CLI 模式的 IpcRegistry
   return {
     handle: (channel: string, listener: any) => {
       ipcRegistry.registerHandler(channel, listener)
@@ -79,7 +80,7 @@ export function getIpcMain() {
     emit: (channel: string, ...args: any[]) => {
       ipcRegistry.emit(channel, ...args)
     },
-    // Remove listener stubs
+    // 移除监听器存根
     removeListener: () => {},
     removeHandler: () => {}
   }

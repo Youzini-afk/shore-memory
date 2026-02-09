@@ -63,7 +63,7 @@ import {
 } from 'lucide-vue-next'
 
 const props = defineProps({
-  item: Object,
+  item: { type: Object, default: () => ({}) },
   level: { type: Number, default: 0 }
 })
 // ... rest of script stays mostly same, but need to check imports

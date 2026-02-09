@@ -37,7 +37,7 @@ class TTSService:
                 await session.exec(
                     select(VoiceConfig)
                     .where(VoiceConfig.type == "tts")
-                    .where(VoiceConfig.is_active == True)
+                    .where(VoiceConfig.is_active)
                 )
             ).first()
         return None

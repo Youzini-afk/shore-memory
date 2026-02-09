@@ -27,18 +27,18 @@ async def add_reminder(time: str, content: str, repeat_rule: str = None) -> str:
         )
 
         if not trigger_time:
-            return "Error: 无法解析时间，请使用更清晰的格式（如 'YYYY-MM-DD HH:MM' 或 '10分钟后'）。"
+            return "错误: 无法解析时间，请使用更清晰的格式（如 'YYYY-MM-DD HH:MM' 或 '10分钟后'）。"
 
         if trigger_time <= datetime.now():
-            return "Error: 触发时间必须是未来时间。"
+            return "错误: 触发时间必须是未来时间。"
 
         agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
         job_id = scheduler_service.add_reminder(
             trigger_time, content, repeat=repeat_rule, agent_id=agent_id
         )
-        return f"Success: 已添加提醒 '{content}'，将在 {trigger_time.strftime('%Y-%m-%d %H:%M:%S')} 触发 (ID: {job_id})。"
+        return f"成功: 已添加提醒 '{content}'，将在 {trigger_time.strftime('%Y-%m-%d %H:%M:%S')} 触发 (ID: {job_id})。"
     except Exception as e:
-        return f"Error: 添加提醒失败: {str(e)}"
+        return f"错误: 添加提醒失败: {str(e)}"
 
 
 async def list_reminders() -> str:
@@ -67,15 +67,15 @@ async def delete_reminder(id: str) -> str:
     :param id: 任务 ID
     """
     try:
-        # Check ownership
+        # 检查所有权
         agent_id = _CURRENT_SESSION_CONTEXT.get("agent_id", "pero")
         jobs = scheduler_service.list_jobs(agent_id=agent_id)
         owned_ids = [job.id for job in jobs]
 
         if id not in owned_ids:
-            return f"Error: 未找到 ID 为 {id} 的任务 (或无权删除)。"
+            return f"错误: 未找到 ID 为 {id} 的任务 (或无权删除)。"
 
         scheduler_service.remove_job(id)
-        return f"Success: 已删除任务 {id}。"
+        return f"成功: 已删除任务 {id}。"
     except Exception:
-        return f"Error: 删除任务 {id} 失败。"
+        return f"错误: 删除任务 {id} 失败。"

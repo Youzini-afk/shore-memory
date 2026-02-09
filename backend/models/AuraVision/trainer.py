@@ -49,7 +49,7 @@ class AuraVisionTrainer:
     def train_epoch(self, dataloader):
         self.model.train()
         total_loss = 0
-        for batch_idx, (anchor, pos, neg) in enumerate(dataloader):
+        for _batch_idx, (anchor, pos, neg) in enumerate(dataloader):
             anchor, pos, neg = (
                 anchor.to(self.device),
                 pos.to(self.device),

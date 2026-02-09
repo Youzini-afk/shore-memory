@@ -13,7 +13,7 @@ PLAYER_WBI_API_URL = "https://api.bilibili.com/x/player/wbi/v2"
 
 
 def extract_bvid(video_input: str) -> str | None:
-    """Extracts BV ID from URL or direct input."""
+    """从 URL 或直接输入中提取 BV 号。"""
     match = re.search(
         r"bilibili\.com/video/(BV[a-zA-Z0-9]+)", video_input, re.IGNORECASE
     )
@@ -27,9 +27,9 @@ def extract_bvid(video_input: str) -> str | None:
 
 def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
     """
-    Fetches subtitle JSON for a given BVID.
+    获取指定 BVID 的字幕 JSON。
     """
-    logging.info(f"Attempting to fetch subtitles for BVID: {bvid}")
+    logging.info(f"正在尝试获取字幕，BVID: {bvid}")
     headers = {
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
         "Referer": f"{BILIBILI_VIDEO_BASE_URL}{bvid}/",
@@ -61,7 +61,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
                     pass
 
         if not aid:
-            return json.dumps({"error": "Could not find AID"}, ensure_ascii=False)
+            return json.dumps({"error": "无法找到 AID"}, ensure_ascii=False)
 
         # Step 2: Get CID
         cid_resp = requests.get(
@@ -69,7 +69,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
         )
         cid_data = cid_resp.json()
         if cid_data["code"] != 0 or not cid_data["data"]:
-            return json.dumps({"error": "Could not find CID"}, ensure_ascii=False)
+            return json.dumps({"error": "无法找到 CID"}, ensure_ascii=False)
         cid = cid_data["data"][0]["cid"]
 
         # Step 3: Get Subtitle List
@@ -105,11 +105,11 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
 
 async def bilibili_get_subtitles(url: str, **kwargs) -> str:
     """
-    Get subtitles for a Bilibili video.
+    获取 Bilibili 视频的字幕。
     """
     bvid = extract_bvid(url)
     if not bvid:
-        return "Error: Invalid Bilibili URL or BVID."
+        return "错误: 无效的 Bilibili 链接或 BV 号。"
 
     # Run synchronous request in executor if needed, but for now simple call
     # Note: In production, consider run_in_executor
@@ -117,16 +117,16 @@ async def bilibili_get_subtitles(url: str, **kwargs) -> str:
         result = get_subtitle_json_string(bvid)
         return result
     except Exception as e:
-        return f"Error fetching subtitles: {str(e)}"
+        return f"获取字幕失败: {str(e)}"
 
 
 async def bilibili_get_info(url: str, **kwargs) -> str:
     """
-    Get basic info for a Bilibili video (Title, Desc, etc).
+    获取 Bilibili 视频的基本信息（标题、简介等）。
     """
     bvid = extract_bvid(url)
     if not bvid:
-        return "Error: Invalid Bilibili URL or BVID."
+        return "错误: 无效的 Bilibili 链接或 BV 号。"
 
     try:
         headers = {
@@ -151,6 +151,6 @@ async def bilibili_get_info(url: str, **kwargs) -> str:
             }
             return json.dumps(info, ensure_ascii=False, indent=2)
         else:
-            return f"Error: API returned code {data['code']} - {data.get('message')}"
+            return f"错误: API 返回代码 {data['code']} - {data.get('message')}"
     except Exception as e:
-        return f"Error fetching video info: {str(e)}"
+        return f"获取视频信息失败: {str(e)}"

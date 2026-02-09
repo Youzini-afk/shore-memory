@@ -112,7 +112,7 @@ const checkTaskStatus = async () => {
       const data = await res.json()
       isTaskPaused.value = data.status === 'paused'
     }
-  } catch (e) {
+  } catch {
     // silent fail
     // 静默失败
   }

@@ -23,7 +23,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import { ref, shallowRef, onMounted, onUnmounted, nextTick } from 'vue'
 import { Monitor, Delete } from '@element-plus/icons-vue'
 import { listen } from '@/utils/ipcAdapter'
 // 引入调用函数

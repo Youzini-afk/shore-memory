@@ -4,16 +4,15 @@ from datetime import datetime
 from sqlmodel import select
 
 try:
-    from core.config_manager import get_config_manager
-    from models import Config, ConversationLog, Memory
+    from models import Config, ConversationLog
     from services.llm_service import LLMService
     from services.memory_service import MemoryService
 except ImportError:
     from backend.models import Config, ConversationLog
     from backend.services.llm_service import LLMService
 
-# Global variable to hold session reference (injected by AgentService)
-# This is a bit hacky but works for tool-to-service communication
+# 用于保存会话引用的全局变量（由 AgentService 注入）
+# 这种方式有点不够优雅，但对于工具到服务的通信是有效的
 _CURRENT_SESSION_CONTEXT = {}
 
 
@@ -32,11 +31,11 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
     if not session:
         return "错误: 数据库会话不可用。"
 
-    # [Check] Block Work Mode if incompatible modes are active
+    # [检查] 如果有不兼容的模式处于活动状态，则阻止进入工作模式
     try:
         active_blockers = []
 
-        # 1. Check Config via ConfigManager (memory cache)
+        # 1. 通过 ConfigManager 检查配置（内存缓存）
         from core.config_manager import get_config_manager
         from services.agent_manager import get_agent_manager
 
@@ -44,7 +43,7 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
         agent_manager = get_agent_manager()
         agent_id = agent_manager.active_agent_id
 
-        # Log current state for debugging
+        # 记录当前状态以便调试
         print(
             f"[SessionOps] 正在检查模式冲突。当前配置: lightweight_mode={config_mgr.get('lightweight_mode')}, aura_vision={config_mgr.get('aura_vision_enabled')}, agent={agent_id}"
         )
@@ -55,7 +54,7 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
         if config_mgr.get("aura_vision_enabled", False):
             active_blockers.append("aura_vision_enabled")
 
-        # 2. Check DB Config (Companion Mode)
+        # 2. 检查数据库配置（陪伴模式）
         companion_config = (
             await session.exec(
                 select(Config).where(Config.key == "companion_mode_enabled")
@@ -65,7 +64,7 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
             active_blockers.append("companion_mode")
 
         if active_blockers:
-            # Map keys to Chinese names for better user experience
+            # 将键映射为中文名称，以获得更好的用户体验
             name_map = {
                 "lightweight_mode": "轻量模式",
                 "companion_mode": "陪伴模式",
@@ -76,20 +75,18 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
 
     except Exception as check_e:
         print(f"[SessionOps] 模式检查警告: {check_e}")
-        # Proceed with caution or return error? Let's log and proceed if check fails to avoid lockouts,
-        # or fail safe. Let's fail safe if we can't verify.
-        # For now, just log.
+        # 检查失败时仅记录日志，不阻止后续操作，以防误判导致死锁。
 
     try:
-        # 1. Generate new Session ID (Agent-Aware)
+        # 1. 生成新的会话 ID (感知 Agent)
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         work_session_id = f"work_{agent_id}_{timestamp}_{uuid.uuid4().hex[:4]}"
 
-        # 2. Update Config
-        # current_session_id: The actual session ID to use for logs
-        # work_mode_task: The name of the task
+        # 2. 更新配置
+        # current_session_id: 用于日志的实际会话 ID
+        # work_mode_task: 任务名称
 
-        # Update current_session_id_{agent_id}
+        # 更新 current_session_id_{agent_id}
         session_key = f"current_session_id_{agent_id}"
         config_id = (
             await session.exec(select(Config).where(Config.key == session_key))
@@ -100,7 +97,7 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
         else:
             config_id.value = work_session_id
 
-        # Update work_mode_task_{agent_id}
+        # 更新 work_mode_task_{agent_id}
         task_key = f"work_mode_task_{agent_id}"
         config_task = (
             await session.exec(select(Config).where(Config.key == task_key))
@@ -113,7 +110,7 @@ async def enter_work_mode(task_name: str = "未知任务") -> str:
 
         await session.commit()
 
-        # [NIT] Activate Work Toolchain
+        # [NIT] 激活工作工具链
         try:
             from core.nit_manager import get_nit_manager
 
@@ -148,7 +145,7 @@ async def exit_work_mode() -> str:
         session_key = f"current_session_id_{agent_id}"
         task_key = f"work_mode_task_{agent_id}"
 
-        # 1. Get current work info
+        # 1. 获取当前工作信息
         config_id = (
             await session.exec(select(Config).where(Config.key == session_key))
         ).first()
@@ -156,15 +153,16 @@ async def exit_work_mode() -> str:
             await session.exec(select(Config).where(Config.key == task_key))
         ).first()
 
-        if not config_id or not config_id.value.startswith(f"work_{agent_id}_"):
-            # Fallback for old sessions or just generic check
-            if not config_id or not config_id.value.startswith("work_"):
-                return "错误: 当前不在工作模式。"
+        if (not config_id or not config_id.value.startswith(f"work_{agent_id}_")) and (
+            not config_id or not config_id.value.startswith("work_")
+        ):
+            # 针对旧会话或通用检查的回退
+            return "错误: 当前不在工作模式。"
 
         work_session_id = config_id.value
         task_name = config_task.value if config_task else "未命名任务"
 
-        # 2. Fetch all logs for this session
+        # 2. 获取该会话的所有日志
         logs = (
             await session.exec(
                 select(ConversationLog)
@@ -176,7 +174,7 @@ async def exit_work_mode() -> str:
         if not logs:
             return "已退出工作模式 (无日志需要总结)。"
 
-        # 3. Summarize via LLM
+        # 3. 通过 LLM 进行总结
         global_config = {
             c.key: c.value for c in (await session.exec(select(Config))).all()
         }
@@ -184,42 +182,19 @@ async def exit_work_mode() -> str:
         api_base = global_config.get("global_llm_api_base")
         bot_name = global_config.get("bot_name", "Pero")
 
-        # Initialize MDPManager
-        import os
-
-        # Path logic: backend/services/session_service.py -> backend/services/mdp/prompts
-        # __file__ -> session_service.py
-        # dirname -> services
-        # dirname -> backend
-        # join -> backend/services/mdp/prompts
-        mdp_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "services",
-            "mdp",
-            "prompts",
-        )
-
-        if not os.path.exists(mdp_dir):
-            # Fallback
-            mdp_dir = os.path.join(os.getcwd(), "backend", "services", "mdp", "prompts")
-
-        from services.mdp.manager import MDPManager
-
-        mdp = MDPManager(mdp_dir)
-
-        # [Unified Model Fix] Use current_model_id instead of hardcoded gpt-4o
+        # [统一模型修复] 使用 current_model_id 而不是硬编码的 gpt-4o
         from models import AIModelConfig
 
         current_model_id = global_config.get("current_model_id")
 
-        # Default fallback if config fails
+        # 如果配置获取失败，则使用默认回退
         model_to_use = "gpt-4o"
 
         if current_model_id:
             model_config = await session.get(AIModelConfig, int(current_model_id))
             if model_config:
                 model_to_use = model_config.model_id
-                # Also ensure we use the correct API key/base if it's a custom provider
+                # 如果是自定义提供商，确保使用正确的 API 密钥/地址
                 if model_config.provider_type == "custom":
                     api_key = model_config.api_key
                     api_base = model_config.api_base
@@ -255,7 +230,7 @@ async def exit_work_mode() -> str:
             agent_id=agent_id
         )
 
-        # [NIT] Deactivate Work Toolchain
+        # [NIT] 停用工作工具链
         try:
             from core.nit_manager import get_nit_manager
 
@@ -263,13 +238,13 @@ async def exit_work_mode() -> str:
         except Exception as nit_e:
             print(f"[SessionOps] 停用 NIT 工作分类失败: {nit_e}")
 
-        # 5. Restore Main Session
-        # Just revert the config pointer
+        # 5. 恢复主会话
+        # 只需还原配置指针
         config_id.value = "default"
         config_task.value = ""
         await session.commit()
 
-        return f"已退出工作模式。任务总结已存入记忆。会话已恢复。"
+        return "已退出工作模式。任务总结已存入记忆。会话已恢复。"
 
     except Exception as e:
         await session.rollback()
@@ -278,8 +253,8 @@ async def exit_work_mode() -> str:
 
 async def abort_work_mode() -> str:
     """
-    Abort 'Work Mode' WITHOUT saving summary.
-    Useful for accidental entry or if the user just wants to quit.
+    中止“工作模式”且不保存总结。
+    适用于意外进入或用户只想退出的情况。
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session:
@@ -294,7 +269,7 @@ async def abort_work_mode() -> str:
         session_key = f"current_session_id_{agent_id}"
         task_key = f"work_mode_task_{agent_id}"
 
-        # 1. Revert Config
+        # 1. 还原配置
         config_id = (
             await session.exec(select(Config).where(Config.key == session_key))
         ).first()
@@ -309,7 +284,7 @@ async def abort_work_mode() -> str:
                 config_task.value = ""
             await session.commit()
 
-            # [NIT] Deactivate Work Toolchain
+            # [NIT] 停用工作工具链
             try:
                 from core.nit_manager import get_nit_manager
 
@@ -317,7 +292,7 @@ async def abort_work_mode() -> str:
             except Exception:
                 pass
 
-            original_session_id = "default"  # Simplified
+            original_session_id = "default"  # 简化处理
             return f"工作模式已中止。恢复至会话: {original_session_id}"
         else:
             return "当前不在工作模式。"

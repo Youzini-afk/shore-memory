@@ -49,7 +49,10 @@
 import { Files as FilesIcon, Search as SearchIcon, Settings as SettingsIcon } from 'lucide-vue-next'
 
 defineProps({
-  activeTab: String
+  activeTab: {
+    type: String,
+    default: 'explorer'
+  }
 })
 
 defineEmits(['update:activeTab'])

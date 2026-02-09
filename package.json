@@ -1,7 +1,7 @@
 {
   "name": "pero-core",
   "private": true,
-  "version": "0.5.12",
+  "version": "0.5.13",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -31,6 +31,7 @@
     "adm-zip": "^0.5.16",
     "axios": "^1.13.3",
     "chalk": "^4.1.2",
+    "dayjs": "^1.11.19",
     "dompurify": "^3.3.1",
     "echarts": "^6.0.0",
     "electron-store": "^11.0.2",
@@ -69,7 +70,7 @@
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
-    "electron": "^40.0.0",
+    "electron": "^40.2.1",
     "electron-builder": "^26.4.0",
     "esbuild": "^0.25.12",
     "eslint": "^8.57.1",
@@ -83,9 +84,18 @@
     "rimraf": "^6.1.2",
     "tailwindcss": "^3.4.17",
     "ts-proto": "^2.11.1",
+    "typescript": "^5.9.3",
     "vite": "^6.2.0",
     "vitepress": "^1.6.4",
     "wait-on": "^9.0.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "protobufjs",
+      "vue-demi"
+    ]
   },
   "overrides": {},
   "build": {

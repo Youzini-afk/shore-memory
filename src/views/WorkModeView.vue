@@ -228,13 +228,11 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, onErrorCaptured, computed, reactive } from 'vue'
+import { ref, onMounted, onActivated, onErrorCaptured, reactive } from 'vue'
 import {
-  Files as FilesIcon,
   CheckCircle as CheckCircleIcon,
   XCircle as XCircleIcon,
   X as XIcon,
-  Circle as CircleIcon,
   LogOut as LogOutIcon,
   FolderOpen as FolderOpenIcon,
   LayoutGrid as LayoutGridIcon,
@@ -247,7 +245,7 @@ import ChatInterface from '../components/chat/ChatInterface.vue'
 import CustomDialog from '../components/ui/CustomDialog.vue'
 import TerminalManager from '../components/ide/TerminalManager.vue'
 
-const props = defineProps({
+defineProps({
   isReady: {
     type: Boolean,
     default: false
@@ -314,7 +312,6 @@ const fetchActiveAgent = async () => {
   }
 }
 
-const activeTab = ref('explorer')
 const openFiles = ref([])
 const currentFile = ref(null)
 const dirtyFiles = ref(new Set())

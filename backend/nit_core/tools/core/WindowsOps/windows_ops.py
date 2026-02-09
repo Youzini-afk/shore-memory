@@ -1,10 +1,11 @@
+import contextlib
 import os
 import platform
 import shutil
 import subprocess
 import time
 
-# Optional imports for Windows-specific features
+# Windows 特有功能的导入
 try:
     import pyautogui
     import pyperclip
@@ -17,7 +18,7 @@ except ImportError:
     screen_adapter = None
     scaled_pyautogui = None
 
-# winreg is Windows-only
+# winreg 仅限 Windows
 try:
     import winreg
 except ImportError:
@@ -85,7 +86,7 @@ def open_application(app_name: str):
     使用增强的搜索逻辑，优先使用 os.startfile 以获得更安全、无黑窗的体验。
     """
     if _is_server_mode():
-        return "Error: Server mode does not support opening desktop applications."
+        return "错误: Server 模式不支持打开桌面应用程序。"
 
     if not app_name:
         return "请提供要打开的应用程序名称。"
@@ -96,14 +97,13 @@ def open_application(app_name: str):
         # 尝试寻找完整路径
         full_path = find_app_path(app_name)
 
-        if full_path:
+        if full_path and hasattr(os, "startfile"):
             # 使用 os.startfile 打开，这相当于双击文件，最稳健
-            if hasattr(os, "startfile"):
-                os.startfile(full_path)
-                return f"已成功通过路径打开: {full_path}"
+            os.startfile(full_path)
+            return f"已成功通过路径打开: {full_path}"
 
-        # 如果实在找不到确切路径，或者在没有 os.startfile 的环境(虽然已经 check 了 server mode)
-        # 退回到使用 start 命令 (shell 模式)
+        # 如果实在找不到确切路径，或者在没有 os.startfile 的环境（虽然已经检查了 server mode）
+        # 退回到使用 start 命令（shell 模式）
         subprocess.Popen(f'start "" "{app_name}"', shell=True)
         return f"未找到确切路径，已尝试通过系统命令开启: {app_name}"
 
@@ -120,7 +120,7 @@ def get_active_windows():
         return []  # Server 模式下没有窗口
 
     if not win32gui or not psutil:
-        return "Error: win32gui or psutil not installed."
+        return "错误: 未安装 win32gui 或 psutil。"
 
     windows = []
 
@@ -165,7 +165,7 @@ def get_active_windows():
     try:
         win32gui.EnumWindows(enum_window_callback, None)
     except Exception as e:
-        return f"Error listing windows: {str(e)}"
+        return f"列出窗口错误: {str(e)}"
 
     return windows
 
@@ -176,10 +176,10 @@ def activate_window(target_name: str):
     target_name: 可以是进程名 (e.g. 'chrome.exe') 或标题关键词 (e.g. 'Google Chrome')
     """
     if _is_server_mode():
-        return "Error: Server mode does not support window activation."
+        return "错误: Server 模式不支持窗口激活。"
 
     if not win32gui:
-        return "Error: win32gui not installed."
+        return "错误: 未安装 win32gui。"
 
     target_name = target_name.lower()
     found_hwnd = None
@@ -197,16 +197,13 @@ def activate_window(target_name: str):
 
                 if target_name in title or target_name == proc_name:
                     found_hwnd = hwnd
-                    return False  # Stop enumeration
+                    return False  # 停止枚举
         except Exception:
             pass
         return True
 
-    try:
+    with contextlib.suppress(Exception):
         win32gui.EnumWindows(enum_callback, None)
-    except Exception:
-        # 忽略 EnumWindows 的异常结束 (通常是因为 return False 提前终止)
-        pass
 
     if found_hwnd:
         try:
@@ -271,11 +268,11 @@ except ImportError:
 
 
 def safe_int(val):
-    """Safely convert value to int, returning None if conversion fails."""
+    """安全地将值转换为 int，如果转换失败则返回 None。"""
     if val is None:
         return None
     try:
-        return int(float(val))  # Handle string floats like "100.0"
+        return int(float(val))  # 处理像 "100.0" 这样的浮点数字符串
     except (ValueError, TypeError):
         return None
 
@@ -293,9 +290,9 @@ def automation_execute(
     执行自动化操作。
     """
     if _is_server_mode():
-        return f"Error: Server mode does not support automation action '{action}'."
+        return f"错误: Server 模式不支持自动化操作 '{action}'."
 
-    # Robustly cast coordinates to integers
+    # 将坐标强制转换为整数
     x = safe_int(x)
     y = safe_int(y)
     x2 = safe_int(x2)
@@ -347,7 +344,7 @@ def automation_execute(
                 if pyperclip:
                     pyperclip.copy(target)
                 else:
-                    return "Error: pyperclip not installed or supported."
+                    return "错误: 未安装或不支持 pyperclip。"
 
                 # 3. 短暂等待确保写入生效
                 time.sleep(0.1)
@@ -371,19 +368,9 @@ def automation_execute(
             message = target_text or "主人，我有事情要告诉你哦！"
 
             # 使用 PowerShell 发送 Windows 11 原生通知
-            ps_script = f"""
-            $title = "{title}"
-            $message = "{message}"
-            [void][System.Reflection.Assembly]::LoadWithPartialName('System.Windows.Forms')
-            $notification = New-Object System.Windows.Forms.NotifyIcon
-            $notification.Icon = [System.Drawing.SystemIcons]::Information
-            $notification.Visible = $true
-            $notification.ShowBalloonTip(5000, $title, $message, [System.Windows.Forms.ToolTipIcon]::Info)
-            """
-            # 注意：上述是旧式气泡通知。对于 Win11 原生 Toast，使用以下更现代的方法：
             modern_ps_script = f"""
-            $Title = "{title}"
-            $Text = "{message}"
+            $Title = "{title.replace('"', '`"')}"
+            $Text = "{message.replace('"', '`"')}"
             $Template = [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
             $RawText = $Template.GetElementsByTagName("text")
             $RawText[0].AppendChild($Template.CreateTextNode($Title)) > $null
@@ -394,7 +381,7 @@ def automation_execute(
 
             try:
                 subprocess.run(
-                    ["powershell", "-Command", modern_ps_script],
+                    ["powershell", "-ExecutionPolicy", "Bypass", "-Command", modern_ps_script],
                     capture_output=True,
                     check=True,
                 )
@@ -406,7 +393,7 @@ def automation_execute(
             if x is not None and y is not None:
                 scaled_pyautogui.moveTo(x, y, duration=1.0)
                 return f"已将鼠标移动到逻辑坐标 ({x}, {y}) 以供调试。"
-            return "Debug cursor requires x and y coordinates."
+            return "调试光标需要 x 和 y 坐标。"
         return "未知的自动化动作。"
     except Exception as e:
         return f"自动化操作失败: {str(e)}"
@@ -425,7 +412,7 @@ def windows_operation(
     y2: int = None,
     target_text: str = None,
 ):
-    # Ensure coordinates are safely converted at the entry point as well
+    # 确保坐标在入口点也安全转换为整数
     x = safe_int(x)
     y = safe_int(y)
     x2 = safe_int(x2)

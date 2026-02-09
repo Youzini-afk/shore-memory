@@ -8,21 +8,21 @@ logger = logging.getLogger(__name__)
 
 class PostprocessorManager:
     """
-    Manages and executes a pipeline of postprocessors.
-    Supports both batch processing and streaming processing.
+    管理并执行后处理器管道。
+    支持批处理和流处理。
     """
 
     def __init__(self):
         self.postprocessors: List[BasePostprocessor] = []
 
     def register(self, postprocessor: BasePostprocessor):
-        """Register a new postprocessor to the end of the pipeline."""
+        """注册一个新的后处理器到管道末尾。"""
         self.postprocessors.append(postprocessor)
         # logger.info(f"Registered postprocessor: {postprocessor.name}")
 
     async def process(self, content: str, context: Dict[str, Any]) -> str:
         """
-        Run the content through all registered postprocessors in order (Batch).
+        按顺序通过所有注册的后处理器运行内容（批处理）。
         """
         current_content = content
         for processor in self.postprocessors:

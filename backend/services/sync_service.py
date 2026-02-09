@@ -25,7 +25,7 @@ class SyncService:
             return
         self.initialized = True
 
-        # Initial values from ENV (will be overwritten by DB if available)
+        # 从环境变量获取初始值（如果数据库中有值，将被覆盖）
         self.cloud_url = os.getenv("CLOUD_GATEWAY_URL", "")
         self.cloud_token = os.getenv("CLOUD_GATEWAY_TOKEN", "")
         self.mode = os.getenv("CLOUD_SYNC_MODE", "client")  # "client" or "server"
@@ -36,15 +36,15 @@ class SyncService:
         self.pending_updates = []
 
     async def load_config(self):
-        """Load configuration from ConfigManager (DB)."""
+        """从 ConfigManager (数据库) 加载配置。"""
         from core.config_manager import get_config_manager
 
         cm = get_config_manager()
 
-        # ConfigManager has already loaded from DB at startup
-        # We check if specific keys exist, otherwise fallback to current (ENV)
+        # ConfigManager 在启动时已经从数据库加载
+        # 我们检查特定的键是否存在，否则回退到当前值 (环境变量)
 
-        # Helper to get config safely
+        # 安全获取配置的辅助函数
         def get_conf(key, default):
             val = cm.get(key)
             return val if val is not None else default
@@ -61,23 +61,23 @@ class SyncService:
         )
 
     async def reload(self):
-        """Reload config and restart service."""
+        """重新加载配置并重启服务。"""
         await self.stop()
         await self.load_config()
         if self.enabled:
             self.start()
 
     def start(self):
-        """Start the sync service if configured."""
-        # Ensure we don't start if disabled or missing config
+        """如果已配置，则启动同步服务。"""
+        # 确保在禁用或缺少配置时不启动
         if not self.enabled:
             logger.debug("[Sync] Service disabled.")
             return
 
         if self.mode == "server":
             logger.info("☁️ [Sync] Running in SERVER mode (Passive).")
-            # In server mode, we don't connect to another gateway.
-            # We just wait for connections (handled by main Gateway).
+            # 在服务器模式下，我们不连接到另一个网关。
+            # 我们只是等待连接（由主网关处理）。
             self.running = True
             return
 
@@ -85,20 +85,20 @@ class SyncService:
             logger.info("☁️ [Sync] 启动云端同步服务 (Client Mode)...")
             logger.info(f"☁️ [Sync] 目标网关: {self.cloud_url}")
 
-            # Create a dedicated client for Cloud connection
+            # 为云连接创建一个专用客户端
             self.client = GatewayClient(uri=self.cloud_url)
             self.client.set_token(self.cloud_token)
 
-            # Use a distinct device ID for the sync client to avoid confusion
-            # Appending -sync suffix
+            # 为同步客户端使用不同的设备 ID 以避免混淆
+            # 添加 -sync 后缀
             self.client.device_id = f"{self.client.device_id}-sync"
 
-            # Register handlers
+            # 注册处理程序
             self.client.on("connect", self.on_connect)
             self.client.on("disconnect", self.on_disconnect)
             self.client.on("action:sync_push", self.handle_sync_push)
 
-            # Start client
+            # 启动客户端
             self.client.start_background()
             self.running = True
         else:
@@ -111,14 +111,14 @@ class SyncService:
 
     async def on_connect(self):
         logger.info("☁️ [Sync] 已连接到云端网关!")
-        # Example: Send a hello/sync-init message
+        # 示例: 发送 hello/sync-init 消息
         await self.push_update("sync_init", {"status": "connected"})
 
     async def on_disconnect(self):
         logger.warning("☁️ [Sync] 与云端网关断开连接")
 
     async def handle_sync_push(self, envelope):
-        """Handle incoming data push from cloud."""
+        """处理来自云端的传入数据推送。"""
         try:
             req = envelope.request
             payload_str = req.params.get("payload", "{}")
@@ -131,14 +131,14 @@ class SyncService:
 
             logger.info(f"☁️ [Sync] 收到云端推送 [{data_type}]: {str(payload)[:50]}...")
 
-            # Dispatch to appropriate handlers (to be implemented)
+            # 分发到适当的处理程序（待实现）
             # if data_type == "pet_state": ...
 
         except Exception as e:
             logger.error(f"☁️ [Sync] 处理推送失败: {e}")
 
     async def push_update(self, data_type: str, payload: Dict[str, Any]):
-        """Push local update to cloud."""
+        """将本地更新推送到云端。"""
         if not self.running or not self.client:
             return
 
@@ -147,7 +147,7 @@ class SyncService:
             envelope.id = str(uuid.uuid4())
             envelope.source_id = self.client.device_id
             envelope.target_id = (
-                "master"  # Generally targeting the master node on cloud
+                "master"  # 通常以云端的主节点为目标
             )
             envelope.timestamp = int(time.time() * 1000)
 
@@ -167,5 +167,5 @@ class SyncService:
             logger.error(f"☁️ [Sync] 推送更新失败: {e}")
 
 
-# Global instance
+# 全局实例
 sync_service = SyncService()

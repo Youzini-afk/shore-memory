@@ -35,8 +35,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, defineAsyncComponent, onMounted } from 'vue'
-import { listen, invoke, emit } from '@/utils/ipcAdapter'
+import { ref, computed, watch, onMounted } from 'vue'
+import { emit } from '@/utils/ipcAdapter'
 import { APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import CustomDialog from '../components/ui/CustomDialog.vue'
@@ -93,7 +93,7 @@ watch(isWorkMode, async (newVal) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_name: 'Coding Session' })
       })
-      if (!res.ok) throw new Error('Failed to enter work session')
+      if (!res.ok) throw new Error('进入工作会话失败')
       const data = await res.json()
 
       if (data.message && data.message.startsWith('Error')) {

@@ -1,7 +1,7 @@
 """
-[LEGACY/FALLBACK] Python AST Node Definitions.
-NOTE: These definitions are used when the Rust extension is unavailable OR for type hinting in the Python fallback path.
-The Rust implementation (rust_binding/src/ast.rs) mirrors this structure.
+[LEGACY/FALLBACK] Python AST 节点定义。
+注意：当 Rust 扩展不可用时，或者用于 Python 回退路径中的类型提示时，将使用这些定义。
+Rust 实现 (rust_binding/src/ast.rs) 镜像了此结构。
 """
 
 from dataclasses import dataclass
@@ -38,7 +38,7 @@ class CallNode(ASTNode):
     tool_name: str
     args: Dict[str, ValueNode]
     is_async: bool = False
-    callback: Optional[str] = None  # For async callback task name
+    callback: Optional[str] = None  # 用于异步回调任务名称
 
 
 @dataclass

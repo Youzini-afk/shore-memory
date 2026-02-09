@@ -383,7 +383,7 @@
                         : 'bg-slate-600'
                     "
                   ></div>
-                  {{ agent.is_active ? 'Active Agent' : agent.is_enabled ? 'Ready' : 'Disabled' }}
+                  {{ agent.is_active ? '当前活跃' : agent.is_enabled ? '就绪' : '已禁用' }}
                 </span>
 
                 <!-- 仅在已启用但未活跃时显示“设为活跃” -->
@@ -950,7 +950,7 @@
           </div>
         </div>
         <div class="flex items-center gap-4">
-          <span class="flex items-center gap-1.5"> <ShieldCheck :size="12" /> SECURE MODE </span>
+          <span class="flex items-center gap-1.5"> <ShieldCheck :size="12" /> 安全模式 </span>
           <span>© 2026 PEROFAMILY</span>
         </div>
       </footer>
@@ -983,15 +983,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, nextTick, shallowRef, watch, defineAsyncComponent } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
 import {
   Sparkles,
   Home,
-  Settings,
   FolderOpen,
   Cpu,
   Database,
@@ -1000,7 +998,6 @@ import {
   ShieldCheck,
   LayoutGrid,
   ScrollText,
-  Play,
   Shield,
   Menu,
   Zap,
@@ -1017,7 +1014,6 @@ import {
   Terminal
 } from 'lucide-vue-next'
 
-const router = useRouter()
 const activeTab = ref('home')
 // console.debug("Stats update failed", e) -> removed
 // const napcatLogs = ref([]) -> removed
@@ -1060,7 +1056,7 @@ const updateStats = async () => {
     cpuUsage.value = stats.cpu_usage
     memoryUsed.value = stats.memory_used
     memoryTotal.value = stats.memory_total
-  } catch (e) {
+  } catch {
     // ignore
   }
 }
@@ -1156,7 +1152,8 @@ onMounted(async () => {
   try {
     const installed = await invoke('check_es')
     esStatus.value = installed ? 'INSTALLED' : 'NOT_INSTALLED'
-  } catch (e) {
+  } catch {
+    // eslint-disable-line @typescript-eslint/no-unused-vars
     esStatus.value = 'ERROR'
   }
 
@@ -1362,14 +1359,6 @@ const toggleLaunch = async () => {
   }
 }
 
-const openConfig = () => {
-  addLog('Config editor not implemented yet.')
-}
-
-const openFolder = async () => {
-  await invoke('open_root_folder')
-}
-
 const installES = async () => {
   if (isInstallingES.value || esStatus.value === 'INSTALLED') return
   isInstallingES.value = true
@@ -1405,7 +1394,7 @@ const fetchAgents = async () => {
 
 const toggleAgentEnabled = async (agent) => {
   // Optimistic update
-  const originalState = agent.is_enabled
+  // const originalState = agent.is_enabled
   agent.is_enabled = !agent.is_enabled
 
   await saveAgentConfig()

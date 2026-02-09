@@ -45,7 +45,7 @@ class Parser:
     def match(self, type: TokenType) -> Token:
         if self.peek().type == type:
             return self.advance()
-        self.error(f"Expected {type}, got {self.peek().type}")
+        self.error(f"预期 {type}, 但得到 {self.peek().type}")
 
     def parse(self) -> PipelineNode:
         statements = []
@@ -115,7 +115,7 @@ class Parser:
         elif token.type == TokenType.LBRACKET:
             return self.parse_list()
         else:
-            self.error(f"Expected value, got {token.type}")
+            self.error(f"预期值 (Value), 但得到 {token.type}")
 
     def parse_list(self) -> ListNode:
         self.match(TokenType.LBRACKET)

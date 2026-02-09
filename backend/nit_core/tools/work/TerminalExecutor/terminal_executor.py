@@ -10,10 +10,10 @@ from services.realtime_session_manager import realtime_session_manager
 
 logger = logging.getLogger(__name__)
 
-# Wasm Auditor Path
+# Wasm 审计器路径
 WASM_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "auditor.wasm")
 
-# Wasm Engine (Singleton to avoid overhead)
+# Wasm 引擎（单例以避免开销）
 _wasm_engine = None
 _wasm_module = None
 
@@ -22,19 +22,19 @@ def _get_wasm_module():
     global _wasm_engine, _wasm_module
     if _wasm_module is None:
         try:
-            logger.info(f"Loading Wasm Auditor from: {WASM_PATH}")
+            logger.info(f"正在从 {WASM_PATH} 加载 Wasm 审计器")
             _wasm_engine = Engine()
             _wasm_module = Module.from_file(_wasm_engine, WASM_PATH)
         except Exception as e:
-            logger.error(f"Failed to load Wasm module: {e}")
+            logger.error(f"加载 Wasm 模块失败: {e}")
             return None
     return _wasm_module
 
 
 def audit_command_via_wasm(command: str) -> dict:
     """
-    Call Rust Wasm to audit the command.
-    Returns: {"level": int, "reason": str, "highlight": str|None}
+    调用 Rust Wasm 来审计命令。
+    返回: {"level": int, "reason": str, "highlight": str|None}
     """
     module = _get_wasm_module()
     if not module:
@@ -48,43 +48,43 @@ def audit_command_via_wasm(command: str) -> dict:
 
         memory = exports["memory"]
         alloc = exports["alloc"]
-        # dealloc = exports["dealloc"] # Optional cleanup
+        # dealloc = exports["dealloc"] # 可选清理
         audit_abi = exports["audit_command_abi"]
 
-        # 1. Encode command
+        # 1. 编码命令
         cmd_bytes = command.encode("utf-8")
         cmd_len = len(cmd_bytes)
 
-        # 2. Allocate memory in Wasm
+        # 2. 在 Wasm 中分配内存
         ptr = alloc(store, cmd_len)
 
-        # 3. Write to memory
-        # Note: wasmtime memory.write signature might vary by version.
-        # Attempting standard (store, data, offset) order for recent versions.
+        # 3. 写入内存
+        # 注意：wasmtime memory.write 签名可能因版本而异。
+        # 尝试最新版本的标准 (store, data, offset) 顺序。
         try:
             memory.write(store, cmd_bytes, ptr)
         except Exception:
-            # Fallback for other versions or if signature is (store, offset, data)
+            # 其他版本的回退，或者如果签名是 (store, offset, data)
             memory.write(store, ptr, cmd_bytes)
 
-        # 4. Call Audit (returns packed len|ptr)
+        # 4. 调用审计（返回打包的 len|ptr）
         packed_res = audit_abi(store, ptr, cmd_len)
 
         res_ptr = packed_res & 0xFFFFFFFF
         res_len = (packed_res >> 32) & 0xFFFFFFFF
 
-        # 5. Read result
+        # 5. 读取结果
         json_bytes = memory.read(store, res_ptr, res_ptr + res_len)
         json_str = bytes(json_bytes).decode("utf-8")
 
         result = json.loads(json_str)
 
-        # Convert level string to int if necessary (Wasm returns enum as string by default)
+        # 必要时将级别字符串转换为 int（Wasm 默认将枚举返回为字符串）
         if isinstance(result.get("level"), str):
             level_map = {"Safe": 0, "Notice": 1, "Warn": 2, "Block": 3}
             result["level"] = level_map.get(
                 result["level"], 1
-            )  # Default to Notice (1) if unknown
+            )  # 如果未知，默认为 Notice (1)
 
         return result
 
@@ -108,7 +108,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
     reason = audit_result.get("reason", "常规操作")
     highlight = audit_result.get("highlight", None)
 
-    # Python Fallback for safety (Double Check)
+    # Python 安全回退（双重检查）
     lower_cmd = command.lower()
     if risk_level < 3:
         FORBIDDEN = ["rm -rf /", "format c:", "rd /s /q c:\\"]
@@ -122,7 +122,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
     risk_info = {"level": risk_level, "reason": reason, "highlight": highlight}
 
     logger.info(
-        f"Requesting user confirmation for command: {command} (Risk Level: {risk_level})"
+        f"请求用户确认指令: {command} (风险等级: {risk_level})"
     )
 
     approved = await realtime_session_manager.request_user_confirmation(
@@ -130,11 +130,11 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
     )
 
     if not approved:
-        logger.info(f"User denied command execution: {command}")
+        logger.info(f"用户拒绝执行指令: {command}")
         return "执行已取消: 用户拒绝了该指令的执行请求。"
 
     # 2. 用户同意，执行指令
-    logger.info(f"User approved command. Executing: {command}")
+    logger.info(f"用户已批准指令。正在执行: {command}")
 
     # 构造 PowerShell 命令，强制 UTF-8 编码
     # 使用 -Command 包装，并预置 OutputEncoding
@@ -160,12 +160,12 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
             {"type": "command_running", "command": command, "pid": process.pid}
         )
 
-        # [New] Broadcast Terminal Init for Terminal Manager
+        # [新增] 广播终端初始化以供终端管理器使用
         await realtime_session_manager.broadcast(
             {"type": "terminal_init", "pid": process.pid, "command": command}
         )
 
-        # Output Buffers
+        # 输出缓冲区
         stdout_buffer = []
         stderr_buffer = []
 
@@ -176,7 +176,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
                     break
                 decoded_line = line.decode("utf-8", errors="replace")
                 buffer.append(decoded_line)
-                # Broadcast real-time output
+                # 广播实时输出
                 await realtime_session_manager.broadcast(
                     {
                         "type": "terminal_output",
@@ -186,7 +186,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
                     }
                 )
 
-        # Start stream readers
+        # 启动流读取器
         stdout_reader = asyncio.create_task(
             read_stream(process.stdout, stdout_buffer, "stdout")
         )
@@ -199,7 +199,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
         realtime_session_manager.register_skippable_command(process.pid, skip_event)
 
         try:
-            # Wait for process to exit
+            # 等待进程退出
             wait_task = asyncio.create_task(process.wait())
             skip_task = asyncio.create_task(skip_event.wait())
 
@@ -209,18 +209,18 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
 
             if skip_task in done:
                 logger.info(
-                    f"User skipped waiting for command {command} (PID {process.pid})"
+                    f"用户跳过了等待指令 {command} (PID {process.pid})"
                 )
 
-                # Ensure readers and process wait continue in background
+                # 确保读取器和进程等待在后台继续
                 async def background_monitor():
                     try:
                         await wait_task
                         await asyncio.gather(stdout_reader, stderr_reader)
                         logger.info(
-                            f"Background command {process.pid} finished. Exit code: {process.returncode}"
+                            f"后台指令 {process.pid} 已完成。退出代码: {process.returncode}"
                         )
-                        # Broadcast exit for Terminal Manager
+                        # 广播退出以供终端管理器使用
                         await realtime_session_manager.broadcast(
                             {
                                 "type": "terminal_exit",
@@ -229,9 +229,9 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
                             }
                         )
                     except Exception as e:
-                        logger.error(f"Background command {process.pid} error: {e}")
+                        logger.error(f"后台指令 {process.pid} 错误: {e}")
 
-                # Fire and forget background monitor
+                # 触发并遗忘后台监视器
                 asyncio.create_task(background_monitor())
 
                 return (
@@ -240,7 +240,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
 
             else:
                 skip_task.cancel()
-                # Wait for readers to finish consuming remaining output
+                # 等待读取器完成剩余输出的消费
                 await asyncio.gather(stdout_reader, stderr_reader)
 
                 output = "".join(stdout_buffer).strip()
@@ -254,7 +254,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
 
                 final_output = "\n\n".join(result_parts)
 
-                # Broadcast exit for Terminal Manager
+                # 广播退出以供终端管理器使用
                 await realtime_session_manager.broadcast(
                     {
                         "type": "terminal_exit",
@@ -283,5 +283,5 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
             )
 
     except Exception as e:
-        logger.error(f"Command execution failed: {e}")
+        logger.error(f"指令执行失败: {e}")
         return f"执行出错: {str(e)}"

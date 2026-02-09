@@ -68,14 +68,14 @@ class HistoryPreprocessor(BasePreprocessor):
         current_messages = context.get("messages", [])
         agent_id = context.get("agent_id", "pero")
 
-        # [Configurable Preprocessor] Check if history fetch is disabled via config
-        # Default to True unless explicitly disabled
-        # Social Mode: Disabled by default (as it provides its own context)
+        # [可配置预处理器] 检查是否通过配置禁用了历史记录获取
+        # 默认为 True，除非显式禁用
+        # 社交模式：默认禁用（因为它提供自己的上下文）
         enable_history = True
         if source == "social":
             enable_history = False
 
-        # Allow override via variables (if injected by SocialService)
+        # 允许通过变量覆盖（如果是 SocialService 注入的）
         variables = context.get("variables", {})
         if "enable_history" in variables:
             enable_history = variables["enable_history"]
@@ -86,16 +86,16 @@ class HistoryPreprocessor(BasePreprocessor):
             context["earliest_timestamp"] = None
             return context
 
-        # Fetch recent logs
+        # 获取最近的日志
         try:
-            # [Context Window Adjustment]
-            # Work Mode needs longer context for coding tasks.
+            # [上下文窗口调整]
+            # 工作模式需要更长的上下文用于编码任务。
             is_work_context = session_id.startswith("work_") or source == "ide"
 
             # 策略调整：先拉取足够多的日志 (例如 200 条)，然后基于 Token 进行截断
             limit = 200 if is_work_context else 40
 
-            # [Feature] Preview Prompt (History Cutoff)
+            # [特性] 预览提示词 (历史截止)
             before_id = variables.get("history_before_id")
 
             history_logs = await memory_service.query_logs(
@@ -127,7 +127,6 @@ class HistoryPreprocessor(BasePreprocessor):
                     r"<!-- PERO_RAG_BLOCK_END -->", "", content, flags=re.S
                 )
 
-                # Filter Thinking and Monologue blocks from history context
                 # 过滤掉 Thinking 和 Monologue 块，避免污染上下文
                 content = re.sub(
                     r"【\s*(?:Thinking|Monologue)\s*:.*?】", "", content, flags=re.S
@@ -139,7 +138,7 @@ class HistoryPreprocessor(BasePreprocessor):
                 if content:
                     history_messages.append({"role": log.role, "content": content})
 
-        # [Token Based Truncation]
+        # [基于 Token 的截断]
         # 如果处于工作模式，我们使用 100K Token 的滑动窗口策略
         if is_work_context and history_messages:
             try:
@@ -169,13 +168,13 @@ class HistoryPreprocessor(BasePreprocessor):
 
             except ImportError:
                 print("[History] 未找到 tiktoken。回退到消息计数限制。")
-                # Fallback: Keep last 100 messages if tiktoken fails
+                # 回退：如果 tiktoken 失败，则保留最后 100 条消息
                 if len(history_messages) > 100:
                     history_messages = history_messages[-100:]
             except Exception as e:
                 print(f"[History] Token 截断失败: {e}")
 
-        # Deduplication logic
+        # 去重逻辑
         if current_messages and history_messages:
 
             def _safe_get_text(msg):
@@ -248,7 +247,7 @@ class RAGPreprocessor(BasePreprocessor):
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         source = context.get("source", "desktop")
 
-        # [Configurable Preprocessor] Check if RAG is disabled
+        # [可配置预处理器] 检查 RAG 是否已禁用
         enable_rag = True
         if source == "social":
             enable_rag = False
@@ -258,7 +257,7 @@ class RAGPreprocessor(BasePreprocessor):
             enable_rag = variables["enable_rag"]
 
         if not enable_rag:
-            variables["memory_context"] = ""  # Explicitly clear it
+            variables["memory_context"] = ""  # 显式清除
             context["variables"] = variables
             return context
 
@@ -368,17 +367,17 @@ class RAGPreprocessor(BasePreprocessor):
                         weights.append(0.15)
 
                     if embeddings:
-                        # Normalize weights to sum to 1.0 if not all roles are present
+                        # 如果并非所有角色都存在，则将权重归一化为总和为 1.0
                         total_weight = sum(weights)
                         normalized_weights = [w / total_weight for w in weights]
 
-                        # Calculate weighted average
+                        # 计算加权平均值
                         merged_vec = np.zeros_like(embeddings[0])
-                        for emb, weight in zip(embeddings, normalized_weights):
+                        for emb, weight in zip(embeddings, normalized_weights, strict=False):
                             merged_vec += np.array(emb) * weight
                         query_vec = merged_vec.tolist()
 
-                # Perform Search
+                # 执行搜索
                 print(f"[RAGPreprocessor] 正在搜索相关记忆: {user_message[:30]}...")
                 memories = await memory_service.get_relevant_memories(
                     session,
@@ -395,15 +394,15 @@ class RAGPreprocessor(BasePreprocessor):
                 # [特性] RAG 刷新块构建
                 # 创建富含元数据的注释块以进行动态刷新
                 if memories:
-                    # [Optimization] Simplify metadata to reduce prompt clutter
-                    # User feedback: JSON metadata is redundant and memories lack timestamps.
+                    # [优化] 简化元数据以减少提示词混乱
+                    # 用户反馈：JSON 元数据是多余的，记忆缺少时间戳。
 
                     def format_memory_item(m):
-                        # Use realTime if available, otherwise convert timestamp
+                        # 如果可用则使用 realTime，否则转换时间戳
                         time_str = m.realTime
                         if not time_str and m.timestamp:
                             try:
-                                # Timestamp is in milliseconds
+                                # 时间戳以毫秒为单位
                                 dt = datetime.datetime.fromtimestamp(
                                     m.timestamp / 1000.0
                                 )
@@ -417,7 +416,7 @@ class RAGPreprocessor(BasePreprocessor):
 
                     inner_content = "\n".join([format_memory_item(m) for m in memories])
 
-                    # Simplified block marker without verbose JSON
+                    # 简化的块标记，无详细 JSON
                     memory_context = f"<!-- PERO_RAG_BLOCK_START -->\n{inner_content}\n<!-- PERO_RAG_BLOCK_END -->"
                 else:
                     memory_context = "无相关记忆"
@@ -430,7 +429,7 @@ class RAGPreprocessor(BasePreprocessor):
             print(f"[RAGPreprocessor] 检索记忆失败: {e}")
             memory_context = "无相关记忆 (检索出错)"
 
-        # Populate variables
+        # 填充变量
         variables = context.get("variables", {})
         variables.update(
             {
@@ -460,7 +459,7 @@ class WeeklyReportPreprocessor(BasePreprocessor):
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         source = context.get("source", "desktop")
 
-        # [Configurable Preprocessor] Check if Graph is disabled
+        # [可配置预处理器] 检查图谱是否已禁用
         enable_graph = True
         if source == "social":
             enable_graph = False
@@ -531,7 +530,7 @@ class WeeklyReportPreprocessor(BasePreprocessor):
 
 class GraphFlashbackPreprocessor(BasePreprocessor):
     """
-    Performs logical flashback on the memory graph to find associated fragments.
+    在记忆图谱上执行逻辑闪回以查找关联碎片。
     """
 
     @property
@@ -548,7 +547,7 @@ class GraphFlashbackPreprocessor(BasePreprocessor):
             print("[GraphFlashback] 跳过: 无用户消息")
             return context
 
-        # Perform logical flashback
+        # 执行逻辑闪回
         try:
             print(f"[GraphFlashback] 开始逻辑闪回: {user_message[:30]}...")
             flashback = await memory_service.logical_flashback(
@@ -557,14 +556,14 @@ class GraphFlashbackPreprocessor(BasePreprocessor):
 
             graph_context = ""
             if flashback:
-                # Format the flashback fragments
+                # 格式化闪回碎片
                 fragments = [item["name"] for item in flashback]
                 graph_context = "关联思绪: " + ", ".join(fragments)
                 print(f"[GraphFlashback] 找到 {len(fragments)} 个碎片: {fragments}")
             else:
                 print("[GraphFlashback] 未找到碎片。")
 
-            # Populate variables
+            # 填充变量
             variables = context.get("variables", {})
             variables["graph_context"] = graph_context
             context["variables"] = variables
@@ -577,7 +576,7 @@ class GraphFlashbackPreprocessor(BasePreprocessor):
 
 class ConfigPreprocessor(BasePreprocessor):
     """
-    Loads LLM configuration and determines capabilities (Vision, Voice).
+    加载 LLM 配置并确定能力（视觉、语音）。
     """
 
     @property
@@ -590,7 +589,7 @@ class ConfigPreprocessor(BasePreprocessor):
         if agent_service:
             config = await agent_service._get_llm_config()
         else:
-            # Fallback or simplified logic
+            # 回退或简化逻辑
             config = {}
 
         context["llm_config"] = config
@@ -620,18 +619,14 @@ class SystemPromptPreprocessor(BasePreprocessor):
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         source = context.get("source", "desktop")
 
-        # [Fix] Social mode now uses MDP pipeline in AgentService, so we MUST generate system prompt.
-        # Previously this was skipped because social prompt was manually constructed.
+        # [修复] 社交模式现在在 AgentService 中使用 MDP 管道，因此我们必须生成系统提示词。
+        # 以前这被跳过，因为社交提示词是手动构建的。
         # if source == "social":
         #    return context
-
-        session = context["session"]
 
         # [NIT Security] 即使是手动构建的 Prompt，也需要注入 NIT ID
         # 但如果是社交模式，NIT ID 可能已经在 social_service 中处理了
         # 这里的逻辑主要是针对 IDE/Desktop 模式
-
-        agent_id = context.get("agent_id", "pero")
 
         prompt_manager = context["prompt_manager"]
         variables = context.get("variables", {})
@@ -639,12 +634,12 @@ class SystemPromptPreprocessor(BasePreprocessor):
         is_voice_mode = context.get("is_voice_mode", False)
         nit_id = context.get("nit_id")
 
-        # [Work Mode Detection]
+        # [工作模式检测]
         session_id = context.get("session_id", "default")
         source = context.get("source", "desktop")
         is_work_mode = session_id.startswith("work_") or source == "ide"
 
-        # [Work Mode Context Injection]
+        # [工作模式上下文注入]
         if is_work_mode:
             try:
                 # 获取最近的非工作模式对话 (default session) 作为前情提要
@@ -683,7 +678,7 @@ class SystemPromptPreprocessor(BasePreprocessor):
                 print(f"[SystemPromptBuilder] 注入工作模式上下文失败: {e}")
                 variables["recent_history_context"] = ""
 
-        # [Fix] Inject dynamic_tools from context to variables so PromptManager can use it
+        # [修复] 从上下文注入 dynamic_tools 到变量，以便 PromptManager 可以使用它
         if "dynamic_tools" in context:
             variables["dynamic_tools"] = context["dynamic_tools"]
 
@@ -696,7 +691,7 @@ class SystemPromptPreprocessor(BasePreprocessor):
         )
 
         # [NIT Security] 将动态握手 ID 注入系统提示词
-        # [Fix] Skip NIT injection for Social Mode as it doesn't support tools
+        # [修复] 社交模式不支持工具，因此跳过 NIT 注入
         if (
             nit_id
             and source != "social"
@@ -739,7 +734,7 @@ class PerceptionPreprocessor(BasePreprocessor):
                 visual = p.get("visual", "Unknown")
                 perception_context += f"- [{timestamp}] Observed: {visual}\n"
 
-            perception_context += "(Use these observations to understand user's recent context, but don't explicitly mention 'I saw you' unless relevant.)"
+            perception_context += "\n(使用这些观察结果来了解用户的近期上下文，但不要显式提及“我看到你”，除非相关。)"
 
             # 注入变量 (追加到 memory_context)
             variables = context.get("variables", {})

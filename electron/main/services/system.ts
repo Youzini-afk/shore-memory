@@ -16,7 +16,7 @@ setInterval(async () => {
   try {
     const load = await si.currentLoad()
     lastCpuLoad = load.currentLoad
-  } catch (e) {
+  } catch {
     // ignore
   }
 }, 5000)
@@ -29,7 +29,7 @@ export async function getSystemStats(): Promise<SystemStats> {
       memory_used: mem.active,
       memory_total: mem.total
     }
-  } catch (e) {
+  } catch {
     return { cpu_usage: 0, memory_used: 0, memory_total: 0 }
   }
 }
@@ -44,7 +44,7 @@ export function getConfig(): any {
   if (fs.existsSync(configPath)) {
     try {
       return fs.readJsonSync(configPath)
-    } catch (e) {
+    } catch {
       return {}
     }
   }
@@ -52,7 +52,6 @@ export function getConfig(): any {
 }
 
 export function saveConfig(config: any) {
-  // Save configuration to file
   // 将配置保存到文件
   const dataDir = path.join(paths.userData, 'data')
   fs.ensureDirSync(dataDir)
@@ -60,17 +59,19 @@ export function saveConfig(config: any) {
 }
 
 export function getGatewayToken(): string {
-  // Development path
+  // 开发环境路径
   const devPath = path.join(process.cwd(), 'data/gateway_token.json')
-  // Production path (next to exe or in userData)
+  // 生产环境路径 (在 exe 旁边或 userData 中)
   const prodPath = path.join(paths.userData, 'data/gateway_token.json')
 
-  // Check ENV first (set by startGateway if in same process, but unlikely here)
+  // 首先检查 ENV (如果由 startGateway 在同一进程中设置，但此处不太可能)
   if (process.env.GATEWAY_TOKEN_PATH && fs.existsSync(process.env.GATEWAY_TOKEN_PATH)) {
     try {
       const data = fs.readJsonSync(process.env.GATEWAY_TOKEN_PATH)
       return data.token || ''
-    } catch (e) {}
+    } catch {
+      // ignore
+    }
   }
 
   const tokenPath = fs.existsSync(devPath) ? devPath : prodPath
@@ -79,7 +80,7 @@ export function getGatewayToken(): string {
     try {
       const data = fs.readJsonSync(tokenPath)
       return data.token || ''
-    } catch (e) {
+    } catch {
       return ''
     }
   }

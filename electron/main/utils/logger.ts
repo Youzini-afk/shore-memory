@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import dayjs from 'dayjs'
 
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
@@ -7,8 +6,8 @@ export type LogSource = 'Main' | 'Renderer' | 'Gateway' | 'Backend' | 'Plugin' |
 class Logger {
   private static instance: Logger
 
-  // Patterns to hide (Noise reduction)
-  // Optimized: Combined regex for better performance
+  // 隐藏模式 (降噪)
+  // 优化: 组合正则以获得更好的性能
   private hiddenPattern: RegExp = new RegExp(
     [
       '\\[vite\\]',
@@ -43,8 +42,8 @@ class Logger {
     ].join('|')
   )
 
-  // Translation map (English -> Chinese)
-  // Optimized: Use a Map for O(1) lookup of exact matches, and regex for patterns
+  // 翻译映射 (英语 -> 中文)
+  // 优化: 使用 Map 进行精确匹配的 O(1) 查找，正则用于模式匹配
   private translations: Array<{ from: RegExp | string; to: string }> = [
     { from: 'Window ready-to-show event fired', to: '窗口准备就绪' },
     { from: 'Loading URL', to: '正在加载页面' },
@@ -85,25 +84,25 @@ class Logger {
   }
 
   private shouldHide(message: string): boolean {
-    // Fast path: Check length or common prefixes first
-    if (message.length > 500) return false // Don't filter long messages (likely important)
+    // 快速路径: 首先检查长度或公共前缀
+    if (message.length > 500) return false // 不过滤长消息 (可能很重要)
     if (message.startsWith('[vite]')) return true
 
     return this.hiddenPattern.test(message)
   }
 
   private translate(message: string): string {
-    // Fast path: if message is very short, skip translation
+    // 快速路径: 如果消息很短，跳过翻译
     if (message.length < 2) return message
 
-    // Fast path: skip translation for known log formats to save CPU
-    // e.g. [2026-...] [INFO] ...
+    // 快速路径: 跳过已知日志格式的翻译以节省 CPU
+    // 例如 [2026-...] [INFO] ...
     if (message.startsWith('[') && message.includes('] [')) return message
 
     let translated = message
-    // Most translations are specific phrases. We can check if the message *contains* key words first?
-    // But since we have a list of replacements, iterating is necessary unless we rebuild the whole string.
-    // However, we can optimize by only replacing if the source string is present.
+    // 大多数翻译都是特定短语。我们可以先检查消息是否*包含*关键字吗？
+    // 但由于我们有一个替换列表，迭代是必要的，除非我们重建整个字符串。
+    // 但是，我们可以通过仅在源字符串存在时进行替换来优化。
 
     for (const { from, to } of this.translations) {
       if (typeof from === 'string') {
@@ -127,11 +126,11 @@ class Logger {
     const translatedMsg = this.translate(message)
     const timestamp = dayjs().format('HH:mm:ss')
 
-    // Unified format: [HH:mm:ss] [SOURCE] [LEVEL] Message
+    // 统一格式: [HH:mm:ss] [SOURCE] [LEVEL] 消息
     const formattedLog = `[${timestamp}] [${source}] [${level}] ${translatedMsg}`
 
-    // Use console.log/error based on level to preserve terminal colors if available,
-    // or just standard output.
+    // 根据级别使用 console.log/error 以保留终端颜色 (如果可用)，
+    // 或者只是标准输出。
     if (level === 'ERROR') {
       console.error(formattedLog)
     } else if (level === 'WARN') {

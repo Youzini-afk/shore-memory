@@ -1,65 +1,64 @@
-
 declare global {
   interface Window {
     electron?: {
-      invoke: (channel: string, ...args: any[]) => Promise<any>;
-      on: (channel: string, listener: (event: any, ...args: any[]) => void) => () => void;
-    };
+      invoke: (channel: string, ...args: any[]) => Promise<any>
+      on: (channel: string, listener: (event: any, ...args: any[]) => void) => () => void
+    }
   }
 }
 
-const isElectron = () => !!window.electron;
+const isElectron = () => !!window.electron
 
 // Web Bridge 支持
-let ws: WebSocket | null = null;
-const listeners = new Map<string, Set<(payload: any) => void>>();
+let ws: WebSocket | null = null
+const listeners = new Map<string, Set<(payload: any) => void>>()
 
 const initWs = () => {
-  if (isElectron() || ws) return;
+  if (isElectron() || ws) return
 
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
   // 使用当前 Host (Docker/CLI 兼容)
-  const wsUrl = `${protocol}//${window.location.host}`;
-  
-  console.log('[IPC Adapter] Connecting to Web Bridge:', wsUrl);
-  ws = new WebSocket(wsUrl);
+  const wsUrl = `${protocol}//${window.location.host}`
+
+  console.log('[IPC Adapter] Connecting to Web Bridge:', wsUrl)
+  ws = new WebSocket(wsUrl)
 
   ws.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data)
       if (data.type === 'event' && data.channel) {
-        const handlers = listeners.get(data.channel);
+        const handlers = listeners.get(data.channel)
         if (handlers) {
           // WebBridge 发送数组参数，取首个作为 payload
-          const payload = data.args && data.args.length > 0 ? data.args[0] : undefined;
-          handlers.forEach(h => h(payload));
+          const payload = data.args && data.args.length > 0 ? data.args[0] : undefined
+          handlers.forEach((h) => h(payload))
         }
       }
     } catch (e) {
-      console.error('[IPC Adapter] WS Message Parse Error:', e);
+      console.error('[IPC Adapter] WS Message Parse Error:', e)
     }
-  };
+  }
 
   ws.onclose = () => {
-    console.log('[IPC Adapter] Web Bridge Disconnected. Reconnecting in 3s...');
-    ws = null;
-    setTimeout(initWs, 3000);
-  };
+    console.log('[IPC Adapter] Web Bridge Disconnected. Reconnecting in 3s...')
+    ws = null
+    setTimeout(initWs, 3000)
+  }
 
   ws.onerror = (err) => {
-    console.error('[IPC Adapter] Web Bridge Connection Error:', err);
-  };
-};
+    console.error('[IPC Adapter] Web Bridge Connection Error:', err)
+  }
+}
 
 // 浏览器模式自动初始化
 if (!isElectron()) {
   // 稍作延迟确保环境就绪
-  setTimeout(initWs, 100);
+  setTimeout(initWs, 100)
 }
 
 export const invoke = async (cmd: string, args?: any) => {
   if (isElectron()) {
-    return window.electron!.invoke(cmd, args);
+    return window.electron!.invoke(cmd, args)
   }
 
   // 浏览器模式 (HTTP Bridge)
@@ -69,56 +68,55 @@ export const invoke = async (cmd: string, args?: any) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(args !== undefined ? [args] : [])
-    });
+    })
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status} ${response.statusText}`);
+      throw new Error(`HTTP Error: ${response.status} ${response.statusText}`)
     }
 
-    const data = await response.json();
+    const data = await response.json()
     if (data.error) {
-      throw new Error(data.error);
+      throw new Error(data.error)
     }
-    return data.result;
-
+    return data.result
   } catch (e) {
-    console.error(`[IPC Adapter] Failed to invoke '${cmd}':`, e);
-    
+    console.error(`[IPC Adapter] Failed to invoke '${cmd}':`, e)
+
     // UI 指令安全回退
-    if (cmd.startsWith('window-')) return null;
-    
-    throw e;
+    if (cmd.startsWith('window-')) return null
+
+    throw e
   }
 }
 
 export const listen = async (event: string, handler: (payload: any) => void) => {
   if (isElectron()) {
-    return window.electron!.on(event, (_e: any, ...args: any[]) => handler(args[0]));
+    return window.electron!.on(event, (_e: any, ...args: any[]) => handler(args[0]))
   }
 
   // 浏览器模式 (WebSocket)
   if (!listeners.has(event)) {
-    listeners.set(event, new Set());
+    listeners.set(event, new Set())
   }
-  listeners.get(event)!.add(handler);
+  listeners.get(event)!.add(handler)
 
   // 返回取消订阅函数
   return () => {
-    const handlers = listeners.get(event);
+    const handlers = listeners.get(event)
     if (handlers) {
-      handlers.delete(handler);
+      handlers.delete(handler)
       if (handlers.size === 0) {
-        listeners.delete(event);
+        listeners.delete(event)
       }
     }
-  };
+  }
 }
 
 export const emit = async (event: string, payload?: any) => {
   if (isElectron()) {
-    return window.electron!.invoke('emit_event', { event, payload });
+    return window.electron!.invoke('emit_event', { event, payload })
   }
 
   // 浏览器模式: emit 映射为 invoke
-  return invoke('emit_event', { event, payload });
+  return invoke('emit_event', { event, payload })
 }

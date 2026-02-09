@@ -1,4 +1,4 @@
-# --- Stage 1: Builder (Rust + Python) ---
+# --- Stage 1: Builder (Rust + Python + uv) ---
 FROM python:3.10-slim AS builder
 
 # 安装构建工具
@@ -9,14 +9,17 @@ RUN apt-get update && apt-get install -y \
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# 安装 uv
+RUN pip install uv
+
 WORKDIR /build
 
 # 复制 Rust 源码
 COPY backend/nit_core/interpreter/rust_binding ./nit_core/interpreter/rust_binding
 COPY backend/rust_core ./rust_core
 
-# 编译 Rust 扩展 (使用 maturin)
-RUN pip install maturin
+# 编译 Rust 扩展 (使用 maturin，uv 可以快速安装)
+RUN uv pip install maturin --system
 RUN cd nit_core/interpreter/rust_binding && maturin build --release --out ../../../dist
 RUN cd rust_core && maturin build --release --out ../dist
 
@@ -31,19 +34,20 @@ RUN apt-get update && apt-get install -y \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
+# 安装 uv
+RUN pip install uv
+
 # 复制依赖定义
-COPY backend/requirements.txt .
-# 安装 Python 依赖
-RUN pip install --no-cache-dir -r requirements.txt
+COPY backend/pyproject.toml .
+# 复制源码 (uv pip install . 需要源码)
+COPY backend/ .
+
+# 安装 Python 依赖 (使用 uv，安装到系统环境)
+RUN uv pip install . --system
 
 # 复制并安装编译好的 Wheel 包
 COPY --from=builder /build/dist/*.whl /tmp/
-RUN pip install /tmp/*.whl
-
-# 复制源码
-COPY backend/ .
-# 注意：config 在 docker-compose 中通常挂载 volume，但这里可以复制一个模板
-# COPY config/ ./config_template/
+RUN uv pip install /tmp/*.whl --system
 
 # 环境变量
 ENV PERO_ENV=server

@@ -70,7 +70,7 @@ class NITBridge:
                 return str(result)
 
             except Exception as e:
-                return f"Error invoking MCP tool {tool_name}: {e}"
+                return f"调用 MCP 工具 {tool_name} 出错: {e}"
 
         # 1. 带 mcp_ 前缀
         prefixed_name = f"mcp_{tool_name}"
@@ -123,7 +123,7 @@ class NITBridge:
             target_type = "string"
 
             # 查找匹配的 key (忽略大小写/下划线)
-            for schema_key in properties.keys():
+            for schema_key in properties:
                 if self.dispatcher.parser.normalize_key(
                     schema_key
                 ) == self.dispatcher.parser.normalize_key(k):
