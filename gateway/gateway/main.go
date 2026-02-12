@@ -53,8 +53,12 @@ func generateAndSaveToken() {
 			"token": authToken,
 		}
 		fileData, _ := json.MarshalIndent(data, "", "  ")
+
+		absPath, _ := filepath.Abs(path)
 		if err := os.WriteFile(path, fileData, 0644); err != nil {
-			log.Printf("警告: 无法保存令牌到文件 %s: %v", path, err)
+			log.Printf("警告: 无法保存令牌到文件 %s: %v", absPath, err)
+		} else {
+			log.Printf("✅ Gateway 令牌已保存至: %s", absPath)
 		}
 	}
 }
@@ -69,6 +73,7 @@ var upgrader = websocket.Upgrader{
 type Node struct {
 	ID   string
 	Conn *websocket.Conn
+	mu   sync.Mutex
 	// Capabilities, etc.
 }
 
@@ -117,6 +122,10 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		messageType, p, err := conn.ReadMessage()
 		if err != nil {
+			// 如果是正常关闭，不打印错误日志
+			if !websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				break
+			}
 			log.Println("读取消息失败 (read):", err)
 			break
 		}
@@ -175,7 +184,9 @@ func broadcastMessage(envelope *perolink.Envelope) {
 			continue // Don't echo back to sender
 		}
 
+		node.mu.Lock()
 		err := node.Conn.WriteMessage(websocket.BinaryMessage, data)
+		node.mu.Unlock()
 		if err != nil {
 			log.Printf("发送至 %s 错误: %v\n", id, err)
 			// TODO: Handle disconnection
@@ -199,7 +210,9 @@ func unicastMessage(envelope *perolink.Envelope) {
 		return
 	}
 
+	node.mu.Lock()
 	err = node.Conn.WriteMessage(websocket.BinaryMessage, data)
+	node.mu.Unlock()
 	if err != nil {
 		log.Printf("发送至 %s 错误: %v\n", envelope.TargetId, err)
 	}

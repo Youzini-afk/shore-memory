@@ -200,7 +200,7 @@ const handleDialogCancel = () => {
   dialog.visible = false
 }
 
-const API_BASE = 'http://localhost:9120/api/ide'
+const API_BASE = 'http://127.0.0.1:9120/api/ide'
 
 const fetchFiles = async (path = null) => {
   try {

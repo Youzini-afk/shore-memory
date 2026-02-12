@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref } from 'vue'
 import {
   Menu as IconMenu,
   ChatLineRound,
@@ -16,11 +16,6 @@ import {
 } from '@element-plus/icons-vue'
 
 // Mock Data
-const stats = reactive({
-  total_memories: 128,
-  total_logs: 1256,
-  total_tasks: 5
-})
 
 const currentTab = ref('overview')
 
@@ -49,11 +44,7 @@ const handleQuitApp = () => {
     <el-container class="main-layout">
       <!-- 侧边导航栏 -->
       <el-aside width="260px" class="glass-sidebar">
-        <el-menu
-          :default-active="currentTab"
-          class="sidebar-menu"
-          @select="handleTabSelect"
-        >
+        <el-menu :default-active="currentTab" class="sidebar-menu" @select="handleTabSelect">
           <el-menu-item index="overview">
             <el-icon><IconMenu /></el-icon>
             <span>总览</span>
@@ -94,19 +85,14 @@ const handleQuitApp = () => {
             <el-icon><Monitor /></el-icon>
             <span>系统终端</span>
           </el-menu-item>
-          <el-menu-item index="system_reset" style="color: #f56c6c;">
+          <el-menu-item index="system_reset" style="color: #f56c6c">
             <el-icon><Warning /></el-icon>
             <span>危险区域</span>
           </el-menu-item>
         </el-menu>
 
         <div class="sidebar-footer">
-          <el-button 
-            class="quit-button" 
-            type="danger" 
-            plain 
-            @click="handleQuitApp"
-          >
+          <el-button class="quit-button" type="danger" plain @click="handleQuitApp">
             <el-icon><SwitchButton /></el-icon>
             <span>退出系统</span>
           </el-button>
@@ -119,13 +105,13 @@ const handleQuitApp = () => {
           <div class="view-container-wrapper">
             <!-- 1. 仪表盘概览 -->
             <div v-if="currentTab === 'overview'" class="view-container">
-              <div style="margin-top: 40px; text-align: center; color: #666;">
-                 <h2>欢迎使用 PeroCore 控制面板</h2>
-                 <p>点击左侧菜单查看不同功能模块 (演示版)</p>
+              <div style="margin-top: 40px; text-align: center; color: #666">
+                <h2>欢迎使用 PeroCore 控制面板</h2>
+                <p>点击左侧菜单查看不同功能模块 (演示版)</p>
               </div>
             </div>
             <div v-else class="view-container placeholder-view">
-                <el-empty :description="currentTab + ' 页面 (演示模式)'" />
+              <el-empty :description="currentTab + ' 页面 (演示模式)'" />
             </div>
           </div>
         </el-main>
@@ -142,7 +128,7 @@ const handleQuitApp = () => {
   background-color: #fce7f3; /* pink-50 */
   overflow: hidden;
   border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   color: #374151;
 }
@@ -156,7 +142,7 @@ const handleQuitApp = () => {
   justify-content: center;
   font-size: 12px;
   color: #666;
-  border-bottom: 1px solid rgba(0,0,0,0.05);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
   position: relative;
   z-index: 10;
 }
@@ -209,9 +195,16 @@ const handleQuitApp = () => {
 }
 
 @keyframes float {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(30px, -50px) scale(1.1); }
-  66% { transform: translate(-20px, 20px) scale(0.9); }
+  0%,
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+  33% {
+    transform: translate(30px, -50px) scale(1.1);
+  }
+  66% {
+    transform: translate(-20px, 20px) scale(0.9);
+  }
 }
 
 .main-layout {
@@ -271,7 +264,7 @@ const handleQuitApp = () => {
 
 .version-tag {
   font-size: 10px;
-  background: rgba(255,255,255,0.5);
+  background: rgba(255, 255, 255, 0.5);
   padding: 2px 6px;
   border-radius: 10px;
   color: #666;
@@ -319,7 +312,7 @@ const handleQuitApp = () => {
 .content-area {
   padding: 20px;
   overflow-y: auto;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .view-container {
@@ -331,7 +324,7 @@ const handleQuitApp = () => {
   align-items: center;
   justify-content: center;
   height: 100%;
-  background: rgba(255,255,255,0.3);
+  background: rgba(255, 255, 255, 0.3);
   border-radius: 12px;
 }
 
@@ -369,7 +362,7 @@ const handleQuitApp = () => {
 .stat-icon {
   font-size: 32px;
   margin-right: 16px;
-  background: rgba(255,255,255,0.2);
+  background: rgba(255, 255, 255, 0.2);
   width: 56px;
   height: 56px;
   border-radius: 12px;

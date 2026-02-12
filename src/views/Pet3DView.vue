@@ -244,7 +244,7 @@
 import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import BedrockAvatar from '../components/avatar/BedrockAvatar.vue'
 import PetNotificationManager from '@/components/ui/PetNotificationManager.vue'
-import FileSearchModal from '../components/FileSearchModal.vue'
+import FileSearchModal from '../components/modals/FileSearchModal.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
 import { API_BASE } from '../config'
 import { gatewayClient } from '../api/gateway'
@@ -313,6 +313,7 @@ const parsedBubbleContent = computed(() => {
   if (!text) return []
 
   const segments = []
+  // [兼容性保留] 正则包含 Monologue 以兼容历史数据展示，2024-02 之后的新消息将不再产生此标签
   const regex =
     /(?:【(Thinking|Error|Reflection|Monologue)[:：]?\s*([\s\S]*?)】)|(?:\n|^)\s*\*([\s\S]+?)\*|(?:\n|^)\s*(Thought|Action)[:：]\s*([\s\S]+?)(?=\n\s*(?:Thought|Action)[:：]|\n\s*\*|【(?:Thinking|Error|Reflection|Monologue)|$)|(?:<(nit(?:-[a-zA-Z0-9-]+)?)>[\s\S]*?<\/\6>)|(?:\[\[\[NIT_CALL\]\]\][\s\S]*?\[\[\[NIT_END\]\]\])/gi
 

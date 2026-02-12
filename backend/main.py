@@ -30,12 +30,13 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from rich.console import Console
-from rich.logging import RichHandler
 from rich.traceback import install as install_rich_traceback
+
+from utils.logging_config import configure_logging
 
 # --- 1. Rich 全局初始化 (最优先执行) ---
 
-# 强制 stdout 使用 UTF-8 编码，防止在 Windows 终端出现乱码
+# 强制 stdout 使用 UTF-8 编码
 if sys.stdout.encoding.lower() != "utf-8":
     try:
         sys.stdout.reconfigure(encoding="utf-8")
@@ -43,19 +44,14 @@ if sys.stdout.encoding.lower() != "utf-8":
         import io
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
+log_file = os.environ.get("PERO_LOG_FILE")
+configure_logging(log_file=log_file)
+
 # 安装 Rich 的 traceback handler，使报错信息美观易读
 install_rich_traceback(show_locals=True, width=120)
 
 # 初始化 Rich Console
 console = Console()
-
-# 配置全局 logging 使用 RichHandler
-logging.basicConfig(
-    level="INFO",
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(console=console, rich_tracebacks=True, markup=True)],
-)
 
 # 获取 logger
 logger = logging.getLogger("rich")
@@ -100,7 +96,7 @@ if current_dir not in sys.path:
     sys.path.insert(0, current_dir)
 
 from core.config_manager import get_config_manager
-from database import get_session, init_db
+from database import engine, get_session, init_db
 from models import (
     AIModelConfig,
     Config,
@@ -122,20 +118,22 @@ from routers.memory_router import history_router, legacy_memories_router
 from routers.memory_router import router as memory_router
 from routers.nit_router import router as nit_router
 from routers.scheduler_router import router as scheduler_router
+from routers.stronghold_router import router as stronghold_router
 from routers.task_control_router import router as task_control_router
-from services.agent_service import AgentService
-from services.asr_service import get_asr_service
-from services.browser_bridge_service import browser_bridge_service
-from services.companion_service import companion_service
-from services.embedding_service import embedding_service
-from services.gateway_client import gateway_client
-from services.memory_secretary_service import MemorySecretaryService
-from services.memory_service import MemoryService
-from services.realtime_session_manager import realtime_session_manager
-from services.scheduler_service import scheduler_service
-from services.screenshot_service import screenshot_manager
-from services.sync_service import sync_service
-from services.tts_service import get_tts_service
+from services.agent.agent_service import AgentService
+from services.agent.companion_service import companion_service
+from services.agent.scheduler_service import scheduler_service
+from services.core.embedding_service import embedding_service
+from services.core.gateway_client import gateway_client
+from services.core.realtime_session_manager import realtime_session_manager
+from services.core.sync_service import sync_service
+from services.interaction.browser_bridge_service import browser_bridge_service
+from services.interaction.tts_service import get_tts_service
+
+# from services.memory_secretary_service import MemorySecretaryService
+from services.memory.memory_service import MemoryService
+from services.perception.asr_service import get_asr_service
+from services.perception.screenshot_service import screenshot_manager
 
 if os.name == "nt":
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
@@ -145,10 +143,9 @@ if os.name == "nt":
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
 # 初始化日志
-from utils.logging_config import configure_logging
-
-log_file = os.environ.get("PERO_LOG_FILE")
-configure_logging(log_file=log_file)
+# configure_logging 已经在最前面调用过一次了，这里不需要重复初始化
+# log_file = os.environ.get("PERO_LOG_FILE")
+# configure_logging(log_file=log_file)
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +179,7 @@ async def lifespan(app: FastAPI):
         print("🧠 记忆引擎: [禁用] (未找到 pero_memory_core)")
 
     # 检查向量存储
-    from services.vector_store_service import VectorStoreService
+    from services.core.vector_store_service import VectorStoreService
 
     vs = VectorStoreService()
     print(
@@ -195,6 +192,11 @@ async def lifespan(app: FastAPI):
 
     # 从数据库加载配置
     await get_config_manager().load_from_db()
+
+    # [优化] 预热 AgentManager 以避免首次请求延迟
+    from services.agent.agent_manager import get_agent_manager
+    get_agent_manager()
+    print("🤖 AgentManager: [就绪]")
 
     # [Debug] 打印加载的关键配置
     cm = get_config_manager()
@@ -232,7 +234,7 @@ async def lifespan(app: FastAPI):
     # Start AuraVision (if enabled)
     config_mgr = get_config_manager()
     if config_mgr.get("aura_vision_enabled", False):
-        from services.aura_vision_service import aura_vision_service
+        from services.perception.aura_vision_service import aura_vision_service
 
         if aura_vision_service.initialize():
             asyncio.create_task(aura_vision_service.start_vision_loop())
@@ -269,7 +271,7 @@ async def lifespan(app: FastAPI):
         from sqlalchemy.orm import sessionmaker
 
         from database import engine
-        from services.chain_service import chain_service
+        from services.agent.chain_service import chain_service
 
         # Initial delay to let DB settle
         await asyncio.sleep(30)
@@ -310,7 +312,7 @@ async def lifespan(app: FastAPI):
                             # [Feature] Persist Weekly Report to DB
                             # 周报直接存入数据库，不再保存到本地文件
                             try:
-                                from services.memory_service import MemoryService
+                                from services.memory.memory_service import MemoryService
 
                                 await MemoryService.save_memory(
                                     session=session,
@@ -393,7 +395,7 @@ async def lifespan(app: FastAPI):
                             f"[Main] 触发定时梦境模式 (上次: {last_trigger_time}, 计划: {latest_scheduled})"
                         )
                         # Instantiate AgentService to use its _trigger_dream method
-                        from services.agent_service import AgentService
+                        from services.agent.agent_service import AgentService
 
                         agent_service = AgentService(session)
                         await agent_service._trigger_dream()
@@ -445,31 +447,27 @@ async def lifespan(app: FastAPI):
                             f"[Main] 触发定时记忆维护与梦境 (上次: {last_time}, 计划: {latest_scheduled})"
                         )
 
-                        # 1. Trigger Memory Secretary (Maintenance)
-                        from services.memory_secretary_service import (
-                            MemorySecretaryService,
-                        )
-
-                        maintenance_service = MemorySecretaryService(session)
-
-                        # 2. Trigger Agent Service (Dream)
-                        from services.agent_service import AgentService
-
-                        agent_service = AgentService(session)
-
-                        # 3. Trigger Daily Diary Generation
-                        from services.reflection_service import ReflectionService
+                        # 1. Trigger Reflection Service (Maintenance & Dream)
+                        from services.memory.reflection_service import ReflectionService
 
                         reflection_service = ReflectionService(session)
 
+                        # 2. Trigger Agent Service (Dream trigger)
+                        from services.agent.agent_service import AgentService
+
+                        agent_service = AgentService(session)
+
                         # Run tasks
                         try:
-                            active_agent_id = config.get("agent_id", "pero")
+                            # [Fix] Config is a single DB model instance, not a dictionary. Use ConfigManager to get global settings.
+                            config_mgr = get_config_manager()
+                            active_agent_id = config_mgr.get("agent_id", "pero")
                             await asyncio.gather(
-                                maintenance_service.run_maintenance(),
+                                reflection_service.run_maintenance(),
                                 agent_service._trigger_dream(),
                                 reflection_service.generate_desktop_diary(
-                                    agent_id=active_agent_id
+                                    agent_id=active_agent_id,
+                                    date_str=latest_scheduled.strftime("%Y-%m-%d"),
                                 ),
                             )
                         except Exception as inner_e:
@@ -500,7 +498,7 @@ async def lifespan(app: FastAPI):
         from sqlalchemy.orm import sessionmaker
 
         from database import engine
-        from services.reflection_service import ReflectionService
+        from services.memory.reflection_service import ReflectionService
 
         # Initial delay to stagger with other tasks
         await asyncio.sleep(300)
@@ -530,7 +528,7 @@ async def lifespan(app: FastAPI):
     # Replaces frontend polling with backend scheduling
     async def execute_and_broadcast_chat(instruction: str, session: AsyncSession):
         """Execute a trigger chat and broadcast the result to all connected clients."""
-        from services.agent_service import AgentService
+        from services.agent.agent_service import AgentService
 
         agent_service = AgentService(session)
         full_response = ""
@@ -729,6 +727,44 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_warmup())
 
+    # [Feature] Stronghold Initialization
+    try:
+        from services.chat.stronghold_service import StrongholdService
+        async with AsyncSession(engine) as session:
+            stronghold_service = StrongholdService(session)
+            await stronghold_service.ensure_initial_data()
+            print("[Main] Stronghold initialized.")
+    except Exception as e:
+        print(f"[Main] Stronghold initialization failed: {e}")
+
+    # [Optimization] Pre-warm critical status caches for Dashboard
+    try:
+        from services.agent.agent_manager import get_agent_manager
+        agent_manager = get_agent_manager()
+        active_agent = agent_manager.get_active_agent()
+        active_agent_id = active_agent.id if active_agent else "pero"
+
+        async with AsyncSession(engine) as session:
+            statement = select(PetState).where(PetState.agent_id == active_agent_id)
+            state = (await session.exec(statement)).first()
+            if not state:
+                state = PetState(
+                    agent_id=active_agent_id, mood="开心", vibe="正常", mind="正在想主人..."
+                )
+                session.add(state)
+                await session.commit()
+                await session.refresh(state)
+
+            if not hasattr(app.state, "pet_state_cache"):
+                app.state.pet_state_cache = {}
+            app.state.pet_state_cache[active_agent_id] = {
+                "data": state,
+                "time": time.time()
+            }
+        print(f"✅ 状态预热完成 (Agent: {active_agent_id})")
+    except Exception as e:
+        print(f"⚠️ 状态预热失败: {e}")
+
     yield
 
     # Shutdown
@@ -766,6 +802,7 @@ app.include_router(nit_router)
 app.include_router(task_control_router)
 app.include_router(agent_router)
 app.include_router(group_chat_router)
+app.include_router(stronghold_router)
 
 # [Plugin] Social Adapter Router
 from nit_core.plugins.social_adapter.social_router import router as social_router
@@ -978,28 +1015,53 @@ async def websocket_browser_endpoint(websocket: WebSocket):
     await browser_bridge_service.connect(websocket)
 
 
+@app.get("/api/companion/status")
+async def get_companion_status():
+    config_mgr = get_config_manager()
+    enabled = config_mgr.get("companion_mode_enabled", False)
+    return {"enabled": enabled}
+
+
 @app.get("/api/pet/state")
 async def get_pet_state(session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         # Get active agent info FIRST
-        from services.agent_manager import get_agent_manager
+        from services.agent.agent_manager import get_agent_manager
 
         agent_manager = get_agent_manager()
         active_agent = agent_manager.get_active_agent()
         active_agent_id = active_agent.id if active_agent else "pero"
 
-        # Find PetState for active agent
-        statement = select(PetState).where(PetState.agent_id == active_agent_id)
-        state = (await session.exec(statement)).first()
+        # [Optimization] Use a simple cache for PetState to avoid DB queries on every Dashboard refresh
+        # If not in cache, fetch from DB and update cache
+        if not hasattr(app.state, "pet_state_cache"):
+            app.state.pet_state_cache = {}
+
+        state = None
+        if active_agent_id in app.state.pet_state_cache:
+            # Check if cache is older than 5 seconds
+            cache_entry = app.state.pet_state_cache[active_agent_id]
+            if time.time() - cache_entry["time"] < 5:
+                state = cache_entry["data"]
 
         if not state:
-            # 初始化默认状态
-            state = PetState(
-                agent_id=active_agent_id, mood="开心", vibe="正常", mind="正在想主人..."
-            )
-            session.add(state)
-            await session.commit()
-            await session.refresh(state)
+            statement = select(PetState).where(PetState.agent_id == active_agent_id)
+            state = (await session.exec(statement)).first()
+
+            if not state:
+                # 初始化默认状态
+                state = PetState(
+                    agent_id=active_agent_id, mood="开心", vibe="正常", mind="正在想主人..."
+                )
+                session.add(state)
+                await session.commit()
+                await session.refresh(state)
+
+            # Update cache
+            app.state.pet_state_cache[active_agent_id] = {
+                "data": state,
+                "time": time.time()
+            }
 
         # Convert to dict and add active_agent info
         response_data = state.model_dump()
@@ -1046,7 +1108,7 @@ async def get_system_status():
 
 
 # --- Task Control APIs ---
-from services.task_manager import task_manager
+from services.agent.task_manager import task_manager
 
 
 @app.post("/api/task/{session_id}/pause")
@@ -1097,6 +1159,19 @@ async def toggle_companion(
             status_code=400, detail="请先开启“轻量模式”后再启动陪伴模式。"
         )
 
+    # [New Requirement] Companion mode requires vision capability in current model
+    if enabled:
+        config_entry = await session.get(Config, "current_model_id")
+        if not config_entry:
+            raise HTTPException(status_code=400, detail="未配置当前对话模型，无法开启陪伴模式。")
+        
+        model_config = await session.get(AIModelConfig, int(config_entry.value))
+        if not model_config or not model_config.enable_vision:
+            raise HTTPException(
+                status_code=400, 
+                detail="当前对话模型未开启“图片模态”能力，陪伴模式需要模型能够理解屏幕截图。"
+            )
+
     config = await session.get(Config, "companion_mode_enabled")
     if not config:
         config = Config(key="companion_mode_enabled", value="false")
@@ -1119,9 +1194,9 @@ async def toggle_companion(
 
 # --- Social Mode APIs ---
 @app.get("/api/social/status")
-async def get_social_status(session: AsyncSession = Depends(get_session)):  # noqa: B008
-    config = await session.get(Config, "enable_social_mode")
-    enabled = config.value == "true" if config else False
+async def get_social_status():
+    config_mgr = get_config_manager()
+    enabled = config_mgr.get("enable_social_mode", False)
     return {"enabled": enabled}
 
 
@@ -1387,7 +1462,7 @@ async def delete_mcp(mcp_id: int, session: AsyncSession = Depends(get_session)):
 
 
 @app.get("/api/nit/status")
-async def get_nit_status(session: AsyncSession = Depends(get_session)):  # noqa: B008
+async def get_nit_status():
     from nit_core.dispatcher import get_dispatcher
 
     dispatcher = get_dispatcher()
@@ -1396,15 +1471,12 @@ async def get_nit_status(session: AsyncSession = Depends(get_session)):  # noqa:
     plugin_names = dispatcher.pm.list_plugins()
     plugins_data = [{"name": name} for name in plugin_names]
 
-    # Get enabled MCPs count
-    mcp_count = len(
-        (await session.exec(select(MCPConfig).where(MCPConfig.enabled))).all()
-    )
-
+    # Use ConfigManager for active_mcp_count if available, otherwise just return 0 for speed
+    # We avoid DB query here to ensure Dashboard rendering is not blocked by slow NIT status
     return {
         "nit_version": "1.0",
         "plugins_count": len(plugin_names),
-        "active_mcp_count": mcp_count,
+        "active_mcp_count": 0,  # [Optimized] 暂时返回 0 以提高响应速度，Dashboard 不需要精确计数
         "plugins": plugins_data,
     }
 
@@ -1460,7 +1532,7 @@ async def delete_orphaned_edges(session: AsyncSession = Depends(get_session)):  
 async def scan_lonely_memories(
     limit: int = 5, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
-    from services.reflection_service import ReflectionService
+    from services.memory.reflection_service import ReflectionService
 
     service = ReflectionService(session)
     result = await service.scan_lonely_memories(limit=limit)
@@ -1469,16 +1541,16 @@ async def scan_lonely_memories(
 
 @app.post("/api/memories/maintenance")
 async def run_maintenance(session: AsyncSession = Depends(get_session)):  # noqa: B008
-    from services.memory_secretary_service import MemorySecretaryService
+    from services.memory.reflection_service import ReflectionService
 
-    service = MemorySecretaryService(session)
+    service = ReflectionService(session)
     result = await service.run_maintenance()
     return result
 
 
 @app.post("/api/memories/dream")
 async def trigger_dream(limit: int = 10, session: AsyncSession = Depends(get_session)):  # noqa: B008
-    from services.reflection_service import ReflectionService
+    from services.memory.reflection_service import ReflectionService
 
     service = ReflectionService(session)
     result = await service.dream_and_associate(limit=limit)
@@ -1993,7 +2065,9 @@ async def health_check():
 
 @app.post("/api/maintenance/run")
 async def run_maintenance_api(session: AsyncSession = Depends(get_session)):  # noqa: B008
-    service = MemorySecretaryService(session)
+    from services.memory.reflection_service import ReflectionService
+
+    service = ReflectionService(session)
     return await service.run_maintenance()
 
 
@@ -2145,7 +2219,7 @@ async def get_waifu_texts(session: AsyncSession = Depends(get_session)):  # noqa
     """获取动态生成的 Live2D 台词配置 (Agent 专属)"""
     try:
         # 1. 获取当前活跃 Agent
-        from services.agent_manager import get_agent_manager
+        from services.agent.agent_manager import get_agent_manager
 
         agent_manager = get_agent_manager()
         active_agent = agent_manager.get_active_agent()
@@ -2235,7 +2309,7 @@ async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):  # noqa: B00
     api_base = payload.get("api_base", "https://api.openai.com")
     provider = payload.get("provider", "openai")
 
-    from services.llm_service import LLMService
+    from services.core.llm_service import LLMService
 
     llm = LLMService(api_key, api_base, "", provider=provider)
     models = await llm.list_models()
@@ -2247,7 +2321,9 @@ async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):  # noqa: B00
 async def undo_maintenance_api(
     record_id: int, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
-    service = MemorySecretaryService(session)
+    from services.memory.reflection_service import ReflectionService
+
+    service = ReflectionService(session)
     success = await service.undo_maintenance(record_id)
     if not success:
         raise HTTPException(status_code=400, detail="Undo failed or record not found")

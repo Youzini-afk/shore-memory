@@ -1,0 +1,16 @@
+[
+  {
+    "name": "find_anime_by_image",
+    "description": "Find anime source by image.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "image_url": {
+          "type": "string",
+          "description": "URL of the image to search."
+        }
+      },
+      "required": ["image_url"]
+    }
+  }
+]

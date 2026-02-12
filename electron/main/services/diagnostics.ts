@@ -57,7 +57,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
   const dotVenvPython = path.join(workspaceRoot, 'backend/.venv/Scripts/python.exe')
 
   logger.info('Main', `[诊断] 检查虚拟环境路径: ${devVenvPython} 和 ${dotVenvPython}`)
-  
+
   if (await fs.pathExists(devVenvPython)) {
     devVenvPythonExists = true
     pythonPath = devVenvPython

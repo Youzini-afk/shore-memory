@@ -108,7 +108,7 @@ class SocialMemoryService:
             # Embedding（调用核心的 EmbeddingService）
             vec = []
             try:
-                from services.embedding_service import embedding_service
+                from services.core.embedding_service import embedding_service
 
                 vec = embedding_service.encode_one(content)
             except Exception as e:
@@ -304,7 +304,7 @@ class SocialMemoryService:
                 bot_name = "Pero"
 
             # 获取 Agent 配置文件以进行动态角色注入
-            from services.agent_manager import AgentManager
+            from services.agent.agent_manager import AgentManager
 
             agent_manager = AgentManager()
             agent_manager.agents.get(agent_id)
@@ -322,7 +322,7 @@ class SocialMemoryService:
                 },
             )
 
-            from services.llm_service import llm_service
+            from services.core.llm_service import llm_service
 
             report_text = await llm_service.chat_completion(
                 messages=[{"role": "user", "content": report_prompt}], temperature=0.7

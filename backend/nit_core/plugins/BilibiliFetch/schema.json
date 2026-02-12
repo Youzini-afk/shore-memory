@@ -1,0 +1,30 @@
+[
+  {
+    "name": "bilibili_get_info",
+    "description": "Get video info from Bilibili.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Video URL or BV ID."
+        }
+      },
+      "required": ["url"]
+    }
+  },
+  {
+    "name": "bilibili_get_subtitles",
+    "description": "Get video subtitles from Bilibili.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": {
+          "type": "string",
+          "description": "Video URL or BV ID."
+        }
+      },
+      "required": ["url"]
+    }
+  }
+]

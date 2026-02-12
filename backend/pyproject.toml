@@ -102,7 +102,7 @@ exclude = [
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "B", "C4", "SIM"]
-ignore = ["E501"] # Line length handled by black
+ignore = ["E501", "B008"] # Line length handled by black, B008 ignored for FastAPI Depends
 
 # Allow autofix for all enabled rules (when `--fix`) is provided.
 fixable = ["A", "B", "C", "D", "E", "F", "I", "SIM"]

@@ -11,7 +11,8 @@
     "invocationCommands": [
       {
         "commandIdentifier": "finish_task",
-        "description": "结束任务并总结。参数 summary: 给主人的最终回复(必填); mood: 心情(如高兴, 思考); vibe: 氛围(如活跃, 发呆); mind: 内心独白; click_head_msgs/click_chest_msgs/click_body_msgs: 触碰头部/胸部/身体的随机台词(支持字符串或列表); idle_msgs: 闲置台词; back_msgs: 欢迎回来台词。"
+        "description": "结束任务并进行最终总结，同时更新你的心情与交互台词",
+        "parameter": "最终回复 (summary)，心情 (mood: '高兴'/'思考'等)，氛围 (vibe)，内心独白 (mind)，触碰头部/胸部/身体台词 (click_head_msgs/click_chest_msgs/click_body_msgs)，闲置台词 (idle_msgs)，欢迎回来台词 (back_msgs)"
       }
     ]
   }

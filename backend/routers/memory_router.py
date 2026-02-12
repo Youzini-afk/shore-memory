@@ -10,12 +10,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from database import engine, get_session
 from models import ConversationLog
 from peroproto import perolink_pb2
-from services.gateway_client import gateway_client
-from services.memory_importer import MemoryImporter
-from services.memory_secretary_service import MemorySecretaryService
-from services.memory_service import MemoryService
+from services.core.gateway_client import gateway_client
+from services.memory.memory_importer import MemoryImporter
+from services.memory.memory_service import MemoryService
+from services.memory.reflection_service import ReflectionService
 
-router = APIRouter(prefix="/api/memory", tags=["memory"])
+router = APIRouter(prefix="/api/memories", tags=["memory"])
 history_router = APIRouter(prefix="/api/history", tags=["history"])
 legacy_memories_router = APIRouter(prefix="/api/memories", tags=["memory-legacy"])
 
@@ -42,7 +42,7 @@ async def import_story(
 @router.post("/secretary/run")
 async def run_memory_secretary(session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
-        service = MemorySecretaryService(session)
+        service = ReflectionService(session)
         return await service.run_maintenance()
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
@@ -105,7 +105,7 @@ async def get_chat_history(
 
 
 async def run_retry_background(log_id: int):
-    from services.scorer_service import ScorerService
+    from services.memory.scorer_service import ScorerService
 
     try:
         async_session = sessionmaker(

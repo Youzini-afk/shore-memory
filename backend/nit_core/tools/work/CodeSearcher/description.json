@@ -11,7 +11,8 @@
     "invocationCommands": [
       {
         "commandIdentifier": "code_search",
-        "description": "代码搜索。参数 query_pattern: 关键词/正则; target_rel_path: (可选) 相对路径; is_case_sensitive: (可选) True/False; context_lines_count: (可选) 上下文行数。"
+        "description": "在项目中通过关键词或正则表达式检索代码逻辑",
+        "parameter": "搜索内容 (query_pattern)，可选的搜索路径 (target_rel_path)，是否区分大小写 (is_case_sensitive: true/false)"
       }
     ]
   }

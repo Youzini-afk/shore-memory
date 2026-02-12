@@ -1,0 +1,24 @@
+{
+  "manifestVersion": "1.0.1",
+  "name": "StrongholdOps",
+  "displayName": "据点交互 (StrongholdOps)",
+  "version": "1.0.1",
+  "description": "据点交互工具。用于角色在据点内的移动和呼叫管家。",
+  "author": "PeroCore",
+  "pluginType": "python-module",
+  "entryPoint": "stronghold_ops.py",
+  "capabilities": {
+    "invocationCommands": [
+      {
+        "commandIdentifier": "call_butler",
+        "description": "呼叫据点管家来协助更改环境或执行操作",
+        "parameter": "对管家的具体请求 (query, 例如 '把灯光调暗', '播放音乐')"
+      },
+      {
+        "commandIdentifier": "move_to_room",
+        "description": "移动到据点内的另一个房间",
+        "parameter": "目标房间名称 (target_room_name, 例如 '客厅', '卧室')"
+      }
+    ]
+  }
+}

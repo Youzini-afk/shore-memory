@@ -6,7 +6,7 @@ import numpy as np
 from sqlmodel import desc, select
 
 from models import Config, ConversationLog, PetState
-from services.embedding_service import embedding_service
+from services.core.embedding_service import embedding_service
 
 from .base import BasePreprocessor
 
@@ -54,11 +54,124 @@ class UserInputPreprocessor(BasePreprocessor):
 class HistoryPreprocessor(BasePreprocessor):
     """
     从数据库获取并清理对话历史。
+    支持多源历史拉取与压扁 (Flattening) 逻辑，为 MDP 的两轮制拼接提供支持。
     """
 
     @property
     def name(self) -> str:
         return "HistoryFetcher"
+
+    async def _fetch_and_clean_logs(
+        self,
+        session,
+        memory_service,
+        source: str,
+        limit: int,
+        agent_id: str,
+        before_id: str = None,
+    ) -> list[Dict[str, str]]:
+        """辅助函数：拉取并清理特定源的日志"""
+        try:
+            # 对于 Group/Desktop 模式，session_id 不作为过滤条件（我们拉取所有模式相关的日志）
+            # 但为了保持兼容性，如果 source 是 ide/work，我们仍然通过 session_id 过滤
+            query_session_id = None
+            if source == "ide" or (
+                isinstance(source, str) and source.startswith("work_")
+            ):
+                query_session_id = source  # 这里 source 可能被用作 session_id
+
+            logs = await memory_service.query_logs(
+                session,
+                source=source if not query_session_id else None,
+                session_id=query_session_id if query_session_id else "all",
+                limit=limit,
+                agent_id=agent_id,
+                before_id=before_id,
+            )
+        except Exception as e:
+            print(f"[HistoryPreprocessor] 拉取 {source} 日志失败: {e}")
+            return []
+
+        cleaned_msgs = []
+        if not logs:
+            return cleaned_msgs
+
+        for log in logs:
+            content = log.content
+            # 清理 XML 标签和 Thinking 块
+            content = re.sub(
+                r"<!-- PERO_RAG_BLOCK_START.*?-->", "", content, flags=re.S
+            )
+            content = re.sub(r"<!-- PERO_RAG_BLOCK_END -->", "", content, flags=re.S)
+            content = re.sub(
+                r"【\s*(?:Thinking|Monologue)\s*:.*?】", "", content, flags=re.S
+            )
+            content = re.sub(r"<([A-Z_]+)>.*?</\1>", "", content, flags=re.S)
+            content = re.sub(r"<[^>]+>", "", content)
+            content = content.strip()
+
+            if content:
+                cleaned_msgs.append({
+                    "role": log.role, 
+                    "content": content,
+                    "timestamp": log.timestamp
+                })
+
+        return cleaned_msgs
+
+    def _flatten_history(self, messages: list[Dict[str, Any]], bot_name: str) -> str:
+        """将消息列表压扁为 XML 格式"""
+        if not messages:
+            return "<!-- 暂无历史记录 -->"
+
+        flattened_lines = []
+        now = datetime.datetime.now()
+        
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            ts = msg.get("timestamp")
+            
+            # 格式化时间
+            time_str = ""
+            if ts:
+                try:
+                    # 兼容秒级和毫秒级时间戳
+                    if ts > 1e11: # 毫秒
+                        dt = datetime.datetime.fromtimestamp(ts / 1000.0)
+                    else: # 秒
+                        dt = datetime.datetime.fromtimestamp(ts)
+                    
+                    # 如果不是今天的消息，增加日期显示 [MM-DD HH:MM]
+                    if dt.date() != now.date():
+                        time_str = dt.strftime("%m-%d %H:%M")
+                    else:
+                        time_str = dt.strftime("%H:%M")
+                except Exception:
+                    pass
+
+            # 显示名称映射
+            display_name = "User"
+            if role == "assistant":
+                display_name = bot_name
+            elif role == "system":
+                display_name = "System"
+            elif role == "user":
+                display_name = "User" # 或者 owner_name
+            
+            # 转义内容，防止破坏 XML 结构
+            content = str(content).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+            # 构建 XML 标签
+            # <message role="user" name="User" time="12:00">Content</message>
+            line = f'<message role="{role}" name="{display_name}"'
+            if time_str:
+                line += f' time="{time_str}"'
+            line += f'>{content}</message>'
+            
+            flattened_lines.append(line)
+            
+        return "\n".join(flattened_lines)
 
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         session = context["session"]
@@ -67,16 +180,74 @@ class HistoryPreprocessor(BasePreprocessor):
         session_id = context.get("session_id", "default")
         current_messages = context.get("messages", [])
         agent_id = context.get("agent_id", "pero")
+        variables = context.get("variables", {})
 
-        # [可配置预处理器] 检查是否通过配置禁用了历史记录获取
-        # 默认为 True，除非显式禁用
-        # 社交模式：默认禁用（因为它提供自己的上下文）
+        # 获取当前 Bot Name
+        from core.config_manager import get_config_manager
+        config_mgr = get_config_manager()
+        bot_name = config_mgr.get("bot_name", "Pero")
+
+        # [多源拉取策略]
+        # 1. Group History (群聊模式)
+        # 2. Desktop History (桌宠模式)
+        
+        # 限制条数
+        # TODO: 从 variables 中读取 {{desktop_history, 40}} 这种配置来动态决定 limit
+        # 目前先写死
+        limit = 20 
+        
+        # 拉取 Group History (需要去 GroupChatMessage 表拉取，目前 query_logs 只查 ConversationLog)
+        # 这是一个问题：HistoryFetcher 目前只封装了 ConversationLog 的查询。
+        # 我们需要在 query_logs 增加对 GroupChatMessage 的支持，或者在这里单独处理。
+        # 为了快速实现，我们暂时假设 query_logs 已经支持或者我们在这里直接查 Group 表。
+        # 但 GroupChatMessage 结构不同。
+        # 临时方案：我们在这里直接查 GroupChatMessage 表。
+        
+        from models import GroupChatMessage
+        from services.chat.stronghold_service import StrongholdService
+        
+        stronghold_service = StrongholdService(session)
+        # 获取当前 Agent 所在的 Room
+        current_room = await stronghold_service.get_agent_location(agent_id)
+        
+        group_history_text = "（暂无群聊记录）"
+        if current_room:
+            stmt = select(GroupChatMessage).where(GroupChatMessage.room_id == current_room.id).order_by(desc(GroupChatMessage.timestamp)).limit(limit)
+            group_msgs = (await session.exec(stmt)).all()
+            # 翻转为正序
+            group_msgs.reverse()
+            
+            # 转换为通用格式
+            formatted_group_msgs = []
+            for m in group_msgs:
+                formatted_group_msgs.append({
+                    "role": m.role, 
+                    "content": m.content,
+                    "timestamp": m.timestamp
+                })
+            
+            group_history_text = self._flatten_history(formatted_group_msgs, bot_name)
+            
+        variables["flattened_group_history"] = group_history_text
+        
+        # 拉取 Desktop History (查 ConversationLog)
+        desktop_msgs = await self._fetch_and_clean_logs(
+            session, memory_service, "desktop", limit, agent_id
+        )
+        # query_logs (默认 sort='asc') 已经返回了按时间正序排列的记录 (Old -> New)
+        # 所以我们不需要再次翻转，除非我们需要倒序显示。
+        # Group History 那边是手动 query DESC 然后 reverse 成 ASC。
+        # 这里保持一致，使用 ASC。
+        
+        variables["flattened_desktop_history"] = self._flatten_history(desktop_msgs, bot_name)
+
+        # [Legacy Logic 兼容]
+        # 为了兼容旧的逻辑（有些地方可能还在用 history_messages），我们保留原有逻辑
+        # 但主要用于 Work 模式或 IDE 模式的流式上下文
+        
         enable_history = True
         if source == "social":
             enable_history = False
-
-        # 允许通过变量覆盖（如果是 SocialService 注入的）
-        variables = context.get("variables", {})
         if "enable_history" in variables:
             enable_history = variables["enable_history"]
 
@@ -86,134 +257,32 @@ class HistoryPreprocessor(BasePreprocessor):
             context["earliest_timestamp"] = None
             return context
 
-        # 获取最近的日志
-        try:
-            # [上下文窗口调整]
-            # 工作模式需要更长的上下文用于编码任务。
-            is_work_context = session_id.startswith("work_") or source == "ide"
-
-            # 策略调整：先拉取足够多的日志 (例如 200 条)，然后基于 Token 进行截断
-            limit = 200 if is_work_context else 40
-
-            # [特性] 预览提示词 (历史截止)
-            before_id = variables.get("history_before_id")
-
-            history_logs = await memory_service.query_logs(
-                session,
-                source,
-                session_id,
-                limit=limit,
-                agent_id=agent_id,
-                before_id=before_id,
+        # 原有逻辑：根据当前 session_id 拉取上下文 (主要用于 Work Mode 的连续性)
+        # 如果是 Group 或 Desktop 模式，我们已经在上面压扁了，这里可以传空，或者为了保险起见传少量
+        # 这里的 history_messages 将被 PromptManager 的 compose_messages 忽略（如果采用两轮制）
+        # 但为了防止某些旧代码报错，我们还是拉取一下
+        
+        context["history_messages"] = []
+        
+        # 只有在 Work Mode 下，我们才需要“未压扁”的原始消息列表作为 Context，
+        # 因为 Work Mode 可能需要精准的代码上下文，且我们还没有完全迁移 Work Mode 到两轮制（或者 Work Mode 也迁移？）
+        # 根据 spec，Work Mode 也使用 XML 标签块拼接。
+        # 所以这里的 history_messages 实际上可以为空了，因为所有的历史都进了 variables。
+        
+        # 暂时保留 Work Mode 的特殊处理，以防万一
+        is_work_context = session_id.startswith("work_") or source == "ide"
+        if is_work_context:
+             work_msgs = await self._fetch_and_clean_logs(
+                session, memory_service, session_id, 50, agent_id # Work Mode session_id
             )
-        except Exception as e:
-            print(f"[HistoryPreprocessor] 获取历史日志失败: {e}")
-            history_logs = []
+             context["history_messages"] = work_msgs
+             # Work Mode 的压扁历史可能需要特殊处理，或者直接用 recent_history_context
+             # 现在的 system.md 里 Work Mode 用的是 recent_history_context
+             # 我们把 work_msgs 压扁放进 recent_history_context
+             variables["recent_history_context"] = self._flatten_history(work_msgs, bot_name)
 
-        history_messages = []
-        earliest_timestamp = None
-
-        if history_logs:
-            earliest_timestamp = history_logs[0].timestamp
-            # print(f"[History] Context Window Start: {earliest_timestamp}")
-            for log in history_logs:
-                # Clean tags
-                content = log.content
-
-                content = re.sub(
-                    r"<!-- PERO_RAG_BLOCK_START.*?-->", "", content, flags=re.S
-                )
-                content = re.sub(
-                    r"<!-- PERO_RAG_BLOCK_END -->", "", content, flags=re.S
-                )
-
-                # 过滤掉 Thinking 和 Monologue 块，避免污染上下文
-                content = re.sub(
-                    r"【\s*(?:Thinking|Monologue)\s*:.*?】", "", content, flags=re.S
-                )
-
-                content = re.sub(r"<([A-Z_]+)>.*?</\1>", "", content, flags=re.S)
-                content = re.sub(r"<[^>]+>", "", content)
-                content = content.strip()
-                if content:
-                    history_messages.append({"role": log.role, "content": content})
-
-        # [基于 Token 的截断]
-        # 如果处于工作模式，我们使用 100K Token 的滑动窗口策略
-        if is_work_context and history_messages:
-            try:
-                import tiktoken
-
-                enc = tiktoken.get_encoding("cl100k_base")  # 适用于 GPT-4/GPT-3.5
-
-                MAX_TOKENS = 100000  # 100K Limit
-                current_tokens = 0
-                truncated_history = []
-
-                # 从最新的消息开始累加 (history_messages 是按时间顺序排列的，所以我们要倒序遍历)
-                for msg in reversed(history_messages):
-                    content = msg.get("content", "")
-                    tokens = len(enc.encode(content))
-
-                    if current_tokens + tokens > MAX_TOKENS:
-                        print(
-                            f"[History] 达到 Token 上限 ({current_tokens} + {tokens} > {MAX_TOKENS}). 正在截断旧消息。"
-                        )
-                        break
-
-                    current_tokens += tokens
-                    truncated_history.insert(0, msg)  # 保持原有顺序插入头部
-
-                history_messages = truncated_history
-
-            except ImportError:
-                print("[History] 未找到 tiktoken。回退到消息计数限制。")
-                # 回退：如果 tiktoken 失败，则保留最后 100 条消息
-                if len(history_messages) > 100:
-                    history_messages = history_messages[-100:]
-            except Exception as e:
-                print(f"[History] Token 截断失败: {e}")
-
-        # 去重逻辑
-        if current_messages and history_messages:
-
-            def _safe_get_text(msg):
-                c = msg.get("content", "")
-                if isinstance(c, str):
-                    return c.strip()
-                elif isinstance(c, list):
-                    return " ".join(
-                        [item["text"] for item in c if item.get("type") == "text"]
-                    ).strip()
-                return ""
-
-            first_msg_content = _safe_get_text(current_messages[0])
-            match_index = -1
-            for i in range(len(history_messages) - 1, -1, -1):
-                if history_messages[i]["content"] == first_msg_content:
-                    is_match = True
-                    for j in range(
-                        1, min(len(current_messages), len(history_messages) - i)
-                    ):
-                        if history_messages[i + j]["content"] != _safe_get_text(
-                            current_messages[j]
-                        ):
-                            is_match = False
-                            break
-                    if is_match:
-                        match_index = i
-                        break
-
-            if match_index != -1:
-                history_messages = history_messages[:match_index]
-
-        context["history_messages"] = history_messages
-        context["earliest_timestamp"] = earliest_timestamp
-
-        # 我们暂时不将它们合并到 "messages" 中，而是保持分离以提供灵活性
-        # 但通常我们可能希望有一个 "full_context_messages" 列表
-        context["full_context_messages"] = history_messages + current_messages
-
+        context["full_context_messages"] = current_messages # 这里的 full_context 仅包含当前消息了
+        
         return context
 
 
@@ -279,7 +348,7 @@ class RAGPreprocessor(BasePreprocessor):
         # 获取相关记忆
         try:
             # [特性] 思考管道：自动链触发
-            from services.chain_service import chain_service
+            from services.agent.chain_service import chain_service
 
             # 1. 尝试路由到思考链
             chain_name = chain_service.route_chain(user_message)
@@ -630,7 +699,6 @@ class SystemPromptPreprocessor(BasePreprocessor):
 
         prompt_manager = context["prompt_manager"]
         variables = context.get("variables", {})
-        full_context_messages = context.get("full_context_messages", [])
         is_voice_mode = context.get("is_voice_mode", False)
         nit_id = context.get("nit_id")
 
@@ -682,19 +750,25 @@ class SystemPromptPreprocessor(BasePreprocessor):
         if "dynamic_tools" in context:
             variables["dynamic_tools"] = context["dynamic_tools"]
 
-        final_messages = prompt_manager.compose_messages(
-            full_context_messages,
-            variables,
-            is_voice_mode=is_voice_mode,
-            is_social_mode=context.get("source") == "social",  # Pass is_social_mode
+        # [Fix] PromptManager.compose_messages is async and has a new signature
+        # Inject is_voice_mode into variables for templates
+        if is_voice_mode:
+            variables["is_voice_mode"] = True
+
+        final_messages = await prompt_manager.compose_messages(
+            history=context.get("history_messages", []),
+            variables=variables,
+            is_social_mode=context.get("source") == "social",
             is_work_mode=is_work_mode,
+            user_message=context.get("user_message", ""),
+            is_multimodal=context.get("is_multimodal", False),
+            session=context.get("session"),
         )
 
         # [NIT Security] 将动态握手 ID 注入系统提示词
-        # [修复] 社交模式不支持工具，因此跳过 NIT 注入
+        # [修复] 社交模式也支持工具调用（如提醒），因此不再跳过 NIT 注入
         if (
             nit_id
-            and source != "social"
             and final_messages
             and final_messages[0]["role"] == "system"
         ):
@@ -719,7 +793,9 @@ class PerceptionPreprocessor(BasePreprocessor):
 
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
         try:
-            from services.multimodal_trigger_service import multimodal_coordinator
+            from services.perception.multimodal_trigger_service import (
+                multimodal_coordinator,
+            )
 
             # 获取最近的感知记录
             recent_perceptions = multimodal_coordinator.get_recent_perceptions(limit=5)

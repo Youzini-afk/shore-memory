@@ -11,7 +11,8 @@
     "invocationCommands": [
       {
         "commandIdentifier": "find_anime_by_image",
-        "description": "识图搜番。参数 image_url: 图片的网络链接 (如需搜本地图片，请先上传或尝试传入本地路径)。"
+        "description": "识图搜番。通过截图查找动漫出处。",
+        "parameter": "图片链接 (image_url)。如需搜本地图片，请先上传或尝试传入本地路径"
       }
     ]
   }

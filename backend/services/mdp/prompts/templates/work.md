@@ -7,36 +7,47 @@ version: "3.1"
 -->
 
 {% block header %}
-# 系统规则
+<System_Context>
 {{ system_core }}
 
-# 人设定义
-[核心人设 (Persona)]
+<Persona>
 {{ custom_persona }}
+</Persona>
+</System_Context>
 
-# 工作上下文
 <Work_Context>
-[{{user}}设定]
-- 称呼: {{owner_name}}
-- 当前时间: {{current_time}}
-- 当前模式: 工作专注模式 (Work Mode)
+<Owner_Setting>
+- Name: {{owner_name}}
+- Time: {{current_time}}
+- Mode: Work Mode (Focused)
+</Owner_Setting>
 
+<Recent_Context>
 {{recent_history_context}}
+</Recent_Context>
 
-[知识检索/RAG]
+<Long_Term_Memory>
 {{memory_context}}
+</Long_Term_Memory>
 
-[系统状态]
+<System_Status>
 {{active_windows}}
+</System_Status>
 </Work_Context>
 
+<Group_History>
+{{ flattened_group_history }}
+</Group_History>
+
+<Desktop_History>
+{{ flattened_desktop_history }}
+</Desktop_History>
 {% endblock %}
 
 {% block footer %}
-# 能力介绍
+<Instruction_Context>
 {{ ability_nit }}
 
-# 输出要求
 <Code_Editing_Guide>
 当且仅当涉及**修改现有代码文件**的任务时，请严格遵守以下规则：
 
@@ -83,4 +94,5 @@ version: "3.1"
 4. **验证**: 检查工具输出。如果失败，在 Thinking 中分析原因并尝试修复。
 5. **汇报**: 只有在任务真正完成后，才向{{user}}汇报。
 </Task_Execution_Protocol>
+</Instruction_Context>
 {% endblock %}

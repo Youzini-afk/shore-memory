@@ -38,7 +38,9 @@ class Logger {
       'Force showing Dashboard',
       '托盘图标候选路径',
       '选定的托盘图标路径',
-      'checkNapCatInstalled'
+      'checkNapCatInstalled',
+      '令牌无效',
+      'Received envelope from'
     ].join('|')
   )
 

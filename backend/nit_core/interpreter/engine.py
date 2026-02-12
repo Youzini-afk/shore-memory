@@ -1,29 +1,5 @@
 import logging
-import os
-import sys
 from typing import Any
-
-
-def _security_check():
-    """检测调试器、反编译环境和沙箱"""
-    # 1. 检测调试器 (Pdb, pycharm-debug 等)
-    gettrace = sys.gettrace()
-    if gettrace is not None:
-        return True, "Debugger detected"
-
-    # 2. 检测已知反编译/分析工具环境变量
-    analysis_indicators = [
-        "PYCHARM_HOSTED",
-        "PYTHONBREAKPOINT",
-        "PYDEVD_LOAD_VALUES_ASYNC",
-        "UNCOMPYLE6_DEBUG",
-        "DECOMPYLE3_DEBUG",
-    ]
-    if any(env in os.environ for env in analysis_indicators):
-        return True, "Analysis environment detected"
-
-    return False, None
-
 
 try:
     from nit_rust_runtime import (
@@ -64,20 +40,6 @@ class NITRuntime:
         """
         :param tool_executor: 异步函数(name, params) -> result
         """
-        # 运行时防御检查
-        is_bad, reason = _security_check()
-        if is_bad:
-            # 伪装成一个普通的导入错误或内存错误，增加分析难度
-            print(f"\n[CRITICAL] 系统完整性检查失败: 0x{id(self):X}")
-            print(f"非法内存访问于 {hex(sys.maxsize)}")
-            # 随机化退出行为，让自动化分析工具难以预测
-            import random
-
-            if random.random() > 0.5:
-                os._exit(1)
-            else:
-                raise MemoryError("NIT 启动期间发生致命分段错误")
-
         self.tool_executor = tool_executor
 
         if RUST_AVAILABLE:

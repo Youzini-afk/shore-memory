@@ -401,32 +401,3 @@ def automation_execute(
 
 # 已废弃：Native Tool Definition 移除，仅保留函数实现供 NIT 调用
 # tool_definition = {...}
-
-
-def windows_operation(
-    action: str,
-    target: str = None,
-    x: int = None,
-    y: int = None,
-    x2: int = None,
-    y2: int = None,
-    target_text: str = None,
-):
-    # 确保坐标在入口点也安全转换为整数
-    x = safe_int(x)
-    y = safe_int(y)
-    x2 = safe_int(x2)
-    y2 = safe_int(y2)
-
-    if action == "open_app":
-        return open_application(target)
-    elif action == "get_info":
-        return get_system_status()
-    elif action == "get_active_windows":
-        return str(get_active_windows())
-    elif action == "activate":
-        return activate_window(target)
-    elif action == "get_mouse_pos":
-        return get_mouse_position()
-    else:
-        return automation_execute(action, target, x, y, x2, y2, target_text)

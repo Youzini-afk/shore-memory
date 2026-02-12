@@ -286,3 +286,48 @@ class AgentProfile(SQLModel, table=True):
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
     updated_at: datetime = Field(default_factory=datetime.utcnow)
+
+
+# --- Stronghold System Models ---
+
+
+class StrongholdFacility(SQLModel, table=True):
+    """据点设施（如：指挥部、生活区）"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = Field(unique=True)
+    description: str
+    icon: Optional[str] = None  # 前端图标名称
+    created_at: datetime = Field(default_factory=get_local_now)
+
+
+class StrongholdRoom(SQLModel, table=True):
+    """据点房间/子区域"""
+
+    id: str = Field(primary_key=True)  # UUID
+    facility_id: Optional[int] = Field(
+        default=None, foreign_key="strongholdfacility.id"
+    )
+    name: str
+    description: str
+    environment_json: str = "{}"  # 动态环境变量 (JSON)
+    allowed_agents_json: str = "[]"  # 允许进入的角色 ID 列表 (空代表无限制)
+    created_at: datetime = Field(default_factory=get_local_now)
+
+
+class AgentLocation(SQLModel, table=True):
+    """角色当前位置"""
+
+    agent_id: str = Field(primary_key=True)
+    room_id: str = Field(foreign_key="strongholdroom.id")
+    updated_at: datetime = Field(default_factory=get_local_now)
+
+
+class ButlerConfig(SQLModel, table=True):
+    """据点管家配置"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str = "Butler"
+    persona: str  # 管家人设/System Prompt
+    enabled: bool = True
+    updated_at: datetime = Field(default_factory=get_local_now)

@@ -105,6 +105,21 @@ async def check_and_migrate_db():
                         )
                     )
                     sync_conn.commit()
+
+                # 2. 修复 AgentProfile 表缺失 role 列的问题
+                result = sync_conn.execute(text("PRAGMA table_info(agentprofile)"))
+                columns = [row[1] for row in result.fetchall()]
+                if columns and "role" not in columns:
+                    print(
+                        "[Database Migration] Adding 'role' column to 'agentprofile'..."
+                    )
+                    # 添加 role 列，默认值为 'assistant'
+                    sync_conn.execute(
+                        text(
+                            "ALTER TABLE agentprofile ADD COLUMN role VARCHAR DEFAULT 'assistant'"
+                        )
+                    )
+                    sync_conn.commit()
             except Exception as e:
                 print(f"[Database Migration] Error migrating maintenancerecord: {e}")
 

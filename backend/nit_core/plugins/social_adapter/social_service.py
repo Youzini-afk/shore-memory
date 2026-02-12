@@ -24,16 +24,16 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 # 数据库和 Agent 导入
 from database import engine
-from services.agent_manager import AgentManager
+from services.agent.agent_manager import AgentManager
 from services.mdp.manager import mdp
-from services.memory_service import MemoryService
+from services.memory.memory_service import MemoryService
 
 # ruff: noqa: E402
 from .models import SocialSession
 from .session_manager import SocialSessionManager
 
-# from services.agent_service import AgentService (移至方法内部)
-# from services.prompt_service import PromptManager (移至方法内部以避免循环导入)
+# from services.agent.agent_service import AgentService (移至方法内部)
+# from services.core.prompt_service import PromptManager (移至方法内部以避免循环导入)
 
 logger = logging.getLogger(__name__)
 
@@ -55,6 +55,12 @@ class SocialService:
 
         # [社交身份] Bot 信息缓存 (映射: self_id -> 信息字典)
         self.bot_infos: Dict[str, Dict[str, Any]] = {}
+        # [兼容性] 单 Bot 信息缓存
+        self.bot_info: Dict[str, Any] = {}
+        
+        # [Fix] Initialize sticker map
+        self._sticker_map: Dict[str, str] = {}
+        self._sticker_base_dir: Optional[str] = None
 
         # [Agent 映射] 加载 Agent 配置以映射 QQ -> Agent
         self.qq_agent_map: Dict[str, str] = {}  # qq_id -> agent_id
@@ -71,7 +77,7 @@ class SocialService:
     def _load_agent_mappings(self):
         """从所有 Agent 加载社交配置"""
         try:
-            from services.agent_manager import AgentManager
+            from services.agent.agent_manager import AgentManager
 
             # 我们需要一个临时实例来读取配置，或者使用静态方法（如果可用）。
             # 这里我们只实例化 AgentManager，它会在 __init__ 中加载配置
@@ -169,6 +175,161 @@ class SocialService:
         # [新增] 启动时处理待处理的好友请求
         # 我们需要等待 WS 连接
         asyncio.create_task(self._startup_check_worker())
+
+    async def check_daily_summary(self):
+        """
+        [Worker] 每日检查并生成社交日报
+        """
+        logger.info("[Social] 启动社交日报检查 Worker...")
+
+        while self.running:
+            try:
+                # 1. 确定目标日期 (昨天)
+                yesterday = datetime.now() - timedelta(days=1)
+                date_str = yesterday.strftime("%Y-%m-%d")
+
+                # 2. 获取所有相关的 Agent
+                agent_ids = set(self.qq_agent_map.values())
+                if not agent_ids:
+                    agent_ids.add("pero")
+
+                for agent_id in agent_ids:
+                    await self._process_daily_summary_for_agent(agent_id, date_str)
+
+                # 3. 每小时检查一次
+                await asyncio.sleep(3600)
+
+            except Exception as e:
+                logger.error(f"[Social] 日报检查循环出错: {e}")
+                await asyncio.sleep(600)
+
+    async def _process_daily_summary_for_agent(self, agent_id: str, date_str: str):
+        try:
+            # 1. 检查文件/DB 是否已存在
+            import os
+
+            from sqlmodel import select
+
+            from .database import get_social_db_session
+            from .models_db import SocialDailyReport
+
+            # A. 检查 DB
+            report_exists = False
+            async for session in get_social_db_session():
+                stmt = select(SocialDailyReport).where(
+                    SocialDailyReport.date_str == date_str,
+                    SocialDailyReport.agent_id == agent_id
+                )
+                result = await session.exec(stmt)
+                if result.first():
+                    report_exists = True
+                break
+            
+            if report_exists:
+                return
+
+            # B. 检查文件 (作为双重确认，或者如果 DB 没存但文件有了)
+            # 定位 workspace
+            # backend/nit_core/plugins/social_adapter/social_service.py -> backend
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
+            workspace_dir = os.path.join(os.path.dirname(backend_dir), "pero_workspace")
+            report_dir = os.path.join(workspace_dir, agent_id, "social_reports")
+            os.makedirs(report_dir, exist_ok=True)
+            
+            file_path = os.path.join(report_dir, f"{date_str}.md")
+            if os.path.exists(file_path):
+                # 补录到 DB? 暂时跳过
+                return
+
+            logger.info(f"[Social] 正在为 {agent_id} 生成 {date_str} 的社交日报...")
+
+            # 2. 获取消息记录
+            from sqlmodel import and_
+
+            from .models_db import QQMessage
+            
+            start_time = datetime.strptime(date_str, "%Y-%m-%d")
+            end_time = start_time + timedelta(days=1)
+            
+            messages = []
+            async for session in get_social_db_session():
+                stmt = select(QQMessage).where(
+                    and_(
+                        QQMessage.timestamp >= start_time,
+                        QQMessage.timestamp < end_time,
+                        QQMessage.agent_id == agent_id
+                    )
+                ).order_by(QQMessage.timestamp)
+                
+                messages = (await session.exec(stmt)).all()
+                break
+                
+            if not messages:
+                logger.info(f"[Social] {agent_id} 在 {date_str} 无消息记录，跳过日报生成。")
+                return
+
+            # 3. 格式化上下文
+            context_lines = []
+            for msg in messages:
+                sender = msg.sender_name or msg.sender_id
+                time_str = msg.timestamp.strftime("%H:%M:%S")
+                type_str = "Group" if msg.session_type == "group" else "Private"
+                # 简单过滤过长消息
+                content = msg.content[:500] + "..." if len(msg.content) > 500 else msg.content
+                context_lines.append(f"[{time_str}] [{type_str}] {sender}: {content}")
+            
+            context_text = "\n".join(context_lines)
+            
+            # 4. 调用 ScorerService 生成
+            from sqlalchemy.orm import sessionmaker
+            from sqlmodel.ext.asyncio.session import AsyncSession
+
+            from database import engine
+            from services.memory.scorer_service import ScorerService
+            
+            async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+            async with async_session_factory() as main_session:
+                scorer = ScorerService(main_session)
+                
+                report_content = await scorer.generate_social_daily_report(
+                    context_text=context_text,
+                    date_str=date_str,
+                    total_messages=len(messages),
+                    agent_name=agent_id
+                )
+                
+            if not report_content:
+                logger.warning(f"[Social] 日报生成返回空内容 ({agent_id}, {date_str})")
+                return
+
+            # 5. 保存结果
+            # A. Save to File
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(report_content)
+                logger.info(f"[Social] 日报文件已保存: {file_path}")
+            except Exception as e:
+                logger.error(f"[Social] 保存日报文件失败: {e}")
+
+            # B. Save to DB
+            try:
+                async for session in get_social_db_session():
+                    report = SocialDailyReport(
+                        date_str=date_str,
+                        content=report_content,
+                        total_messages=len(messages),
+                        agent_id=agent_id
+                    )
+                    session.add(report)
+                    await session.commit()
+                    break
+                logger.info("[Social] 日报已归档到数据库。")
+            except Exception as e:
+                logger.error(f"[Social] 保存日报到数据库失败: {e}")
+                
+        except Exception as e:
+            logger.error(f"[Social] 处理 {agent_id} 的日报失败: {e}", exc_info=True)
 
     async def handle_raw_event(self, raw_data: str):
         """
@@ -714,7 +875,7 @@ class SocialService:
         )
         async with async_session() as db_session:
             # Import locally to avoid circular dependency
-            from services.agent_manager import AgentManager
+            from services.agent.agent_manager import AgentManager
 
             agent_manager = AgentManager()
 
@@ -748,7 +909,11 @@ class SocialService:
                     sender = f"Me ({current_agent_name})"
 
                 clean_content = self._clean_cq_codes(msg.content)
-                recent_context += f"[{sender}]: {clean_content}\n"
+                msg_time = ""
+                if hasattr(msg, "timestamp") and msg.timestamp:
+                    msg_time = f" ({msg.timestamp.strftime('%m-%d %H:%M')})"
+                
+                recent_context += f"[{sender}]{msg_time}: {clean_content}\n"
 
             if not recent_context:
                 recent_context = "(本地缓存为空)"
@@ -781,21 +946,25 @@ class SocialService:
 
             prompt_context = {
                 "agent_name": bot_name,
-                "current_time": datetime.now().strftime("%H:%M"),
+                "current_time": datetime.now().strftime("%Y-%m-%d %H:%M"),
                 "session_state": session_state,
                 "session_type_str": session_type_str,
                 "target_session_name": target_name,
+                "custom_persona": agent_profile.social_custom_persona
+                if agent_profile
+                else "",
+                "recent_history": recent_context,  # [Fix] Inject history context!
             }
 
             prompt = mdp.render(template_name, prompt_context)
             rules_prompt = mdp.render(rules_template_name, prompt_context)
 
-            from services.agent_service import AgentService
+            from services.agent.agent_service import AgentService
 
             agent = AgentService(db_session)
 
             config = await agent._get_llm_config()
-            from services.llm_service import LLMService
+            from services.core.llm_service import LLMService
 
             llm = LLMService(
                 api_key=config.get("api_key"),
@@ -837,7 +1006,7 @@ class SocialService:
 
             # 构造消息
             user_content_payload = [
-                {"type": "text", "text": f"Context:\n{recent_context}\n\nDecision?"}
+                {"type": "text", "text": "Decision?"}
             ]
 
             if processed_images:
@@ -927,188 +1096,6 @@ class SocialService:
             except Exception as e:
                 logger.error(f"[Social] 秘书错误: {e}", exc_info=True)
                 return False
-
-    # 移除旧的 _attempt_random_thought (已被上面覆盖)
-    # async def _attempt_random_thought(self): ...
-
-    async def check_daily_summary(self):
-        """
-        检查我们是否需要为昨天生成摘要。
-        """
-        from datetime import datetime, timedelta
-
-        try:
-            # 1. 获取上次摘要日期
-            last_date_str = self.config_manager.get("last_social_summary_date", "")
-            yesterday = (datetime.now() - timedelta(days=1)).date()
-            yesterday_str = yesterday.strftime("%Y-%m-%d")
-
-            if last_date_str == yesterday_str:
-                logger.info(f"[Social] {yesterday_str} 的每日摘要已存在。")
-                return
-
-            # 2. 生成摘要
-            logger.info(f"[Social] 正在生成 {yesterday_str} 的每日摘要...")
-            await self._generate_daily_summary(yesterday_str)
-
-            # 3. 更新配置
-            await self.config_manager.set("last_social_summary_date", yesterday_str)
-            logger.info(f"[Social] {yesterday_str} 的每日摘要已完成。")
-
-        except Exception as e:
-            logger.error(f"[Social] 每日摘要失败: {e}", exc_info=True)
-
-    async def _generate_daily_summary(self, date_str: str):
-        """
-        为特定日期生成摘要。
-        """
-        try:
-            async_session = sessionmaker(
-                engine, class_=AsyncSession, expire_on_commit=False
-            )
-            async with async_session() as session:
-                # 1. 获取日志
-                # 使用带有日期过滤器的 MemoryService.get_recent_logs
-                # 但是 get_recent_logs 需要 source 和 session_id。我们需要所有 QQ 日志。
-                # 所以我们手动使用 search_logs 且 source="qq_%" 和时间范围？
-                # search_logs 目前不支持日期范围。
-                # 让我们在这里添加一个专门的查询。
-
-                from datetime import datetime, time
-
-                from sqlmodel import select
-
-                from models import ConversationLog
-
-                target_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-                start_dt = datetime.combine(target_date, time.min)
-                end_dt = datetime.combine(target_date, time.max)
-
-                statement = (
-                    select(ConversationLog)
-                    .where(ConversationLog.source.like("qq_%"))
-                    .where(ConversationLog.timestamp >= start_dt)
-                    .where(ConversationLog.timestamp <= end_dt)
-                    .order_by(ConversationLog.timestamp)
-                )
-
-                logs = (await session.exec(statement)).all()
-
-                if not logs:
-                    logger.info(f"[Social] 未找到 {date_str} 的日志。")
-                    return
-
-                # 2. 准备上下文
-                context_text = ""
-                for log in logs:
-                    sender = (
-                        self.config_manager.get("bot_name", "Pero")
-                        if log.role == "assistant"
-                        else "User"
-                    )
-                    # 尝试元数据
-                    try:
-                        meta = json.loads(log.metadata_json)
-                        if "sender_name" in meta:
-                            sender = meta["sender_name"]
-                        if "session_name" in meta:
-                            sender += f" ({meta['session_name']})"
-                    except Exception:
-                        pass
-
-                    clean_content = self._clean_cq_codes(log.content)
-                    context_text += f"[{log.timestamp.strftime('%H:%M')}] {sender}: {clean_content}\n"
-
-                # 如果太长则截断（MVP 的简单字符限制）
-                if len(context_text) > 50000:
-                    context_text = context_text[:50000] + "\n...(Truncated)..."
-
-                # 3. 调用 LLM
-                # 使用默认/全局配置
-                # 我们可以重用 AgentService._get_llm_config 逻辑或直接从数据库获取
-                from services.agent_service import AgentService
-                from services.llm_service import LLMService
-
-                agent = AgentService(session)
-                config = await agent._get_llm_config()
-
-                llm = LLMService(
-                    api_key=config.get("api_key"),
-                    api_base=config.get("api_base"),
-                    model=config.get("model"),
-                )
-
-                # Get active agent name
-                from services.agent_manager import AgentManager
-
-                agent_manager = AgentManager()
-                active_agent = agent_manager.agents.get(agent_manager.active_agent_id)
-                bot_name = (
-                    active_agent.name
-                    if active_agent
-                    else self.config_manager.get("bot_name", "Pero")
-                )
-
-                variables = {
-                    "agent_name": bot_name,
-                    "date_str": date_str,
-                    "total_messages": len(logs),
-                    "context_text": context_text,
-                }
-
-                from services.prompt_service import PromptManager
-
-                pm = PromptManager()
-                pm._enrich_variables(variables, is_social_mode=True, is_work_mode=False)
-
-                prompt = mdp.render(
-                    "social/reporting/daily_report_generator",
-                    variables,
-                )
-
-                messages = [{"role": "user", "content": prompt}]
-                # 使用较高的 temperature 以获得更生动、更有创意的日记
-
-                # [Fix] 增加重试机制，防止网络抖动导致任务失败
-                import asyncio
-
-                retry_count = 3
-                response = None
-                last_error = None
-
-                for i in range(retry_count):
-                    try:
-                        response = await llm.chat(messages, temperature=0.7)
-                        break
-                    except Exception as e:
-                        last_error = e
-                        logger.warning(
-                            f"[Social] 生成摘要 LLM 请求失败 (尝试 {i+1}/{retry_count}): {e}"
-                        )
-                        await asyncio.sleep(2 * (i + 1))  # 简单的退避策略
-
-                if not response:
-                    raise Exception(
-                        f"LLM 请求在 {retry_count} 次尝试后失败: {last_error}"
-                    )
-
-                summary_content = response["choices"][0]["message"]["content"]
-
-                # 4. 保存到文件 (MD)
-                from utils.memory_file_manager import MemoryFileManager
-
-                # Use active agent name to isolate logs
-                file_path = await MemoryFileManager.save_log(
-                    "social_daily",
-                    f"{date_str}_Diary",
-                    summary_content,
-                    agent_id=bot_name,
-                )
-
-                logger.info(f"[Social] 社交日记已生成并保存: {file_path}")
-
-        except Exception as e:
-            logger.error(f"[Social] 生成摘要错误: {e}", exc_info=True)
 
     async def stop(self):
         self.running = False
@@ -1325,7 +1312,7 @@ class SocialService:
 
         try:
             # 1. 咨询 LLM
-            from services.agent_service import AgentService
+            from services.agent.agent_service import AgentService
 
             async_session = sessionmaker(
                 engine, class_=AsyncSession, expire_on_commit=False
@@ -1336,7 +1323,7 @@ class SocialService:
 
                 # 构建提示（中文）
                 # Get Agent Profile for dynamic persona injection
-                from services.agent_manager import AgentManager
+                from services.agent.agent_manager import AgentManager
 
                 agent_manager = AgentManager()
                 agent_profile = agent_manager.agents.get(agent_manager.active_agent_id)
@@ -1352,12 +1339,19 @@ class SocialService:
 
             prompt = mdp.render(
                 "social/decisions/friend_request_decision",
-                {"agent_name": bot_name, "user_id": user_id, "comment": comment},
+                {
+                    "agent_name": bot_name,
+                    "user_id": user_id,
+                    "comment": comment,
+                    "custom_persona": agent_profile.social_custom_persona
+                    if agent_profile
+                    else "",
+                },
             )
 
             messages = [{"role": "system", "content": prompt}]
 
-            from services.llm_service import LLMService
+            from services.core.llm_service import LLMService
 
             llm = LLMService(
                 api_key=config.get("api_key"),
@@ -1818,7 +1812,9 @@ class SocialService:
                 return False
 
             # 2. 调用 AgentService
-            from services.agent_service import AgentService  # 延迟导入以避免循环依赖
+            from services.agent.agent_service import (
+                AgentService,  # 延迟导入以避免循环依赖
+            )
 
             logger.debug(f"[{session.session_id}] 正在建立主数据库连接...")
             async_session = sessionmaker(
@@ -1828,11 +1824,11 @@ class SocialService:
                 logger.debug(
                     f"[{session.session_id}] 主数据库连接已建立。初始化 AgentService..."
                 )
-                from services.agent_service import AgentService
+                from services.agent.agent_service import AgentService
 
                 agent = AgentService(db_session)
 
-                from services.prompt_service import PromptManager
+                from services.core.prompt_service import PromptManager
 
                 prompt_manager = PromptManager()
                 # logger.info(f"[{session.session_id}] 获取系统 Prompt...")
@@ -1917,7 +1913,7 @@ class SocialService:
                 # [User Request] Temporarily disable multi-agent support in Social Mode.
                 # Always use default Pero configuration regardless of active agent.
 
-                # from services.agent_manager import get_agent_manager
+                # from services.agent.agent_manager import get_agent_manager
                 # agent_manager = get_agent_manager()
                 # active_agent = agent_manager.get_active_agent()
 
@@ -2388,7 +2384,7 @@ class SocialService:
             # 注意：social_db 是独立的，我们需要主数据库连接来获取 AIModelConfig
             from database import engine as main_engine
             from models import AIModelConfig, Config
-            from services.llm_service import LLMService
+            from services.core.llm_service import LLMService
 
             llm_service = None
             async with MainAsyncSession(main_engine) as main_session:
@@ -2516,6 +2512,11 @@ class SocialService:
         """
         通用发送消息助手
         """
+        # [Fix] 移除 NIT 标签和清理文本，防止标签泄露到社交平台
+        from nit_core.dispatcher import remove_nit_tags
+
+        message = remove_nit_tags(message)
+
         # [Deduplication] 简单的重复检测，避免短时间内发送完全相同的内容
         # 检查最近 10 条消息（无论谁发的，因为有时候会重复别人的话，或者重复自己的）
         recent_contents = [m.content for m in session.buffer[-10:]]
@@ -2574,7 +2575,8 @@ class SocialService:
                 raise TimeoutError(f"API {action} timed out.") from None
 
     def _ensure_sticker_map(self):
-        if not hasattr(self, "_sticker_map"):
+        # [Fix] Check _sticker_base_dir instead of _sticker_map because _sticker_map is initialized in __init__
+        if self._sticker_base_dir is None:
             try:
                 import json
                 import os
@@ -2593,9 +2595,11 @@ class SocialService:
                     self._sticker_base_dir = os.path.dirname(sticker_path)
                 else:
                     self._sticker_map = {}
+                    self._sticker_base_dir = ""  # Mark as checked
             except Exception as e:
                 logger.error(f"Failed to load sticker index: {e}")
                 self._sticker_map = {}
+                self._sticker_base_dir = ""  # Mark as checked
 
     def _process_stickers(self, message: str) -> str:
         """
@@ -2893,7 +2897,7 @@ class SocialService:
         try:
             # 如果可能，我们需要在方法内部导入 realtime_session_manager 以避免循环导入
             # 或者只是依赖 services 中的那个
-            from services.realtime_session_manager import realtime_session_manager
+            from services.core.realtime_session_manager import realtime_session_manager
 
             await realtime_session_manager.broadcast(
                 {

@@ -11,7 +11,8 @@
     "invocationCommands": [
       {
         "commandIdentifier": "execute_terminal_command",
-        "description": "在终端中执行系统指令。参数 command: 要执行的Shell指令; cwd: (可选) 工作目录。"
+        "description": "在终端中执行系统指令（需用户确认）",
+        "parameter": "要执行的Shell指令 (command)，可选的工作目录 (cwd)"
       }
     ]
   }

@@ -4,6 +4,7 @@ import fs from 'fs-extra'
 import { getDiagnostics } from './diagnostics'
 import { WindowLike } from '../types'
 import { logger } from '../utils/logger'
+import { getGatewayToken } from './system'
 
 let backendProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -54,7 +55,8 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     ENABLE_SOCIAL_MODE: enableSocialMode.toString(),
     PERO_DATA_DIR: dataDir,
     PERO_DATABASE_PATH: dbPath,
-    PERO_CONFIG_PATH: configPath
+    PERO_CONFIG_PATH: configPath,
+    GATEWAY_TOKEN: getGatewayToken()
   }
 
   // 启动子进程

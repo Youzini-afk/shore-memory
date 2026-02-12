@@ -17,21 +17,19 @@ from .ast_nodes import (
 
 try:
     from models import Config, ConversationLog
-    from services.llm_service import LLMService
 
     # from services.mdp.manager import MDPManager
-    from services.memory_service import MemoryService
+    from services.memory.memory_service import MemoryService
 except ImportError:
     from backend.models import Config, ConversationLog
-    from backend.services.llm_service import LLMService
-    from backend.services.memory_service import MemoryService
+    from backend.services.memory.memory_service import MemoryService
 
 # 尝试导入 AgentManager 以支持多 Agent
 try:
-    from services.agent_manager import get_agent_manager
+    from services.agent.agent_manager import get_agent_manager
 except ImportError:
     try:
-        from backend.services.agent_manager import get_agent_manager
+        from backend.services.agent.agent_manager import get_agent_manager
     except ImportError:
         get_agent_manager = None
 
@@ -129,46 +127,31 @@ async def exit_work_mode() -> str:
         if not logs:
             return "已退出工作模式 (无日志可汇总)。"
 
-        # 3. 通过 LLM 汇总
+        # 3. 通过 ScorerService 进行总结
+        from services.memory.scorer_service import ScorerService
+
         global_config = {
             c.key: c.value for c in (await session.exec(select(Config))).all()
         }
-        api_key = global_config.get("global_llm_api_key")
-        api_base = global_config.get("global_llm_api_base")
-        # 如果未配置，默认为 "Pero"
         bot_name = global_config.get("bot_name", "Pero")
 
-        # [Unified Model Fix] 使用 current_model_id 而不是硬编码的 gpt-4o
-        from models import AIModelConfig
-        from services.mdp.manager import mdp
-
-        current_model_id = global_config.get("current_model_id")
-
-        model_to_use = "gpt-4o"
-        if current_model_id:
-            model_config = await session.get(AIModelConfig, int(current_model_id))
-            if model_config:
-                model_to_use = model_config.model_id
-                if model_config.provider_type == "custom":
-                    api_key = model_config.api_key
-                    api_base = model_config.api_base
-
-        llm = LLMService(api_key, api_base, model_to_use)
+        scorer_service = ScorerService(session)
         log_text = "\n".join([f"{log.role}: {log.content}" for log in logs])
 
-        prompt = mdp.render(
-            "components/artifacts/work_log",
-            {"agent_name": bot_name, "task_name": task_name, "log_text": log_text},
+        summary_content = await scorer_service.generate_work_log_summary(
+            task_name=task_name, log_text=log_text, agent_name=bot_name
         )
 
-        summary = await llm.chat([{"role": "user", "content": prompt}])
-        summary_content = summary["choices"][0]["message"]["content"]
+        if not summary_content:
+            summary_content = f"工作模式总结失败。任务: {task_name}。"
 
         # 获取活跃 Agent
         agent_id = "pero"
         if get_agent_manager:
             with contextlib.suppress(Exception):
-                agent_id = get_agent_manager().active_agent_id
+                active_agent = get_agent_manager().active_agent_id
+                if active_agent:
+                    agent_id = active_agent
 
         # 4. 保存到记忆 (长期)
         await MemoryService.save_memory(

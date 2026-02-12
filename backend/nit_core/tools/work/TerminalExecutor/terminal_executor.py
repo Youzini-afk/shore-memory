@@ -6,7 +6,7 @@ import subprocess
 
 from wasmtime import Engine, Linker, Module, Store
 
-from services.realtime_session_manager import realtime_session_manager
+from services.core.realtime_session_manager import realtime_session_manager
 
 logger = logging.getLogger(__name__)
 

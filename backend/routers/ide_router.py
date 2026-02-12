@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from database import get_session
-from services.session_service import enter_work_mode, exit_work_mode
+from services.core.session_service import enter_work_mode, exit_work_mode
 
 router = APIRouter(prefix="/api/ide", tags=["ide"])
 
@@ -58,7 +58,7 @@ class SkipCommandRequest(BaseModel):
 
 @router.post("/tools/terminal/skip")
 async def skip_terminal_command(request: SkipCommandRequest):
-    from services.realtime_session_manager import realtime_session_manager
+    from services.core.realtime_session_manager import realtime_session_manager
 
     success = realtime_session_manager.skip_command(request.pid)
     if not success:
@@ -71,8 +71,8 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     from sqlmodel import select
 
     from models import Config
-    from services.agent_manager import get_agent_manager
-    from services.agent_service import AgentService
+    from services.agent.agent_manager import get_agent_manager
+    from services.agent.agent_service import AgentService
 
     agent_service = AgentService(session)
     agent_manager = get_agent_manager()
@@ -101,7 +101,7 @@ async def chat(request: ChatRequest, session: AsyncSession = Depends(get_session
     # [特性] 实时ReAct广播
     # 广播思考状态至前端(ChatInterface/PetView)
     # 这确保了即使是 IDE 聊天，我们也能通过 WebSocket 获得实时可视化。
-    from services.realtime_session_manager import realtime_session_manager
+    from services.core.realtime_session_manager import realtime_session_manager
 
     async def on_status(status_type: str, content: str):
         # 广播思考步骤至所有客户端
@@ -333,7 +333,7 @@ async def api_enter_work_mode(
     request: WorkModeRequest, session: AsyncSession = Depends(get_session)  # noqa: B008
 ):
     # 注入Session至SessionOps上下文
-    from services.session_service import set_current_session_context
+    from services.core.session_service import set_current_session_context
 
     set_current_session_context(session)
 
@@ -344,7 +344,7 @@ async def api_enter_work_mode(
 @router.post("/work_mode/exit")
 async def api_exit_work_mode(session: AsyncSession = Depends(get_session)):  # noqa: B008
     # 注入Session
-    from services.session_service import set_current_session_context
+    from services.core.session_service import set_current_session_context
 
     set_current_session_context(session)
 
@@ -361,7 +361,7 @@ async def api_abort_work_mode(session: AsyncSession = Depends(get_session)):  # 
 
     from core.nit_manager import get_nit_manager
     from models import Config
-    from services.agent_manager import get_agent_manager
+    from services.agent.agent_manager import get_agent_manager
 
     try:
         agent_manager = get_agent_manager()

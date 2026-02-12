@@ -19,17 +19,43 @@ class ThinkingFilterPostprocessor(BasePostprocessor):
         """
         通过 Thinking 块（不再过滤它们），以便可以将它们存储在记忆中
         并按要求显示给用户。
+        但在社交模式下，我们根据 context 进行过滤。
         """
-        # 用户请求保留思考过程以增加“可爱度”并用于记忆存储。
-        # 所以我们只是按原样返回内容。
+        if context.get("source") == "social":
+            import re
+            # 移除 【Thinking:...】, [Thinking:...], (Thinking:...) 等块
+            # 这种非流式处理使用简单的正则
+            content = re.sub(r"【Thinking:.*?】", "", content, flags=re.DOTALL | re.IGNORECASE)
+            content = re.sub(r"\[Thinking:.*?\]", "", content, flags=re.DOTALL | re.IGNORECASE)
+            content = re.sub(r"\(Thinking:.*?\)", "", content, flags=re.DOTALL | re.IGNORECASE)
+            
+            # [兼容性保留] 移除旧版 【Monologue:...】 等块，确保历史记录或意外输出不溢出到社交平台
+            content = re.sub(r"【Monologue:.*?】", "", content, flags=re.DOTALL | re.IGNORECASE)
+            content = re.sub(r"\[Monologue:.*?\]", "", content, flags=re.DOTALL | re.IGNORECASE)
+            content = re.sub(r"\(Monologue:.*?\)", "", content, flags=re.DOTALL | re.IGNORECASE)
+        
         return content
 
     async def process_stream(
         self, stream: AsyncIterable[str], context: Dict[str, Any]
     ) -> AsyncIterable[str]:
         """
-        通过流而不过滤 Thinking 块（按用户要求）。
+        在社交模式下过滤思考块。
         """
+        if context.get("source") == "social":
+            from nit_core.dispatcher import ThinkingBlockStreamFilter
+            thinking_filter = ThinkingBlockStreamFilter()
+            async for chunk in stream:
+                filtered = thinking_filter.filter(chunk)
+                if filtered:
+                    yield filtered
+            
+            # Flush
+            remaining = thinking_filter.flush()
+            if remaining:
+                yield remaining
+            return
+
         async for chunk in stream:
             yield chunk
 

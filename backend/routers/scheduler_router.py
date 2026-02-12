@@ -8,7 +8,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from database import get_session
 from models import ScheduledTask
-from services.scheduler_service import scheduler_service
+from services.agent.scheduler_service import scheduler_service
 
 router = APIRouter()
 

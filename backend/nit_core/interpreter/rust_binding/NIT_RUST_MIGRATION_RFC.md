@@ -1,6 +1,6 @@
 # NIT 协议 Rust 化迁移技术方案 (RFC)
 
-**状态**: 提案中 (Proposed)  
+**状态**: 已完成
 **日期**: 2026-01-15  
 **目标**: 提升 NIT (Natural Instruction Tool) 协议解释器的安全性、性能与稳定性。
 
@@ -99,39 +99,3 @@ impl NITScope {
 这消除了 Python 在字符处理循环上的巨大开销。
 
 ---
-
-## 4. 迁移路线图 (Roadmap)
-
-### Phase 1: 基础设施搭建 (Rust)
-- [ ] 在 `rust_core` 中定义 NIT 的 AST 节点 (`AssignmentNode`, `CallNode` 等) 并通过 PyO3 导出。
-- [ ] 实现 Rust 版 `Lexer`。
-- [ ] 实现 Rust 版 `Parser`。
-- [ ] **验证**: 编写 Python 单元测试，确保 Rust Parser 输出的 AST 与原 Python Parser 结构一致。
-
-### Phase 2: 内存容器实现 (Rust)
-- [ ] 实现 `NITScope` 类，接管变量存储。
-- [ ] 实现严格的内存配额检查 (Quotas)。
-
-### Phase 3: 运行时嫁接 (Python)
-- [ ] 修改 `interpreter/runtime.py`。
-- [ ] 移除旧的 `lexer.py` 和 `parser.py` 调用。
-- [ ] 将 `self.variables` 替换为 `NITScope` 实例。
-- [ ] 保持 `async execute()` 逻辑不变，继续处理 `await`。
-
----
-
-## 5. 风险评估
-
-1.  **PyO3 转换开销**: 
-    - *风险*: Rust 解析出的 AST 需要转换为 Python 对象供 Runtime 使用，如果对象极其庞大，跨语言边界的开销可能抵消解析优势。
-    - *缓解*: NIT 脚本通常较短（指令集），AST 深度有限，转换开销可忽略不计。
-
-2.  **开发复杂度**:
-    - *风险*: 团队需要同时维护 Rust 和 Python 代码。
-    - *缓解*: 核心逻辑下沉到 Rust 后，变更频率较低。Python 层只需关注业务调度。
-
----
-
-## 6. 结论
-
-此方案是在不破坏现有异步生态的前提下，引入 Rust 强安全特性的最佳路径。它就像是把“编译器”和“内存条”换成了 Rust 制造，而让 Python 继续充当灵活的“调度员”。

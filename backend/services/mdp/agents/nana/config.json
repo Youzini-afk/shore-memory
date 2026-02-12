@@ -15,11 +15,11 @@
     "social": {
       "strategy": "whitelist",
       "allowed_tags": ["social"],
-      "allowed_tools": ["read_social_memory", "read_agent_memory", "qq_notify_master", "add_reminder", "list_reminders", "delete_reminder"]
+      "allowed_tools": ["add_reminder", "list_reminders", "delete_reminder"]
     },
     "work": {
       "strategy": "whitelist",
-      "allowed_tags": ["core", "work"]
+      "allowed_tags": ["work"]
     },
     "desktop": {
       "strategy": "whitelist",
@@ -27,7 +27,7 @@
     },
     "lightweight": {
       "strategy": "whitelist",
-      "allowed_tools": [
+     "allowed_tools": [
         "finish_task",
         "take_screenshot",
         "screen_ocr",
@@ -37,7 +37,10 @@
         "add_schedule_task",
         "list_pending_tasks",
         "delete_schedule_task"
-      ]
+      ]},
+    "group": {
+      "strategy": "whitelist",
+      "allowed_tags": ["group"]
     }
   }
 }

@@ -4,7 +4,7 @@
     <div class="node-row">
       <div class="node client">
         <span class="icon">💼</span>
-        <span class="label">Client Service<br><small>业务服务 (如 ChatService)</small></span>
+        <span class="label">Client Service<br /><small>业务服务 (如 ChatService)</small></span>
       </div>
     </div>
 
@@ -17,7 +17,7 @@
     <div class="node-row">
       <div class="node manager main-node">
         <span class="icon">⚙️</span>
-        <span class="label">MDP Manager<br><small>提示词管理器</small></span>
+        <span class="label">MDP Manager<br /><small>提示词管理器</small></span>
       </div>
     </div>
 
@@ -28,11 +28,11 @@
         <div class="storage-box">
           <div class="storage-item common">
             <span class="icon">📁</span>
-            <span class="label">prompts/<br><small>通用组件仓库</small></span>
+            <span class="label">prompts/<br /><small>通用组件仓库</small></span>
           </div>
           <div class="storage-item agent">
             <span class="icon">👤</span>
-            <span class="label">agents/{name}/<br><small>Agent 特有覆盖</small></span>
+            <span class="label">agents/{name}/<br /><small>Agent 特有覆盖</small></span>
           </div>
         </div>
       </div>
@@ -42,7 +42,9 @@
         <span class="desc">3. Inject Variables / 注入变量</span>
         <div class="context-box">
           <span class="icon">🧬</span>
-          <span class="label">Runtime Context<br><small>运行时上下文 (Time, Memory...)</small></span>
+          <span class="label"
+            >Runtime Context<br /><small>运行时上下文 (Time, Memory...)</small></span
+          >
         </div>
       </div>
     </div>
@@ -56,7 +58,7 @@
     <div class="node-row">
       <div class="node engine">
         <span class="icon">🔥</span>
-        <span class="label">Jinja2 Engine<br><small>递归渲染引擎 (Max Depth: 5)</small></span>
+        <span class="label">Jinja2 Engine<br /><small>递归渲染引擎 (Max Depth: 5)</small></span>
         <div class="recursion-loop">🔄</div>
       </div>
     </div>
@@ -70,7 +72,7 @@
     <div class="node-row">
       <div class="node result">
         <span class="icon">📝</span>
-        <span class="label">System Prompt<br><small>最终生成的提示词</small></span>
+        <span class="label">System Prompt<br /><small>最终生成的提示词</small></span>
       </div>
     </div>
   </div>
@@ -105,15 +107,17 @@
   border-radius: 8px;
   background: var(--vp-c-bg);
   border: 1px solid var(--vp-c-divider);
-  box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-  transition: transform 0.2s, box-shadow 0.2s;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  transition:
+    transform 0.2s,
+    box-shadow 0.2s;
   min-width: 160px;
   position: relative;
 }
 
 .node:hover {
   transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   border-color: var(--vp-c-brand);
 }
 
@@ -172,8 +176,12 @@
 }
 
 @keyframes rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* Connections */
@@ -215,7 +223,8 @@
   margin-bottom: 2px;
 }
 
-.storage-box, .context-box {
+.storage-box,
+.context-box {
   border: 1px dashed var(--vp-c-divider);
   border-radius: 8px;
   padding: 0.8rem;

@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from core.config_manager import get_config_manager
 from database import get_session
 from models import Config
-from services.sync_service import sync_service
+from services.core.sync_service import sync_service
 
 router = APIRouter(prefix="/api/sync", tags=["Sync"])
 

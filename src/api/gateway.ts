@@ -201,7 +201,11 @@ export class GatewayClient {
       }
 
       this.ws.onclose = () => {
-        logToMain('Disconnected from Gateway')
+        // Only log "Disconnected" if we were actually connected before
+        // This avoids spamming during startup when the backend is not yet ready
+        if (this.isConnected) {
+          logToMain('Disconnected from Gateway')
+        }
         this.isConnected = false
         this.stopHeartbeat()
         setTimeout(() => this.connect(), this.reconnectInterval)
@@ -284,7 +288,8 @@ export class GatewayClient {
   }
 
   private handleMessage(envelope: Envelope) {
-    logToMain('Received envelope from ' + envelope.sourceId)
+    // 降级日志，不再发送到主进程终端
+    console.debug('Received envelope from ' + envelope.sourceId)
 
     if (envelope.request) {
       // Server pushed request (e.g. voice_update)

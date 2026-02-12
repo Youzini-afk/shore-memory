@@ -11,10 +11,10 @@
         <span class="control close"></span>
       </div>
     </div>
-    
-    <div class="canvas-wrapper" ref="wrapper">
+
+    <div ref="wrapper" class="canvas-wrapper">
       <canvas ref="canvas"></canvas>
-      
+
       <!-- HUD Overlay -->
       <div class="hud-overlay">
         <div class="stat-item">
@@ -71,7 +71,7 @@ class Node {
     // Bounce off walls
     if (this.x < 0 || this.x > w) this.vx *= -1
     if (this.y < 0 || this.y > h) this.vy *= -1
-    
+
     // Pulse animation
     this.pulse += 0.05
   }
@@ -81,7 +81,7 @@ class Node {
     context.arc(this.x, this.y, this.size, 0, Math.PI * 2)
     context.fillStyle = this.color
     context.fill()
-    
+
     // Glow effect
     context.shadowBlur = 10
     context.shadowColor = this.color
@@ -90,14 +90,14 @@ class Node {
 
 const init = () => {
   if (!canvas.value || !wrapper.value) return
-  
+
   width = wrapper.value.offsetWidth
   height = 400 // Fixed height
-  
+
   canvas.value.width = width
   canvas.value.height = height
   ctx = canvas.value.getContext('2d')
-  
+
   // Create nodes
   nodes = []
   for (let i = 0; i < NODE_COUNT; i++) {
@@ -108,28 +108,28 @@ const init = () => {
 
 const animate = () => {
   if (!ctx) return
-  
+
   ctx.clearRect(0, 0, width, height)
-  
+
   // Update and draw nodes
-  nodes.forEach(node => {
+  nodes.forEach((node) => {
     node.update(width, height)
     node.draw(ctx)
   })
-  
+
   // Draw connections
   let connections = 0
   ctx.lineWidth = 0.5
-  
+
   for (let i = 0; i < nodes.length; i++) {
     for (let j = i + 1; j < nodes.length; j++) {
       const dx = nodes[i].x - nodes[j].x
       const dy = nodes[i].y - nodes[j].y
       const distance = Math.sqrt(dx * dx + dy * dy)
-      
+
       if (distance < CONNECTION_DISTANCE) {
         connections++
-        const opacity = 1 - (distance / CONNECTION_DISTANCE)
+        const opacity = 1 - distance / CONNECTION_DISTANCE
         ctx.strokeStyle = `rgba(150, 150, 150, ${opacity * 0.5})`
         ctx.beginPath()
         ctx.moveTo(nodes[i].x, nodes[i].y)
@@ -138,10 +138,10 @@ const animate = () => {
       }
     }
   }
-  
+
   // Reset shadow for lines
   ctx.shadowBlur = 0
-  
+
   connectionCount.value = connections.toLocaleString()
   animationFrameId = requestAnimationFrame(animate)
 }
@@ -149,7 +149,7 @@ const animate = () => {
 onMounted(() => {
   init()
   animate()
-  
+
   window.addEventListener('resize', init)
 })
 
@@ -207,9 +207,15 @@ onUnmounted(() => {
   display: inline-block;
 }
 
-.control.close { background-color: #ef4444; }
-.control.minimize { background-color: #f59e0b; }
-.control.maximize { background-color: #10b981; }
+.control.close {
+  background-color: #ef4444;
+}
+.control.minimize {
+  background-color: #f59e0b;
+}
+.control.maximize {
+  background-color: #10b981;
+}
 
 .canvas-wrapper {
   position: relative;

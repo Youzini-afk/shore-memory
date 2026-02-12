@@ -8,7 +8,6 @@ The project is currently in the Alpha development stage.
 | Version | Supported / 支持状态 | Notes / 说明 |
 | ------- | ------------------ | ----------------------------------- |
 | Alpha   | :x:                | Not guaranteed for normal use or security.<br>所有版本均不保证可以正常使用及安全性。 |
-| Beta    | :soon: (Expected)  | Expected release on 2026/01/25.<br>预计于 2026/01/25 发布。 |
 
 ## Reporting a Vulnerability / 报告漏洞
 

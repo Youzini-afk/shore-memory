@@ -11,19 +11,23 @@
     "invocationCommands": [
       {
         "commandIdentifier": "read_file_content",
-        "description": "解析文档。将PDF/Word/MD等转换为纯文本。参数 file_path: 文件绝对路径。"
+        "description": "将PDF/Word/MD等文件转换为纯文本进行读取",
+        "parameter": "文件绝对路径 (file_path)"
       },
       {
         "commandIdentifier": "list_directory",
-        "description": "列出文件。查看目录下的详细文件列表。参数 dir_path: 目录绝对路径。"
+        "description": "查看目录下的详细文件列表",
+        "parameter": "目录绝对路径 (dir_path)"
       },
       {
         "commandIdentifier": "write_file",
-        "description": "写入文件。覆盖写入指定文件内容，会自动进行代码语法检查。参数 file_path: 目标路径; content: 写入内容。"
+        "description": "覆盖写入指定文件内容（自动进行代码语法检查）",
+        "parameter": "目标路径 (file_path)，写入内容 (content)"
       },
       {
         "commandIdentifier": "apply_diff",
-        "description": "应用补丁。使用 SEARCH/REPLACE 格式对文件进行局部修改。参数 file_path: 目标路径; search: 要替换的原内容(必须唯一); replace: 替换后的新内容。"
+        "description": "使用 SEARCH/REPLACE 格式对文件进行局部修改",
+        "parameter": "目标路径 (file_path)，要替换的原内容 (search, 必须唯一)，替换后的新内容 (replace)"
       }
     ]
   }

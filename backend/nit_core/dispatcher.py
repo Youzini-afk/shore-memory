@@ -13,7 +13,7 @@ import logging
 import os
 import re
 import time
-from typing import Any, Callable, Dict, List
+from typing import Any, Callable, Dict, List, Optional
 
 from core.config_manager import get_config_manager
 from core.nit_manager import get_nit_manager
@@ -173,10 +173,12 @@ class XMLStreamFilter:
 class ThinkingBlockStreamFilter:
     """
     思考块过滤器：隐藏 Thinking/Monologue 块
+    (Monologue 为旧版兼容保留)
     """
 
     def __init__(self, tag_names: List[str] = None):
         if tag_names is None:
+            # [兼容性保留] Monologue 标签在 2024-02 之后不再主动生成，保留此处以过滤可能存在的旧版输出
             self.tag_names = ["Thinking", "Monologue"]
 
         # 匹配 【Thinking, [Thinking, (Thinking
@@ -343,7 +345,7 @@ class NITDispatcher:
         """注册浏览器桥接服务 (BrowserBridge)"""
         # BrowserBridge 也是一种特殊形式的工具
         try:
-            from services.browser_bridge_service import BrowserBridgeService
+            from services.interaction.browser_bridge_service import BrowserBridgeService
 
             bridge = BrowserBridgeService()
 
@@ -363,13 +365,104 @@ class NITDispatcher:
         """获取所有已注册的插件名称"""
         return sorted(PLUGIN_REGISTRY.keys())
 
+    def get_tool_natural_description(self, tool_name: str) -> Optional[Dict[str, str]]:
+        """
+        获取工具的自然语言描述结构 (用于 System Prompt)
+        返回: {"description": "...", "parameter": "..."} 或 None
+        """
+        norm_name = normalize_nit_key(tool_name)
+        manifest = self.tool_to_manifest.get(norm_name)
+        
+        if not manifest:
+            return None
+            
+        commands = []
+        if "capabilities" in manifest and "invocationCommands" in manifest["capabilities"]:
+            commands = manifest["capabilities"]["invocationCommands"]
+        elif "capabilities" in manifest and "toolDefinitions" in manifest["capabilities"]:
+            commands = manifest["capabilities"]["toolDefinitions"]
+            
+        for cmd in commands:
+            cmd_id = cmd.get("commandIdentifier")
+            if normalize_nit_key(cmd_id) == norm_name:
+                return {
+                    "description": cmd.get("description", "").strip(),
+                    "parameter": cmd.get("parameter", "")
+                }
+        return None
+
     def get_tools_description(self, category_filter: str = "core") -> str:
         """
-        [Deprecated]
-        此方法已被 AgentService 中的 Unified Tool Policy Enforcement 取代。
-        仅保留为空实现以防止遗留代码报错，未来应彻底移除。
+        获取工具描述列表。
+        目标格式: - **tool_name**: 功能描述。参数 arg1: desc1; arg2: desc2。
         """
-        return ""
+        lines = []
+        
+        # 收集所有符合条件的清单
+        target_manifests = []
+        for manifest in self.pm.get_all_manifests():
+            # 过滤类别
+            category = manifest.get("_category", "core")
+            if category_filter and category != category_filter:
+                continue
+            target_manifests.append(manifest)
+
+        if not target_manifests:
+            return ""
+
+        for manifest in target_manifests:
+            commands = []
+            if "capabilities" in manifest and "invocationCommands" in manifest["capabilities"]:
+                commands = manifest["capabilities"]["invocationCommands"]
+            elif "capabilities" in manifest and "toolDefinitions" in manifest["capabilities"]:
+                commands = manifest["capabilities"]["toolDefinitions"]
+
+            for cmd in commands:
+                name = cmd.get("commandIdentifier")
+                desc = cmd.get("description", "").strip()
+                if not name:
+                    continue
+
+                # 新规范支持：直接获取 parameter 字段
+                param_str = cmd.get("parameter", "")
+                
+                if param_str:
+                    # 使用新格式直接拼接
+                    full_desc = f"- **{name}**: {desc}"
+                    if not (full_desc.endswith("。") or full_desc.endswith(".")):
+                        full_desc += "。"
+                    
+                    # 只有当参数不为空且不是“无”的时候才添加
+                    if param_str and "无" not in param_str and param_str != "":
+                         full_desc += f" 参数 {param_str}"
+                         if not (full_desc.endswith("。") or full_desc.endswith(".")):
+                             full_desc += "。"
+                    lines.append(full_desc)
+                    continue
+
+                # 提取参数 (旧逻辑回退)
+                param_parts = []
+                args = cmd.get("arguments", [])
+                for arg in args:
+                    arg_name = arg.get("name")
+                    arg_desc = arg.get("description", "")
+                    is_required = arg.get("required", False)
+                    req_mark = "" if is_required else "(可选)"
+                    
+                    if arg_desc:
+                        param_parts.append(f"{arg_name}: {arg_desc}{req_mark}")
+                    else:
+                        param_parts.append(f"{arg_name}{req_mark}")
+
+                full_desc = f"- **{name}**: {desc}"
+                if param_parts:
+                    if not (full_desc.endswith("。") or full_desc.endswith(".")):
+                        full_desc += "。"
+                    full_desc += " 参数 " + "; ".join(param_parts) + "。"
+                
+                lines.append(full_desc)
+
+        return "\n".join(lines)
 
     async def _echo_plugin(self, params: Dict[str, Any]) -> str:
         """测试用插件"""
@@ -525,9 +618,9 @@ class NITDispatcher:
 
             # 轻量模式检查
             config = get_config_manager()
-            if config.get("lightweight_mode", False) and plugin_id not in ["ScreenVision", "TaskLifecycle", "MemoryOps"]:
+            if config.get("lightweight_mode", False) and plugin_id not in ["ScreenVision", "TaskLifecycle"]:
                 logger.warning(f"轻量模式拦截: {plugin_name}")
-                return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。"
+                return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。仅 ScreenVision 和 TaskLifecycle 可用。"
 
             if not self.nm.is_category_enabled(category):
                 return f"错误: 类别 '{category}' 已禁用。"

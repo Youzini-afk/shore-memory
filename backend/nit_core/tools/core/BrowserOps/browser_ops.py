@@ -2,9 +2,11 @@ import httpx
 from bs4 import BeautifulSoup
 
 try:
-    from services.browser_bridge_service import browser_bridge_service
+    from services.interaction.browser_bridge_service import browser_bridge_service
 except ImportError:
-    from backend.services.browser_bridge_service import browser_bridge_service
+    from backend.services.interaction.browser_bridge_service import (
+        browser_bridge_service,
+    )
 
 
 async def _wrap_result_with_content(result: dict) -> str:

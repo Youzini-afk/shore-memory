@@ -1,0 +1,36 @@
+import { createRouter, createWebHashHistory, type RouteRecordRaw } from 'vue-router'
+import Pet3DView from '../views/Pet3DView.vue'
+import DashboardView from '../views/DashboardView.vue'
+import LauncherView from '../views/LauncherView.vue'
+import MainWindow from '../views/MainWindow.vue'
+import StrongholdView from '../views/StrongholdView.vue'
+import BedrockAvatar from '../components/avatar/BedrockAvatar.vue'
+
+const routes: RouteRecordRaw[] = [
+  { path: '/', redirect: '/launcher' },
+  { path: '/launcher', component: LauncherView },
+  { path: '/ide', component: MainWindow },
+  { path: '/stronghold', component: StrongholdView },
+  { path: '/pet-3d', component: Pet3DView },
+  { path: '/dashboard', component: DashboardView },
+  { path: '/test-3d', component: BedrockAvatar }
+]
+
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes
+})
+
+router.beforeEach((to, from, next) => {
+  console.log(`[路由] 正在从 ${from.path} 导航到 ${to.path}`)
+
+  // Docker 模式重定向
+  if (!window.electron && to.path === '/launcher') {
+    next('/dashboard')
+    return
+  }
+
+  next()
+})
+
+export default router

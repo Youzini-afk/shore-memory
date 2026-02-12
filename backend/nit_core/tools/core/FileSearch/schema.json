@@ -1,0 +1,29 @@
+[
+  {
+    "name": "search_files",
+    "description": "Search for files by name pattern.",
+    "parameters": {
+      "type": "object",
+      "properties": { "query": { "type": "string" } },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "read_file_content",
+    "description": "Read content of a text file.",
+    "parameters": {
+      "type": "object",
+      "properties": { "file_path": { "type": "string" } },
+      "required": ["file_path"]
+    }
+  },
+  {
+    "name": "list_directory",
+    "description": "List files in a directory.",
+    "parameters": {
+      "type": "object",
+      "properties": { "dir_path": { "type": "string" } },
+      "required": ["dir_path"]
+    }
+  }
+]

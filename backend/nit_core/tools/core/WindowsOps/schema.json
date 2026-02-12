@@ -1,0 +1,50 @@
+[
+  {
+    "name": "open_application",
+    "description": "Launch an application.",
+    "parameters": {
+      "type": "object",
+      "properties": { "app_name": { "type": "string" } },
+      "required": ["app_name"]
+    }
+  },
+  {
+    "name": "get_active_windows",
+    "description": "List active windows.",
+    "parameters": { "type": "object", "properties": {} }
+  },
+  {
+    "name": "activate_window",
+    "description": "Bring a window to front.",
+    "parameters": {
+      "type": "object",
+      "properties": { "target_name": { "type": "string" } },
+      "required": ["target_name"]
+    }
+  },
+  {
+    "name": "get_system_status",
+    "description": "Get system status info.",
+    "parameters": { "type": "object", "properties": {} }
+  },
+  {
+    "name": "get_mouse_position",
+    "description": "Get mouse coordinates.",
+    "parameters": { "type": "object", "properties": {} }
+  },
+  {
+    "name": "automation_execute",
+    "description": "Execute low-level automation.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "action": { "type": "string", "enum": ["click", "double_click", "right_click", "drag", "type", "hotkey", "notification"] },
+        "target": { "type": "string" },
+        "x": { "type": "integer" },
+        "y": { "type": "integer" },
+        "target_text": { "type": "string" }
+      },
+      "required": ["action"]
+    }
+  }
+]

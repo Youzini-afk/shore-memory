@@ -986,6 +986,9 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
+import NotificationManager from '../components/ui/NotificationManager.vue'
+import PetNotificationManager from '../components/ui/PetNotificationManager.vue'
+import ContextMenu from '../components/ui/ContextMenu.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
 import {
   Sparkles,

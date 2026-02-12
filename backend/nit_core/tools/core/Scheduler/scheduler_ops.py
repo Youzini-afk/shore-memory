@@ -2,12 +2,12 @@ from datetime import datetime
 
 import dateparser
 
-from services.scheduler_service import scheduler_service
+from services.agent.scheduler_service import scheduler_service
 
 try:
-    from services.session_service import _CURRENT_SESSION_CONTEXT
+    from services.core.session_service import _CURRENT_SESSION_CONTEXT
 except ImportError:
-    from backend.services.session_service import _CURRENT_SESSION_CONTEXT
+    from backend.services.core.session_service import _CURRENT_SESSION_CONTEXT
 
 
 async def add_reminder(time: str, content: str, repeat_rule: str = None) -> str:

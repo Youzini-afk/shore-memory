@@ -12,11 +12,13 @@
     "invocationCommands": [
       {
         "commandIdentifier": "screen_ocr",
-        "description": "OCR文字提取。从屏幕截图中识别并提取文本。参数 return_detail: (可选) True/False 是否返回坐标详情，默认 False。"
+        "description": "从屏幕截图中识别并提取文本信息",
+        "parameter": "是否返回详细坐标 (return_detail: True/False, 默认 False)"
       },
       {
         "commandIdentifier": "take_screenshot",
-        "description": "屏幕截图。获取当前屏幕画面。参数 count: (可选) 截图数量，默认 1。"
+        "description": "获取当前屏幕画面的截图",
+        "parameter": "截图数量 (count, 默认 1)"
       }
     ]
   }

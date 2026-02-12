@@ -1,0 +1,20 @@
+[
+  {
+    "name": "call_butler",
+    "description": "Call the stronghold butler.",
+    "parameters": {
+      "type": "object",
+      "properties": { "query": { "type": "string" } },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "move_to_room",
+    "description": "Move to another room.",
+    "parameters": {
+      "type": "object",
+      "properties": { "target_room_name": { "type": "string" } },
+      "required": ["target_room_name"]
+    }
+  }
+]

@@ -19,17 +19,17 @@ export default {
     app.component('BedrockDemo', BedrockDemo)
     app.component('MDPGraph', MDPGraph)
     app.component('DashboardDemo', DashboardDemo)
-    
+
     if (inBrowser) {
       // @ts-ignore
       if (!document.startViewTransition) return
 
-      router.onBeforeRouteChange = (to) => {
+      router.onBeforeRouteChange = () => {
         // @ts-ignore
         const transition = document.startViewTransition(() => {
           // The promise is resolved when the DOM is updated
         })
-        
+
         transition.finished.then(() => {
           // Cleanup if needed
         })

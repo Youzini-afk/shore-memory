@@ -26,20 +26,22 @@ export async function startGateway(window: WindowLike) {
     // 生产环境: resources/bin/gateway(.exe)
     gatewayPath = path.join(paths.resources, 'bin', execName)
   } else {
-    // 开发环境: 优先查找 ../PeroLink/gateway(.exe)
-    // process.cwd() 通常是项目根目录 (PeroCore-Electron)
+    // 开发环境: 查找优先级
+    const devPaths = [
+      path.join(process.cwd(), 'gateway', execName),           // 当前项目下的 gateway/gateway.exe
+      path.join(process.cwd(), 'resources/bin', execName),     // 当前项目下的 resources/bin/gateway.exe
+      path.join(process.cwd(), '../PeroLink', execName),       // 兼容旧路径
+    ]
 
-    // 优先级 1: ../PeroLink/gateway.exe
-    const path1 = path.join(process.cwd(), '../PeroLink', execName)
-    // 优先级 2: ./gateway/gateway.exe
-    const path2 = path.join(process.cwd(), 'gateway', execName)
+    for (const p of devPaths) {
+      if (await fs.pathExists(p)) {
+        gatewayPath = p
+        break
+      }
+    }
 
-    if (await fs.pathExists(path1)) {
-      gatewayPath = path1
-    } else if (await fs.pathExists(path2)) {
-      gatewayPath = path2
-    } else {
-      gatewayPath = path1 // 默认回退
+    if (!gatewayPath) {
+      gatewayPath = devPaths[0] // 默认回退
     }
   }
 
@@ -103,6 +105,9 @@ export async function startGateway(window: WindowLike) {
       GATEWAY_TOKEN_PATH: tokenPath
     }
   })
+
+  // 设置环境变量，以便同一进程内的其他模块能立即获取到路径
+  process.env.GATEWAY_TOKEN_PATH = tokenPath
 
   // 等待令牌文件创建
   let retries = 0

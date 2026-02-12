@@ -55,7 +55,10 @@ if (args.cliMode) {
   app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
   // 为 Windows 10+ 通知设置应用程序名称
-  if (process.platform === 'win32') app.setAppUserModelId(app.getName())
+  if (process.platform === 'win32') {
+    app.setName('PeroCore')
+    app.setAppUserModelId(app.getName())
+  }
 
   if (!app.requestSingleInstanceLock()) {
     app.quit()
@@ -188,6 +191,11 @@ if (args.cliMode) {
       logger.error('Main', `IPC: chat-message 失败: ${error.message}`)
       throw error
     }
+  })
+
+  ipcMain.handle('open_stronghold_window', () => {
+    windowManager.createStrongholdWindow()
+    return null
   })
 
   // IPC 处理程序 - Tauri 适配器

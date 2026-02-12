@@ -6,7 +6,7 @@ from sqlmodel import Session
 
 from database import get_session
 from models import GroupChatMessage, GroupChatRoom
-from services.group_chat_service import GroupChatService
+from services.chat.group_chat_service import GroupChatService
 
 router = APIRouter(prefix="/api/groupchat", tags=["groupchat"])
 

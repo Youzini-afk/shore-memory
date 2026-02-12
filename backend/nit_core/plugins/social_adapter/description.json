@@ -11,55 +11,68 @@
     "invocationCommands": [
       {
         "commandIdentifier": "qq_send_group_msg",
-        "description": "发送群消息。参数 group_id: 群号; message: 内容。"
+        "description": "发送群消息。",
+        "parameter": "群号 (group_id)，内容 (message)"
       },
       {
         "commandIdentifier": "qq_send_private_msg",
-        "description": "发送私聊。参数 user_id: QQ号; content: 内容。"
+        "description": "发送私聊。",
+        "parameter": "QQ号 (user_id)，内容 (content)"
       },
       {
         "commandIdentifier": "qq_handle_friend_request",
-        "description": "处理好友请求。参数 flag: 请求标识; approve: True/False; remark: (可选) 备注。"
+        "description": "处理好友请求。",
+        "parameter": "请求标识 (flag)，是否同意 (approve: True/False)，可选备注 (remark)"
       },
       {
         "commandIdentifier": "qq_delete_friend",
-        "description": "删除好友。参数 user_id: QQ号; reason: (可选) 原因。"
+        "description": "删除好友。",
+        "parameter": "QQ号 (user_id)，可选原因 (reason)"
       },
       {
         "commandIdentifier": "qq_get_friend_list",
-        "description": "获取好友列表 (无需参数)。"
+        "description": "获取好友列表。",
+        "parameter": "无"
       },
       {
         "commandIdentifier": "qq_get_group_list",
-        "description": "获取群列表 (无需参数)。"
+        "description": "获取群列表。",
+        "parameter": "无"
       },
       {
         "commandIdentifier": "qq_get_stranger_info",
-        "description": "获取陌生人信息。参数 user_id: QQ号。"
+        "description": "获取陌生人信息。",
+        "parameter": "QQ号 (user_id)"
       },
       {
         "commandIdentifier": "qq_get_group_info",
-        "description": "获取群信息。参数 group_id: 群号。"
+        "description": "获取群信息。",
+        "parameter": "群号 (group_id)"
       },
       {
         "commandIdentifier": "qq_get_group_member_info",
-        "description": "获取群成员信息。参数 group_id: 群号; user_id: QQ号。"
+        "description": "获取群成员信息。",
+        "parameter": "群号 (group_id)，QQ号 (user_id)"
       },
       {
         "commandIdentifier": "qq_get_group_history",
-        "description": "获取群历史。参数 group_id: 群号; count: (可选) 获取的消息数量，默认 20。"
+        "description": "获取群历史。",
+        "parameter": "群号 (group_id)，可选获取的消息数量 (count, 默认 20)"
       },
       {
         "commandIdentifier": "read_social_memory",
-        "description": "读取社交记忆。搜索QQ聊天记录。参数 query: 搜索关键词; filter: (可选) 过滤条件。"
+        "description": "读取社交记忆。搜索QQ聊天记录。",
+        "parameter": "搜索关键词 (query)，可选过滤条件 (filter)"
       },
       {
         "commandIdentifier": "read_agent_memory",
-        "description": "读取代理记忆。搜索与主人的交互记录。参数 query: 搜索关键词。"
+        "description": "读取代理记忆。搜索与主人的交互记录。",
+        "parameter": "搜索关键词 (query)"
       },
       {
         "commandIdentifier": "qq_notify_master",
-        "description": "通知主人。主动报告重要社交事件。参数 content: 通知内容; importance: (可选) 重要程度 (low/medium/high)，默认 medium。"
+        "description": "通知主人。主动报告重要社交事件。",
+        "parameter": "通知内容 (content)，可选重要程度 (importance: low/medium/high, 默认 medium)"
       }
     ]
   }

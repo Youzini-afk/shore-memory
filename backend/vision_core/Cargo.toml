@@ -30,5 +30,3 @@ anyhow = "1.0"
 # 数据结构
 ahash = "0.8"
 smallvec = "1.11"
-
-[workspace]

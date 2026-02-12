@@ -2,7 +2,7 @@ from typing import Dict
 
 from fastapi import APIRouter, Body, HTTPException
 
-from services.task_manager import task_manager
+from services.agent.task_manager import task_manager
 
 router = APIRouter(prefix="/api/task", tags=["task_control"])
 

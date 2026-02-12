@@ -1,7 +1,7 @@
 import logging
 from typing import Any, Callable, Dict, List
 
-from services.mcp_service import McpClient
+from services.core.mcp_service import McpClient
 
 from .dispatcher import NITDispatcher, get_dispatcher
 

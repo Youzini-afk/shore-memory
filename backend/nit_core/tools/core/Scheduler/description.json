@@ -8,15 +8,18 @@
         "invocationCommands": [
             {
                 "commandIdentifier": "add_reminder",
-                "description": "添加提醒。参数 time: 触发时间 (支持自然语言 '10分钟后', '明天8点'); content: 提醒内容; repeat_rule: (可选) 'daily'/'weekly'。"
+                "description": "添加一个定时提醒或任务",
+                "parameter": "触发时间 (time, 支持自然语言 '10分钟后', '明天8点')，提醒内容 (content)，可选的重复规则 (repeat_rule: 'daily'/'weekly')"
             },
             {
                 "commandIdentifier": "list_reminders",
-                "description": "列出提醒。查看所有待执行任务 (无需参数)。"
+                "description": "列出当前所有待执行的提醒任务",
+                "parameter": "无"
             },
             {
                 "commandIdentifier": "delete_reminder",
-                "description": "删除提醒。参数 id: 任务ID (从 list_reminders 获取)。"
+                "description": "删除指定的提醒任务",
+                "parameter": "任务ID (id, 从 list_reminders 获取)"
             }
         ]
     }

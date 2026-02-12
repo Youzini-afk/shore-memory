@@ -7,41 +7,53 @@ version: "3.0"
 -->
 
 {% block header %}
-# 系统规则
+<System_Context>
 {{ system_core }}
 
-# 人设定义
 {{ persona_definition }}
+</System_Context>
 
-# 上下文与状态
-<用户上下文>
-[主人设定]
-- 主人名字: {{owner_name}}
-- 主人人设: {{user_persona}}
+<Long_Term_Memory>
+{{ memory_context }}
+</Long_Term_Memory>
 
-[当前长记忆/状态]
-- 现实时间: {{current_time}}
-- 当前心情: {{mood}}
-- 核心状态: {{vibe}}
-- 内心独白: {{mind}}
-{{vision_status}}
+<Group_History>
+{{ flattened_group_history }}
+</Group_History>
 
-[相关记忆片段 (RAG)]
-{{memory_context}}
+<Desktop_History>
+{{ flattened_desktop_history }}
+</Desktop_History>
 
-[关联思绪 (Graph)]
+<Environment_Context>
+<Owner_Setting>
+- 姓名: {{owner_name}}
+- 设定: {{user_persona}}
+</Owner_Setting>
+
+<Graph_Context>
 {{graph_context}}
-</用户上下文>
+</Graph_Context>
+</Environment_Context>
 {% endblock %}
 
 {% block footer %}
-# 能力介绍
+<Instruction_Context>
 {{ ability_nit }}
 
 {{ ability_sensory }}
 
 {{ ability }}
 
-# 输出要求
 {{ output_constraint }}
+
+<Current_Status>
+- 当前时间: {{current_time}}
+- 心情: {{mood}}
+- 氛围: {{vibe}}
+- 心理活动: {{mind}}
+{{vision_status}}
+</Current_Status>
+
+</Instruction_Context>
 {% endblock %}

@@ -432,9 +432,11 @@
                           :content="
                             !isLightweightEnabled
                               ? '请先开启轻量模式'
-                              : isCompanionEnabled
-                                ? '关闭陪伴'
-                                : '开启陪伴'
+                              : !isCurrentModelVisionEnabled
+                                ? '当前对话模型未开启“图片模态”能力，无法使用陪伴模式'
+                                : isCompanionEnabled
+                                  ? '关闭陪伴'
+                                  : '开启陪伴'
                           "
                           placement="top"
                         >
@@ -442,7 +444,7 @@
                             v-model="isCompanionEnabled"
                             active-text="ON"
                             inactive-text="OFF"
-                            :disabled="!isLightweightEnabled"
+                            :disabled="!isLightweightEnabled || !isCurrentModelVisionEnabled"
                             :loading="isTogglingCompanion"
                             @change="toggleCompanion"
                           />
@@ -1827,8 +1829,8 @@
 import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { listen, invoke } from '@/utils/ipcAdapter'
-import VoiceConfigPanel from './VoiceConfigPanel.vue'
-import AsyncMarkdown from '../components/AsyncMarkdown.vue'
+import VoiceConfigPanel from '../components/settings/VoiceConfigPanel.vue'
+import AsyncMarkdown from '../components/markdown/AsyncMarkdown.vue'
 import * as echarts from 'echarts'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import {
@@ -1854,8 +1856,8 @@ import {
   ArrowDown,
   Upload
 } from '@element-plus/icons-vue'
-import TerminalPanel from '../components/TerminalPanel.vue'
-import NapCatTerminal from '../components/NapCatTerminal.vue'
+import TerminalPanel from '../components/terminal/TerminalPanel.vue'
+import NapCatTerminal from '../components/terminal/NapCatTerminal.vue'
 import logoImg from '../assets/logo1.png'
 import { gatewayClient } from '../api/gateway'
 
@@ -1875,6 +1877,11 @@ const isSaving = ref(false)
 const isGlobalRefreshing = ref(false)
 const isCompanionEnabled = ref(false)
 const isTogglingCompanion = ref(false)
+const isCurrentModelVisionEnabled = computed(() => {
+  if (!currentActiveModelId.value || !models.value.length) return false
+  const activeModel = models.value.find((m) => m.id === currentActiveModelId.value)
+  return activeModel ? !!activeModel.enable_vision : false
+})
 const isSocialEnabled = ref(false)
 const isLightweightEnabled = ref(false)
 const isTogglingLightweight = ref(false)
@@ -2243,6 +2250,7 @@ const formatLogContent = (content) => {
   if (!content) return ''
   // Hide Thinking and Monologue blocks (but keep them in raw data)
   // 隐藏 Thinking 和 Monologue 块（但在原始数据中保留它们）
+  // [兼容性保留] Monologue 为旧版格式，此处保留过滤以确保 UI 清洁
   return content.replace(/【(Thinking|Monologue)[\s\S]*?】/gi, '')
 }
 
@@ -2504,6 +2512,21 @@ const waitForBackend = async () => {
 // [Feature] Listen for new messages via Gateway
 
 onMounted(() => {
+  waitForBackend() // 启动检测
+
+  // [Fix] Only connect gateway when backend is confirmed online
+  // Avoid log spamming during initial startup phase
+  watch(
+    isBackendOnline,
+    (online) => {
+      if (online) {
+        console.log('[Dashboard] Backend online, connecting to Gateway...')
+        gatewayClient.connect()
+      }
+    },
+    { immediate: false }
+  )
+
   // [Fix] Listen for agent changes to refresh all data
   gatewayClient.on('action:agent_changed', (payload) => {
     const agentId = payload.agent_id || (payload.params && payload.params.agent_id)

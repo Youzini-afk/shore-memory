@@ -6,10 +6,10 @@ try:
     from sqlmodel import select
 
     from models import PetState
-    from services.session_service import _CURRENT_SESSION_CONTEXT
+    from services.core.session_service import _CURRENT_SESSION_CONTEXT
 except ImportError:
     from backend.models import PetState
-    from backend.services.session_service import _CURRENT_SESSION_CONTEXT
+    from backend.services.core.session_service import _CURRENT_SESSION_CONTEXT
     from sqlmodel import select
 
 
@@ -184,13 +184,13 @@ async def finish_task(
                     import uuid
 
                     from peroproto import perolink_pb2
-                    from services.gateway_client import gateway_client
+                    from services.core.gateway_client import gateway_client
                 except ImportError:
                     import time
                     import uuid
 
                     from backend.peroproto import perolink_pb2
-                    from backend.services.gateway_client import gateway_client
+                    from backend.services.core.gateway_client import gateway_client
 
                 payload = {}
                 if mood:
@@ -238,11 +238,11 @@ async def finish_task(
         if triggers:
             try:
                 try:
-                    from services.realtime_session_manager import (
+                    from services.core.realtime_session_manager import (
                         realtime_session_manager,
                     )
                 except ImportError:
-                    from backend.services.realtime_session_manager import (
+                    from backend.services.core.realtime_session_manager import (
                         realtime_session_manager,
                     )
 

@@ -11,15 +11,18 @@
     "invocationCommands": [
       {
         "commandIdentifier": "write_workspace_file",
-        "description": "写入笔记。参数 filename: 文件名; content: 内容。"
+        "description": "在你的个人工作空间中创建或覆盖文件，用于保存笔记、代码或任何文本内容",
+        "parameter": "文件相对路径 (filename)，要写入的文本内容 (content)"
       },
       {
         "commandIdentifier": "read_workspace_file",
-        "description": "读取笔记。参数 filename: 文件名。"
+        "description": "从你的个人工作空间读取文件内容",
+        "parameter": "文件相对路径 (filename)"
       },
       {
         "commandIdentifier": "list_workspace_files",
-        "description": "列出笔记。参数 subdir: (可选) 子目录。"
+        "description": "列出工作空间中指定目录下的所有文件",
+        "parameter": "可选的子目录路径 (subdir)"
       }
     ]
   }

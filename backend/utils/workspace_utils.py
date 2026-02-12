@@ -1,6 +1,6 @@
 import os
 
-from services.agent_manager import get_agent_manager
+from services.agent.agent_manager import get_agent_manager
 
 # Base workspace directory (PeroCore/pero_workspace)
 # Assuming this file is in backend/utils/workspace_utils.py

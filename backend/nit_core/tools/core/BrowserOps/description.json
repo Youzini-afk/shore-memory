@@ -11,31 +11,38 @@
     "invocationCommands": [
       {
         "commandIdentifier": "browser_fetch_text",
-        "description": "文本速读。快速抓取网页正文。参数 url: 目标网页地址。"
+        "description": "文本速读：快速抓取并提取网页的正文内容",
+        "parameter": "目标网页地址 (url)"
       },
       {
         "commandIdentifier": "browser_open_url",
-        "description": "视觉浏览-打开。加载网页以进行交互。参数 url: 目标网页地址。"
+        "description": "视觉浏览：在虚拟浏览器中加载并渲染网页以进行后续交互",
+        "parameter": "目标网页地址 (url)"
       },
       {
         "commandIdentifier": "browser_click",
-        "description": "视觉浏览-点击。点击页面元素。参数 selector: CSS选择器 (如 '#submit-btn') 或 text: 元素包含的文本 (如 '登录')。"
+        "description": "视觉浏览：点击页面上的特定元素",
+        "parameter": "CSS选择器 (selector, 如 '#submit-btn') 或 元素文本 (text, 如 '登录')"
       },
       {
         "commandIdentifier": "browser_type",
-        "description": "视觉浏览-输入。在输入框填写内容。参数 selector: CSS选择器; text: 要输入的文本内容。"
+        "description": "视觉浏览：在输入框中填写内容",
+        "parameter": "输入框CSS选择器 (selector)，要输入的文本内容 (text)"
       },
       {
         "commandIdentifier": "browser_get_content",
-        "description": "视觉浏览-观察。获取当前页面的结构化 Markdown 视图 (无需参数)。"
+        "description": "视觉浏览：获取当前页面的结构化 Markdown 视图，用于观察页面状态",
+        "parameter": "无"
       },
       {
         "commandIdentifier": "browser_scroll",
-        "description": "视觉浏览-滚动。参数 direction: 'down' (向下) 或 'up' (向上)。"
+        "description": "视觉浏览：滚动当前页面",
+        "parameter": "方向 (direction: 'down' 或 'up')"
       },
       {
         "commandIdentifier": "browser_back",
-        "description": "视觉浏览-后退。返回上一页 (无需参数)。"
+        "description": "视觉浏览：返回上一页",
+        "parameter": "无"
       }
     ]
   }

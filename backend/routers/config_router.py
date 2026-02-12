@@ -92,7 +92,7 @@ async def get_aura_vision_mode():
 async def set_aura_vision_mode(enabled: bool = Body(..., embed=True)):
     await get_config_manager().set("aura_vision_enabled", enabled)
 
-    from services.aura_vision_service import aura_vision_service
+    from services.perception.aura_vision_service import aura_vision_service
 
     if enabled:
         if not aura_vision_service.is_running:
@@ -165,7 +165,9 @@ async def get_companion_mode():
 
 
 @router.post("/companion_mode")
-async def set_companion_mode(enabled: bool = Body(..., embed=True)):
+async def set_companion_mode(
+    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)
+):
     # 检查依赖：需先开启轻量模式
     config_mgr = get_config_manager()
     if enabled and not config_mgr.get("lightweight_mode", False):
@@ -173,9 +175,23 @@ async def set_companion_mode(enabled: bool = Body(..., embed=True)):
             status_code=400, detail="请先开启“轻量模式”后再启动陪伴模式。"
         )
 
+    # [New Requirement] Companion mode requires vision capability in current model
+    if enabled:
+        config_entry = await session.get(Config, "current_model_id")
+        if not config_entry:
+            raise HTTPException(status_code=400, detail="未配置当前对话模型，无法开启陪伴模式。")
+        
+        from models import AIModelConfig
+        model_config = await session.get(AIModelConfig, int(config_entry.value))
+        if not model_config or not model_config.enable_vision:
+            raise HTTPException(
+                status_code=400, 
+                detail="当前对话模型未开启“图片模态”能力，陪伴模式需要模型能够理解屏幕截图。"
+            )
+
     await config_mgr.set("companion_mode_enabled", enabled)
 
-    from services.companion_service import companion_service
+    from services.agent.companion_service import companion_service
 
     if enabled:
         await companion_service.start()

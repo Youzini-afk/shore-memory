@@ -1,0 +1,45 @@
+[
+  {
+    "name": "read_file_content",
+    "description": "Read file content.",
+    "parameters": {
+      "type": "object",
+      "properties": { "file_path": { "type": "string" } },
+      "required": ["file_path"]
+    }
+  },
+  {
+    "name": "list_directory",
+    "description": "List directory contents.",
+    "parameters": {
+      "type": "object",
+      "properties": { "dir_path": { "type": "string" } },
+      "required": ["dir_path"]
+    }
+  },
+  {
+    "name": "write_file",
+    "description": "Write content to a file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": { "type": "string" },
+        "content": { "type": "string" }
+      },
+      "required": ["file_path", "content"]
+    }
+  },
+  {
+    "name": "apply_diff",
+    "description": "Apply a patch to a file.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "file_path": { "type": "string" },
+        "search": { "type": "string", "description": "Original content block" },
+        "replace": { "type": "string", "description": "New content block" }
+      },
+      "required": ["file_path", "search", "replace"]
+    }
+  }
+]

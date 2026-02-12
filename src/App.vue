@@ -1,6 +1,6 @@
 <template>
-  <div class="app-container">
-    <div class="main-content">
+  <div class="app-container h-full w-full">
+    <div class="main-content h-full w-full">
       <router-view v-slot="{ Component }">
         <keep-alive>
           <component :is="Component" />

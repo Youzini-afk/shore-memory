@@ -5,8 +5,8 @@ from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from database import get_session
-from services.agent_manager import get_agent_manager
-from services.agent_service import AgentService
+from services.agent.agent_manager import get_agent_manager
+from services.agent.agent_service import AgentService
 
 router = APIRouter(prefix="/api/agents", tags=["agents"])
 

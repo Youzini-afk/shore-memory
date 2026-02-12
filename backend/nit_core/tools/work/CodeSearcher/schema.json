@@ -1,0 +1,30 @@
+[
+  {
+    "name": "code_search",
+    "description": "Search code patterns in the project.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query_pattern": {
+          "type": "string",
+          "description": "Keyword or regex pattern to search for."
+        },
+        "target_rel_path": {
+          "type": "string",
+          "description": "Optional relative path to limit search scope."
+        },
+        "is_case_sensitive": {
+          "type": "boolean",
+          "description": "Whether the search is case sensitive.",
+          "default": false
+        },
+        "context_lines_count": {
+          "type": "integer",
+          "description": "Number of context lines to show.",
+          "default": 2
+        }
+      },
+      "required": ["query_pattern"]
+    }
+  }
+]

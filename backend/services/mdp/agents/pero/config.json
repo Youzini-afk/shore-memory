@@ -4,7 +4,8 @@
   "description": "看板娘Pero!",
   "personas": {
     "work": "personas/work.md",
-    "social": "personas/social.md"
+    "social": "personas/social.md",
+    "group": "personas/group.md"
   },
   "social": {
     "enabled": true,
@@ -15,11 +16,11 @@
     "social": {
       "strategy": "whitelist",
       "allowed_tags": ["social"],
-      "allowed_tools": ["read_social_memory", "read_agent_memory", "qq_notify_master", "add_reminder", "list_reminders", "delete_reminder"]
+      "allowed_tools": ["add_reminder", "list_reminders", "delete_reminder"]
     },
     "work": {
       "strategy": "whitelist",
-      "allowed_tags": ["core", "work"]
+      "allowed_tags": ["work"]
     },
     "desktop": {
       "strategy": "whitelist",
@@ -37,7 +38,10 @@
         "add_schedule_task",
         "list_pending_tasks",
         "delete_schedule_task"
-      ]
+      ]},
+    "group": {
+      "strategy": "whitelist",
+      "allowed_tags": ["group"]
     }
   }
 }

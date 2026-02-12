@@ -3,20 +3,41 @@
   "name": "WindowsOps",
   "displayName": "系统操作 (WindowsOps)",
   "version": "1.0.1",
-  "description": "系统控制。执行打开应用、按键模拟等Windows操作。",
+  "description": "系统控制。执行打开应用、窗口切换、鼠标模拟、系统状态获取等操作。",
   "author": "PeroCore",
-  "platforms": ["windows"],
   "pluginType": "python-module",
   "entryPoint": "windows_ops.py",
   "capabilities": {
     "invocationCommands": [
       {
-        "commandIdentifier": "windows_operation",
-        "description": "系统控制。参数 instruction: 自然语言指令 (如 '打开记事本', '按下Win+D', '调大音量', '静音', '锁屏')。"
+        "commandIdentifier": "open_application",
+        "description": "启动指定的应用程序",
+        "parameter": "应用程序名称 (app_name, 如 'notepad', 'chrome')"
       },
       {
-        "commandIdentifier": "open_application",
-        "description": "打开应用。参数 app_name: 应用程序名称 (如 'notepad', 'calc', 'chrome')。"
+        "commandIdentifier": "get_active_windows",
+        "description": "获取当前所有可见的顶层窗口列表",
+        "parameter": "无"
+      },
+      {
+        "commandIdentifier": "activate_window",
+        "description": "将指定的应用程序窗口置顶",
+        "parameter": "进程名 (target_name, 如 'chrome.exe') 或标题关键词 (如 'Google Chrome')"
+      },
+      {
+        "commandIdentifier": "get_system_status",
+        "description": "获取操作系统版本、屏幕分辨率等状态信息",
+        "parameter": "无"
+      },
+      {
+        "commandIdentifier": "get_mouse_position",
+        "description": "获取当前鼠标的逻辑坐标 (0-1000)",
+        "parameter": "无"
+      },
+      {
+        "commandIdentifier": "automation_execute",
+        "description": "执行底层的键鼠模拟操作",
+        "parameter": "动作类型 (action: 'click'|'type'|'hotkey'|'drag'|'notification')，目标 (target: 输入文本/按键)，坐标 (x, y)，OCR目标文本 (target_text)"
       }
     ]
   }

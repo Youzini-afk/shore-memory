@@ -1,0 +1,21 @@
+[
+  {
+    "name": "finish_task",
+    "description": "Finish the task and update persona state.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "summary": { "type": "string", "description": "Final response to user" },
+        "mood": { "type": "string", "description": "Current mood" },
+        "vibe": { "type": "string", "description": "Current vibe" },
+        "mind": { "type": "string", "description": "Internal monologue" },
+        "click_head_msgs": { "type": "array", "items": { "type": "string" } },
+        "click_chest_msgs": { "type": "array", "items": { "type": "string" } },
+        "click_body_msgs": { "type": "array", "items": { "type": "string" } },
+        "idle_msgs": { "type": "array", "items": { "type": "string" } },
+        "back_msgs": { "type": "array", "items": { "type": "string" } }
+      },
+      "required": ["summary"]
+    }
+  }
+]

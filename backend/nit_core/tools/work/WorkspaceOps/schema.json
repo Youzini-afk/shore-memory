@@ -1,0 +1,36 @@
+[
+  {
+    "name": "write_workspace_file",
+    "description": "Write content to a file in the workspace.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": { "type": "string", "description": "Relative path of the file" },
+        "content": { "type": "string", "description": "Text content to write" }
+      },
+      "required": ["filename", "content"]
+    }
+  },
+  {
+    "name": "read_workspace_file",
+    "description": "Read content from a file in the workspace.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "filename": { "type": "string", "description": "Relative path of the file" }
+      },
+      "required": ["filename"]
+    }
+  },
+  {
+    "name": "list_workspace_files",
+    "description": "List files in the workspace directory.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "subdir": { "type": "string", "description": "Optional subdirectory to list", "default": "" }
+      },
+      "required": []
+    }
+  }
+]

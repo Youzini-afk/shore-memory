@@ -12,8 +12,9 @@ def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None)
         log_file: 可选的日志文件路径
     """
 
-    # 定义格式
-    log_format = "[%(asctime)s] [%(levelname)s] [%(name)s] %(message)s"
+    # 定义格式 (简化版，移除重复的元数据)
+    # 因为 Electron 端的 Logger 已经会自动添加 [LEVEL]，这里不再重复添加 [%(levelname)s]
+    log_format = "[%(name)s] %(message)s"
     date_format = "%Y-%m-%d %H:%M:%S"
 
     # 强制 stdout 使用 UTF-8

@@ -1,0 +1,150 @@
+[
+  {
+    "name": "qq_send_group_msg",
+    "description": "Send group message.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "group_id": { "type": "integer", "description": "Group ID" },
+        "message": { "type": "string", "description": "Message content" }
+      },
+      "required": ["group_id", "message"]
+    }
+  },
+  {
+    "name": "qq_send_private_msg",
+    "description": "Send private message.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "integer", "description": "User QQ ID" },
+        "content": { "type": "string", "description": "Message content" }
+      },
+      "required": ["user_id", "content"]
+    }
+  },
+  {
+    "name": "qq_handle_friend_request",
+    "description": "Handle friend request.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "flag": { "type": "string", "description": "Request flag" },
+        "approve": { "type": "boolean", "description": "Approve or not" },
+        "remark": { "type": "string", "description": "Remark for friend" }
+      },
+      "required": ["flag", "approve"]
+    }
+  },
+  {
+    "name": "qq_delete_friend",
+    "description": "Delete friend.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "integer", "description": "User QQ ID" },
+        "reason": { "type": "string", "description": "Reason" }
+      },
+      "required": ["user_id"]
+    }
+  },
+  {
+    "name": "qq_get_friend_list",
+    "description": "Get friend list.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "qq_get_group_list",
+    "description": "Get group list.",
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "required": []
+    }
+  },
+  {
+    "name": "qq_get_stranger_info",
+    "description": "Get stranger info.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "user_id": { "type": "integer", "description": "User QQ ID" }
+      },
+      "required": ["user_id"]
+    }
+  },
+  {
+    "name": "qq_get_group_info",
+    "description": "Get group info.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "group_id": { "type": "integer", "description": "Group ID" }
+      },
+      "required": ["group_id"]
+    }
+  },
+  {
+    "name": "qq_get_group_member_info",
+    "description": "Get group member info.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "group_id": { "type": "integer", "description": "Group ID" },
+        "user_id": { "type": "integer", "description": "User QQ ID" }
+      },
+      "required": ["group_id", "user_id"]
+    }
+  },
+  {
+    "name": "qq_get_group_history",
+    "description": "Get group history messages.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "group_id": { "type": "integer", "description": "Group ID" },
+        "count": { "type": "integer", "description": "Number of messages", "default": 20 }
+      },
+      "required": ["group_id"]
+    }
+  },
+  {
+    "name": "read_social_memory",
+    "description": "Search social memory (chat logs).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Search query" },
+        "filter": { "type": "object", "description": "Optional filter" }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "read_agent_memory",
+    "description": "Search agent memory (interaction logs).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": { "type": "string", "description": "Search query" }
+      },
+      "required": ["query"]
+    }
+  },
+  {
+    "name": "qq_notify_master",
+    "description": "Notify master about important event.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "content": { "type": "string", "description": "Notification content" },
+        "importance": { "type": "string", "enum": ["low", "medium", "high"], "default": "medium" }
+      },
+      "required": ["content"]
+    }
+  }
+]

@@ -7,6 +7,7 @@ export class WindowManager {
   private static instance: WindowManager
 
   public launcherWin: BrowserWindow | null = null
+  public strongholdWin: BrowserWindow | null = null
   public petWin: BrowserWindow | null = null
   public dashboardWin: BrowserWindow | null = null
   public ideWin: BrowserWindow | null = null
@@ -62,7 +63,7 @@ export class WindowManager {
     }
 
     this.launcherWin = new BrowserWindow({
-      title: 'Pero Launcher',
+      title: 'PeroCore',
       icon: this.getIconPath(),
       width: 900,
       height: 600,
@@ -94,7 +95,7 @@ export class WindowManager {
     this.launcherWin.loadURL(this.getPageUrl('/launcher'))
     logger.info('Main', `Loading URL: ${this.getPageUrl('/launcher')}`)
 
-    this.launcherWin.on('ready-to-show', () => {
+  this.launcherWin.on('ready-to-show', () => {
       logger.info('Main', 'Window ready-to-show event fired')
       this.launcherWin?.show()
     })
@@ -112,6 +113,49 @@ export class WindowManager {
     return this.launcherWin
   }
 
+  public createStrongholdWindow(): BrowserWindow {
+    if (this.strongholdWin && !this.strongholdWin.isDestroyed()) {
+      if (!this.strongholdWin.isVisible()) this.strongholdWin.show()
+      if (this.strongholdWin.isMinimized()) this.strongholdWin.restore()
+      this.strongholdWin.focus()
+      return this.strongholdWin
+    }
+
+    this.strongholdWin = new BrowserWindow({
+      title: 'PeroCore',
+      icon: this.getIconPath(),
+      width: 1200,
+      height: 800,
+      show: false,
+      frame: false,
+      center: true,
+      transparent: true,
+      hasShadow: true,
+      backgroundColor: '#00000000',
+      webPreferences: {
+        preload: this.getPreloadPath(),
+        nodeIntegration: true,
+        contextIsolation: true
+      }
+    })
+
+    if (process.platform === 'win32') {
+      try {
+        this.strongholdWin.setBackgroundMaterial('acrylic')
+      } catch {
+        // ignore
+      }
+    }
+
+    this.strongholdWin.loadURL(this.getPageUrl('/stronghold'))
+    
+    this.strongholdWin.on('ready-to-show', () => {
+      this.strongholdWin?.show()
+    })
+
+    return this.strongholdWin
+  }
+
   public createPetWindow(): BrowserWindow {
     if (this.petWin && !this.petWin.isDestroyed()) {
       if (!this.petWin.isVisible()) this.petWin.show()
@@ -125,7 +169,7 @@ export class WindowManager {
     const { width, height } = primaryDisplay.workAreaSize
 
     this.petWin = new BrowserWindow({
-      title: 'Pero Pet',
+      title: 'PeroCore',
       icon: this.getIconPath(),
       width: 600,
       height: 600,
@@ -223,7 +267,7 @@ export class WindowManager {
     }
 
     this.dashboardWin = new BrowserWindow({
-      title: 'Pero Dashboard',
+      title: 'PeroCore',
       icon: this.getIconPath(),
       width: 1280,
       height: 800,
@@ -286,7 +330,7 @@ export class WindowManager {
     }
 
     this.ideWin = new BrowserWindow({
-      title: 'Pero IDE',
+      title: 'PeroCore',
       icon: this.getIconPath(),
       width: 1400,
       height: 900,

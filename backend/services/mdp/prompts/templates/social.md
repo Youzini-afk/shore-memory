@@ -7,22 +7,22 @@ version: "1.1"
 -->
 
 {% block header %}
-# 系统规则
+<System_Context>
 {{ system_core }}
 
-# 人设定义
 {{ social_instructions }}
+</System_Context>
 
-# 上下文
-<User Context>
+<Context>
 {{ xml_context }}
-</User Context>
+</Context>
+
 {% endblock %}
 
 {% block footer %}
-
+<Instruction_Context>
 {{ xml_guide }}
 
-# 输出要求
 {{ instruction_prompt }}
+</Instruction_Context>
 {% endblock %}

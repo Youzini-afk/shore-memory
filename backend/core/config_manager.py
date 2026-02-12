@@ -21,6 +21,14 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     _instance: Optional["ConfigManager"] = None
+    
+    # 易失性配置列表：这些配置仅在内存中维护，不会从数据库加载或保存
+    # 通常由环境变量或命令行参数控制
+    VOLATILE_CONFIGS = {
+        "enable_social_mode",
+        "napcat_ws_url",
+        "napcat_http_url",
+    }
 
     def __init__(self, config_path: Optional[str] = None):
         # 默认配置
@@ -42,7 +50,7 @@ class ConfigManager:
             if env_val is not None:
                 self.config[key] = self._parse_value(env_val)
                 self.env_loaded_keys.add(key)
-                logger.info(f"已从环境变量加载配置: {key}={self.config[key]}")
+                logger.debug(f"已从环境变量加载配置: {key}={self.config[key]}")
 
         # 从命令行参数加载 (最高优先级，覆盖环境变量)
         # 支持格式: --key=value (例如 --enable-social-mode=true)
@@ -67,11 +75,8 @@ class ConfigManager:
                         self.env_loaded_keys.add(
                             config_key
                         )  # 将 CLI 参数视为环境变量级别的覆盖
-                        logger.info(
+                        logger.debug(
                             f"已从 CLI 加载配置: {config_key}={self.config[config_key]}"
-                        )
-                        print(
-                            f"[ConfigManager] 已加载 CLI 配置: {config_key}={self.config[config_key]}"
                         )
                 except Exception as e:
                     logger.warning(f"无法解析 CLI 参数 {arg}: {e}")
@@ -89,9 +94,13 @@ class ConfigManager:
                 configs = results.all()
 
                 for config in configs:
+                    # 如果配置是易失性的，则跳过
+                    if config.key in self.VOLATILE_CONFIGS:
+                        continue
+
                     # 如果配置已从 ENV 加载，则不要用数据库值覆盖
                     if config.key in self.env_loaded_keys:
-                        logger.info(f"忽略 {config.key} 的数据库配置 (已被 ENV 覆盖)")
+                        logger.debug(f"忽略 {config.key} 的数据库配置 (已被 ENV 覆盖)")
                         continue
 
                     self.config[config.key] = self._parse_value(config.value)
@@ -124,6 +133,11 @@ class ConfigManager:
         """更新内存和数据库中的配置。"""
         logger.info(f"正在更新配置: {key} = {value}")
         self.config[key] = value
+
+        # 如果是易失性配置，则不保存到数据库
+        if key in self.VOLATILE_CONFIGS:
+            logger.debug(f"跳过保存易失性配置: {key}")
+            return
 
         # 转换为字符串以便数据库存储
         str_value = str(value)

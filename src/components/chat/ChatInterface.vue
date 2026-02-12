@@ -695,57 +695,40 @@
     </div>
 
     <!-- 输入区域 -->
-    <div class="p-6 pt-0 bg-transparent flex-shrink-0">
+    <div class="p-6 pt-0 bg-transparent flex-shrink-0 relative z-20">
       <div
-        class="relative rounded-2xl shadow-xl border transition-all flex flex-col"
+        class="rounded-2xl shadow-xl border transition-all flex flex-col overflow-hidden"
         :class="
           workMode
             ? 'bg-[#0f172a] border-slate-700/50 focus-within:border-amber-500/50 focus-within:shadow-amber-500/10'
             : 'bg-white/60 border-sky-200/50 focus-within:border-sky-400/50 focus-within:shadow-sky-400/20 backdrop-blur-md'
         "
       >
-        <!-- 待发送图片预览 -->
+        <!-- 待发送图片预览 (移入输入框内部容器) -->
         <div
           v-if="pendingImages.length > 0"
-          class="px-4 pt-4 pb-2 flex gap-2 overflow-x-auto custom-scrollbar"
+          class="px-4 pt-4 pb-2 flex gap-2 overflow-x-auto custom-scrollbar border-b border-white/10"
         >
           <div v-for="(img, idx) in pendingImages" :key="idx" class="relative group flex-shrink-0">
             <img
               :src="img.url"
-              class="h-16 w-16 object-cover rounded-lg shadow-sm"
-              :class="workMode ? 'border border-slate-700' : 'border border-slate-200'"
+              class="h-16 w-16 object-cover rounded-lg shadow-sm border border-white/10"
             />
             <button
-              class="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow-md hover:scale-110 transition-transform"
-              :class="
-                workMode ? 'text-slate-900 hover:text-red-600' : 'text-slate-500 hover:text-red-500'
-              "
+              class="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow-md hover:scale-110 transition-transform text-slate-500 hover:text-red-500"
               @click="removePendingImage(idx)"
             >
               <XCircle class="w-4 h-4 fill-current" />
             </button>
           </div>
         </div>
-      </div>
-      <div
-        class="text-center mt-2 text-[10px] font-medium tracking-wide"
-        :class="workMode ? 'text-slate-600' : 'text-slate-400'"
-      >
-        {{ AGENT_NAME.toUpperCase() }} AI AGENT · POWERED BY RE-ACT ENGINE
-      </div>
-    </div>
 
-    <!-- Input Area -->
-    <!-- 输入区域 -->
-    <div class="flex-none p-6 pt-0 relative z-20">
-      <div class="relative">
+        <!-- 文本输入区 -->
         <textarea
           v-model="input"
-          class="w-full bg-transparent text-sm p-4 pr-24 rounded-2xl focus:outline-none resize-none h-14 max-h-32 min-h-[56px] custom-scrollbar font-sans border transition-colors shadow-sm"
+          class="w-full bg-transparent text-sm p-4 focus:outline-none resize-none min-h-[56px] max-h-48 custom-scrollbar font-sans border-none"
           :class="[
-            workMode
-              ? 'text-slate-200 placeholder-slate-500 bg-[#0f172a]/50 border-slate-700 focus:border-slate-600'
-              : 'text-slate-800 placeholder-slate-400 bg-white/50 border-white/20 focus:bg-white/80 shadow-sky-100/20',
+            workMode ? 'text-slate-200 placeholder-slate-500' : 'text-slate-800 placeholder-slate-400',
             disabled ? 'opacity-50 cursor-not-allowed' : ''
           ]"
           :placeholder="disabled ? '工作区初始化中...' : `问 ${agentName} 任何问题...`"
@@ -754,70 +737,87 @@
           @keydown.enter.prevent="handleEnter"
         ></textarea>
 
-        <div class="absolute right-2 bottom-2 flex items-center gap-1">
-          <!-- 图片上传按钮 -->
-          <input
-            ref="fileInput"
-            type="file"
-            accept="image/*"
-            multiple
-            class="hidden"
-            @change="handleFileSelect"
-          />
-          <button
-            :disabled="isInputLocked || disabled || !isVisionEnabled"
-            class="p-2 rounded-xl transition-all flex items-center justify-center group relative"
-            :class="
-              workMode
-                ? !isVisionEnabled
-                  ? 'opacity-30 cursor-not-allowed text-slate-400'
-                  : 'text-amber-500/80 bg-amber-500/10 hover:bg-amber-500/20 hover:text-amber-400'
-                : 'bg-sky-500 hover:bg-sky-600 text-white shadow-lg shadow-sky-500/20 disabled:bg-slate-200 disabled:text-slate-400 disabled:shadow-none disabled:cursor-not-allowed'
-            "
-            :title="!isVisionEnabled ? '当前模型不支持视觉功能 (请在设置中开启)' : '上传图片'"
-            @click="triggerUpload"
-          >
-            <ImageIcon class="w-5 h-5" />
-          </button>
+        <!-- 底部工具栏 (图标外置到输入框内部底部) -->
+        <div
+          class="px-3 py-2 flex items-center justify-between border-t transition-colors"
+          :class="workMode ? 'border-slate-700/50 bg-slate-900/30' : 'border-white/20 bg-white/30'"
+        >
+          <div class="flex items-center gap-2">
+            <!-- 图片上传按钮 -->
+            <input
+              ref="fileInput"
+              type="file"
+              accept="image/*"
+              multiple
+              class="hidden"
+              @change="handleFileSelect"
+            />
+            <button
+              :disabled="isInputLocked || disabled || !isVisionEnabled"
+              class="h-9 w-9 rounded-xl transition-all flex items-center justify-center group relative border"
+              :class="
+                workMode
+                  ? !isVisionEnabled
+                    ? 'opacity-30 cursor-not-allowed text-slate-500 border-transparent'
+                    : 'text-amber-500 border-amber-500/20 hover:bg-amber-500/10 hover:border-amber-500/40'
+                  : !isVisionEnabled
+                    ? 'opacity-30 cursor-not-allowed text-slate-400 border-transparent'
+                    : 'text-sky-600 border-sky-200 bg-sky-50/50 hover:bg-sky-100 hover:border-sky-300'
+              "
+              :title="!isVisionEnabled ? '当前模型不支持视觉功能 (请在设置中开启)' : '上传图片'"
+              @click="triggerUpload"
+            >
+              <ImageIcon class="w-4.5 h-4.5" />
+            </button>
+          </div>
 
+          <!-- 发送按钮 -->
           <button
             :disabled="isInputLocked || (!input.trim() && pendingImages.length === 0) || disabled"
-            class="p-2 text-white rounded-xl transition-all shadow-lg flex items-center justify-center group"
+            class="h-9 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs font-bold border"
             :class="
               workMode
-                ? 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/20 disabled:bg-slate-700 disabled:text-slate-500'
-                : 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/20 disabled:bg-slate-200 disabled:text-slate-400'
+                ? 'bg-amber-500 border-amber-600 hover:bg-amber-600 text-white shadow-amber-500/20 disabled:bg-slate-700 disabled:border-transparent disabled:text-slate-500 disabled:shadow-none'
+                : 'bg-sky-500 border-sky-600 hover:bg-sky-600 text-white shadow-sky-500/20 disabled:bg-slate-200 disabled:border-transparent disabled:text-slate-400 disabled:shadow-none'
             "
             @click="sendMessage"
           >
+            <span v-if="!isSending">发送</span>
+            <div
+              v-else
+              class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"
+            ></div>
             <svg
               v-if="!isSending"
               xmlns="http://www.w3.org/2000/svg"
               viewBox="0 0 24 24"
               fill="currentColor"
-              class="w-5 h-5 group-hover:translate-x-0.5 transition-transform"
+              class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"
             >
               <path
                 d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z"
               />
             </svg>
-            <div
-              v-else
-              class="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"
-            ></div>
           </button>
         </div>
       </div>
-    </div>
-    <CustomDialog
-      v-model:visible="deleteDialogVisible"
-      type="confirm"
-      title="删除消息"
-      :message="deleteDialogMessage"
-      @confirm="handleConfirmDelete"
-    />
-  </div>
-</template>
+      <div
+         class="text-center mt-3 text-[9px] font-bold tracking-widest opacity-30 uppercase"
+         :class="workMode ? 'text-slate-500' : 'text-slate-400'"
+       >
+         {{ AGENT_NAME }} AI AGENT · POWERED BY RE-ACT ENGINE
+       </div>
+     </div>
+
+     <CustomDialog
+       v-model:visible="deleteDialogVisible"
+       type="confirm"
+       title="删除消息"
+       :message="deleteDialogMessage"
+       @confirm="handleConfirmDelete"
+     />
+   </div>
+ </template>
 
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
@@ -837,10 +837,12 @@ import {
   Image as ImageIcon,
   XCircle
 } from 'lucide-vue-next'
-import AsyncMarkdown from '../AsyncMarkdown.vue'
+import AsyncMarkdown from '../markdown/AsyncMarkdown.vue'
 import CustomDialog from '../ui/CustomDialog.vue'
 import { AGENT_NAME, AGENT_AVATAR_TEXT } from '../../config'
 import { gatewayClient } from '../../api/gateway'
+
+const API_BASE = 'http://127.0.0.1:9120'
 
 const props = defineProps({
   workMode: Boolean,
@@ -869,17 +871,32 @@ onMounted(async () => {
     // 1. Check exact ID match
     const exists = messages.value.some((m) => m.id == payload.id)
 
-    // 2. Check for pending assistant message (no ID) that matches this content
+    // 2. Check for pending message (no ID) that matches this content
     // This handles the transition from "Streamed/Pending" -> "Persisted"
     let pendingMatchIndex = -1
-    if (!exists && payload.role === 'assistant') {
-      const lastMsgIndex = messages.value.length - 1
-      const lastMsg = messages.value[lastMsgIndex]
 
-      // If last message is assistant, has no ID, and content is similar or it's just the last one
-      if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.id) {
-        // We assume this is the persisted version of the stream
-        pendingMatchIndex = lastMsgIndex
+    if (!exists) {
+      // [Fix] Check for pending USER message (optimistic update)
+      if (payload.role === 'user') {
+        // Look backwards for a pending user message
+        for (let i = messages.value.length - 1; i >= 0; i--) {
+          const m = messages.value[i]
+          if (m.role === 'user' && !m.id && m.content === payload.content) {
+            pendingMatchIndex = i
+            break
+          }
+        }
+      } 
+      // [Fix] Check for pending ASSISTANT message
+      else if (payload.role === 'assistant') {
+        const lastMsgIndex = messages.value.length - 1
+        const lastMsg = messages.value[lastMsgIndex]
+
+        // If last message is assistant, has no ID, and content is similar or it's just the last one
+        if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.id) {
+          // We assume this is the persisted version of the stream
+          pendingMatchIndex = lastMsgIndex
+        }
       }
     }
 
@@ -888,7 +905,7 @@ onMounted(async () => {
         // Update the pending message with real ID and final content
         const msg = messages.value[pendingMatchIndex]
         msg.id = payload.id
-        msg.content = payload.content // Use final content (cleaned or full)
+        msg.content = payload.raw_content || payload.content // Use raw_content to keep NIT logs
         msg.timestamp = payload.timestamp
         msg.senderId = payload.agent_id || 'pero'
         msg.pair_id = payload.pair_id
@@ -899,7 +916,7 @@ onMounted(async () => {
         messages.value.push({
           id: payload.id,
           role: payload.role,
-          content: payload.content,
+          content: payload.raw_content || payload.content, // Use raw_content to keep NIT logs
           timestamp: payload.timestamp,
           senderId: payload.agent_id || 'pero',
           pair_id: payload.pair_id,
@@ -1004,7 +1021,7 @@ const playMessage = async (msg) => {
   isLoadingAudio.value = true
 
   try {
-    const response = await fetch('http://localhost:8000/api/tts/preview', {
+    const response = await fetch(`${API_BASE}/api/tts/preview`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1118,7 +1135,6 @@ const isInputLocked = computed(() => {
 })
 
 // 配置
-const API_BASE = 'http://localhost:9120'
 const HISTORY_LIMIT = 30
 
 const parseMessage = (content) => {
@@ -1128,7 +1144,7 @@ const parseMessage = (content) => {
 
   // 健壮的正则模式
   // 1. Thinking/Monologue: 【Thinking: ...】 or 【Monologue: ...】
-  // 1. 思考/独白: 【Thinking: ...】 或 【Monologue: ...】
+  // 1. 思考/独白: 【Thinking: ...】 或 【Monologue: ...】 (Monologue 为旧版兼容)
   // 2. NIT Tool: <nit>...</nit> or <nit-ID>...</nit-ID> or [[[NIT_CALL]]]...[[[NIT_END]]]
   // 2. NIT 工具: <nit>...</nit> 或 <nit-ID>...</nit-ID> 或 [[[NIT_CALL]]]...[[[NIT_END]]]
   // 3. DeepSeek Thinking: <think>...</think>
@@ -1153,6 +1169,7 @@ const parseMessage = (content) => {
     if (match[1]) {
       // Thinking or Monologue (Standard)
       // 思考或独白（标准）
+      // [兼容性保留] Monologue 类型在 2024-02 之后已废弃，合并入 Thinking，此处保留解析以支持历史记录显示
       segments.push({
         type: match[1].toLowerCase(),
         content: match[2].trim()
@@ -1321,24 +1338,29 @@ const handleVoiceUpdate = (data) => {
     }
   } else if (params.type === 'text_response') {
     // Assistant response from Voice/Desktop (Incremental or Final)
-    if (!isSending.value) {
-      const content = params.content
-      const lastMsg = messages.value[messages.value.length - 1]
+    // [Fix] Even if isSending is true, we might receive async updates via Gateway (e.g. from Tool Output)
+    // But usually fetch handles the response. 
+    // HOWEVER, if the response is empty (e.g. tool call only), fetch might return empty.
+    // Let's rely on Gateway for text updates if content is not empty.
+    
+    if (params.content) {
+       const content = params.content
+       const lastMsg = messages.value[messages.value.length - 1]
 
-      if (lastMsg && lastMsg.role === 'assistant') {
-        // Update existing message if it looks like a continuation or replacement
-        // Since RealtimeSessionManager sends full accumulated text in 'content', we can just replace it.
-        lastMsg.content = content
-        scrollToBottom()
-      } else {
-        // New message
-        messages.value.push({
-          role: 'assistant',
-          content: content,
-          timestamp: new Date().toISOString()
-        })
-        scrollToBottom()
-      }
+       if (lastMsg && lastMsg.role === 'assistant') {
+         // Update existing message if it looks like a continuation or replacement
+         // Since RealtimeSessionManager sends full accumulated text in 'content', we can just replace it.
+         lastMsg.content = content
+         scrollToBottom()
+       } else {
+         // New message
+         messages.value.push({
+           role: 'assistant',
+           content: content,
+           timestamp: new Date().toISOString()
+         })
+         scrollToBottom()
+       }
     }
   }
 
@@ -1500,7 +1522,9 @@ const fetchHistory = async (append = false) => {
   // If in work mode, use 'ide' source.
   // If in chat mode (workMode false), use 'desktop' source to sync with PetView.
   const source = props.workMode ? 'ide' : 'desktop'
-  const sessionId = props.workMode ? 'current_work_session' : props.targetId || 'default'
+  // [Fix] In desktop/direct mode, the session_id in DB is usually 'default'.
+  // We use agent_id param to filter by character, not session_id.
+  const sessionId = props.workMode ? 'current_work_session' : 'default'
 
   try {
     let res

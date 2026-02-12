@@ -1,0 +1,63 @@
+[
+  {
+    "name": "browser_fetch_text",
+    "description": "Fetch and extract text content from a URL.",
+    "parameters": {
+      "type": "object",
+      "properties": { "url": { "type": "string" } },
+      "required": ["url"]
+    }
+  },
+  {
+    "name": "browser_open_url",
+    "description": "Open a URL in the visual browser.",
+    "parameters": {
+      "type": "object",
+      "properties": { "url": { "type": "string" } },
+      "required": ["url"]
+    }
+  },
+  {
+    "name": "browser_click",
+    "description": "Click an element on the page.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "selector": { "type": "string", "description": "CSS Selector" },
+        "text": { "type": "string", "description": "Element text content" }
+      }
+    }
+  },
+  {
+    "name": "browser_type",
+    "description": "Type text into an input field.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "selector": { "type": "string" },
+        "text": { "type": "string" }
+      },
+      "required": ["selector", "text"]
+    }
+  },
+  {
+    "name": "browser_get_content",
+    "description": "Get current page content as Markdown.",
+    "parameters": { "type": "object", "properties": {} }
+  },
+  {
+    "name": "browser_scroll",
+    "description": "Scroll the page.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "direction": { "type": "string", "enum": ["up", "down"], "default": "down" }
+      }
+    }
+  },
+  {
+    "name": "browser_back",
+    "description": "Go back to the previous page.",
+    "parameters": { "type": "object", "properties": {} }
+  }
+]

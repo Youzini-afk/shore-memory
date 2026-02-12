@@ -253,7 +253,7 @@ PeroCore-Electron/
 │   ├── nit_core/             # 📜 NIT 工具调用协议 (Natural Instruction Tool)
 │   │   ├── interpreter/      # 🗣️ 指令解释器 (Command Interpreter)
 │   │   └── tools/            # 🛠️ 工具箱 (Toolbox)
-│   │       ├── core/         # 基础能力 (FileSearch, MemoryOps, SystemControl)
+│   │       ├── core/         # 基础能力 (FileSearch, SystemControl)
 │   │       └── work/         # 工作能力 (CodeSearcher, Terminal, WorkspaceOps)
 │   │
 │   ├── rust_core/            # ⚡ Rust 高性能算子 (Graph Diffusion Memory & Vision Kernels)

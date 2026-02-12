@@ -18,3 +18,6 @@ Injected Via: MDPManager.render("social/decisions/secretary_decision_group")
 
 **当前状态**: {{ session_state }} (DIVE=潜水/高冷, ACTIVE=活跃/秒回)
 **会话类型**: 群聊 (Group)
+
+**聊天记录**:
+{{ recent_history }}

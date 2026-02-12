@@ -298,7 +298,7 @@ const agentId = ref('pero')
 
 const fetchActiveAgent = async () => {
   try {
-    const res = await fetch('http://localhost:9120/api/agents')
+    const res = await fetch('http://127.0.0.1:9120/api/agents')
     if (res.ok) {
       const agents = await res.json()
       const active = agents.find((a) => a.is_active)
@@ -338,7 +338,7 @@ const onFileSelected = async (fileNode) => {
   }
 
   try {
-    const res = await fetch('http://localhost:9120/api/ide/file/read', {
+    const res = await fetch('http://127.0.0.1:9120/api/ide/file/read', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fileNode.path })
@@ -422,7 +422,7 @@ const saveFile = async (content) => {
   if (!currentFile.value) return
 
   try {
-    const res = await fetch('http://localhost:9120/api/ide/file/write', {
+    const res = await fetch('http://127.0.0.1:9120/api/ide/file/write', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
