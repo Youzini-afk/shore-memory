@@ -1,7 +1,7 @@
 {
   "name": "pero-core",
   "private": true,
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "A powerful desktop application powered by PeroCore",
   "author": "YoKONCy",
   "license": "Apache-2.0",

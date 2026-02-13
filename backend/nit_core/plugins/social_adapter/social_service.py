@@ -893,7 +893,6 @@ class SocialService:
 
             recent_context = ""
             for msg in recent_messages:
-                sender = msg.sender_name
                 # [修复] 使用 target_session.agent_id
                 agent_profile = agent_manager.agents.get(target_session.agent_id)
                 current_agent_name = (
@@ -902,19 +901,27 @@ class SocialService:
                     else self.config_manager.get("bot_name", "Pero")
                 )
 
-                if (
-                    sender == current_agent_name
-                    or sender == "Me"
-                    or sender == self.config_manager.get("bot_name", "Pero")
-                ):
-                    sender = f"Me ({current_agent_name})"
+                # [修复] 发送者身份判断逻辑
+                # 1. 检查 sender_id 是否为 "self" (Agent 刚发出的消息)
+                # 2. 检查 sender_id 是否为当前 Bot 的 QQ 号 (从 DB 恢复的历史记录)
+                is_bot = (
+                    msg.sender_id == "self" 
+                    or msg.sender_id in self.bot_infos
+                    or (self.bot_info and msg.sender_id == str(self.bot_info.get("user_id")))
+                )
+
+                if is_bot:
+                    sender_display = f"Me ({current_agent_name})"
+                else:
+                    # [修复] 优先显示用户名而非 QQ 号
+                    sender_display = msg.sender_name or f"User({msg.sender_id})"
 
                 clean_content = self._clean_cq_codes(msg.content)
                 msg_time = ""
                 if hasattr(msg, "timestamp") and msg.timestamp:
                     msg_time = f" ({msg.timestamp.strftime('%m-%d %H:%M')})"
                 
-                recent_context += f"[{sender}]{msg_time}: {clean_content}\n"
+                recent_context += f"[{sender_display}]{msg_time}: {clean_content}\n"
 
             if not recent_context:
                 recent_context = "(本地缓存为空)"
