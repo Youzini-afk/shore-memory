@@ -96,6 +96,7 @@ export async function startGateway(window: WindowLike) {
 
   // 启动 Gateway
   gatewayProcess = spawn(gatewayPath, [], {
+    cwd: path.dirname(gatewayPath),
     stdio: ['ignore', 'pipe', 'pipe'],
     detached: false,
     windowsHide: true,
@@ -103,6 +104,13 @@ export async function startGateway(window: WindowLike) {
       ...process.env,
       GATEWAY_TOKEN_PATH: tokenPath
     }
+  })
+
+  // 关键：监听启动错误（如二进制缺失、权限问题等）
+  gatewayProcess.on('error', (err) => {
+    const msg = `Gateway 启动错误 (Spawn Error): ${err.message}`
+    logger.error('Gateway', msg)
+    if (!window.isDestroyed()) window.webContents.send('system-error', msg)
   })
 
   // 设置环境变量，以便同一进程内的其他模块能立即获取到路径

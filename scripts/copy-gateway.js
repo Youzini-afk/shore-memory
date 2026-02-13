@@ -19,7 +19,25 @@ console.log('Building/Copying gateway from internal source:', GATEWAY_SRC_DIR)
 
 if (fs.existsSync(path.join(GATEWAY_SRC_DIR, 'gateway/main.go'))) {
   try {
+    // Check if Go is installed
+    try {
+      execSync('go version', { stdio: 'ignore' })
+    } catch (e) {
+      console.warn('Warning: Go is not installed or not in PATH. Skipping Gateway build.')
+      if (!fs.existsSync(GATEWAY_DEST_FILE)) {
+        console.error('Error: Gateway binary not found and Go is not available to build it.')
+        process.exit(1)
+      }
+      // If binary exists, use it
+      return
+    }
+
     console.log('Running go build...')
+    // Ensure destination directory exists
+    if (!fs.existsSync(DEST_DIR)) {
+      fs.mkdirSync(DEST_DIR, { recursive: true })
+    }
+
     // 直接构建到目标位置
     execSync(`go build -o "${GATEWAY_DEST_FILE}" ./gateway`, {
       cwd: GATEWAY_SRC_DIR,

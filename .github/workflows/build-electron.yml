@@ -23,13 +23,15 @@ jobs:
       - name: Setup Go
         uses: actions/setup-go@v5
         with:
-          go-version: '1.21'
+          go-version: '1.23'
           cache-dependency-path: PeroCore-Electron/gateway/go.sum
 
       - name: Build Gateway
         run: |
           cd PeroCore-Electron/gateway
           echo "Building Gateway..."
+          # Ensure output directory exists
+          mkdir -p ../resources/bin
           go mod tidy
           go build -o ../resources/bin/gateway.exe gateway/main.go
           
