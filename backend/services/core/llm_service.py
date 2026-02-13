@@ -193,9 +193,22 @@ class LLMService:
                 
                 preview_content = "..."
                 if isinstance(content, str):
-                    preview_content = content[:50] + "..." if len(content) > 50 else content
+                    # 移除所有截断，显示完整内容
+                    preview_content = content
                 elif isinstance(content, list):
-                    preview_content = f"[{len(content)} items]"
+                    # 尝试提取列表中的完整文本内容
+                    text_parts = []
+                    for item in content:
+                        if isinstance(item, dict):
+                            if item.get("type") == "text":
+                                text_parts.append(item.get("text", ""))
+                            elif item.get("type") == "image_url":
+                                text_parts.append("[Image]")
+                            else:
+                                text_parts.append(f"[{item.get('type', 'unknown')}]")
+                    
+                    full_text = " ".join(text_parts)
+                    preview_content = full_text or f"[{len(content)} items (No Text)]"
                 
                 summary["messages_preview"].append(f"[{role}] {preview_content}")
 

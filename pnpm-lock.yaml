@@ -71,9 +71,15 @@ importers:
       monaco-editor:
         specifier: ^0.55.1
         version: 0.55.1
+      ms:
+        specifier: ^2.1.3
+        version: 2.1.3
       protobufjs:
         specifier: ^8.0.0
         version: 8.0.0
+      semver:
+        specifier: ^7.7.4
+        version: 7.7.4
       systeminformation:
         specifier: ^5.30.6
         version: 5.30.7

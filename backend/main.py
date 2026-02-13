@@ -42,6 +42,7 @@ if sys.stdout.encoding.lower() != "utf-8":
         sys.stdout.reconfigure(encoding="utf-8")
     except AttributeError:
         import io
+
         sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 log_file = os.environ.get("PERO_LOG_FILE")
@@ -195,6 +196,7 @@ async def lifespan(app: FastAPI):
 
     # [优化] 预热 AgentManager 以避免首次请求延迟
     from services.agent.agent_manager import get_agent_manager
+
     get_agent_manager()
     print("🤖 AgentManager: [就绪]")
 
@@ -257,7 +259,10 @@ async def lifespan(app: FastAPI):
                     now = time.time()
                     for f in os.listdir(temp_vision):
                         f_path = os.path.join(temp_vision, f)
-                        if os.path.isfile(f_path) and now - os.path.getmtime(f_path) > 3600:  # 1 hour
+                        if (
+                            os.path.isfile(f_path)
+                            and now - os.path.getmtime(f_path) > 3600
+                        ):  # 1 hour
                             with suppress(Exception):
                                 os.remove(f_path)
             except Exception as e:
@@ -321,7 +326,7 @@ async def lifespan(app: FastAPI):
                                     clusters="[周报归档]",
                                     importance=5,
                                     memory_type="summary",
-                                    source="system"
+                                    source="system",
                                 )
                                 print("[Main] 周报已生成并存入数据库。")
                             except Exception as e:
@@ -612,9 +617,7 @@ async def lifespan(app: FastAPI):
                     now = datetime.now()
                     tasks = (
                         await session.exec(
-                            select(ScheduledTask).where(
-                                not ScheduledTask.is_triggered
-                            )
+                            select(ScheduledTask).where(not ScheduledTask.is_triggered)
                         )
                     ).all()
 
@@ -730,7 +733,8 @@ async def lifespan(app: FastAPI):
     # [Feature] Stronghold Initialization
     try:
         from services.chat.stronghold_service import StrongholdService
-        async with AsyncSession(engine) as session:
+
+        async with AsyncSession(engine, expire_on_commit=False) as session:
             stronghold_service = StrongholdService(session)
             await stronghold_service.ensure_initial_data()
             print("[Main] Stronghold initialized.")
@@ -740,16 +744,20 @@ async def lifespan(app: FastAPI):
     # [Optimization] Pre-warm critical status caches for Dashboard
     try:
         from services.agent.agent_manager import get_agent_manager
+
         agent_manager = get_agent_manager()
         active_agent = agent_manager.get_active_agent()
         active_agent_id = active_agent.id if active_agent else "pero"
 
-        async with AsyncSession(engine) as session:
+        async with AsyncSession(engine, expire_on_commit=False) as session:
             statement = select(PetState).where(PetState.agent_id == active_agent_id)
             state = (await session.exec(statement)).first()
             if not state:
                 state = PetState(
-                    agent_id=active_agent_id, mood="开心", vibe="正常", mind="正在想主人..."
+                    agent_id=active_agent_id,
+                    mood="开心",
+                    vibe="正常",
+                    mind="正在想主人...",
                 )
                 session.add(state)
                 await session.commit()
@@ -759,7 +767,7 @@ async def lifespan(app: FastAPI):
                 app.state.pet_state_cache = {}
             app.state.pet_state_cache[active_agent_id] = {
                 "data": state,
-                "time": time.time()
+                "time": time.time(),
             }
         print(f"✅ 状态预热完成 (Agent: {active_agent_id})")
     except Exception as e:
@@ -1051,7 +1059,10 @@ async def get_pet_state(session: AsyncSession = Depends(get_session)):  # noqa: 
             if not state:
                 # 初始化默认状态
                 state = PetState(
-                    agent_id=active_agent_id, mood="开心", vibe="正常", mind="正在想主人..."
+                    agent_id=active_agent_id,
+                    mood="开心",
+                    vibe="正常",
+                    mind="正在想主人...",
                 )
                 session.add(state)
                 await session.commit()
@@ -1060,7 +1071,7 @@ async def get_pet_state(session: AsyncSession = Depends(get_session)):  # noqa: 
             # Update cache
             app.state.pet_state_cache[active_agent_id] = {
                 "data": state,
-                "time": time.time()
+                "time": time.time(),
             }
 
         # Convert to dict and add active_agent info
@@ -1150,7 +1161,8 @@ async def get_task_status(session_id: str):
 
 @app.post("/api/companion/toggle")
 async def toggle_companion(
-    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)  # noqa: B008
+    enabled: bool = Body(..., embed=True),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     # [Requirement] Companion mode depends on Lightweight mode
     config_mgr = get_config_manager()
@@ -1163,13 +1175,15 @@ async def toggle_companion(
     if enabled:
         config_entry = await session.get(Config, "current_model_id")
         if not config_entry:
-            raise HTTPException(status_code=400, detail="未配置当前对话模型，无法开启陪伴模式。")
-        
+            raise HTTPException(
+                status_code=400, detail="未配置当前对话模型，无法开启陪伴模式。"
+            )
+
         model_config = await session.get(AIModelConfig, int(config_entry.value))
         if not model_config or not model_config.enable_vision:
             raise HTTPException(
-                status_code=400, 
-                detail="当前对话模型未开启“图片模态”能力，陪伴模式需要模型能够理解屏幕截图。"
+                status_code=400,
+                detail="当前对话模型未开启“图片模态”能力，陪伴模式需要模型能够理解屏幕截图。",
             )
 
     config = await session.get(Config, "companion_mode_enabled")
@@ -1202,7 +1216,8 @@ async def get_social_status():
 
 @app.post("/api/social/toggle")
 async def toggle_social(
-    enabled: bool = Body(..., embed=True), session: AsyncSession = Depends(get_session)  # noqa: B008
+    enabled: bool = Body(..., embed=True),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     # 1. Update DB & Memory
     await get_config_manager().set("enable_social_mode", enabled)
@@ -1230,7 +1245,8 @@ async def toggle_social(
 
 @app.get("/api/tasks", response_model=List[ScheduledTask])
 async def get_tasks(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
+    agent_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     statement = select(ScheduledTask).where(not ScheduledTask.is_triggered)
     if agent_id:
@@ -1255,9 +1271,7 @@ async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)
 async def check_tasks(session: AsyncSession = Depends(get_session)):  # noqa: B008
     now = datetime.now()
     tasks = (
-        await session.exec(
-            select(ScheduledTask).where(not ScheduledTask.is_triggered)
-        )
+        await session.exec(select(ScheduledTask).where(not ScheduledTask.is_triggered))
     ).all()
     triggered_prompts = []
 
@@ -1320,7 +1334,8 @@ async def get_configs(session: AsyncSession = Depends(get_session)):  # noqa: B0
 
 @app.post("/api/configs")
 async def update_config(
-    configs: Dict[str, str], session: AsyncSession = Depends(get_session)  # noqa: B008
+    configs: Dict[str, str],
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     # [Check] Block enabling incompatible modes if in Work Mode
     try:
@@ -1374,7 +1389,8 @@ async def get_models(session: AsyncSession = Depends(get_session)):  # noqa: B00
 
 @app.post("/api/models", response_model=AIModelConfig)
 async def create_model(
-    model_data: Dict[str, Any] = Body(...), session: AsyncSession = Depends(get_session)  # noqa: B008
+    model_data: Dict[str, Any] = Body(...),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     model_data.pop("id", None)
     model = AIModelConfig(**model_data)
@@ -1420,7 +1436,8 @@ async def get_mcps(session: AsyncSession = Depends(get_session)):  # noqa: B008
 
 @app.post("/api/mcp", response_model=MCPConfig)
 async def create_mcp(
-    mcp_data: Dict[str, Any] = Body(...), session: AsyncSession = Depends(get_session)  # noqa: B008
+    mcp_data: Dict[str, Any] = Body(...),
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     mcp_data.pop("id", None)
     mcp_data.pop("created_at", None)
@@ -1530,7 +1547,8 @@ async def delete_orphaned_edges(session: AsyncSession = Depends(get_session)):  
 
 @app.post("/api/memories/scan_lonely")
 async def scan_lonely_memories(
-    limit: int = 5, session: AsyncSession = Depends(get_session)  # noqa: B008
+    limit: int = 5,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     from services.memory.reflection_service import ReflectionService
 
@@ -1559,7 +1577,8 @@ async def trigger_dream(limit: int = 10, session: AsyncSession = Depends(get_ses
 
 @app.get("/api/memories/tags")
 async def get_tag_cloud(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
+    agent_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     service = MemoryService()
     target_agent = agent_id if agent_id else "pero"
@@ -1677,7 +1696,8 @@ async def update_voice_config(
 
 @app.delete("/api/voice-configs/{config_id}")
 async def delete_voice_config(
-    config_id: int, session: AsyncSession = Depends(get_session)  # noqa: B008
+    config_id: int,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     try:
         db_config = await session.get(VoiceConfig, config_id)
@@ -1844,17 +1864,23 @@ async def chat(
 
                                 # 优先尝试读取本地缓存
                                 if os.path.exists(filler_cache_path):
-                                    with suppress(Exception), open(filler_cache_path, "rb") as f:
+                                    with (
+                                        suppress(Exception),
+                                        open(filler_cache_path, "rb") as f,
+                                    ):
                                         # 读取二进制并转为 base64 字符串，与 generate_tts_chunk 输出保持一致
-                                        audio_data = base64.b64encode(
-                                            f.read()
-                                        ).decode("utf-8")
+                                        audio_data = base64.b64encode(f.read()).decode(
+                                            "utf-8"
+                                        )
 
                                 # 如果没有缓存，则生成并保存
                                 if not audio_data:
                                     audio_data = await generate_tts_chunk(filler_phrase)
                                     if audio_data:
-                                        with suppress(Exception), open(filler_cache_path, "wb") as f:
+                                        with (
+                                            suppress(Exception),
+                                            open(filler_cache_path, "wb") as f,
+                                        ):
                                             # audio_data 是 base64 字符串，保存为二进制音频文件
                                             f.write(base64.b64decode(audio_data))
                                         logger.info(
@@ -2055,7 +2081,9 @@ async def reset_system(session: AsyncSession = Depends(get_session)):  # noqa: B
         import traceback
 
         print(f"重置系统时出错: {traceback.format_exc()}")
-        raise HTTPException(status_code=500, detail=f"恢复出厂设置失败: {str(e)}") from e
+        raise HTTPException(
+            status_code=500, detail=f"恢复出厂设置失败: {str(e)}"
+        ) from e
 
 
 @app.get("/health")
@@ -2269,7 +2297,8 @@ async def get_memories(
 
 @app.post("/api/memories", response_model=Memory)
 async def add_memory(
-    payload: Dict[str, Any], session: AsyncSession = Depends(get_session)  # noqa: B008
+    payload: Dict[str, Any],
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """手动添加记忆"""
     try:
@@ -2319,7 +2348,8 @@ async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):  # noqa: B00
 
 @app.post("/api/maintenance/undo/{record_id}")
 async def undo_maintenance_api(
-    record_id: int, session: AsyncSession = Depends(get_session)  # noqa: B008
+    record_id: int,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     from services.memory.reflection_service import ReflectionService
 
@@ -2343,7 +2373,8 @@ async def get_maintenance_records(session: AsyncSession = Depends(get_session)):
 
 @app.get("/api/stats/overview")
 async def get_overview_stats(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
+    agent_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """
     获取概览页面的统计数据（总数），解耦渲染数量和显示数量。

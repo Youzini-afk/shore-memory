@@ -5,7 +5,7 @@ import { logger } from '../utils/logger'
 
 function getRootPath() {
   if (isDev && isElectron) {
-    // 开发环境: dist-electron/main/services -> PeroCore-Electron
+    // 开发环境: dist-electron/main/services -> ProjectRoot
     return path.resolve(__dirname, '../../..')
   } else {
     return paths.resources

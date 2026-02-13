@@ -2,6 +2,11 @@ import logging
 import sys
 from typing import Optional
 
+try:
+    from loguru import logger as loguru_logger
+except ImportError:
+    loguru_logger = None
+
 
 def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None):
     """
@@ -25,6 +30,18 @@ def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None)
             # Python 3.7 之前的版本或某些环境可能不支持 reconfigure
             import io
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
+
+    # 配置 Loguru (如果已安装)
+    # Loguru 默认输出到 stderr，这会导致 Electron 将其捕获为 ERROR 日志
+    # 这里将其重定向到 stdout
+    if loguru_logger:
+        loguru_logger.remove()  # 移除默认处理程序
+        loguru_logger.add(
+            sys.stdout,
+            level=logging.getLevelName(level),
+            colorize=True,
+            # 保持 Loguru 默认格式，或者可以根据需要自定义
+        )
 
     # 创建处理器
     handlers = []

@@ -1160,22 +1160,8 @@ onMounted(async () => {
     esStatus.value = 'ERROR'
   }
 
-  // 如果需要，自动安装 NapCat
-  if (isSocialEnabled.value) {
-    invoke('install_napcat')
-      .then(async (success) => {
-        if (success) {
-          addLog('[SYSTEM] NapCat 环境已就绪')
-          // 刷新环境状态
-          await checkEnvironment()
-        } else {
-          addLog('[SYSTEM] NapCat 环境检查/安装失败')
-        }
-      })
-      .catch((e) => {
-        console.error('NapCat 自动安装检查失败', e)
-      })
-  }
+  // [已移除] 自动安装 NapCat 逻辑移至启动流程 (toggleLaunch) 以避免冲突并确保顺序
+  // if (isSocialEnabled.value) { ... }
 
   // 开始统计轮询
   updateStats()
@@ -1317,6 +1303,34 @@ const toggleLaunch = async () => {
     isStarting.value = true
     try {
       addLog('[SYSTEM] Starting services...')
+
+      // 0. NapCat Pre-check (If Social Mode is enabled)
+      // 0. NapCat 预检 (如果开启了社交模式)
+      if (isSocialEnabled.value) {
+        addLog('[SYSTEM] 正在检查 NapCat 环境...')
+        napcatStatus.value = 'INSTALLING' // 使用临时状态或 STARTING
+
+        try {
+          // 检查是否已安装
+          const isInstalled = await invoke('check_napcat')
+          
+          if (!isInstalled) {
+            addLog('[SYSTEM] 未检测到 NapCat，开始自动下载...')
+            // 注意：install_napcat 在后端是阻塞的，直到下载安装完成才会返回
+            const success = await invoke('install_napcat')
+            
+            if (!success) {
+              throw new Error('NapCat 自动安装失败，无法启动。请检查网络或手动安装。')
+            }
+            addLog('[SYSTEM] NapCat 安装完成。')
+          } else {
+            addLog('[SYSTEM] NapCat 环境检查通过。')
+          }
+        } catch (e) {
+          napcatStatus.value = 'ERROR'
+          throw e // 抛出异常以中断后续启动流程
+        }
+      }
 
       // 1. Start Backend
       // 1. 启动后端

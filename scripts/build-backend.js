@@ -8,7 +8,8 @@ const AdmZip = require('adm-zip')
 // Configuration
 // 配置
 const PYTHON_VERSION = '3.10.11'
-const PYTHON_URL = `https://www.python.org/ftp/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`
+// 使用淘宝镜像加速 Python 下载
+const PYTHON_URL = `https://npmmirror.com/mirrors/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`
 const PROJECT_ROOT = path.resolve(__dirname, '..')
 const RESOURCES_DIR = path.join(PROJECT_ROOT, 'resources')
 const PYTHON_DEST = path.join(RESOURCES_DIR, 'python')
@@ -119,8 +120,10 @@ async function setupPython() {
       log('pip is already installed in embedded Python.', 'success')
     } catch {
       log('pip not found. Installing via get-pip.py...')
+      // 下载 get-pip.py
       await downloadFile(GET_PIP_URL, getPipPath)
-      execSync(`"${pythonExe}" "${getPipPath}" --no-warn-script-location`, { stdio: 'inherit' })
+      // 使用清华源加速安装 pip
+      execSync(`"${pythonExe}" "${getPipPath}" --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`, { stdio: 'inherit' })
       fs.unlinkSync(getPipPath)
     }
 
@@ -130,7 +133,8 @@ async function setupPython() {
       log('uv is already installed.', 'success')
     } catch {
       log('Installing uv...')
-      execSync(`"${pythonExe}" -m pip install uv --no-warn-script-location`, {
+      // 使用清华源
+      execSync(`"${pythonExe}" -m pip install uv --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`, {
         stdio: 'inherit'
       })
     }
@@ -139,7 +143,8 @@ async function setupPython() {
       execSync(`"${pythonExe}" -m pip show maturin`, { stdio: 'ignore' })
     } catch {
       log('Installing maturin...')
-      execSync(`"${pythonExe}" -m pip install maturin --no-warn-script-location`, {
+      // 使用清华源
+      execSync(`"${pythonExe}" -m pip install maturin --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`, {
         stdio: 'inherit'
       })
     }
@@ -171,8 +176,10 @@ function installDependencies() {
     // 我们需要确保使用安装在嵌入式 Python 中的 uv
     // 命令：python.exe -m uv pip install . --system（如果我们想安装到系统，但这已经是嵌入式的，所以它就是系统）
     // 实际上对于嵌入式 Python，只要我们指向它，`uv pip install` 就可以工作。
+    // 使用清华源
+    const env = { ...process.env, UV_INDEX_URL: 'https://pypi.tuna.tsinghua.edu.cn/simple' }
 
-    execSync(`"${pythonExe}" -m uv pip install "${BACKEND_DIR}"`, { stdio: 'inherit' })
+    execSync(`"${pythonExe}" -m uv pip install "${BACKEND_DIR}"`, { stdio: 'inherit', env })
 
     log('Dependencies installed successfully via uv.', 'success')
   } catch (e) {
@@ -191,7 +198,7 @@ function buildRustExtensions() {
     execSync(`"${pythonExe}" -m maturin --version`, { stdio: 'ignore' })
   } catch {
     log('Maturin not found in embedded Python. Installing...', 'warning')
-    execSync(`"${pythonExe}" -m pip install maturin`, { stdio: 'inherit' })
+    execSync(`"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`, { stdio: 'inherit' })
   }
 
   const extensions = [
@@ -283,7 +290,7 @@ function buildRustExtensions() {
           execSync(`"${pythonExe}" -m maturin --version`, { stdio: 'ignore' })
         } catch {
           log('Installing maturin...', 'warning')
-          execSync(`"${pythonExe}" -m pip install maturin`, { stdio: 'inherit' })
+          execSync(`"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`, { stdio: 'inherit' })
         }
 
         execSync(

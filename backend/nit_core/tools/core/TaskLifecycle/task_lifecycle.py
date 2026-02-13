@@ -131,7 +131,7 @@ async def finish_task(
                 pet_state.mind = mind
 
             # 正确映射到模型字段（基于原始代码模式）
-            # 在 PeroCore-Electron 中，模型可能使用 click_messages_json 或类似字段
+            # 在 ProjectRoot 中，模型可能使用 click_messages_json 或类似字段
             if click_data:
                 field_name = (
                     "click_messages_json"

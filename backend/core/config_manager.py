@@ -1,4 +1,5 @@
 # type: ignore
+import json
 import logging
 import os
 import sys
@@ -39,6 +40,28 @@ class ConfigManager:
             "aura_vision_enabled": False,
             "enable_social_mode": False,  # 默认关闭以确保安全
             "tts_enabled": True,
+            # [Memory] 默认记忆配置 (JSON 结构)
+            "memory_config": json.dumps({
+                "modes": {
+                    "desktop": {
+                        "context_limit": 20,
+                        "rag_limit": 10
+                    },
+                    "work": {
+                        "context_limit": 50,
+                        "rag_limit": 15
+                    },
+                    "social": {
+                        "context_limit": 100,
+                        "rag_limit": 10,
+                        "advanced": {
+                            "image_limit": 2,
+                            "cross_context_users": 3,
+                            "cross_context_history": 10
+                        }
+                    }
+                }
+            }),
         }
 
         self.env_loaded_keys: Set[str] = set()
@@ -128,6 +151,19 @@ class ConfigManager:
 
     def get(self, key: str, default: Any = None) -> Any:
         return self.config.get(key, default)
+
+    def get_json(self, key: str) -> Dict[str, Any]:
+        """获取并解析 JSON 配置项"""
+        val = self.get(key)
+        if isinstance(val, str):
+            try:
+                return json.loads(val)
+            except json.JSONDecodeError:
+                logger.warning(f"配置项 {key} 不是有效的 JSON: {val}")
+                return {}
+        if isinstance(val, dict):
+            return val
+        return {}
 
     async def set(self, key: str, value: Any):
         """更新内存和数据库中的配置。"""

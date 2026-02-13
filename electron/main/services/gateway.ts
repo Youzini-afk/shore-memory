@@ -50,7 +50,6 @@ export async function startGateway(window: WindowLike) {
     // 开发环境回退: 尝试在其他常见位置查找
     const altPaths = [
       path.join(__dirname, '../../../../PeroLink', execName),
-      path.join(__dirname, '../../../../PeroCore-Electron/gateway', execName),
       path.join(process.cwd(), 'gateway', execName)
     ]
 

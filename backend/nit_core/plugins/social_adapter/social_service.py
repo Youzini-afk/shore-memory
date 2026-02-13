@@ -14,6 +14,7 @@ import aiofiles
 from fastapi import WebSocket, WebSocketDisconnect
 
 from core.config_manager import get_config_manager
+from utils.workspace_utils import get_workspace_root
 
 # ContextVar 用于去重
 injected_msg_ids_var: ContextVar[Optional[Set[str]]] = ContextVar(
@@ -230,11 +231,8 @@ class SocialService:
 
             # B. 检查文件 (作为双重确认，或者如果 DB 没存但文件有了)
             # 定位 workspace
-            # backend/nit_core/plugins/social_adapter/social_service.py -> backend
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(current_dir))))
-            workspace_dir = os.path.join(os.path.dirname(backend_dir), "pero_workspace")
-            report_dir = os.path.join(workspace_dir, agent_id, "social_reports")
+            agent_workspace = get_workspace_root(agent_id)
+            report_dir = os.path.join(agent_workspace, "social_reports")
             os.makedirs(report_dir, exist_ok=True)
             
             file_path = os.path.join(report_dir, f"{date_str}.md")
@@ -880,7 +878,10 @@ class SocialService:
             agent_manager = AgentManager()
 
             # 上下文获取逻辑 (limit 100)
-            history_limit = 100
+            memory_config = self.config_manager.get_json("memory_config")
+            social_config = memory_config.get("modes", {}).get("social", {})
+            history_limit = social_config.get("context_limit", 100)
+            
             recent_messages = await self.session_manager.get_recent_messages(
                 target_session.session_id,
                 target_session.session_type,
@@ -1526,7 +1527,15 @@ class SocialService:
             logger.debug(f"[{session.session_id}] 休眠结束。")
 
             # 1. 构建 XML 上下文
-            history_limit = 100
+            memory_config = self.config_manager.get_json("memory_config")
+            social_config = memory_config.get("modes", {}).get("social", {})
+            history_limit = social_config.get("context_limit", 100)
+            
+            # 高级配置
+            advanced_config = social_config.get("advanced", {})
+            cross_context_users = advanced_config.get("cross_context_users", 3)
+            cross_context_history = advanced_config.get("cross_context_history", 10)
+            image_limit = min(advanced_config.get("image_limit", 2), 4)
 
             logger.debug(f"[{session.session_id}] 获取最近消息历史...")
             # 获取历史记录
@@ -1577,9 +1586,10 @@ class SocialService:
             relevant_users = []
             seen_users = set()
 
-            # Check last 10 messages (or fewer if not enough)
+            # Check last N messages (or fewer if not enough)
+            scan_limit = cross_context_history # Reuse history limit for scan range
             scan_range = (
-                recent_messages[-10:] if len(recent_messages) >= 10 else recent_messages
+                recent_messages[-scan_limit:] if len(recent_messages) >= scan_limit else recent_messages
             )
 
             # Self ID
@@ -1608,7 +1618,7 @@ class SocialService:
                 ):
                     relevant_users.append(uid)
                     seen_users.add(uid)
-                    if len(relevant_users) >= 3:
+                    if len(relevant_users) >= cross_context_users:
                         break
 
             logger.debug(f"[{session.session_id}] 发现相关用户: {relevant_users}")
@@ -1625,7 +1635,7 @@ class SocialService:
                         # 增加 2 秒超时，避免获取私聊历史卡死主流程
                         return uid, await asyncio.wait_for(
                             self.session_manager.get_recent_messages(
-                                uid, "private", limit=10
+                                uid, "private", limit=cross_context_history
                             ),
                             timeout=2.0,
                         )
@@ -1691,7 +1701,7 @@ class SocialService:
                         # Fetch group history (limit 10)
                         # 这里我们不需要太复杂的并发，因为只有一个群
                         group_msgs = await self.session_manager.get_recent_messages(
-                            latest_group_id, "group", limit=10
+                            latest_group_id, "group", limit=cross_context_history
                         )
 
                         if group_msgs:
@@ -1737,8 +1747,8 @@ class SocialService:
             # This ensures Pero can see images sent just before the trigger.
             history_images = []
             if recent_messages:
-                # Check last 2 messages in history
-                for msg in recent_messages[-2:]:
+                # Check last N messages in history based on image_limit
+                for msg in recent_messages[-image_limit:]:
                     # Extract CQ codes for images
                     import re
 
@@ -1856,58 +1866,8 @@ class SocialService:
                     use_stickers = self.config_manager.get("social.use_stickers", False)
 
                 if use_stickers:
-                    # Try agent-specific directory first
-                    agent_stickers_dir = os.path.join(
-                        agent_manager.agents_dir, current_agent_id, "stickers"
-                    )
-
-                    # Fallback to user agents dir if not found in builtin
-                    if not os.path.exists(agent_stickers_dir):
-                        agent_stickers_dir = os.path.join(
-                            agent_manager.user_agents_dir, current_agent_id, "stickers"
-                        )
-
-                    # Fallback to legacy global assets (only if not found in agent dir)
-                    if not os.path.exists(agent_stickers_dir):
-                        # Check legacy path
-                        legacy_stickers_dir = os.path.abspath(
-                            os.path.join(
-                                os.path.dirname(__file__),
-                                "..",
-                                "..",
-                                "..",
-                                "assets",
-                                "stickers",
-                            )
-                        )
-                        if os.path.exists(legacy_stickers_dir):
-                            agent_stickers_dir = legacy_stickers_dir
-
-                    if os.path.exists(agent_stickers_dir):
-                        # Scan stickers
-                        stickers = []
-                        try:
-                            for entry in os.scandir(agent_stickers_dir):
-                                if entry.is_file() and entry.name.lower().endswith(
-                                    (".jpg", ".png", ".gif", ".jpeg")
-                                ):
-                                    # Extract name without extension
-                                    name = os.path.splitext(entry.name)[0]
-                                    stickers.append(name)
-                                    # Update internal map for sending
-                                    self._sticker_map[name] = entry.path
-                        except Exception as e:
-                            logger.error(f"扫描表情包目录失败: {e}")
-
-                        if stickers:
-                            sticker_list = ", ".join(stickers)
-                            sticker_expression_prompt = mdp.render(
-                                "social/abilities/sticker_expression",
-                                {"sticker_list": sticker_list},
-                            )
-                            logger.debug(
-                                f"[{session.session_id}] 已加载 {len(stickers)} 个表情包。"
-                            )
+                    # [Refactor] Use shared method to load stickers
+                    sticker_list = self._load_agent_stickers(current_agent_id)
 
                 # [Refactor] Inject Decoupled Persona & Traits
                 # [User Request] Temporarily disable multi-agent support in Social Mode.
@@ -2512,6 +2472,10 @@ class SocialService:
         """
         通用发送消息助手
         """
+        # [Fix] Ensure stickers for this agent are loaded (Fixes inconsistent parsing)
+        if hasattr(session, "agent_id") and session.agent_id:
+            self._load_agent_stickers(session.agent_id)
+
         # [Fix] 移除 NIT 标签和清理文本，防止标签泄露到社交平台
         from nit_core.dispatcher import remove_nit_tags
 
@@ -2574,6 +2538,70 @@ class SocialService:
                     del self.pending_requests[echo_id]
                 raise TimeoutError(f"API {action} timed out.") from None
 
+    def _load_agent_stickers(self, agent_id: str) -> str:
+        """
+        Load stickers for the specified agent into the global sticker map.
+        Returns a comma-separated list of sticker names.
+        """
+        sticker_list = ""
+        if not agent_id:
+            return ""
+
+        try:
+            # Import here just in case, though module level import exists
+            from services.agent.agent_manager import AgentManager
+            agent_manager = AgentManager()
+
+            # Try agent-specific directory first
+            agent_stickers_dir = os.path.join(
+                agent_manager.agents_dir, agent_id, "stickers"
+            )
+
+            # Fallback to user agents dir if not found in builtin
+            if not os.path.exists(agent_stickers_dir):
+                agent_stickers_dir = os.path.join(
+                    agent_manager.user_agents_dir, agent_id, "stickers"
+                )
+
+            # Fallback to legacy global assets (only if not found in agent dir)
+            if not os.path.exists(agent_stickers_dir):
+                # Check legacy path
+                legacy_stickers_dir = os.path.abspath(
+                    os.path.join(
+                        os.path.dirname(
+                            os.path.dirname(
+                                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                            )
+                        ),
+                        "assets",
+                        "stickers",
+                    )
+                )
+                if os.path.exists(legacy_stickers_dir):
+                    agent_stickers_dir = legacy_stickers_dir
+
+            if os.path.exists(agent_stickers_dir):
+                # Scan stickers
+                stickers = []
+                for entry in os.scandir(agent_stickers_dir):
+                    if entry.is_file() and entry.name.lower().endswith(
+                        (".jpg", ".png", ".gif", ".jpeg")
+                    ):
+                        # Extract name without extension
+                        name = os.path.splitext(entry.name)[0]
+                        stickers.append(name)
+                        # Update internal map for sending
+                        self._sticker_map[name] = entry.path
+                
+                if stickers:
+                    sticker_list = ", ".join(stickers)
+                    # logger.debug(f"[Social] Loaded {len(stickers)} stickers for agent {agent_id}.")
+
+        except Exception as e:
+            logger.error(f"[Social] Failed to load stickers for agent {agent_id}: {e}")
+            
+        return sticker_list
+
     def _ensure_sticker_map(self):
         # [Fix] Check _sticker_base_dir instead of _sticker_map because _sticker_map is initialized in __init__
         if self._sticker_base_dir is None:
@@ -2589,17 +2617,32 @@ class SocialService:
                 sticker_path = os.path.join(
                     base_dir, "assets", "stickers", "index.json"
                 )
+                logger.debug(f"[Social] Loading sticker map from: {sticker_path}")
+                
+                if not os.path.exists(sticker_path):
+                    # Fallback to default agent sticker path
+                    fallback_path = os.path.join(
+                        base_dir, "services", "mdp", "agents", "pero", "stickers", "index.json"
+                    )
+                    logger.debug(f"[Social] Primary sticker path not found. Trying fallback: {fallback_path}")
+                    if os.path.exists(fallback_path):
+                        sticker_path = fallback_path
+
                 if os.path.exists(sticker_path):
                     with open(sticker_path, "r", encoding="utf-8") as f:
                         self._sticker_map = json.load(f)
                     self._sticker_base_dir = os.path.dirname(sticker_path)
+                    logger.info(f"[Social] Sticker map loaded from {sticker_path}. Count: {len(self._sticker_map)}")
                 else:
+                    logger.warning(f"[Social] Sticker index not found at {sticker_path} (or fallback)")
                     self._sticker_map = {}
-                    self._sticker_base_dir = ""  # Mark as checked
+                    # Do not set _sticker_base_dir to "" so we can retry if file appears later
+                    # self._sticker_base_dir = "" 
             except Exception as e:
                 logger.error(f"Failed to load sticker index: {e}")
                 self._sticker_map = {}
-                self._sticker_base_dir = ""  # Mark as checked
+                # Allow retry on next attempt
+                # self._sticker_base_dir = "" 
 
     def _process_stickers(self, message: str) -> str:
         """
@@ -2614,6 +2657,9 @@ class SocialService:
         def replace_match(match):
             # Clean up the sticker name: remove whitespace
             sticker_name_raw = match.group(1).strip()
+            
+            # Debug log
+            # logger.debug(f"[Sticker] Processing tag: {sticker_name_raw}")
 
             # Try exact match first
             filename = self._sticker_map.get(sticker_name_raw)
@@ -2623,18 +2669,23 @@ class SocialService:
                 for k, v in self._sticker_map.items():
                     if k.lower() == sticker_name_raw.lower():
                         filename = v
+                        # logger.debug(f"[Sticker] Found case-insensitive match: {k} -> {filename}")
                         break
-
+            
             if filename:
                 # Construct absolute path for NapCat/OneBot
                 # OneBot usually supports file:// protocol
-                full_path = os.path.join(self._sticker_base_dir, filename)
+                base_dir = self._sticker_base_dir if self._sticker_base_dir else ""
+                full_path = os.path.join(base_dir, filename)
                 # Convert to forward slashes for compatibility
                 full_path = full_path.replace("\\", "/")
-                return f"[CQ:image,file=file:///{full_path}]"
+                
+                cq_code = f"[CQ:image,file=file:///{full_path}]"
+                # logger.debug(f"[Sticker] Generated CQ: {cq_code}")
+                return cq_code
 
             # If still not found, keep original text to let user know it failed (or silently fail)
-            # Keeping original is better for debugging prompt issues.
+            logger.warning(f"[Sticker] Sticker not found in map: '{sticker_name_raw}'. Map size: {len(self._sticker_map)}")
             return match.group(0)
 
         # Regex to find [sticker:xxx]

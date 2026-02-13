@@ -186,15 +186,25 @@ class HistoryPreprocessor(BasePreprocessor):
         from core.config_manager import get_config_manager
         config_mgr = get_config_manager()
         bot_name = config_mgr.get("bot_name", "Pero")
+        
+        # [配置读取]
+        memory_config = config_mgr.get_json("memory_config")
+        
+        # 确定当前模式
+        mode_key = "desktop"
+        if source == "social":
+            mode_key = "social"
+        elif source == "ide" or session_id.startswith("work_"):
+            mode_key = "work"
+            
+        # 动态获取 limit
+        limit = memory_config.get("modes", {}).get(mode_key, {}).get("context_limit", 20)
 
         # [多源拉取策略]
         # 1. Group History (群聊模式)
         # 2. Desktop History (桌宠模式)
         
-        # 限制条数
-        # TODO: 从 variables 中读取 {{desktop_history, 40}} 这种配置来动态决定 limit
-        # 目前先写死
-        limit = 20 
+        # limit 已由上方配置读取决定
         
         # 拉取 Group History (需要去 GroupChatMessage 表拉取，目前 query_logs 只查 ConversationLog)
         # 这是一个问题：HistoryFetcher 目前只封装了 ConversationLog 的查询。
@@ -341,9 +351,21 @@ class RAGPreprocessor(BasePreprocessor):
         pet_state = await self._get_pet_state(session, agent_id)
 
         # 获取用户配置
+        from core.config_manager import get_config_manager
+        config_mgr = get_config_manager()
         configs = {c.key: c.value for c in (await session.exec(select(Config))).all()}
         owner_name = configs.get("owner_name", "主人")
         user_persona = configs.get("user_persona", "未设定")
+
+        # [配置读取] 动态 RAG limit
+        memory_config = config_mgr.get_json("memory_config")
+        mode_key = "desktop"
+        if source == "social":
+            mode_key = "social"
+        elif source == "ide" or (context.get("session_id", "default").startswith("work_")):
+            mode_key = "work"
+            
+        rag_limit = memory_config.get("modes", {}).get(mode_key, {}).get("rag_limit", 10)
 
         # 获取相关记忆
         try:
@@ -451,7 +473,7 @@ class RAGPreprocessor(BasePreprocessor):
                 memories = await memory_service.get_relevant_memories(
                     session,
                     user_message,
-                    limit=10,
+                    limit=rag_limit,
                     exclude_after_time=earliest_timestamp,
                     query_vec=query_vec,
                     agent_id=agent_id,

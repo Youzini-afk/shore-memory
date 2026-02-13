@@ -2,6 +2,8 @@
   "name": "pero-core",
   "private": true,
   "version": "0.6.0",
+  "description": "A powerful desktop application powered by PeroCore",
+  "author": "YoKONCy",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
@@ -44,7 +46,9 @@
     "marked": "^17.0.1",
     "mime-types": "^3.0.2",
     "monaco-editor": "^0.55.1",
+    "ms": "^2.1.3",
     "protobufjs": "^8.0.0",
+    "semver": "^7.7.4",
     "systeminformation": "^5.30.6",
     "three": "^0.182.0",
     "tree-kill": "^1.2.2",

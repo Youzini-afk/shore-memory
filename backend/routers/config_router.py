@@ -82,6 +82,19 @@ async def set_lightweight_mode(enabled: bool = Body(..., embed=True)):
     return {"status": "success", "enabled": enabled}
 
 
+# 6. 记忆配置 (Memory Config)
+@router.get("/memory")
+async def get_memory_config():
+    return get_config_manager().get_json("memory_config")
+
+
+@router.post("/memory")
+async def set_memory_config(config: Dict = Body(...)):
+    import json
+    await get_config_manager().set("memory_config", json.dumps(config))
+    return {"status": "success", "config": config}
+
+
 # 2. 主动视觉
 @router.get("/aura_vision")
 async def get_aura_vision_mode():

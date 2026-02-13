@@ -18,6 +18,7 @@ from models import (
 )
 from services.core.llm_service import LLMService
 from services.mdp.manager import mdp
+from utils.workspace_utils import get_workspace_root
 
 
 class ReflectionService:
@@ -362,19 +363,14 @@ class ReflectionService:
             return None
 
         # 6. 保存文件
-        # Path: PeroCore-Electron/pero_workspace/[agent_id]/diaries/YYYY-MM-DD.md
+        # Path: {Workspace}/[agent_id]/diaries/YYYY-MM-DD.md
         # 定位相对于此文件或项目根目录的 workspace
-        # 假设 backend 在 PeroCore-Electron/backend
-        # workspace 在 PeroCore-Electron/pero_workspace
+        # 假设 backend 在 {ProjectRoot}/backend
+        # workspace 在 {ProjectRoot}/pero_workspace
 
         # 健壮的路径查找
-        current_file_dir = os.path.dirname(os.path.abspath(__file__))
-        project_root = os.path.dirname(
-            os.path.dirname(current_file_dir)
-        )  # backend/services -> backend -> root
-        workspace_root = os.path.join(project_root, "pero_workspace")
-
-        diary_dir = os.path.join(workspace_root, agent_id, "diaries")
+        agent_workspace = get_workspace_root(agent_id)
+        diary_dir = os.path.join(agent_workspace, "diaries")
         os.makedirs(diary_dir, exist_ok=True)
 
         file_path = os.path.join(diary_dir, f"{date_str}.md")
