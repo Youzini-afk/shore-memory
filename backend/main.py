@@ -29,6 +29,11 @@ from contextlib import asynccontextmanager, suppress
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+# 路径防御：确保打包后或不同目录下启动都能正确找到模块 (必须放在自定义模块导入之前)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+if current_dir not in sys.path:
+    sys.path.insert(0, current_dir)
+
 from rich.console import Console
 from rich.traceback import install as install_rich_traceback
 
@@ -90,11 +95,6 @@ from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlmodel import delete, desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
-
-# 路径防御：确保打包后或不同目录下启动都能正确找到模块
-current_dir = os.path.dirname(os.path.abspath(__file__))
-if current_dir not in sys.path:
-    sys.path.insert(0, current_dir)
 
 from core.config_manager import get_config_manager
 from database import engine, get_session, init_db
