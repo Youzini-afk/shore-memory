@@ -16,6 +16,7 @@ from .models_db import QQMessage, SocialDailyReport, SocialMemory, SocialMemoryR
 class SocialMemoryService:
     _instance = None
     _rust_engine = None
+    _social_engine = None  # PEDSA 社交核心引擎
 
     def __new__(cls):
         if cls._instance is None:
@@ -42,11 +43,47 @@ class SocialMemoryService:
         # 内存中的关键词索引 (Keyword -> List[MemoryID])
         self.keyword_index: Dict[str, Set[int]] = {}
 
+        # 初始化 PEDSA 社交核心
+        try:
+            from pero_social_core import SocialMemoryEngine
+
+            self._social_engine = SocialMemoryEngine()
+            print("[SocialMemory] PEDSA Social Core (Rust) 已加载。", flush=True)
+        except ImportError:
+            print(
+                "[SocialMemory] 未找到 pero_social_core，将使用降级模式。", flush=True
+            )
+            self._social_engine = None
+
     async def initialize(self):
         """初始化 Rust 引擎和加载索引"""
         print("[SocialMemory] 正在初始化...", flush=True)
         await self._init_rust_engine()
         await self._load_keyword_index()
+        await self._load_pedsa_engine()
+
+    async def _load_pedsa_engine(self):
+        """加载数据到 PEDSA 社交引擎"""
+        if not self._social_engine:
+            return
+
+        print("[SocialMemory] 正在向 PEDSA 引擎注入记忆...", flush=True)
+        count = 0
+        async for session in get_social_db_session():
+            statement = select(SocialMemory)
+            memories = (await session.exec(statement)).all()
+            for mem in memories:
+                try:
+                    vec = json.loads(mem.embedding_json) if mem.embedding_json else []
+                    ts = int(mem.created_at.timestamp())
+                    kws = [k.strip() for k in mem.keywords.split(",") if k.strip()]
+                    # 确保 vector 是 float list
+                    vec = [float(x) for x in vec]
+                    self._social_engine.add_memory(mem.id, mem.content, ts, vec, kws)
+                    count += 1
+                except Exception as e:
+                    print(f"[SocialMemory] 加载记忆 {mem.id} 失败: {e}")
+        print(f"[SocialMemory] PEDSA 引擎加载完成，共 {count} 条记忆。", flush=True)
 
     async def _init_rust_engine(self):
         """初始化独立的 Rust 认知引擎"""
@@ -64,7 +101,7 @@ class SocialMemoryService:
                 if relations:
                     total_relations += len(relations)
                     chunk_relations = [
-                        (int(rel.source_id), int(rel.target_id), float(rel.strength))
+                        (int(rel.source_id), int(rel.target_id), float(rel.strength), 0)
                         for rel in relations
                     ]
                     self._rust_engine.batch_add_connections(chunk_relations)
@@ -179,32 +216,61 @@ class SocialMemoryService:
             if self._rust_engine and new_relations:
                 self._rust_engine.batch_add_connections(new_relations)
 
-            # 4. 写入独立向量存储（TODO）
+            # 4. 更新 PEDSA 社交引擎
+            if self._social_engine:
+                try:
+                    ts = int(memory.created_at.timestamp())
+                    # vec is already calculated above as `vec`
+                    vec_float = [float(x) for x in vec]
+                    kws = [k.strip() for k in keywords if k.strip()]
+                    self._social_engine.add_memory(
+                        memory.id, memory.content, ts, vec_float, kws
+                    )
+                except Exception as e:
+                    print(f"[SocialMemory] PEDSA 添加失败: {e}")
 
             return memory
 
-    async def retrieve_context(
-        self, query: str, current_session_id: str, agent_id: str = "pero"
-    ) -> str:
+    async def search_memories(
+        self, query: str, agent_id: str = "pero", limit: int = 5
+    ) -> List[SocialMemory]:
         """
-        检索上下文：关键词/向量检索 -> Rust 引擎扩散激活
+        搜索记忆（PEDSA + 扩散），返回 Memory 对象列表
         """
-        # 简单实现：仅基于关键词匹配 + 扩散
+        entry_points = set()
 
-        # 1. 提取查询关键词（模拟）
-        entry_points = []
-        for kw, mids in self.keyword_index.items():
-            if kw in query:
-                entry_points.extend(list(mids))
+        # 1. PEDSA 混合检索 (优先)
+        if self._social_engine:
+            try:
+                ref_time = int(datetime.now().timestamp())
+                # 尝试获取 Query Vector
+                query_vec = None
+                try:
+                    from services.core.embedding_service import embedding_service
+
+                    query_vec = embedding_service.encode_one(query)
+                except Exception:
+                    pass
+
+                # Search Top 20
+                results = self._social_engine.search(query, ref_time, 20, query_vec)
+                entry_points.update([mid for mid, score in results])
+            except Exception as e:
+                print(f"[SocialMemory] PEDSA 检索失败: {e}")
+
+        # 2. 传统关键词匹配 (补充)
+        if not entry_points:
+            for kw, mids in self.keyword_index.items():
+                if kw in query:
+                    entry_points.update(mids)
 
         if not entry_points:
-            return ""
+            return []
 
-        # 2. 扩散激活
+        # 3. 扩散激活 (Cognitive Graph Diffusion)
         activated_ids = set(entry_points)
         if self._rust_engine:
             try:
-                # Rust 引擎返回字典 {id: energy}
                 entry_point_ids = [int(mid) for mid in entry_points]
                 spread_result = self._rust_engine.spread(entry_point_ids, 2, 0.5)
                 activated_ids = set(spread_result.keys())
@@ -212,33 +278,42 @@ class SocialMemoryService:
                 print(f"[SocialMemory] Rust 引擎扩散激活失败: {e}")
                 pass
 
-        # 3. 读取内容
+        # 4. 读取内容
         if not activated_ids:
-            return ""
+            return []
 
         async for session in get_social_db_session():
             statement = (
                 select(SocialMemory)
                 .where(col(SocialMemory.id).in_(activated_ids))
                 .where(SocialMemory.agent_id == agent_id)
-                .limit(5)
+                .limit(limit)
             )
-            memories = (await session.exec(statement)).all()
+            return (await session.exec(statement)).all()
+        return []
 
-            if not memories:
-                return ""
+    async def retrieve_context(
+        self, query: str, current_session_id: str, agent_id: str = "pero"
+    ) -> str:
+        """
+        检索上下文：PEDSA 混合检索 -> Rust 引擎扩散激活
+        """
+        memories = await self.search_memories(query, agent_id, limit=5)
 
-            # 过滤：优先显示非当前会话的记忆
-            result = "【相关记忆回忆】:\n"
-            for mem in memories:
-                source_label = (
-                    "私聊"
-                    if mem.source_session_type == "private"
-                    else f"群{mem.source_session_id}"
-                )
-                result += f"- [{source_label}] {mem.content}\n"
+        if not memories:
+            return ""
 
-            return result
+        # 过滤：优先显示非当前会话的记忆
+        result = "【相关记忆回忆】:\n"
+        for mem in memories:
+            source_label = (
+                "私聊"
+                if mem.source_session_type == "private"
+                else f"群{mem.source_session_id}"
+            )
+            result += f"- [{source_label}] {mem.content}\n"
+
+        return result
 
     async def generate_daily_report(self, date_str: str = None, agent_id: str = "pero"):
         """生成并保存社交日报"""

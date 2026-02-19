@@ -9,15 +9,19 @@ Injected Via: mdp.render("tasks/memory/reflection/relation")
 请分析以下两条记忆之间是否存在深层关联（如因果、主题相似、矛盾、递进等）。
 
 ## 记忆 A ({{ m1_time }})
+
 Content: {{ m1_content }}
 Tags: {{ m1_tags }}
 
 ## 记忆 B ({{ m2_time }})
+
 Content: {{ m2_content }}
 Tags: {{ m2_tags }}
 
 ## 输出格式
+
 如果存在关联，请输出 JSON：
+
 ```json
 {
     "has_relation": true,
@@ -28,6 +32,7 @@ Tags: {{ m2_tags }}
 ```
 
 ## 关联类型
+
 - **associative (联想)**: 内容相关，提及相同的人、事、物或话题。
 - **causal (因果)**: 事件A导致了事件B，或存在逻辑上的推导关系。
 - **thematic (主题)**: 属于同一个大的主题或思维簇（如都在讨论“哲学”）。

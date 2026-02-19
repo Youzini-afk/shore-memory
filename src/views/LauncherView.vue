@@ -10,10 +10,11 @@
     class="fixed -bottom-24 -left-24 w-96 h-96 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none"
   ></div>
 
-  <CustomTitleBar :transparent="true" />
+  <CustomTitleBar v-if="isElectron()" :transparent="true" />
 
   <div
-    class="flex h-screen w-screen overflow-hidden bg-slate-950/95 text-slate-200 font-sans select-text pt-8"
+    class="flex h-screen w-screen overflow-hidden bg-slate-950/95 text-slate-200 font-sans select-text"
+    :class="{ 'pt-8': isElectron() }"
   >
     <!-- 侧边导航栏 -->
     <aside
@@ -96,6 +97,25 @@
           <div
             class="flex items-center gap-4 bg-slate-900/40 px-5 py-2.5 rounded-full border border-slate-700/30 backdrop-blur-md shadow-sm"
           >
+            <!-- Steam User Status -->
+            <div
+              v-if="steamUser"
+              class="flex items-center gap-2 border-r border-slate-700/50 pr-4 mr-1"
+              title="Steam 已连接"
+            >
+              <div
+                class="w-6 h-6 rounded bg-[#171a21] flex items-center justify-center text-[#66c0f4]"
+              >
+                <Gamepad2 :size="14" />
+              </div>
+              <div class="flex flex-col">
+                <span class="text-xs font-bold text-[#66c0f4] leading-none">{{
+                  steamUser.name
+                }}</span>
+                <span class="text-[9px] text-slate-500 font-mono leading-none mt-0.5">ONLINE</span>
+              </div>
+            </div>
+
             <div class="flex items-center gap-2">
               <div
                 :class="[
@@ -1080,7 +1100,7 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
-import { invoke, listen } from '@/utils/ipcAdapter'
+import { invoke, listen, isElectron } from '@/utils/ipcAdapter'
 import {
   Sparkles,
   Home,
@@ -1096,6 +1116,7 @@ import {
   Menu,
   Zap,
   X,
+  Gamepad2,
   Plug,
   Search,
   Plus,
@@ -1146,6 +1167,7 @@ const downloadProgress = ref({
 const cpuUsage = ref(0)
 const memoryUsed = ref(0)
 const memoryTotal = ref(0)
+const steamUser = ref(null)
 let statsInterval = null
 
 const updateStats = async () => {

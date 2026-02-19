@@ -1,0 +1,8 @@
+[build]
+# 针对当前 CPU 架构进行优化
+# 这会启用 AVX2、FMA、SSE4.2 等 SIMD 指令集
+rustflags = ["-C", "target-cpu=native"]
+
+[env]
+# 强制 PyO3 使用项目虚拟环境中的 Python (避免指向全局 Python 3.14)
+PYO3_PYTHON = "c:\\Users\\Administrator\\OneDrive\\桌面\\PeroCore\\backend\\.venv\\Scripts\\python.exe"

@@ -14,9 +14,5 @@
       "@/*": ["../src/*"]
     }
   },
-  "include": [
-    "main/**/*.ts",
-    "preload/**/*.ts",
-    "cli/**/*.ts"
-  ]
+  "include": ["main/**/*.ts", "preload/**/*.ts"]
 }

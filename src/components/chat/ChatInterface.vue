@@ -65,19 +65,11 @@
           <!-- 标题栏 -->
           <div
             class="px-6 py-4 flex items-center gap-3 border-b transition-colors"
-            :class="
-              pendingConfirmation.riskInfo?.level >= 2
-                ? 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/30'
-                : 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30'
-            "
+            :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'header')"
           >
             <div
               class="p-2 rounded-full transition-colors"
-              :class="
-                pendingConfirmation.riskInfo?.level >= 2
-                  ? 'bg-red-100 dark:bg-red-800/40 text-red-600 dark:text-red-400 animate-pulse'
-                  : 'bg-amber-100 dark:bg-amber-800/40 text-amber-600 dark:text-amber-400'
-              "
+              :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'icon')"
             >
               <Terminal class="w-5 h-5" />
             </div>
@@ -85,10 +77,12 @@
               <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
                 请求执行终端指令
                 <span
-                  v-if="pendingConfirmation.riskInfo?.level >= 2"
-                  class="px-2 py-0.5 bg-red-500 text-white text-[10px] rounded-full uppercase tracking-wide font-bold"
-                  >高风险</span
+                  v-if="pendingConfirmation.riskInfo?.level > 0"
+                  class="px-2 py-0.5 text-white text-[10px] rounded-full uppercase tracking-wide font-bold"
+                  :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'badge')"
                 >
+                  {{ getRiskLabel(pendingConfirmation.riskInfo?.level) }}
+                </span>
               </h3>
               <p class="text-xs text-slate-500 dark:text-slate-400">
                 {{ agentName }} 申请在您的系统中执行以下命令
@@ -100,11 +94,7 @@
           <div class="p-6">
             <div
               class="bg-slate-900 rounded-lg p-4 font-mono text-sm overflow-x-auto custom-scrollbar border shadow-inner transition-colors"
-              :class="
-                pendingConfirmation.riskInfo?.level >= 2
-                  ? 'text-red-300 border-red-900/50 bg-red-950/20'
-                  : 'text-green-400 border-slate-700'
-              "
+              :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'content')"
             >
               <span
                 v-if="pendingConfirmation.riskInfo?.highlight"
@@ -120,14 +110,19 @@
 
             <div
               v-if="pendingConfirmation.riskInfo?.level >= 2"
-              class="mt-4 p-3 bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/30 rounded-lg flex gap-3 items-start"
+              class="mt-4 p-3 rounded-lg flex gap-3 items-start"
+              :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'warning_box')"
             >
               <div
-                class="p-1 bg-red-100 dark:bg-red-800/50 rounded text-red-600 dark:text-red-400 shrink-0"
+                class="p-1 rounded shrink-0"
+                :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'warning_icon')"
               >
                 <AlertTriangle class="w-4 h-4" />
               </div>
-              <div class="text-xs text-red-600 dark:text-red-400">
+              <div
+                class="text-xs"
+                :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'warning_text')"
+              >
                 <p class="font-bold mb-1">
                   系统警告：{{ pendingConfirmation.riskInfo?.reason || '敏感操作' }}
                 </p>
@@ -157,15 +152,13 @@
             </button>
             <button
               class="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-lg transition-all active:scale-95 flex items-center gap-2"
-              :class="
-                pendingConfirmation.riskInfo?.level >= 2
-                  ? 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
-                  : 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'
-              "
+              :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'button')"
               @click="respondConfirmation(true)"
             >
               <Check class="w-4 h-4" />
-              <span>{{ pendingConfirmation.isHighRisk ? '确认授权并执行' : '批准并执行' }}</span>
+              <span>{{
+                pendingConfirmation.riskInfo?.level >= 3 ? '确认授权并执行' : '批准并执行'
+              }}</span>
             </button>
           </div>
         </div>
@@ -853,6 +846,99 @@ const props = defineProps({
   targetId: { type: String, default: 'pero' },
   agentName: { type: String, default: AGENT_NAME }
 })
+
+const getRiskLabel = (level) => {
+  if (level === undefined) return '未知'
+  switch (level) {
+    case 0:
+      return '安全'
+    case 1:
+      return '注意'
+    case 2:
+      return '低风险'
+    case 3:
+      return '中风险'
+    case 4:
+      return '高风险'
+    default:
+      return level >= 2 ? '高风险' : '常规'
+  }
+}
+
+const getRiskLevelColor = (level, type) => {
+  const safeLevel = level === undefined ? 1 : level
+
+  // 颜色映射表
+  const colors = {
+    // Level 0: Safe (Green)
+    0: {
+      header: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/30',
+      icon: 'bg-emerald-100 dark:bg-emerald-800/40 text-emerald-600 dark:text-emerald-400',
+      badge: 'bg-emerald-500',
+      content:
+        'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10',
+      warning_box:
+        'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30',
+      warning_icon: 'bg-emerald-100 dark:bg-emerald-800/50 text-emerald-600 dark:text-emerald-400',
+      warning_text: 'text-emerald-600 dark:text-emerald-400',
+      button: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30'
+    },
+    // Level 1: Notice (Blue/Cyan)
+    1: {
+      header: 'bg-sky-50 dark:bg-sky-900/20 border-sky-100 dark:border-sky-800/30',
+      icon: 'bg-sky-100 dark:bg-sky-800/40 text-sky-600 dark:text-sky-400',
+      badge: 'bg-sky-500',
+      content:
+        'text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/10',
+      warning_box: 'bg-sky-50 dark:bg-sky-900/10 border-sky-100 dark:border-sky-900/30',
+      warning_icon: 'bg-sky-100 dark:bg-sky-800/50 text-sky-600 dark:text-sky-400',
+      warning_text: 'text-sky-600 dark:text-sky-400',
+      button: 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30'
+    },
+    // Level 2: Low Risk (Amber/Yellow)
+    2: {
+      header: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30',
+      icon: 'bg-amber-100 dark:bg-amber-800/40 text-amber-600 dark:text-amber-400',
+      badge: 'bg-amber-500',
+      content:
+        'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10',
+      warning_box: 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30',
+      warning_icon: 'bg-amber-100 dark:bg-amber-800/50 text-amber-600 dark:text-amber-400',
+      warning_text: 'text-amber-600 dark:text-amber-400',
+      button: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'
+    },
+    // Level 3: Medium Risk (Orange)
+    3: {
+      header: 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800/30',
+      icon: 'bg-orange-100 dark:bg-orange-800/40 text-orange-600 dark:text-orange-400',
+      badge: 'bg-orange-500',
+      content:
+        'text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/10',
+      warning_box: 'bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-900/30',
+      warning_icon: 'bg-orange-100 dark:bg-orange-800/50 text-orange-600 dark:text-orange-400',
+      warning_text: 'text-orange-600 dark:text-orange-400',
+      button: 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30'
+    },
+    // Level 4: High Risk (Red)
+    4: {
+      header: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/30',
+      icon: 'bg-red-100 dark:bg-red-800/40 text-red-600 dark:text-red-400 animate-pulse',
+      badge: 'bg-red-500',
+      content: 'text-red-300 border-red-900/50 bg-red-950/20',
+      warning_box: 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30',
+      warning_icon: 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-400',
+      warning_text: 'text-red-600 dark:text-red-400',
+      button: 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
+    }
+  }
+
+  // Fallback
+  if (!colors[safeLevel]) {
+    return safeLevel >= 2 ? colors[4][type] : colors[2][type]
+  }
+
+  return colors[safeLevel][type]
+}
 
 // 确认状态
 const pendingConfirmation = ref(null)

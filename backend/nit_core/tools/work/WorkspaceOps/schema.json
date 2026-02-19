@@ -28,7 +28,11 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "subdir": { "type": "string", "description": "Optional subdirectory to list", "default": "" }
+        "subdir": {
+          "type": "string",
+          "description": "Optional subdirectory to list",
+          "default": ""
+        }
       },
       "required": []
     }

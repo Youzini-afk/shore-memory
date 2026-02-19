@@ -34,7 +34,7 @@ jobs:
           mkdir -p ../resources/bin
           go mod tidy
           go build -o ../resources/bin/gateway.exe gateway/main.go
-          
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
@@ -62,7 +62,7 @@ jobs:
       - name: Setup Python for Dependency Installation
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10' 
+          python-version: '3.10'
 
       - name: Setup Python Environment
         shell: powershell
@@ -71,20 +71,20 @@ jobs:
           $Url = "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip"
           $ZipPath = "python.zip"
           $Dest = "PeroCore-Electron/resources/python"
-          
+
           echo "Downloading Python..."
           Invoke-WebRequest -Uri $Url -OutFile $ZipPath
-          
+
           echo "Extracting Python..."
           New-Item -ItemType Directory -Force -Path $Dest
           Expand-Archive -Path $ZipPath -DestinationPath $Dest -Force
-          
+
           # 2. Configure .pth to enable site-packages
           $PthFile = "$Dest/python310._pth"
           $Content = Get-Content $PthFile
           $Content = $Content -replace "#import site", "import site"
           $Content | Set-Content $PthFile
-          
+
           # 3. Install Dependencies via uv
            echo "Installing dependencies..."
            $SitePackages = "$Dest/Lib/site-packages"
@@ -100,7 +100,7 @@ jobs:
            # Note: uv pip install . needs to run where pyproject.toml is
            cd PeroCore-Electron/backend
            uv pip install --target $SitePackages . --system
-          
+
           # Clean up
            cd ../..
            Remove-Item $ZipPath
@@ -113,15 +113,15 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "PeroCore-Electron/backend -> target"
+          workspaces: 'PeroCore-Electron/backend -> target'
 
       - name: Build and Install Rust Core Extensions
         shell: powershell
         run: |
           pip install maturin
-          
+
           $TARGET_LIB = "PeroCore-Electron/resources/python/Lib/site-packages"
-          
+
           # 1. Build and Install pero_memory_core
           echo "Building pero_memory_core..."
           maturin build --release --manifest-path PeroCore-Electron/backend/rust_core/Cargo.toml --out dist
@@ -158,46 +158,58 @@ jobs:
               exit 1
           }
 
+          # 4. Build and Install pero_social_core
+          echo "Building pero_social_core..."
+          maturin build --release --manifest-path PeroCore-Electron/backend/social_core/Cargo.toml --out dist
+          $SOCIAL_WHEEL = Get-ChildItem dist/pero_social_core*.whl | Select-Object -First 1
+          if ($SOCIAL_WHEEL) {
+              echo "Installing $($SOCIAL_WHEEL.Name)..."
+              pip install $SOCIAL_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+          } else {
+              Write-Error "Failed to build pero_social_core wheel"
+              exit 1
+          }
+
       - name: Build Binary Tools
         shell: powershell
         run: |
-           # 1. Build CodeSearcher Tool
-           echo "Building CodeSearcher Tool..."
-           cargo build --release --manifest-path PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml
-           
-           $SEARCHER_SRC_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src"
-           $SEARCHER_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher"
-           
-           # Try to find the built binary.
-           $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
-           if (-not $SEARCHER_BIN) {
-                $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/../target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
-           }
-           
-           if ($SEARCHER_BIN) {
-               echo "Found CodeSearcher binary at $($SEARCHER_BIN.FullName)"
-               Copy-Item -Path $SEARCHER_BIN.FullName -Destination "$SEARCHER_TARGET_DIR/CodeSearcher.exe" -Force
-           } else {
-               Write-Warning "CodeSearcher binary not found after build!"
-           }
+          # 1. Build CodeSearcher Tool
+          echo "Building CodeSearcher Tool..."
+          cargo build --release --manifest-path PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml
 
-           # 2. Build nit_terminal_auditor (Wasm)
-           echo "Building nit_terminal_auditor..."
-           cargo build --release --target wasm32-unknown-unknown --manifest-path PeroCore-Electron/backend/nit_core/nit_terminal_auditor/Cargo.toml
-           
-           $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
-           if (!(Test-Path $WASM_SRC)) {
-               $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/release/nit_terminal_auditor.wasm" 
-           }
-           
-           $WASM_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/TerminalExecutor"
-           
-           if (Test-Path $WASM_SRC) {
-               echo "Found Wasm binary at $WASM_SRC"
-               Copy-Item -Path $WASM_SRC -Destination "$WASM_TARGET_DIR/auditor.wasm" -Force
-           } else {
-               Write-Warning "nit_terminal_auditor.wasm not found after build!"
-           }
+          $SEARCHER_SRC_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src"
+          $SEARCHER_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher"
+
+          # Try to find the built binary.
+          $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
+          if (-not $SEARCHER_BIN) {
+               $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/../target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
+          }
+
+          if ($SEARCHER_BIN) {
+              echo "Found CodeSearcher binary at $($SEARCHER_BIN.FullName)"
+              Copy-Item -Path $SEARCHER_BIN.FullName -Destination "$SEARCHER_TARGET_DIR/CodeSearcher.exe" -Force
+          } else {
+              Write-Warning "CodeSearcher binary not found after build!"
+          }
+
+          # 2. Build nit_terminal_auditor (Wasm)
+          echo "Building nit_terminal_auditor..."
+          cargo build --release --target wasm32-unknown-unknown --manifest-path PeroCore-Electron/backend/nit_core/nit_terminal_auditor/Cargo.toml
+
+          $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
+          if (!(Test-Path $WASM_SRC)) {
+              $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/release/nit_terminal_auditor.wasm" 
+          }
+
+          $WASM_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/TerminalExecutor"
+
+          if (Test-Path $WASM_SRC) {
+              echo "Found Wasm binary at $WASM_SRC"
+              Copy-Item -Path $WASM_SRC -Destination "$WASM_TARGET_DIR/auditor.wasm" -Force
+          } else {
+              Write-Warning "nit_terminal_auditor.wasm not found after build!"
+          }
 
       - name: Install Dependencies
         run: |

@@ -21,7 +21,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "backend/rust_core -> target"
+          workspaces: 'backend/rust_core -> target'
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:
@@ -49,7 +49,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: "backend/rust_core -> target"
+          workspaces: 'backend/rust_core -> target'
       - name: Build wheels
         uses: PyO3/maturin-action@v1
         with:

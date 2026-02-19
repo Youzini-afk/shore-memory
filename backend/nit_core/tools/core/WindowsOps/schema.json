@@ -38,7 +38,10 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "action": { "type": "string", "enum": ["click", "double_click", "right_click", "drag", "type", "hotkey", "notification"] },
+        "action": {
+          "type": "string",
+          "enum": ["click", "double_click", "right_click", "drag", "type", "hotkey", "notification"]
+        },
         "target": { "type": "string" },
         "x": { "type": "integer" },
         "y": { "type": "integer" },

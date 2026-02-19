@@ -1,0 +1,50 @@
+services:
+  pero-backend:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.backend
+    container_name: pero-backend
+    environment:
+      - PERO_ENV=server
+      - PORT=9120
+    volumes:
+      - ../config:/app/config
+      - ../data:/app/data
+    networks:
+      - pero-network
+
+  pero-web:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.web
+    container_name: pero-web
+    ports:
+      - '8080:80'
+    depends_on:
+      - pero-backend
+    networks:
+      - pero-network
+
+  pero-napcat:
+    image: docker.io/napneko/napcat-docker:latest
+    container_name: pero-napcat
+    environment:
+      - ACCOUNT=
+    volumes:
+      - ../config/napcat:/app/config
+    networks:
+      - pero-network
+
+  pero-gateway:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.gateway
+    container_name: pero-gateway
+    ports:
+      - '14747:14747'
+    networks:
+      - pero-network
+
+networks:
+  pero-network:
+    driver: bridge

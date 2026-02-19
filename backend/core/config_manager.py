@@ -40,6 +40,7 @@ class ConfigManager:
             "aura_vision_enabled": False,
             "enable_social_mode": False,  # 默认关闭以确保安全
             "tts_enabled": True,
+            "content_moderation_enabled": False,  # 默认关闭内容审核
             # [Memory] 默认记忆配置 (JSON 结构)
             "memory_config": json.dumps(
                 {
@@ -125,6 +126,12 @@ class ConfigManager:
                         continue
 
                     self.config[config.key] = self._parse_value(config.value)
+
+            # [Moderation] 同步审核服务开关
+            from services.core.moderation_service import moderation_service
+
+            mod_enabled = self.config.get("content_moderation_enabled", False)
+            moderation_service.set_enabled(mod_enabled)
 
             # logger.info(f"配置已从数据库加载。当前配置: {self.config}")
             pass

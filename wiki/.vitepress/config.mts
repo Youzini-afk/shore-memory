@@ -5,8 +5,8 @@ import path from 'path'
 
 // https://vitepress.dev/reference/site-config
 export default defineConfig({
-  title: "Perofamily Wiki",
-  description: "Documentation for PeroCore - The AI Desktop Companion",
+  title: 'Perofamily Wiki',
+  description: 'Documentation for PeroCore - The AI Desktop Companion',
   // base: '/PeroCore/', // Deploy to GitHub Pages: https://YoKONCy.github.io/PeroCore/
   head: [['link', { rel: 'icon', href: '/logo.png' }]],
   appearance: true, // Enable dark mode toggle
@@ -16,7 +16,9 @@ export default defineConfig({
     },
     languages: [
       {
-        ...JSON.parse(fs.readFileSync(path.resolve(__dirname, './grammars/nit.tmLanguage.json'), 'utf-8'))
+        ...JSON.parse(
+          fs.readFileSync(path.resolve(__dirname, './grammars/nit.tmLanguage.json'), 'utf-8')
+        )
       }
     ]
   },
@@ -65,15 +67,10 @@ export default defineConfig({
       },
       {
         text: '🚀 部署运维',
-        items: [
-          { text: 'Docker 部署', link: '/deployment/docker' }
-        ]
+        items: [{ text: 'Docker 部署', link: '/deployment/docker' }]
       }
     ],
 
-    socialLinks: [
-      { icon: 'github', link: 'https://github.com/YoKONCy/PeroCore' }
-    ]
+    socialLinks: [{ icon: 'github', link: 'https://github.com/YoKONCy/PeroCore' }]
   }
 })
-

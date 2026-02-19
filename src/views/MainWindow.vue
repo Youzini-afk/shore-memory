@@ -9,7 +9,12 @@
     />
 
     <!-- 视图容器 -->
-    <div class="absolute top-8 left-0 right-0 bottom-0 bg-[#1e293b] overflow-hidden">
+    <div
+      :class="[
+        'absolute left-0 right-0 bottom-0 bg-[#1e293b] overflow-hidden',
+        isElectron() ? 'top-8' : 'top-0'
+      ]"
+    >
       <Transition name="fade-slide">
         <KeepAlive>
           <component
@@ -36,7 +41,7 @@
 
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
-import { emit } from '@/utils/ipcAdapter'
+import { emit, isElectron } from '@/utils/ipcAdapter'
 import { APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import CustomDialog from '../components/ui/CustomDialog.vue'

@@ -293,6 +293,16 @@ export class WindowManager {
       }
     }
 
+    // [Steam] 尝试在 Dashboard 窗口初始化 Steam Overlay
+    // 注意：Steam Overlay 通常只能依附于一个渲染进程。
+    // 我们选择 DashboardView 作为主要依附对象，因为它是一个标准窗口，适合展示 Overlay。
+    try {
+       const { initSteam } = require('../services/steam')
+       initSteam()
+    } catch (e) {
+       logger.error('Main', `Dashboard Steam 初始化失败: ${e}`)
+    }
+
     this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
     logger.info('Main', `Dashboard 正在加载 URL: ${this.getPageUrl('/dashboard')}`)
 

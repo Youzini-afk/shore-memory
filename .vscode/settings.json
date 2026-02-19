@@ -27,5 +27,15 @@
   },
   "files.associations": {
     "*.css": "tailwindcss"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  },
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "terminal.integrated.env.windows": {
+    "ELECTRON_MIRROR": "https://npmmirror.com/mirrors/electron/",
+    "ELECTRON_BUILDER_BINARIES_MIRROR": "https://npmmirror.com/mirrors/electron-builder-binaries/"
   }
 }

@@ -5,9 +5,9 @@
 The project is currently in the Alpha development stage.
 目前项目处于 Alpha 开发阶段。
 
-| Version | Supported / 支持状态 | Notes / 说明 |
-| ------- | ------------------ | ----------------------------------- |
-| Alpha   | :x:                | Not guaranteed for normal use or security.<br>所有版本均不保证可以正常使用及安全性。 |
+| Version | Supported / 支持状态 | Notes / 说明                                                                         |
+| ------- | -------------------- | ------------------------------------------------------------------------------------ |
+| Alpha   | :x:                  | Not guaranteed for normal use or security.<br>所有版本均不保证可以正常使用及安全性。 |
 
 ## Reporting a Vulnerability / 报告漏洞
 

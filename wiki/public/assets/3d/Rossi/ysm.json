@@ -6,10 +6,8 @@
     "license": {
       "type": "--"
     },
-    "authors": [
-    ],
-    "link": {
-    }
+    "authors": [],
+    "link": {}
   },
   "files": {
     "player": {
@@ -25,9 +23,7 @@
         "carryon": "animations/carryon.animation.json",
         "tlm": "animations/tlm.animation.json"
       },
-      "texture": [
-        "textures/texture.png"
-      ],
+      "texture": ["textures/texture.png"],
       "animation_controllers": ["controller/controller.json"]
     }
   },
@@ -45,7 +41,7 @@
       "变更体型": "#个性化"
     },
     "extra_animation_buttons": [
-{
+      {
         "id": "换装",
         "name": "§d穿脱兜帽",
         "config_forms": [
@@ -73,25 +69,25 @@
             "description": " (切换显示靴子)",
             "value": "v.player_armor_leg"
           },
-{
+          {
             "type": "checkbox",
             "title": "内搭",
             "description": " (切换显示内搭)",
             "value": "v.player_armor_inner"
           },
-{
+          {
             "type": "checkbox",
             "title": "最终防线",
             "description": " (切换显示绑头发的线)",
             "value": "v.player_armor_innest"
           }
-]
-},
+        ]
+      },
       {
         "id": "个性化",
         "name": "§d个性化",
         "config_forms": [
-{
+          {
             "type": "checkbox",
             "title": "禁用额外粒子",
             "description": " (切换显示额外粒子效果)",
@@ -142,22 +138,22 @@
             "min": -10,
             "max": 5
           },
-	{
+          {
             "type": "radio",
             "title": "体型预设",
             "description": "",
             "value": "",
             "labels": {
-"少女(默认)": "v.CBody=0;v.CHead=0;v.CTail=0;v.CDress=0;v.CBackArmour=0",
-"我是小孩":"v.CBody=-2;v.CHead=2;v.CTail=4;v.CDress=1;v.CBackArmour=1",
-"我是大人": "v.CBody=1;v.CHead=-1;v.CTail=-1;v.CDress=0;v.CBackArmour=0",
-"我是巨人": "v.CBody=10;v.CHead=-2;v.CTail=0;v.CDress=-2;v.CBackArmour=0",
-"我是蚁人": "v.CBody=-9;v.CHead=5;v.CTail=8;v.CDress=1;v.CBackArmour=5"
+              "少女(默认)": "v.CBody=0;v.CHead=0;v.CTail=0;v.CDress=0;v.CBackArmour=0",
+              "我是小孩": "v.CBody=-2;v.CHead=2;v.CTail=4;v.CDress=1;v.CBackArmour=1",
+              "我是大人": "v.CBody=1;v.CHead=-1;v.CTail=-1;v.CDress=0;v.CBackArmour=0",
+              "我是巨人": "v.CBody=10;v.CHead=-2;v.CTail=0;v.CDress=-2;v.CBackArmour=0",
+              "我是蚁人": "v.CBody=-9;v.CHead=5;v.CTail=8;v.CDress=1;v.CBackArmour=5"
             }
           }
         ]
       }
-],
+    ],
     "preview_animation": "gui",
     "default_texture": "texture",
     "free": false,

@@ -101,25 +101,12 @@
     }
   },
   {
-    "name": "qq_get_group_history",
-    "description": "Get group history messages.",
+    "name": "search_social_memory",
+    "description": "Search social memory (chat logs) with PEDSA diffusion.",
     "parameters": {
       "type": "object",
       "properties": {
-        "group_id": { "type": "integer", "description": "Group ID" },
-        "count": { "type": "integer", "description": "Number of messages", "default": 20 }
-      },
-      "required": ["group_id"]
-    }
-  },
-  {
-    "name": "read_social_memory",
-    "description": "Search social memory (chat logs).",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "query": { "type": "string", "description": "Search query" },
-        "filter": { "type": "object", "description": "Optional filter" }
+        "query": { "type": "string", "description": "Search query" }
       },
       "required": ["query"]
     }

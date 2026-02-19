@@ -38,7 +38,8 @@
         "add_schedule_task",
         "list_pending_tasks",
         "delete_schedule_task"
-      ]},
+      ]
+    },
     "group": {
       "strategy": "whitelist",
       "allowed_tags": ["group"]

@@ -27,17 +27,19 @@ version: "1.0"
 
 <Environment_Context>
 <Owner_Setting>
+
 - Name: {{owner_name}}
 - Persona: {{user_persona}}
-</Owner_Setting>
+  </Owner_Setting>
 
 <Current_Status>
+
 - Time: {{current_time}}
 - Mood: {{mood}}
 - Vibe: {{vibe}}
 - Mind: {{mind}}
-{{vision_status}}
-</Current_Status>
+  {{vision_status}}
+  </Current_Status>
 
 <Graph_Context>
 {{graph_context}}
@@ -57,9 +59,10 @@ version: "1.0"
 
 [重要指令]
 当前处于轻量响应模式。
+
 1. 请跳过复杂的思考过程 (Thinking)，直接输出回复。
 2. 如需操作，请直接编写 NIT 脚本。
 3. 仅关注视觉与任务管理。
 4. **单轮限制**: 最多只能调用一次工具。收到工具结果后，必须立即给出最终回复。
-</Instruction_Context>
-{% endblock %}
+   </Instruction_Context>
+   {% endblock %}

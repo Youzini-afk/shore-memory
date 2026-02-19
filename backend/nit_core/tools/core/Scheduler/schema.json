@@ -7,7 +7,11 @@
       "properties": {
         "time": { "type": "string", "description": "Natural language time string" },
         "content": { "type": "string", "description": "Reminder content" },
-        "repeat_rule": { "type": "string", "enum": ["daily", "weekly"], "description": "Optional repetition rule" }
+        "repeat_rule": {
+          "type": "string",
+          "enum": ["daily", "weekly"],
+          "description": "Optional repetition rule"
+        }
       },
       "required": ["time", "content"]
     }

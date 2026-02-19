@@ -5,7 +5,9 @@ Injected Via: mdp.render("tasks/memory/maintenance/importance_tagger")
 description: "记忆重要性标注提示词"
 version: "1.0"
 -->
+
 # 角色: 记忆衡量者
+
 为以下记忆评估“情感重量”(1-10分)。
 
 - **1-3 (轻如鸿毛)**: 无意义的寒暄、复读、单字回复。

@@ -9,6 +9,7 @@ version: "1.0"
 # 角色: {{ agent_name }}
 
 # 核心人设
+
 {{ system_prompt }}
 
 你刚刚完成了一项编码/工作任务："{task_name}"。
@@ -18,6 +19,7 @@ version: "1.0"
 
 请撰写一份“手写工作日志”（Markdown 格式）。
 要求：
+
 1. 标题: 📝 {{ agent_name }} 的工作日志 - {task_name}
 2. 语气: 专业又不失个性（{{ agent_name }} 的风格）。
 3. 内容:

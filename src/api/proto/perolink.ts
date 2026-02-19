@@ -5,757 +5,757 @@
 // source: perolink.proto
 
 /* eslint-disable */
-import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
+import { BinaryReader, BinaryWriter } from '@bufbuild/protobuf/wire'
 
-export const protobufPackage = "perolink";
+export const protobufPackage = 'perolink'
 
 /** 消息信封：所有通信的最外层包装 */
 export interface Envelope {
   /** 消息唯一 ID (UUID) */
-  id: string;
+  id: string
   /** 发送方 Node ID */
-  sourceId: string;
+  sourceId: string
   /** 接收方 Node ID ("master", "broadcast", or specific UUID) */
-  targetId: string;
+  targetId: string
   /** Unix 时间戳 */
-  timestamp: number;
+  timestamp: number
   /** 链路追踪 ID */
-  traceId: string;
-  heartbeat?:
-    | Heartbeat
-    | undefined;
+  traceId: string
+  heartbeat?: Heartbeat | undefined
   /** 握手/认证 */
-  hello?:
-    | Hello
-    | undefined;
+  hello?: Hello | undefined
   /** 能力注册 */
-  register?:
-    | CapabilityRegister
-    | undefined;
+  register?: CapabilityRegister | undefined
   /** 请求执行动作 */
-  request?:
-    | ActionRequest
-    | undefined;
+  request?: ActionRequest | undefined
   /** 动作执行结果 */
-  response?:
-    | ActionResponse
-    | undefined;
+  response?: ActionResponse | undefined
   /** 二进制流 (音频/视频片段) */
-  stream?: DataStream | undefined;
+  stream?: DataStream | undefined
 }
 
 export interface Heartbeat {
-  seq: number;
+  seq: number
 }
 
 export interface Hello {
   /** 鉴权 Token */
-  token: string;
+  token: string
   /** 设备名称 (e.g. "My iPhone") */
-  deviceName: string;
+  deviceName: string
   /** 客户端版本 */
-  clientVersion: string;
+  clientVersion: string
   /** "android", "windows", "linux" */
-  platform: string;
+  platform: string
   /** 简易能力列表 (e.g. ["audio.out", "screen.ocr"]) */
-  capabilities: string[];
+  capabilities: string[]
 }
 
 /** 能力定义 */
 export interface Capability {
   /** 能力名称 (e.g. "camera.take_photo") */
-  name: string;
+  name: string
   /** 描述 */
-  description: string;
+  description: string
   /** 参数列表描述 */
-  params: string[];
+  params: string[]
 }
 
 export interface CapabilityRegister {
-  capabilities: Capability[];
+  capabilities: Capability[]
 }
 
 /** 动作请求 */
 export interface ActionRequest {
   /** 要调用的能力名称 */
-  actionName: string;
+  actionName: string
   /** 参数 (KV 形式，简单起见) */
-  params: { [key: string]: string };
+  params: { [key: string]: string }
 }
 
 export interface ActionRequest_ParamsEntry {
-  key: string;
-  value: string;
+  key: string
+  value: string
 }
 
 /** 动作响应 */
 export interface ActionResponse {
   /** 对应的请求 ID */
-  requestId: string;
+  requestId: string
   /** 0=OK, 1=Error */
-  status: number;
+  status: number
   /** 结果数据 (JSON string or text) */
-  data: string;
+  data: string
   /** 错误信息 */
-  errorMsg: string;
+  errorMsg: string
 }
 
 export interface DataStream {
-  streamId: string;
-  data: Uint8Array;
-  isEnd: boolean;
+  streamId: string
+  data: Uint8Array
+  isEnd: boolean
   /** "audio/pcm", "image/jpeg" */
-  contentType: string;
+  contentType: string
 }
 
 function createBaseEnvelope(): Envelope {
   return {
-    id: "",
-    sourceId: "",
-    targetId: "",
+    id: '',
+    sourceId: '',
+    targetId: '',
     timestamp: 0,
-    traceId: "",
+    traceId: '',
     heartbeat: undefined,
     hello: undefined,
     register: undefined,
     request: undefined,
     response: undefined,
-    stream: undefined,
-  };
+    stream: undefined
+  }
 }
 
 export const Envelope: MessageFns<Envelope> = {
   encode(message: Envelope, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.id !== "") {
-      writer.uint32(10).string(message.id);
+    if (message.id !== '') {
+      writer.uint32(10).string(message.id)
     }
-    if (message.sourceId !== "") {
-      writer.uint32(18).string(message.sourceId);
+    if (message.sourceId !== '') {
+      writer.uint32(18).string(message.sourceId)
     }
-    if (message.targetId !== "") {
-      writer.uint32(26).string(message.targetId);
+    if (message.targetId !== '') {
+      writer.uint32(26).string(message.targetId)
     }
     if (message.timestamp !== 0) {
-      writer.uint32(32).int64(message.timestamp);
+      writer.uint32(32).int64(message.timestamp)
     }
-    if (message.traceId !== "") {
-      writer.uint32(42).string(message.traceId);
+    if (message.traceId !== '') {
+      writer.uint32(42).string(message.traceId)
     }
     if (message.heartbeat !== undefined) {
-      Heartbeat.encode(message.heartbeat, writer.uint32(82).fork()).join();
+      Heartbeat.encode(message.heartbeat, writer.uint32(82).fork()).join()
     }
     if (message.hello !== undefined) {
-      Hello.encode(message.hello, writer.uint32(90).fork()).join();
+      Hello.encode(message.hello, writer.uint32(90).fork()).join()
     }
     if (message.register !== undefined) {
-      CapabilityRegister.encode(message.register, writer.uint32(98).fork()).join();
+      CapabilityRegister.encode(message.register, writer.uint32(98).fork()).join()
     }
     if (message.request !== undefined) {
-      ActionRequest.encode(message.request, writer.uint32(162).fork()).join();
+      ActionRequest.encode(message.request, writer.uint32(162).fork()).join()
     }
     if (message.response !== undefined) {
-      ActionResponse.encode(message.response, writer.uint32(170).fork()).join();
+      ActionResponse.encode(message.response, writer.uint32(170).fork()).join()
     }
     if (message.stream !== undefined) {
-      DataStream.encode(message.stream, writer.uint32(242).fork()).join();
+      DataStream.encode(message.stream, writer.uint32(242).fork()).join()
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): Envelope {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseEnvelope();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseEnvelope()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.id = reader.string();
-          continue;
+          message.id = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 18) {
-            break;
+            break
           }
 
-          message.sourceId = reader.string();
-          continue;
+          message.sourceId = reader.string()
+          continue
         }
         case 3: {
           if (tag !== 26) {
-            break;
+            break
           }
 
-          message.targetId = reader.string();
-          continue;
+          message.targetId = reader.string()
+          continue
         }
         case 4: {
           if (tag !== 32) {
-            break;
+            break
           }
 
-          message.timestamp = longToNumber(reader.int64());
-          continue;
+          message.timestamp = longToNumber(reader.int64())
+          continue
         }
         case 5: {
           if (tag !== 42) {
-            break;
+            break
           }
 
-          message.traceId = reader.string();
-          continue;
+          message.traceId = reader.string()
+          continue
         }
         case 10: {
           if (tag !== 82) {
-            break;
+            break
           }
 
-          message.heartbeat = Heartbeat.decode(reader, reader.uint32());
-          continue;
+          message.heartbeat = Heartbeat.decode(reader, reader.uint32())
+          continue
         }
         case 11: {
           if (tag !== 90) {
-            break;
+            break
           }
 
-          message.hello = Hello.decode(reader, reader.uint32());
-          continue;
+          message.hello = Hello.decode(reader, reader.uint32())
+          continue
         }
         case 12: {
           if (tag !== 98) {
-            break;
+            break
           }
 
-          message.register = CapabilityRegister.decode(reader, reader.uint32());
-          continue;
+          message.register = CapabilityRegister.decode(reader, reader.uint32())
+          continue
         }
         case 20: {
           if (tag !== 162) {
-            break;
+            break
           }
 
-          message.request = ActionRequest.decode(reader, reader.uint32());
-          continue;
+          message.request = ActionRequest.decode(reader, reader.uint32())
+          continue
         }
         case 21: {
           if (tag !== 170) {
-            break;
+            break
           }
 
-          message.response = ActionResponse.decode(reader, reader.uint32());
-          continue;
+          message.response = ActionResponse.decode(reader, reader.uint32())
+          continue
         }
         case 30: {
           if (tag !== 242) {
-            break;
+            break
           }
 
-          message.stream = DataStream.decode(reader, reader.uint32());
-          continue;
+          message.stream = DataStream.decode(reader, reader.uint32())
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): Envelope {
     return {
-      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      id: isSet(object.id) ? globalThis.String(object.id) : '',
       sourceId: isSet(object.sourceId)
         ? globalThis.String(object.sourceId)
         : isSet(object.source_id)
-        ? globalThis.String(object.source_id)
-        : "",
+          ? globalThis.String(object.source_id)
+          : '',
       targetId: isSet(object.targetId)
         ? globalThis.String(object.targetId)
         : isSet(object.target_id)
-        ? globalThis.String(object.target_id)
-        : "",
+          ? globalThis.String(object.target_id)
+          : '',
       timestamp: isSet(object.timestamp) ? globalThis.Number(object.timestamp) : 0,
       traceId: isSet(object.traceId)
         ? globalThis.String(object.traceId)
         : isSet(object.trace_id)
-        ? globalThis.String(object.trace_id)
-        : "",
+          ? globalThis.String(object.trace_id)
+          : '',
       heartbeat: isSet(object.heartbeat) ? Heartbeat.fromJSON(object.heartbeat) : undefined,
       hello: isSet(object.hello) ? Hello.fromJSON(object.hello) : undefined,
       register: isSet(object.register) ? CapabilityRegister.fromJSON(object.register) : undefined,
       request: isSet(object.request) ? ActionRequest.fromJSON(object.request) : undefined,
       response: isSet(object.response) ? ActionResponse.fromJSON(object.response) : undefined,
-      stream: isSet(object.stream) ? DataStream.fromJSON(object.stream) : undefined,
-    };
+      stream: isSet(object.stream) ? DataStream.fromJSON(object.stream) : undefined
+    }
   },
 
   toJSON(message: Envelope): unknown {
-    const obj: any = {};
-    if (message.id !== "") {
-      obj.id = message.id;
+    const obj: any = {}
+    if (message.id !== '') {
+      obj.id = message.id
     }
-    if (message.sourceId !== "") {
-      obj.sourceId = message.sourceId;
+    if (message.sourceId !== '') {
+      obj.sourceId = message.sourceId
     }
-    if (message.targetId !== "") {
-      obj.targetId = message.targetId;
+    if (message.targetId !== '') {
+      obj.targetId = message.targetId
     }
     if (message.timestamp !== 0) {
-      obj.timestamp = Math.round(message.timestamp);
+      obj.timestamp = Math.round(message.timestamp)
     }
-    if (message.traceId !== "") {
-      obj.traceId = message.traceId;
+    if (message.traceId !== '') {
+      obj.traceId = message.traceId
     }
     if (message.heartbeat !== undefined) {
-      obj.heartbeat = Heartbeat.toJSON(message.heartbeat);
+      obj.heartbeat = Heartbeat.toJSON(message.heartbeat)
     }
     if (message.hello !== undefined) {
-      obj.hello = Hello.toJSON(message.hello);
+      obj.hello = Hello.toJSON(message.hello)
     }
     if (message.register !== undefined) {
-      obj.register = CapabilityRegister.toJSON(message.register);
+      obj.register = CapabilityRegister.toJSON(message.register)
     }
     if (message.request !== undefined) {
-      obj.request = ActionRequest.toJSON(message.request);
+      obj.request = ActionRequest.toJSON(message.request)
     }
     if (message.response !== undefined) {
-      obj.response = ActionResponse.toJSON(message.response);
+      obj.response = ActionResponse.toJSON(message.response)
     }
     if (message.stream !== undefined) {
-      obj.stream = DataStream.toJSON(message.stream);
+      obj.stream = DataStream.toJSON(message.stream)
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<Envelope>, I>>(base?: I): Envelope {
-    return Envelope.fromPartial(base ?? ({} as any));
+    return Envelope.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<Envelope>, I>>(object: I): Envelope {
-    const message = createBaseEnvelope();
-    message.id = object.id ?? "";
-    message.sourceId = object.sourceId ?? "";
-    message.targetId = object.targetId ?? "";
-    message.timestamp = object.timestamp ?? 0;
-    message.traceId = object.traceId ?? "";
-    message.heartbeat = (object.heartbeat !== undefined && object.heartbeat !== null)
-      ? Heartbeat.fromPartial(object.heartbeat)
-      : undefined;
-    message.hello = (object.hello !== undefined && object.hello !== null) ? Hello.fromPartial(object.hello) : undefined;
-    message.register = (object.register !== undefined && object.register !== null)
-      ? CapabilityRegister.fromPartial(object.register)
-      : undefined;
-    message.request = (object.request !== undefined && object.request !== null)
-      ? ActionRequest.fromPartial(object.request)
-      : undefined;
-    message.response = (object.response !== undefined && object.response !== null)
-      ? ActionResponse.fromPartial(object.response)
-      : undefined;
-    message.stream = (object.stream !== undefined && object.stream !== null)
-      ? DataStream.fromPartial(object.stream)
-      : undefined;
-    return message;
-  },
-};
+    const message = createBaseEnvelope()
+    message.id = object.id ?? ''
+    message.sourceId = object.sourceId ?? ''
+    message.targetId = object.targetId ?? ''
+    message.timestamp = object.timestamp ?? 0
+    message.traceId = object.traceId ?? ''
+    message.heartbeat =
+      object.heartbeat !== undefined && object.heartbeat !== null
+        ? Heartbeat.fromPartial(object.heartbeat)
+        : undefined
+    message.hello =
+      object.hello !== undefined && object.hello !== null
+        ? Hello.fromPartial(object.hello)
+        : undefined
+    message.register =
+      object.register !== undefined && object.register !== null
+        ? CapabilityRegister.fromPartial(object.register)
+        : undefined
+    message.request =
+      object.request !== undefined && object.request !== null
+        ? ActionRequest.fromPartial(object.request)
+        : undefined
+    message.response =
+      object.response !== undefined && object.response !== null
+        ? ActionResponse.fromPartial(object.response)
+        : undefined
+    message.stream =
+      object.stream !== undefined && object.stream !== null
+        ? DataStream.fromPartial(object.stream)
+        : undefined
+    return message
+  }
+}
 
 function createBaseHeartbeat(): Heartbeat {
-  return { seq: 0 };
+  return { seq: 0 }
 }
 
 export const Heartbeat: MessageFns<Heartbeat> = {
   encode(message: Heartbeat, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.seq !== 0) {
-      writer.uint32(8).int64(message.seq);
+      writer.uint32(8).int64(message.seq)
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): Heartbeat {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseHeartbeat();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseHeartbeat()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 8) {
-            break;
+            break
           }
 
-          message.seq = longToNumber(reader.int64());
-          continue;
+          message.seq = longToNumber(reader.int64())
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): Heartbeat {
-    return { seq: isSet(object.seq) ? globalThis.Number(object.seq) : 0 };
+    return { seq: isSet(object.seq) ? globalThis.Number(object.seq) : 0 }
   },
 
   toJSON(message: Heartbeat): unknown {
-    const obj: any = {};
+    const obj: any = {}
     if (message.seq !== 0) {
-      obj.seq = Math.round(message.seq);
+      obj.seq = Math.round(message.seq)
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<Heartbeat>, I>>(base?: I): Heartbeat {
-    return Heartbeat.fromPartial(base ?? ({} as any));
+    return Heartbeat.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<Heartbeat>, I>>(object: I): Heartbeat {
-    const message = createBaseHeartbeat();
-    message.seq = object.seq ?? 0;
-    return message;
-  },
-};
+    const message = createBaseHeartbeat()
+    message.seq = object.seq ?? 0
+    return message
+  }
+}
 
 function createBaseHello(): Hello {
-  return { token: "", deviceName: "", clientVersion: "", platform: "", capabilities: [] };
+  return { token: '', deviceName: '', clientVersion: '', platform: '', capabilities: [] }
 }
 
 export const Hello: MessageFns<Hello> = {
   encode(message: Hello, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.token !== "") {
-      writer.uint32(10).string(message.token);
+    if (message.token !== '') {
+      writer.uint32(10).string(message.token)
     }
-    if (message.deviceName !== "") {
-      writer.uint32(18).string(message.deviceName);
+    if (message.deviceName !== '') {
+      writer.uint32(18).string(message.deviceName)
     }
-    if (message.clientVersion !== "") {
-      writer.uint32(26).string(message.clientVersion);
+    if (message.clientVersion !== '') {
+      writer.uint32(26).string(message.clientVersion)
     }
-    if (message.platform !== "") {
-      writer.uint32(34).string(message.platform);
+    if (message.platform !== '') {
+      writer.uint32(34).string(message.platform)
     }
     for (const v of message.capabilities) {
-      writer.uint32(42).string(v!);
+      writer.uint32(42).string(v!)
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): Hello {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseHello();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseHello()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.token = reader.string();
-          continue;
+          message.token = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 18) {
-            break;
+            break
           }
 
-          message.deviceName = reader.string();
-          continue;
+          message.deviceName = reader.string()
+          continue
         }
         case 3: {
           if (tag !== 26) {
-            break;
+            break
           }
 
-          message.clientVersion = reader.string();
-          continue;
+          message.clientVersion = reader.string()
+          continue
         }
         case 4: {
           if (tag !== 34) {
-            break;
+            break
           }
 
-          message.platform = reader.string();
-          continue;
+          message.platform = reader.string()
+          continue
         }
         case 5: {
           if (tag !== 42) {
-            break;
+            break
           }
 
-          message.capabilities.push(reader.string());
-          continue;
+          message.capabilities.push(reader.string())
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): Hello {
     return {
-      token: isSet(object.token) ? globalThis.String(object.token) : "",
+      token: isSet(object.token) ? globalThis.String(object.token) : '',
       deviceName: isSet(object.deviceName)
         ? globalThis.String(object.deviceName)
         : isSet(object.device_name)
-        ? globalThis.String(object.device_name)
-        : "",
+          ? globalThis.String(object.device_name)
+          : '',
       clientVersion: isSet(object.clientVersion)
         ? globalThis.String(object.clientVersion)
         : isSet(object.client_version)
-        ? globalThis.String(object.client_version)
-        : "",
-      platform: isSet(object.platform) ? globalThis.String(object.platform) : "",
+          ? globalThis.String(object.client_version)
+          : '',
+      platform: isSet(object.platform) ? globalThis.String(object.platform) : '',
       capabilities: globalThis.Array.isArray(object?.capabilities)
         ? object.capabilities.map((e: any) => globalThis.String(e))
-        : [],
-    };
+        : []
+    }
   },
 
   toJSON(message: Hello): unknown {
-    const obj: any = {};
-    if (message.token !== "") {
-      obj.token = message.token;
+    const obj: any = {}
+    if (message.token !== '') {
+      obj.token = message.token
     }
-    if (message.deviceName !== "") {
-      obj.deviceName = message.deviceName;
+    if (message.deviceName !== '') {
+      obj.deviceName = message.deviceName
     }
-    if (message.clientVersion !== "") {
-      obj.clientVersion = message.clientVersion;
+    if (message.clientVersion !== '') {
+      obj.clientVersion = message.clientVersion
     }
-    if (message.platform !== "") {
-      obj.platform = message.platform;
+    if (message.platform !== '') {
+      obj.platform = message.platform
     }
     if (message.capabilities?.length) {
-      obj.capabilities = message.capabilities;
+      obj.capabilities = message.capabilities
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<Hello>, I>>(base?: I): Hello {
-    return Hello.fromPartial(base ?? ({} as any));
+    return Hello.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<Hello>, I>>(object: I): Hello {
-    const message = createBaseHello();
-    message.token = object.token ?? "";
-    message.deviceName = object.deviceName ?? "";
-    message.clientVersion = object.clientVersion ?? "";
-    message.platform = object.platform ?? "";
-    message.capabilities = object.capabilities?.map((e) => e) || [];
-    return message;
-  },
-};
+    const message = createBaseHello()
+    message.token = object.token ?? ''
+    message.deviceName = object.deviceName ?? ''
+    message.clientVersion = object.clientVersion ?? ''
+    message.platform = object.platform ?? ''
+    message.capabilities = object.capabilities?.map((e) => e) || []
+    return message
+  }
+}
 
 function createBaseCapability(): Capability {
-  return { name: "", description: "", params: [] };
+  return { name: '', description: '', params: [] }
 }
 
 export const Capability: MessageFns<Capability> = {
   encode(message: Capability, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.name !== "") {
-      writer.uint32(10).string(message.name);
+    if (message.name !== '') {
+      writer.uint32(10).string(message.name)
     }
-    if (message.description !== "") {
-      writer.uint32(18).string(message.description);
+    if (message.description !== '') {
+      writer.uint32(18).string(message.description)
     }
     for (const v of message.params) {
-      writer.uint32(26).string(v!);
+      writer.uint32(26).string(v!)
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): Capability {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseCapability();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseCapability()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.name = reader.string();
-          continue;
+          message.name = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 18) {
-            break;
+            break
           }
 
-          message.description = reader.string();
-          continue;
+          message.description = reader.string()
+          continue
         }
         case 3: {
           if (tag !== 26) {
-            break;
+            break
           }
 
-          message.params.push(reader.string());
-          continue;
+          message.params.push(reader.string())
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): Capability {
     return {
-      name: isSet(object.name) ? globalThis.String(object.name) : "",
-      description: isSet(object.description) ? globalThis.String(object.description) : "",
-      params: globalThis.Array.isArray(object?.params) ? object.params.map((e: any) => globalThis.String(e)) : [],
-    };
+      name: isSet(object.name) ? globalThis.String(object.name) : '',
+      description: isSet(object.description) ? globalThis.String(object.description) : '',
+      params: globalThis.Array.isArray(object?.params)
+        ? object.params.map((e: any) => globalThis.String(e))
+        : []
+    }
   },
 
   toJSON(message: Capability): unknown {
-    const obj: any = {};
-    if (message.name !== "") {
-      obj.name = message.name;
+    const obj: any = {}
+    if (message.name !== '') {
+      obj.name = message.name
     }
-    if (message.description !== "") {
-      obj.description = message.description;
+    if (message.description !== '') {
+      obj.description = message.description
     }
     if (message.params?.length) {
-      obj.params = message.params;
+      obj.params = message.params
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<Capability>, I>>(base?: I): Capability {
-    return Capability.fromPartial(base ?? ({} as any));
+    return Capability.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<Capability>, I>>(object: I): Capability {
-    const message = createBaseCapability();
-    message.name = object.name ?? "";
-    message.description = object.description ?? "";
-    message.params = object.params?.map((e) => e) || [];
-    return message;
-  },
-};
+    const message = createBaseCapability()
+    message.name = object.name ?? ''
+    message.description = object.description ?? ''
+    message.params = object.params?.map((e) => e) || []
+    return message
+  }
+}
 
 function createBaseCapabilityRegister(): CapabilityRegister {
-  return { capabilities: [] };
+  return { capabilities: [] }
 }
 
 export const CapabilityRegister: MessageFns<CapabilityRegister> = {
   encode(message: CapabilityRegister, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     for (const v of message.capabilities) {
-      Capability.encode(v!, writer.uint32(10).fork()).join();
+      Capability.encode(v!, writer.uint32(10).fork()).join()
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): CapabilityRegister {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseCapabilityRegister();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseCapabilityRegister()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.capabilities.push(Capability.decode(reader, reader.uint32()));
-          continue;
+          message.capabilities.push(Capability.decode(reader, reader.uint32()))
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): CapabilityRegister {
     return {
       capabilities: globalThis.Array.isArray(object?.capabilities)
         ? object.capabilities.map((e: any) => Capability.fromJSON(e))
-        : [],
-    };
+        : []
+    }
   },
 
   toJSON(message: CapabilityRegister): unknown {
-    const obj: any = {};
+    const obj: any = {}
     if (message.capabilities?.length) {
-      obj.capabilities = message.capabilities.map((e) => Capability.toJSON(e));
+      obj.capabilities = message.capabilities.map((e) => Capability.toJSON(e))
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<CapabilityRegister>, I>>(base?: I): CapabilityRegister {
-    return CapabilityRegister.fromPartial(base ?? ({} as any));
+    return CapabilityRegister.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<CapabilityRegister>, I>>(object: I): CapabilityRegister {
-    const message = createBaseCapabilityRegister();
-    message.capabilities = object.capabilities?.map((e) => Capability.fromPartial(e)) || [];
-    return message;
-  },
-};
+    const message = createBaseCapabilityRegister()
+    message.capabilities = object.capabilities?.map((e) => Capability.fromPartial(e)) || []
+    return message
+  }
+}
 
 function createBaseActionRequest(): ActionRequest {
-  return { actionName: "", params: {} };
+  return { actionName: '', params: {} }
 }
 
 export const ActionRequest: MessageFns<ActionRequest> = {
   encode(message: ActionRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.actionName !== "") {
-      writer.uint32(10).string(message.actionName);
+    if (message.actionName !== '') {
+      writer.uint32(10).string(message.actionName)
     }
     globalThis.Object.entries(message.params).forEach(([key, value]: [string, string]) => {
-      ActionRequest_ParamsEntry.encode({ key: key as any, value }, writer.uint32(18).fork()).join();
-    });
-    return writer;
+      ActionRequest_ParamsEntry.encode({ key: key as any, value }, writer.uint32(18).fork()).join()
+    })
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): ActionRequest {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseActionRequest();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseActionRequest()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.actionName = reader.string();
-          continue;
+          message.actionName = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 18) {
-            break;
+            break
           }
 
-          const entry2 = ActionRequest_ParamsEntry.decode(reader, reader.uint32());
+          const entry2 = ActionRequest_ParamsEntry.decode(reader, reader.uint32())
           if (entry2.value !== undefined) {
-            message.params[entry2.key] = entry2.value;
+            message.params[entry2.key] = entry2.value
           }
-          continue;
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): ActionRequest {
@@ -763,199 +763,206 @@ export const ActionRequest: MessageFns<ActionRequest> = {
       actionName: isSet(object.actionName)
         ? globalThis.String(object.actionName)
         : isSet(object.action_name)
-        ? globalThis.String(object.action_name)
-        : "",
+          ? globalThis.String(object.action_name)
+          : '',
       params: isObject(object.params)
         ? (globalThis.Object.entries(object.params) as [string, any][]).reduce(
-          (acc: { [key: string]: string }, [key, value]: [string, any]) => {
-            acc[key] = globalThis.String(value);
-            return acc;
-          },
-          {},
-        )
-        : {},
-    };
+            (acc: { [key: string]: string }, [key, value]: [string, any]) => {
+              acc[key] = globalThis.String(value)
+              return acc
+            },
+            {}
+          )
+        : {}
+    }
   },
 
   toJSON(message: ActionRequest): unknown {
-    const obj: any = {};
-    if (message.actionName !== "") {
-      obj.actionName = message.actionName;
+    const obj: any = {}
+    if (message.actionName !== '') {
+      obj.actionName = message.actionName
     }
     if (message.params) {
-      const entries = globalThis.Object.entries(message.params) as [string, string][];
+      const entries = globalThis.Object.entries(message.params) as [string, string][]
       if (entries.length > 0) {
-        obj.params = {};
+        obj.params = {}
         entries.forEach(([k, v]) => {
-          obj.params[k] = v;
-        });
+          obj.params[k] = v
+        })
       }
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<ActionRequest>, I>>(base?: I): ActionRequest {
-    return ActionRequest.fromPartial(base ?? ({} as any));
+    return ActionRequest.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<ActionRequest>, I>>(object: I): ActionRequest {
-    const message = createBaseActionRequest();
-    message.actionName = object.actionName ?? "";
+    const message = createBaseActionRequest()
+    message.actionName = object.actionName ?? ''
     message.params = (globalThis.Object.entries(object.params ?? {}) as [string, string][]).reduce(
       (acc: { [key: string]: string }, [key, value]: [string, string]) => {
         if (value !== undefined) {
-          acc[key] = globalThis.String(value);
+          acc[key] = globalThis.String(value)
         }
-        return acc;
+        return acc
       },
-      {},
-    );
-    return message;
-  },
-};
+      {}
+    )
+    return message
+  }
+}
 
 function createBaseActionRequest_ParamsEntry(): ActionRequest_ParamsEntry {
-  return { key: "", value: "" };
+  return { key: '', value: '' }
 }
 
 export const ActionRequest_ParamsEntry: MessageFns<ActionRequest_ParamsEntry> = {
-  encode(message: ActionRequest_ParamsEntry, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.key !== "") {
-      writer.uint32(10).string(message.key);
+  encode(
+    message: ActionRequest_ParamsEntry,
+    writer: BinaryWriter = new BinaryWriter()
+  ): BinaryWriter {
+    if (message.key !== '') {
+      writer.uint32(10).string(message.key)
     }
-    if (message.value !== "") {
-      writer.uint32(18).string(message.value);
+    if (message.value !== '') {
+      writer.uint32(18).string(message.value)
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): ActionRequest_ParamsEntry {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseActionRequest_ParamsEntry();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseActionRequest_ParamsEntry()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.key = reader.string();
-          continue;
+          message.key = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 18) {
-            break;
+            break
           }
 
-          message.value = reader.string();
-          continue;
+          message.value = reader.string()
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): ActionRequest_ParamsEntry {
     return {
-      key: isSet(object.key) ? globalThis.String(object.key) : "",
-      value: isSet(object.value) ? globalThis.String(object.value) : "",
-    };
+      key: isSet(object.key) ? globalThis.String(object.key) : '',
+      value: isSet(object.value) ? globalThis.String(object.value) : ''
+    }
   },
 
   toJSON(message: ActionRequest_ParamsEntry): unknown {
-    const obj: any = {};
-    if (message.key !== "") {
-      obj.key = message.key;
+    const obj: any = {}
+    if (message.key !== '') {
+      obj.key = message.key
     }
-    if (message.value !== "") {
-      obj.value = message.value;
+    if (message.value !== '') {
+      obj.value = message.value
     }
-    return obj;
+    return obj
   },
 
-  create<I extends Exact<DeepPartial<ActionRequest_ParamsEntry>, I>>(base?: I): ActionRequest_ParamsEntry {
-    return ActionRequest_ParamsEntry.fromPartial(base ?? ({} as any));
+  create<I extends Exact<DeepPartial<ActionRequest_ParamsEntry>, I>>(
+    base?: I
+  ): ActionRequest_ParamsEntry {
+    return ActionRequest_ParamsEntry.fromPartial(base ?? ({} as any))
   },
-  fromPartial<I extends Exact<DeepPartial<ActionRequest_ParamsEntry>, I>>(object: I): ActionRequest_ParamsEntry {
-    const message = createBaseActionRequest_ParamsEntry();
-    message.key = object.key ?? "";
-    message.value = object.value ?? "";
-    return message;
-  },
-};
+  fromPartial<I extends Exact<DeepPartial<ActionRequest_ParamsEntry>, I>>(
+    object: I
+  ): ActionRequest_ParamsEntry {
+    const message = createBaseActionRequest_ParamsEntry()
+    message.key = object.key ?? ''
+    message.value = object.value ?? ''
+    return message
+  }
+}
 
 function createBaseActionResponse(): ActionResponse {
-  return { requestId: "", status: 0, data: "", errorMsg: "" };
+  return { requestId: '', status: 0, data: '', errorMsg: '' }
 }
 
 export const ActionResponse: MessageFns<ActionResponse> = {
   encode(message: ActionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.requestId !== "") {
-      writer.uint32(10).string(message.requestId);
+    if (message.requestId !== '') {
+      writer.uint32(10).string(message.requestId)
     }
     if (message.status !== 0) {
-      writer.uint32(16).int32(message.status);
+      writer.uint32(16).int32(message.status)
     }
-    if (message.data !== "") {
-      writer.uint32(26).string(message.data);
+    if (message.data !== '') {
+      writer.uint32(26).string(message.data)
     }
-    if (message.errorMsg !== "") {
-      writer.uint32(34).string(message.errorMsg);
+    if (message.errorMsg !== '') {
+      writer.uint32(34).string(message.errorMsg)
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): ActionResponse {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseActionResponse();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseActionResponse()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.requestId = reader.string();
-          continue;
+          message.requestId = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 16) {
-            break;
+            break
           }
 
-          message.status = reader.int32();
-          continue;
+          message.status = reader.int32()
+          continue
         }
         case 3: {
           if (tag !== 26) {
-            break;
+            break
           }
 
-          message.data = reader.string();
-          continue;
+          message.data = reader.string()
+          continue
         }
         case 4: {
           if (tag !== 34) {
-            break;
+            break
           }
 
-          message.errorMsg = reader.string();
-          continue;
+          message.errorMsg = reader.string()
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): ActionResponse {
@@ -963,115 +970,115 @@ export const ActionResponse: MessageFns<ActionResponse> = {
       requestId: isSet(object.requestId)
         ? globalThis.String(object.requestId)
         : isSet(object.request_id)
-        ? globalThis.String(object.request_id)
-        : "",
+          ? globalThis.String(object.request_id)
+          : '',
       status: isSet(object.status) ? globalThis.Number(object.status) : 0,
-      data: isSet(object.data) ? globalThis.String(object.data) : "",
+      data: isSet(object.data) ? globalThis.String(object.data) : '',
       errorMsg: isSet(object.errorMsg)
         ? globalThis.String(object.errorMsg)
         : isSet(object.error_msg)
-        ? globalThis.String(object.error_msg)
-        : "",
-    };
+          ? globalThis.String(object.error_msg)
+          : ''
+    }
   },
 
   toJSON(message: ActionResponse): unknown {
-    const obj: any = {};
-    if (message.requestId !== "") {
-      obj.requestId = message.requestId;
+    const obj: any = {}
+    if (message.requestId !== '') {
+      obj.requestId = message.requestId
     }
     if (message.status !== 0) {
-      obj.status = Math.round(message.status);
+      obj.status = Math.round(message.status)
     }
-    if (message.data !== "") {
-      obj.data = message.data;
+    if (message.data !== '') {
+      obj.data = message.data
     }
-    if (message.errorMsg !== "") {
-      obj.errorMsg = message.errorMsg;
+    if (message.errorMsg !== '') {
+      obj.errorMsg = message.errorMsg
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<ActionResponse>, I>>(base?: I): ActionResponse {
-    return ActionResponse.fromPartial(base ?? ({} as any));
+    return ActionResponse.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<ActionResponse>, I>>(object: I): ActionResponse {
-    const message = createBaseActionResponse();
-    message.requestId = object.requestId ?? "";
-    message.status = object.status ?? 0;
-    message.data = object.data ?? "";
-    message.errorMsg = object.errorMsg ?? "";
-    return message;
-  },
-};
+    const message = createBaseActionResponse()
+    message.requestId = object.requestId ?? ''
+    message.status = object.status ?? 0
+    message.data = object.data ?? ''
+    message.errorMsg = object.errorMsg ?? ''
+    return message
+  }
+}
 
 function createBaseDataStream(): DataStream {
-  return { streamId: "", data: new Uint8Array(0), isEnd: false, contentType: "" };
+  return { streamId: '', data: new Uint8Array(0), isEnd: false, contentType: '' }
 }
 
 export const DataStream: MessageFns<DataStream> = {
   encode(message: DataStream, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.streamId !== "") {
-      writer.uint32(10).string(message.streamId);
+    if (message.streamId !== '') {
+      writer.uint32(10).string(message.streamId)
     }
     if (message.data.length !== 0) {
-      writer.uint32(18).bytes(message.data);
+      writer.uint32(18).bytes(message.data)
     }
     if (message.isEnd !== false) {
-      writer.uint32(24).bool(message.isEnd);
+      writer.uint32(24).bool(message.isEnd)
     }
-    if (message.contentType !== "") {
-      writer.uint32(34).string(message.contentType);
+    if (message.contentType !== '') {
+      writer.uint32(34).string(message.contentType)
     }
-    return writer;
+    return writer
   },
 
   decode(input: BinaryReader | Uint8Array, length?: number): DataStream {
-    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
-    const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseDataStream();
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input)
+    const end = length === undefined ? reader.len : reader.pos + length
+    const message = createBaseDataStream()
     while (reader.pos < end) {
-      const tag = reader.uint32();
+      const tag = reader.uint32()
       switch (tag >>> 3) {
         case 1: {
           if (tag !== 10) {
-            break;
+            break
           }
 
-          message.streamId = reader.string();
-          continue;
+          message.streamId = reader.string()
+          continue
         }
         case 2: {
           if (tag !== 18) {
-            break;
+            break
           }
 
-          message.data = reader.bytes();
-          continue;
+          message.data = reader.bytes()
+          continue
         }
         case 3: {
           if (tag !== 24) {
-            break;
+            break
           }
 
-          message.isEnd = reader.bool();
-          continue;
+          message.isEnd = reader.bool()
+          continue
         }
         case 4: {
           if (tag !== 34) {
-            break;
+            break
           }
 
-          message.contentType = reader.string();
-          continue;
+          message.contentType = reader.string()
+          continue
         }
       }
       if ((tag & 7) === 4 || tag === 0) {
-        break;
+        break
       }
-      reader.skip(tag & 7);
+      reader.skip(tag & 7)
     }
-    return message;
+    return message
   },
 
   fromJSON(object: any): DataStream {
@@ -1079,113 +1086,118 @@ export const DataStream: MessageFns<DataStream> = {
       streamId: isSet(object.streamId)
         ? globalThis.String(object.streamId)
         : isSet(object.stream_id)
-        ? globalThis.String(object.stream_id)
-        : "",
+          ? globalThis.String(object.stream_id)
+          : '',
       data: isSet(object.data) ? bytesFromBase64(object.data) : new Uint8Array(0),
       isEnd: isSet(object.isEnd)
         ? globalThis.Boolean(object.isEnd)
         : isSet(object.is_end)
-        ? globalThis.Boolean(object.is_end)
-        : false,
+          ? globalThis.Boolean(object.is_end)
+          : false,
       contentType: isSet(object.contentType)
         ? globalThis.String(object.contentType)
         : isSet(object.content_type)
-        ? globalThis.String(object.content_type)
-        : "",
-    };
+          ? globalThis.String(object.content_type)
+          : ''
+    }
   },
 
   toJSON(message: DataStream): unknown {
-    const obj: any = {};
-    if (message.streamId !== "") {
-      obj.streamId = message.streamId;
+    const obj: any = {}
+    if (message.streamId !== '') {
+      obj.streamId = message.streamId
     }
     if (message.data.length !== 0) {
-      obj.data = base64FromBytes(message.data);
+      obj.data = base64FromBytes(message.data)
     }
     if (message.isEnd !== false) {
-      obj.isEnd = message.isEnd;
+      obj.isEnd = message.isEnd
     }
-    if (message.contentType !== "") {
-      obj.contentType = message.contentType;
+    if (message.contentType !== '') {
+      obj.contentType = message.contentType
     }
-    return obj;
+    return obj
   },
 
   create<I extends Exact<DeepPartial<DataStream>, I>>(base?: I): DataStream {
-    return DataStream.fromPartial(base ?? ({} as any));
+    return DataStream.fromPartial(base ?? ({} as any))
   },
   fromPartial<I extends Exact<DeepPartial<DataStream>, I>>(object: I): DataStream {
-    const message = createBaseDataStream();
-    message.streamId = object.streamId ?? "";
-    message.data = object.data ?? new Uint8Array(0);
-    message.isEnd = object.isEnd ?? false;
-    message.contentType = object.contentType ?? "";
-    return message;
-  },
-};
+    const message = createBaseDataStream()
+    message.streamId = object.streamId ?? ''
+    message.data = object.data ?? new Uint8Array(0)
+    message.isEnd = object.isEnd ?? false
+    message.contentType = object.contentType ?? ''
+    return message
+  }
+}
 
 function bytesFromBase64(b64: string): Uint8Array {
   if ((globalThis as any).Buffer) {
-    return Uint8Array.from(globalThis.Buffer.from(b64, "base64"));
+    return Uint8Array.from(globalThis.Buffer.from(b64, 'base64'))
   } else {
-    const bin = globalThis.atob(b64);
-    const arr = new Uint8Array(bin.length);
+    const bin = globalThis.atob(b64)
+    const arr = new Uint8Array(bin.length)
     for (let i = 0; i < bin.length; ++i) {
-      arr[i] = bin.charCodeAt(i);
+      arr[i] = bin.charCodeAt(i)
     }
-    return arr;
+    return arr
   }
 }
 
 function base64FromBytes(arr: Uint8Array): string {
   if ((globalThis as any).Buffer) {
-    return globalThis.Buffer.from(arr).toString("base64");
+    return globalThis.Buffer.from(arr).toString('base64')
   } else {
-    const bin: string[] = [];
+    const bin: string[] = []
     arr.forEach((byte) => {
-      bin.push(globalThis.String.fromCharCode(byte));
-    });
-    return globalThis.btoa(bin.join(""));
+      bin.push(globalThis.String.fromCharCode(byte))
+    })
+    return globalThis.btoa(bin.join(''))
   }
 }
 
-type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined;
+type Builtin = Date | Function | Uint8Array | string | number | boolean | undefined
 
-export type DeepPartial<T> = T extends Builtin ? T
-  : T extends globalThis.Array<infer U> ? globalThis.Array<DeepPartial<U>>
-  : T extends ReadonlyArray<infer U> ? ReadonlyArray<DeepPartial<U>>
-  : T extends {} ? { [K in keyof T]?: DeepPartial<T[K]> }
-  : Partial<T>;
+export type DeepPartial<T> = T extends Builtin
+  ? T
+  : T extends globalThis.Array<infer U>
+    ? globalThis.Array<DeepPartial<U>>
+    : T extends ReadonlyArray<infer U>
+      ? ReadonlyArray<DeepPartial<U>>
+      : T extends {}
+        ? { [K in keyof T]?: DeepPartial<T[K]> }
+        : Partial<T>
 
-type KeysOfUnion<T> = T extends T ? keyof T : never;
-export type Exact<P, I extends P> = P extends Builtin ? P
-  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
+type KeysOfUnion<T> = T extends T ? keyof T : never
+export type Exact<P, I extends P> = P extends Builtin
+  ? P
+  : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never }
 
 function longToNumber(int64: { toString(): string }): number {
-  const num = globalThis.Number(int64.toString());
+  const num = globalThis.Number(int64.toString())
   if (num > globalThis.Number.MAX_SAFE_INTEGER) {
-    throw new globalThis.Error("Value is larger than Number.MAX_SAFE_INTEGER");
+    throw new globalThis.Error('Value is larger than Number.MAX_SAFE_INTEGER')
   }
   if (num < globalThis.Number.MIN_SAFE_INTEGER) {
-    throw new globalThis.Error("Value is smaller than Number.MIN_SAFE_INTEGER");
+    throw new globalThis.Error('Value is smaller than Number.MIN_SAFE_INTEGER')
   }
-  return num;
+  return num
 }
 
 function isObject(value: any): boolean {
-  return typeof value === "object" && value !== null;
+  return typeof value === 'object' && value !== null
 }
 
 function isSet(value: any): boolean {
-  return value !== null && value !== undefined;
+  return value !== null && value !== undefined
 }
 
 export interface MessageFns<T> {
-  encode(message: T, writer?: BinaryWriter): BinaryWriter;
-  decode(input: BinaryReader | Uint8Array, length?: number): T;
-  fromJSON(object: any): T;
-  toJSON(message: T): unknown;
-  create<I extends Exact<DeepPartial<T>, I>>(base?: I): T;
-  fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T;
+  encode(message: T, writer?: BinaryWriter): BinaryWriter
+  decode(input: BinaryReader | Uint8Array, length?: number): T
+  fromJSON(object: any): T
+  toJSON(message: T): unknown
+  create<I extends Exact<DeepPartial<T>, I>>(base?: I): T
+  fromPartial<I extends Exact<DeepPartial<T>, I>>(object: I): T
 }

@@ -224,9 +224,22 @@ export function stopBackend() {
   if (backendProcess) {
     logger.info('Backend', '正在停止后端...')
     if (backendProcess.pid) {
-      treeKill(backendProcess.pid, 'SIGKILL', (err) => {
-        if (err) logger.error('Backend', `杀死后端进程树时出错: ${err}`)
-      })
+      // 强制使用 tree-kill 确保所有子进程都被杀死
+      try {
+        treeKill(backendProcess.pid, 'SIGKILL', (err) => {
+          if (err) {
+            logger.error('Backend', `杀死后端进程树时出错: ${err}`)
+            // 回退尝试
+            try {
+              process.kill(backendProcess!.pid!)
+            } catch (e) {
+              // 忽略
+            }
+          }
+        })
+      } catch (e) {
+        logger.error('Backend', `Tree kill 异常: ${e}`)
+      }
     } else {
       backendProcess.kill()
     }

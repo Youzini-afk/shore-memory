@@ -1,6 +1,6 @@
 # 代码注释规范与术语对照表 (Comment Translation Standards)
 
-本文档旨在统一 PeroCore-Electron 项目的代码注释风格，确保代码的可读性和维护性。
+本文档旨在统一 PeroCore 项目的代码注释风格，确保代码的可读性和维护性。
 
 ## 1. 基本原则 (Basic Principles)
 
@@ -14,30 +14,31 @@
 
 在注释中，以下术语建议保留英文或使用特定的中文译名：
 
-| 英文术语 | 建议中文译名/用法 | 备注 |
-| :--- | :--- | :--- |
-| **Token** | Token / 词元 | LLM 输入输出的基本单位 |
-| **Embedding** | Embedding / 向量 | 文本的向量化表示 |
-| **Prompt** | Prompt / 提示词 | LLM 的输入指令 |
-| **Agent** | Agent / 智能体 | 具有自主能力的执行单元 |
-| **Vector Store** | 向量库 | 存储 Embedding 的数据库 |
-| **IPC** | IPC | 进程间通信 (Electron) |
-| **Payload** | Payload / 载荷 | 数据传输的有效载荷 |
-| **Hook** | Hook / 钩子 | Vue 或 React 的生命周期/功能钩子 |
-| **Component** | 组件 | UI 组件 |
-| **Middleware** | 中间件 | 请求处理管道中的组件 |
-| **Buffer** | Buffer / 缓冲区 | 二进制数据缓冲区 |
-| **Stream** | 流 | 数据流 |
-| **Socket** | Socket / 套接字 | 网络通信端点 |
-| **NapCat** | NapCat | QQ 协议适配器名称 (勿译) |
-| **Rust Engine** | Rust 引擎 | 核心高性能计算模块 |
-| **UI/UX** | UI/UX | 用户界面/用户体验 |
+| 英文术语         | 建议中文译名/用法 | 备注                             |
+| :--------------- | :---------------- | :------------------------------- |
+| **Token**        | Token / 词元      | LLM 输入输出的基本单位           |
+| **Embedding**    | Embedding / 向量  | 文本的向量化表示                 |
+| **Prompt**       | Prompt / 提示词   | LLM 的输入指令                   |
+| **Agent**        | Agent / 智能体    | 具有自主能力的执行单元           |
+| **Vector Store** | 向量库            | 存储 Embedding 的数据库          |
+| **IPC**          | IPC               | 进程间通信 (Electron)            |
+| **Payload**      | Payload / 载荷    | 数据传输的有效载荷               |
+| **Hook**         | Hook / 钩子       | Vue 或 React 的生命周期/功能钩子 |
+| **Component**    | 组件              | UI 组件                          |
+| **Middleware**   | 中间件            | 请求处理管道中的组件             |
+| **Buffer**       | Buffer / 缓冲区   | 二进制数据缓冲区                 |
+| **Stream**       | 流                | 数据流                           |
+| **Socket**       | Socket / 套接字   | 网络通信端点                     |
+| **NapCat**       | NapCat            | QQ 协议适配器名称 (勿译)         |
+| **Rust Engine**  | Rust 引擎         | 核心高性能计算模块               |
+| **UI/UX**        | UI/UX             | 用户界面/用户体验                |
 
 ## 3. 注释清理示例 (Examples)
 
 ### 3.1 移除"思考过程" (Removing Thought Process)
 
 **Before:**
+
 ```python
 # I was thinking about using a loop here, but then I realized that list comprehension is faster.
 # Also, we need to check if x is not None because sometimes the API returns null.
@@ -46,6 +47,7 @@ result = [x for x in data if x is not None]
 ```
 
 **After:**
+
 ```python
 # 过滤空值，使用列表推导式优化性能
 result = [x for x in data if x is not None]
@@ -54,28 +56,31 @@ result = [x for x in data if x is not None]
 ### 3.2 翻译业务逻辑 (Translating Business Logic)
 
 **Before:**
+
 ```typescript
-// Check if the environment is ready. 
+// Check if the environment is ready.
 // We need Python, Node.js and the DLLs.
 // If not, return an error status.
 if (!checkEnv()) {
-  return 'error';
+  return 'error'
 }
 ```
 
 **After:**
+
 ```typescript
 // 检查运行环境 (Python, Node.js, DLLs)
 if (!checkEnv()) {
-  return 'error';
+  return 'error'
 }
 ```
 
 ### 3.3 简化代码块描述 (Simplifying Block Descriptions)
 
 **Before:**
+
 ```vue
-<!-- 
+<!--
   This section is for the main dashboard layout.
   It includes the sidebar, the header, and the content area.
   I used flexbox here to make it responsive.
@@ -84,6 +89,7 @@ if (!checkEnv()) {
 ```
 
 **After:**
+
 ```vue
 <!-- 仪表盘主布局 -->
 <div class="dashboard-container">
@@ -98,6 +104,7 @@ if (!checkEnv()) {
 - [ ] 逐步应用到剩余的辅助工具类 (Utils) 和次要组件
 
 ## 下一步计划 (Next Steps)
+
 - 随着开发进行，对新增代码保持此注释规范。
 - 定期检查 `src/components` 下的其他次要组件。
 - 检查 `backend/utils` 目录下的工具类文件。

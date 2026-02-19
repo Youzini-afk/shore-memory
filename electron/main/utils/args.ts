@@ -1,5 +1,4 @@
 export interface CliArgs {
-  cliMode: boolean
   debug: boolean
   noNapcat: boolean
   noGateway: boolean
@@ -8,7 +7,6 @@ export interface CliArgs {
 
 export function parseArgs(argv: string[]): CliArgs {
   const args: CliArgs = {
-    cliMode: argv.includes('--cli'),
     debug: argv.includes('--debug'),
     noNapcat: argv.includes('--no-napcat'),
     noGateway: argv.includes('--no-gateway'),

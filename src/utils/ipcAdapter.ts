@@ -7,7 +7,7 @@ declare global {
   }
 }
 
-const isElectron = () => !!window.electron
+export const isElectron = () => !!window.electron
 
 // Web Bridge 支持
 let ws: WebSocket | null = null
@@ -59,6 +59,26 @@ if (!isElectron()) {
 export const invoke = async (cmd: string, args?: any) => {
   if (isElectron()) {
     return window.electron!.invoke(cmd, args)
+  }
+
+  // 浏览器模式: 本地拦截特定指令
+  if (cmd.startsWith('window-')) {
+    console.log('[IPC Adapter] Mocking window command:', cmd)
+    return null
+  }
+
+  if (cmd === 'open-external' || cmd === 'shell:open') {
+    const url = Array.isArray(args) ? args[0] : args
+    if (url && (url.startsWith('http') || url.startsWith('mailto'))) {
+      window.open(url, '_blank')
+      return true
+    }
+    console.warn('[IPC Adapter] Cannot open non-web URL in browser:', url)
+    return false
+  }
+
+  if (cmd === 'get-platform') {
+    return 'web' // 或者 'docker'
   }
 
   // 浏览器模式 (HTTP Bridge)

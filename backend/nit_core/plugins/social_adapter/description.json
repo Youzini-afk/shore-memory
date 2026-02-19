@@ -55,18 +55,13 @@
         "parameter": "群号 (group_id)，QQ号 (user_id)"
       },
       {
-        "commandIdentifier": "qq_get_group_history",
-        "description": "获取群历史。",
-        "parameter": "群号 (group_id)，可选获取的消息数量 (count, 默认 20)"
-      },
-      {
-        "commandIdentifier": "read_social_memory",
-        "description": "读取社交记忆。搜索QQ聊天记录。",
-        "parameter": "搜索关键词 (query)，可选过滤条件 (filter)"
+        "commandIdentifier": "search_social_memory",
+        "description": "搜索社交记忆 (QQ 聊天记录总结/上下文)。当需要了解过去的对话、特定话题或某人的发言时使用。",
+        "parameter": "搜索关键词 (query)"
       },
       {
         "commandIdentifier": "read_agent_memory",
-        "description": "读取代理记忆。搜索与主人的交互记录。",
+        "description": "读取作为桌宠时的记忆。搜索与主人的交互记录。",
         "parameter": "搜索关键词 (query)"
       },
       {

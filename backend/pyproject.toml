@@ -1,6 +1,6 @@
 [project]
 name = "pero-backend"
-version = "0.6.3"
+version = "0.7.0"
 description = "Backend service for PeroCore"
 requires-python = ">=3.10"
 dependencies = [
@@ -133,3 +133,6 @@ exclude = '''
   | venv
 )/
 '''
+
+[tool.basedpyright]
+typeCheckingMode = "off"

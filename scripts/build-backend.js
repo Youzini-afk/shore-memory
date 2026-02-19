@@ -227,6 +227,11 @@ function buildRustExtensions() {
       name: 'nit_rust_runtime',
       path: path.join(BACKEND_DIR, 'nit_core', 'interpreter', 'rust_binding', 'Cargo.toml'),
       dir: path.join(BACKEND_DIR, 'nit_core', 'interpreter', 'rust_binding')
+    },
+    {
+      name: 'pero_social_core',
+      path: path.join(BACKEND_DIR, 'social_core', 'Cargo.toml'),
+      dir: path.join(BACKEND_DIR, 'social_core')
     }
   ]
 

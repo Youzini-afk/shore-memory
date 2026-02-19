@@ -2,18 +2,18 @@
 layout: home
 
 hero:
-  name: "PeroCore"
-  text: "智能 AI 伙伴"
-  tagline: "高性能记忆框架驱动"
+  name: 'PeroCore'
+  text: '智能 AI 伙伴'
+  tagline: '高性能记忆框架驱动'
   image:
     src: /hero.png
     alt: PeroCore
   actions:
     - theme: brand
-      text: "快速开始"
+      text: '快速开始'
       link: /guide/usage
     - theme: alt
-      text: "了解更多"
+      text: '了解更多'
       link: https://github.com/YoKONCy/PeroCore
 
 features:

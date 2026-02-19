@@ -5,7 +5,11 @@
     "parameters": {
       "type": "object",
       "properties": {
-        "return_detail": { "type": "boolean", "description": "Return coordinate details", "default": false }
+        "return_detail": {
+          "type": "boolean",
+          "description": "Return coordinate details",
+          "default": false
+        }
       }
     }
   },

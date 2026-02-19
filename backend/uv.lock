@@ -2133,7 +2133,7 @@ wheels = [
 
 [[package]]
 name = "pero-backend"
-version = "0.6.2"
+version = "0.6.3"
 source = { virtual = "." }
 dependencies = [
     { name = "aiofiles" },

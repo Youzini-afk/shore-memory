@@ -1381,6 +1381,197 @@ class ReflectionService:
 
         return {"status": "success", "new_relations": new_relations_count}
 
+    async def build_ontology_graph(
+        self, limit: int = 20, agent_id: str = "pero"
+    ) -> dict:
+        """
+        [图谱园丁] (Graph Gardener)
+        执行原子化清洗与图谱构建任务：
+        1. 提取 Event 中的 Raw Tags
+        2. 清洗、归一化、晋升为 Entity Node
+        3. 建立 Event -> Entity 的连接
+        """
+        print(
+            f"[Reflection] 开始构建本体图谱 (limit={limit}, agent_id={agent_id})...",
+            flush=True,
+        )
+
+        # 1. 获取最近的未处理 Event (这里简单取最近的 N 条，实际生产中应该记录 cursor)
+        statement = (
+            select(Memory)
+            .where(Memory.type == "event")
+            .where(Memory.agent_id == agent_id)
+            .order_by(desc(Memory.timestamp))
+            .limit(limit)
+        )
+        events = (await self.session.exec(statement)).all()
+
+        if not events:
+            return {"status": "skipped", "reason": "No events found"}
+
+        # 过滤掉已经有大量关系的 Event (假设它们已经被处理过)
+        # 这里为了简化，我们总是重新检查一遍，依靠 LLM 和 DB 唯一性约束来去重
+
+        # 2. 准备 Prompt 数据
+        event_data = []
+        for e in events:
+            event_data.append(
+                {
+                    "id": e.id,
+                    "content": e.content,
+                    "raw_tags": e.tags.split(",") if e.tags else [],
+                }
+            )
+
+        config = await self._get_reflection_config()
+        if not config["api_key"]:
+            return {"status": "skipped", "reason": "No API Key"}
+
+        llm = LLMService(
+            api_key=config["api_key"],
+            api_base=config["api_base"],
+            model=config["model"],
+        )
+
+        prompt = mdp.render(
+            "tasks/memory/reflection/graph_builder",
+            {"events_json": json.dumps(event_data, ensure_ascii=False)},
+        )
+
+        try:
+            # 3. 调用反思模型
+            response = await llm.chat(
+                [{"role": "user", "content": prompt}],
+                temperature=0.1,
+                timeout=300.0,
+                response_format={"type": "json_object"},
+            )
+            content = response["choices"][0]["message"]["content"]
+
+            # 鲁棒性 JSON 解析
+            if "```json" in content:
+                content = content.split("```json")[1].split("```")[0]
+            elif "```" in content:
+                content = content.split("```")[1].split("```")[0]
+
+            graph_updates = json.loads(content)
+
+            # 4. 执行图谱更新 (原子事务)
+            new_entities_count = 0
+            new_relations_count = 0
+
+            # 4.1 处理新实体 (Nodes)
+            entity_map = {}  # name -> id
+
+            for entity in graph_updates.get("new_entities", []):
+                name = entity.get("name")
+                if not name:
+                    continue
+
+                # 检查是否存在
+                existing = (
+                    await self.session.exec(
+                        select(Memory)
+                        .where(Memory.type == "entity")
+                        .where(Memory.content == name)  # 实体名存入 content
+                        .where(Memory.agent_id == agent_id)
+                    )
+                ).first()
+
+                if existing:
+                    entity_map[name] = existing.id
+                else:
+                    # 创建新实体
+                    new_entity = Memory(
+                        content=name,
+                        type="entity",
+                        tags=entity.get("type", "concept"),  # 将实体类型存入 tags
+                        source="graph_gardener",
+                        agent_id=agent_id,
+                        importance=5,  # 实体默认重要性较高
+                    )
+                    self.session.add(new_entity)
+                    await self.session.flush()  # 获取 ID
+                    entity_map[name] = new_entity.id
+                    new_entities_count += 1
+
+                    # 立即生成向量 (实体的向量只编码名字和类型)
+                    try:
+                        from services.core.embedding_service import embedding_service
+                        from services.core.vector_service import vector_service
+
+                        vec = embedding_service.encode_one(
+                            f"{name} {entity.get('type', '')}"
+                        )
+                        if vec:
+                            vector_service.add_memory(
+                                memory_id=new_entity.id,
+                                content=new_entity.content,
+                                embedding=vec,
+                                metadata={
+                                    "type": "entity",
+                                    "timestamp": new_entity.timestamp,
+                                    "agent_id": agent_id,
+                                },
+                            )
+                    except Exception as e:
+                        print(f"[GraphGardener] 实体向量生成失败: {e}")
+
+            # 4.2 处理关系 (Edges)
+            for rel in graph_updates.get("relations", []):
+                event_id = rel.get("event_id")
+                entity_name = rel.get("entity")
+                rel_type = rel.get("rel", "related")
+                weight = rel.get("weight", 0.5)
+
+                if not event_id or not entity_name:
+                    continue
+
+                entity_id = entity_map.get(entity_name)
+                if not entity_id:
+                    # 实体未创建成功，跳过
+                    continue
+
+                # 检查重复关系
+                existing_rel = (
+                    await self.session.exec(
+                        select(MemoryRelation).where(
+                            (MemoryRelation.source_id == event_id)
+                            & (MemoryRelation.target_id == entity_id)
+                            & (MemoryRelation.relation_type == rel_type)
+                        )
+                    )
+                ).first()
+
+                if not existing_rel:
+                    new_rel = MemoryRelation(
+                        source_id=event_id,
+                        target_id=entity_id,
+                        relation_type=rel_type,
+                        strength=weight,
+                        agent_id=agent_id,
+                    )
+                    self.session.add(new_rel)
+                    new_relations_count += 1
+
+            await self.session.commit()
+            print(
+                f"[Reflection] 图谱构建完成: +{new_entities_count} 实体, +{new_relations_count} 关系"
+            )
+
+            return {
+                "status": "success",
+                "new_entities": new_entities_count,
+                "new_relations": new_relations_count,
+            }
+
+        except Exception as e:
+            print(f"[Reflection] 图谱构建失败: {e}")
+            import traceback
+
+            traceback.print_exc()
+            return {"status": "error", "error": str(e)}
+
     async def _analyze_relation(
         self, llm: LLMService, m1: Memory, m2: Memory
     ) -> Optional[dict]:

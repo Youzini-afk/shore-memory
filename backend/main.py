@@ -115,6 +115,7 @@ from routers.agent_router import router as agent_router
 from routers.config_router import router as config_router
 from routers.group_chat_router import router as group_chat_router
 from routers.ide_router import router as ide_router
+from routers.ipc_router import router as ipc_router
 from routers.memory_router import history_router, legacy_memories_router
 from routers.memory_router import router as memory_router
 from routers.nit_router import router as nit_router
@@ -812,6 +813,7 @@ app.include_router(history_router)
 app.include_router(legacy_memories_router)
 app.include_router(config_router)
 app.include_router(nit_router)
+app.include_router(ipc_router)
 app.include_router(task_control_router)
 app.include_router(agent_router)
 app.include_router(group_chat_router)

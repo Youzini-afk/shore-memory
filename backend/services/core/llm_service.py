@@ -9,6 +9,8 @@ from google import genai
 from google.genai import types
 
 from services.core.gateway_client import gateway_client
+from services.core.moderation_service import moderation_service
+
 
 # 默认 API Base URL 配置 (用户未提供时使用)
 DEFAULT_API_BASES = {
@@ -802,11 +804,15 @@ class LLMService:
                             return
                         data = response.json()
                         if data.get("choices"):
-                            yield {
-                                "content": data["choices"][0]["message"].get(
-                                    "content", ""
-                                )
-                            }
+                            content = data["choices"][0]["message"].get("content", "")
+
+                            # 审核层 (如果启用)
+                            if not moderation_service.check_text(content):
+                                err_msg = "内容已被拦截：涉及敏感或不安全内容。"
+                                yield {"content": err_msg}
+                                return
+
+                            yield {"content": content}
                         return
 
                     async with client.stream(
@@ -833,6 +839,20 @@ class LLMService:
                                     data = json.loads(data_str)
                                     if data.get("choices"):
                                         delta = data["choices"][0].get("delta", {})
+                                        content_chunk = delta.get("content", "")
+
+                                        # 流式审核比较复杂，这里做简单处理：
+                                        # 如果启用了严格审核，可能需要缓冲整个句子。
+                                        # 这里仅做简单的即时关键词检测 (可能不完整)
+                                        if (
+                                            content_chunk
+                                            and not moderation_service.check_text(
+                                                content_chunk
+                                            )
+                                        ):
+                                            yield {"content": "[拦截]"}
+                                            continue
+
                                         yield delta
                                 except Exception:
                                     continue

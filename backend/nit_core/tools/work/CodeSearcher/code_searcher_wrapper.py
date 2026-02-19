@@ -6,7 +6,10 @@ from typing import Optional
 
 # 定位二进制执行文件路径
 CURRENT_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-SEARCH_ENGINE_BINARY = os.path.join(CURRENT_SCRIPT_DIR, "CodeSearcher.exe")
+if os.name == "nt":
+    SEARCH_ENGINE_BINARY = os.path.join(CURRENT_SCRIPT_DIR, "CodeSearcher.exe")
+else:
+    SEARCH_ENGINE_BINARY = os.path.join(CURRENT_SCRIPT_DIR, "CodeSearcher")
 
 
 async def code_search(

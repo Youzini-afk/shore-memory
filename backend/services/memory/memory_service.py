@@ -11,6 +11,16 @@ from models import ConversationLog, Memory, MemoryRelation
 # [Global] Rust 引擎单例 (PEDSA 算法核心)
 _rust_engine = None
 
+RELATION_TYPE_MAP = {
+    "associative": 0,
+    "is_instance_of": 1,
+    "inhibits": 255,
+    "causes": 2,
+    "involves": 0,
+    "mentions": 0,
+    "expresses": 0,
+}
+
 
 async def get_rust_engine(session: AsyncSession):
     global _rust_engine
@@ -36,9 +46,13 @@ async def get_rust_engine(session: AsyncSession):
             if not relations:
                 break
 
-            chunk_relations = [
-                (rel.source_id, rel.target_id, rel.strength) for rel in relations
-            ]
+            chunk_relations = []
+            for rel in relations:
+                type_id = RELATION_TYPE_MAP.get(rel.relation_type, 0)
+                chunk_relations.append(
+                    (rel.source_id, rel.target_id, rel.strength, type_id)
+                )
+
             _rust_engine.batch_add_connections(chunk_relations)
             total_loaded += len(relations)
             mr_offset += BATCH_SIZE
@@ -58,10 +72,11 @@ async def get_rust_engine(session: AsyncSession):
 
             chunk_links = []
             for mid, prev_id, next_id in mem_links:
+                # 时间关系默认类型为 0 (associative)
                 if prev_id:
-                    chunk_links.append((mid, prev_id, 0.2))
+                    chunk_links.append((mid, prev_id, 0.2, 0))
                 if next_id:
-                    chunk_links.append((mid, next_id, 0.2))
+                    chunk_links.append((mid, next_id, 0.2, 0))
 
             if chunk_links:
                 _rust_engine.batch_add_connections(chunk_links)
@@ -267,11 +282,11 @@ class MemoryService:
             try:
                 engine = await get_rust_engine(session)
                 if engine:
-                    # 添加 prev/next 双向链接权重
+                    # 添加 prev/next 双向链接权重 (type=0)
                     engine.batch_add_connections(
                         [
-                            (memory.id, last_memory.id, 0.2),
-                            (last_memory.id, memory.id, 0.2),
+                            (memory.id, last_memory.id, 0.2, 0),
+                            (last_memory.id, memory.id, 0.2, 0),
                         ]
                     )
             except Exception:
@@ -663,291 +678,131 @@ class MemoryService:
         agent_id: str = "pero",
     ) -> List[Memory]:
         """
-        [混合检索策略] 结合向量搜索、图遍历与簇排序
+        [混合检索策略] (Hybrid Search Strategy)
+        1. 锚点定位 (Anchoring): 使用关键词/Tag 命中 Entity Node
+        2. 扩散激活 (Diffusion): 利用 Rust 引擎进行能量扩散
+        3. 向量重排 (Re-ranking): 结合向量相似度输出最终结果
         """
         import math
+
+        from sqlmodel import or_
 
         from services.core.embedding_service import embedding_service
         from services.core.vector_service import vector_service
 
-        # --- 0. 意图识别与簇感知 ---
-        target_cluster = None
-        cluster_keywords = {
-            "逻辑推理簇": [
-                "怎么",
-                "为什么",
-                "如何",
-                "代码",
-                "bug",
-                "逻辑",
-                "分析",
-                "原理",
-                "解释",
-                "define",
-                "function",
-            ],
-            "情感偏好簇": [
-                "喜欢",
-                "讨厌",
-                "爱",
-                "恨",
-                "感觉",
-                "心情",
-                "开心",
-                "难过",
-                "觉得",
-                "want",
-                "hate",
-                "love",
-            ],
-            "计划意图簇": [
-                "打算",
-                "计划",
-                "准备",
-                "明天",
-                "下周",
-                "未来",
-                "目标",
-                "todo",
-                "plan",
-                "will",
-            ],
-            "创造灵感簇": [
-                "想法",
-                "点子",
-                "故事",
-                "如果",
-                "假设",
-                "脑洞",
-                "idea",
-                "imagine",
-                "story",
-            ],
-            "反思簇": [
-                "错了",
-                "改进",
-                "反省",
-                "不好",
-                "烂",
-                "修正",
-                "sorry",
-                "mistake",
-                "fix",
-            ],
-        }
+        # --- 1. 锚点定位 (Anchoring) ---
+        # 简单分词 (未来可接入 AC 自动机)
+        keywords = set(re.findall(r"[\w]+", text))
 
-        if text:
-            for cluster, keywords in cluster_keywords.items():
-                if any(k in text.lower() for k in keywords):
-                    target_cluster = cluster
-                    break
+        # 查找匹配的 Entity Node
+        entity_anchors = []
+        if keywords:
+            # 构造 SQL OR 查询
+            conditions = []
+            for kw in keywords:
+                if len(kw) > 1:  # 忽略单字
+                    conditions.append(Memory.content == kw)
 
-        if target_cluster:
-            pass
+            if conditions:
+                stmt = select(Memory).where(
+                    Memory.type == "entity",
+                    Memory.agent_id == agent_id,
+                    or_(*conditions),
+                )
+                entity_anchors = (await session.exec(stmt)).all()
 
-        # 1. 向量化 Query
+        # --- 2. 向量检索 (Vector Search) ---
         if query_vec is None:
-            if not text:
-                return []
             query_vec = embedding_service.encode_one(text)
 
         if not query_vec:
-            print("[Memory] Embedding 失败，回退到关键词搜索。")
-            if text:
-                return await MemoryService._keyword_search_fallback(
-                    session, text, limit, exclude_after_time, agent_id=agent_id
-                )
             return []
 
-        # 2. 向量检索 (VectorDB Search)
-        try:
-            # [Optimization] 扩大召回范围至 60，保证上下文过滤后的候选数量
-            vector_results = vector_service.search(
-                query_vec, limit=60, agent_id=agent_id
+        # 初步召回 Top-20 (为了给扩散留余地)
+        vector_candidates = vector_service.search(
+            query_vec, limit=20, agent_id=agent_id
+        )
+
+        # --- 3. 扩散激活 (Spreading Activation) ---
+        # 初始能量源:
+        # - Vector Top-N: 能量 = score
+        # - Entity Anchors: 能量 = 2.0 (最大值，因为是精确匹配)
+
+        initial_energy = {}
+
+        # 注入向量候选能量
+        for res in vector_candidates:
+            initial_energy[res["id"]] = res["score"]
+
+        # 注入实体锚点能量
+        for ent in entity_anchors:
+            initial_energy[ent.id] = 2.0
+
+        # 调用 Rust 引擎扩散
+        engine = await get_rust_engine(session)
+        final_scores = initial_energy
+
+        if engine and initial_energy:
+            # 扩散 2 步，衰减 0.6，阈值 0.05
+            # 这样 Entity 可以激活与之相连的 Event
+            final_scores = engine.propagate_activation(
+                initial_scores=initial_energy, steps=2, decay=0.6, min_threshold=0.05
             )
 
-            if not vector_results:
-                print("[Memory] VectorDB 未返回结果，尝试 SQLite 回退...")
-                fallback_res = await MemoryService._keyword_search_fallback(
-                    session, text, limit, exclude_after_time, agent_id=agent_id
-                )
-                if update_access_stats and fallback_res:
-                    await MemoryService.mark_memories_accessed(session, fallback_res)
-                return fallback_res
+        # --- 4. 结果重排 (Re-ranking) ---
+        # 结合: 扩散分数 + 向量相似度 (如果存在) + 时间衰减 + 重要性
 
-            # 获取 Memory 对象
-            memory_ids = [res["id"] for res in vector_results]
+        # 获取所有涉及的记忆 ID
+        all_candidate_ids = list(final_scores.keys())
+        if not all_candidate_ids:
+            return []
 
-            if not memory_ids:
-                return []
+        # 批量获取 Memory 对象
+        stmt = select(Memory).where(Memory.id.in_(all_candidate_ids))
+        if exclude_after_time:
+            stmt = stmt.where(Memory.timestamp < exclude_after_time.timestamp() * 1000)
 
-            statement = (
-                select(Memory)
-                .where(Memory.id.in_(memory_ids))
-                .where(Memory.agent_id == agent_id)
+        memories = (await session.exec(stmt)).all()
+
+        ranked_results = []
+        for mem in memories:
+            # 跳过 Entity 节点本身 (我们只返回 Event 给 LLM，除非用户明确问定义)
+            if mem.type == "entity":
+                continue
+
+            # 基础分 = 扩散分
+            score = final_scores.get(mem.id, 0.0)
+
+            # 向量分修正 (如果在向量结果里)
+            vec_score = next(
+                (x["score"] for x in vector_candidates if x["id"] == mem.id), 0.0
             )
-            valid_memories = (await session.exec(statement)).all()
+            if vec_score > 0:
+                score = score * 0.7 + vec_score * 0.3  # 扩散分主导
 
-            # 建立 ID -> Similarity 映射
-            sim_map = {res["id"]: res["score"] for res in vector_results}
+            # 重要性加权 (1-10 -> 1.0-2.0)
+            importance_weight = 1.0 + (mem.importance / 10.0)
+            score *= importance_weight
 
-            # [Context Awareness] 过滤上下文窗口内的记忆
-            if exclude_after_time:
-                exclude_ts = exclude_after_time.timestamp() * 1000
-                original_count = len(valid_memories)
-                valid_memories = [m for m in valid_memories if m.timestamp < exclude_ts]
-                filtered_count = len(valid_memories)
-                if original_count != filtered_count:
-                    print(
-                        f"[Memory] 上下文过滤: 排除了 {original_count - filtered_count} 条与上下文窗口重叠的记忆。"
-                    )
-
-            if not valid_memories:
-                return []
-
-        except Exception as e:
-            print(f"[Memory] VectorDB 搜索失败: {e}。正在回退。")
-            fallback_res = await MemoryService._keyword_search_fallback(
-                session, text, limit, exclude_after_time, agent_id=agent_id
+            # 时间衰减 (Ebbinghaus) - 简单的线性衰减
+            # 越近越好，但如果是很久以前的高分记忆也保留
+            days_diff = (datetime.now().timestamp() * 1000 - mem.timestamp) / (
+                1000 * 3600 * 24
             )
-            if update_access_stats and fallback_res:
-                await MemoryService.mark_memories_accessed(session, fallback_res)
-            return fallback_res
+            time_decay = 1.0 / (1.0 + math.log(1 + days_diff))  # 对数衰减
+            score *= 0.8 + 0.2 * time_decay  # 时间影响占 20%
 
-        # 3. 关联检索 (Graph Traversal)
-        activation_scores = {m.id: sim_map.get(m.id, 0.0) for m in valid_memories}
+            ranked_results.append((mem, score))
 
-        anchors = valid_memories
-        anchor_ids = [m.id for m in anchors]
+        # 排序并截断
+        ranked_results.sort(key=lambda x: x[1], reverse=True)
+        final_memories = [m for m, s in ranked_results[:limit]]
 
-        # [Optimized] 批量拉取所有相关关系
-        rust_relations = []
+        # [Reinforcement] 更新访问统计
+        if update_access_stats and final_memories:
+            await MemoryService.mark_memories_accessed(session, final_memories)
 
-        if anchor_ids:
-            statement = select(MemoryRelation).where(
-                (MemoryRelation.source_id.in_(anchor_ids))
-                | (MemoryRelation.target_id.in_(anchor_ids))
-            )
-            all_relations = (await session.exec(statement)).all()
-
-            for rel in all_relations:
-                rust_relations.append(
-                    (rel.source_id, rel.target_id, rel.strength * 0.5)
-                )
-
-        # 添加 Prev/Next 关系
-        for anchor in anchors:
-            if anchor.prev_id:
-                rust_relations.append((anchor.id, anchor.prev_id, 0.2))
-            if anchor.next_id:
-                rust_relations.append((anchor.id, anchor.next_id, 0.2))
-
-        # [Rust Integration] 百万级节点优化
-        try:
-            engine = await get_rust_engine(session)
-            if engine:
-                # 执行遍历：使用动态阈值
-                new_scores = engine.propagate_activation(
-                    activation_scores, steps=1, decay=1.0, min_threshold=0.01
-                )
-                activation_scores = new_scores
-            else:
-                pass
-        except Exception as e:
-            print(f"[Memory] Rust 引擎运行时错误: {e}. 正在回退。")
-            # [回退逻辑]
-            relation_map = {}
-            for rel in all_relations:
-                if rel.source_id in activation_scores:
-                    relation_map.setdefault(rel.source_id, []).append(rel)
-                if rel.target_id in activation_scores:
-                    relation_map.setdefault(rel.target_id, []).append(rel)
-
-            for anchor in anchors:
-                base_score = activation_scores[anchor.id]
-                if base_score < 0.3:
-                    continue
-
-                # A. 时间轴遍历
-                if anchor.prev_id and anchor.prev_id in activation_scores:
-                    activation_scores[anchor.prev_id] += base_score * 0.2
-                if anchor.next_id and anchor.next_id in activation_scores:
-                    activation_scores[anchor.next_id] += base_score * 0.2
-
-                # B. 关系网遍历
-                relations = relation_map.get(anchor.id, [])
-                for rel in relations:
-                    target_id = (
-                        rel.target_id if rel.source_id == anchor.id else rel.source_id
-                    )
-                    if target_id in activation_scores:
-                        activation_scores[target_id] += base_score * rel.strength * 0.5
-
-        # 4. 综合排序 (Score = Sim*0.7 + ClusterBonus + Importance*0.3*Decay + Recency)
-        final_candidates = []
-        current_time = datetime.now().timestamp() * 1000
-
-        for m in valid_memories:
-            # 基础相关度分数
-            act_score = activation_scores.get(m.id, 0.0)
-
-            # [Feature] Cluster Soft-Weighting
-            cluster_bonus = 0.0
-            if target_cluster and m.clusters and target_cluster in m.clusters:
-                cluster_bonus = 0.15
-
-            # 归一化重要性
-            imp_score = min(m.base_importance, 10.0) / 10.0
-
-            # 艾宾浩斯衰减
-            time_diff_ms = max(0, current_time - m.timestamp)
-            time_diff_days = time_diff_ms / (1000 * 3600 * 24)
-            decay_factor = math.exp(-0.023 * time_diff_days)
-
-            # Recency Bonus
-            recency_bonus = (
-                max(0, 0.2 * (1 - time_diff_days / 1.0)) if time_diff_days < 1.0 else 0
-            )
-
-            final_score = (
-                (act_score * 0.7)
-                + cluster_bonus
-                + (imp_score * 0.3 * decay_factor)
-                + recency_bonus
-            )
-
-            if final_score > 0.1:
-                final_candidates.append((m, final_score))
-
-        # 5. Rerank
-
-        # 按综合得分初步筛选
-        final_candidates.sort(key=lambda x: x[1], reverse=True)
-        top_candidates = [item[0] for item in final_candidates[: limit * 2]]
-
-        result_memories = []
-        if top_candidates:
-            try:
-                docs = [m.content for m in top_candidates]
-                rerank_results = embedding_service.rerank(text, docs, top_k=limit)
-
-                # 根据 Rerank 结果重新组装
-                for res in rerank_results:
-                    original_idx = res["index"]
-                    result_memories.append(top_candidates[original_idx])
-            except Exception as e:
-                print(f"[Memory] 重排序失败: {e}。回退到初始分数。")
-                result_memories = top_candidates[:limit]
-        else:
-            result_memories = top_candidates[:limit]
-
-        # [修复] 更新访问统计 (强化)
-        # 只要被检索到并最终返回，就视为被"激活"了一次
-        if update_access_stats and result_memories:
-            # 同步等待更新完成，防止 session 提前关闭
-            await MemoryService.mark_memories_accessed(session, result_memories)
-
-        return result_memories
+        return final_memories
 
     @staticmethod
     async def get_memories_by_filter(

@@ -1,8 +1,8 @@
 <template>
   <div class="relative h-full w-full overflow-hidden">
-    <CustomTitleBar title="Stronghold" :show-mode-toggle="false" />
+    <CustomTitleBar v-if="isElectron()" title="Stronghold" :show-mode-toggle="false" />
 
-    <div class="absolute top-8 left-0 right-0 bottom-0 flex">
+    <div :class="['absolute left-0 right-0 bottom-0 flex', isElectron() ? 'top-8' : 'top-0']">
       <!-- Left Sidebar: Facilities & Rooms -->
       <div
         class="w-64 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md z-10"
@@ -321,6 +321,7 @@
 <script setup>
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useStronghold } from '../composables/useStronghold'
+import { isElectron } from '@/utils/ipcAdapter'
 import ChatInterface from '../components/chat/ChatInterface.vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 

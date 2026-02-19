@@ -11,6 +11,7 @@ PeroCore 的 MOD 系统基于 **IoC (控制反转)** 容器和 **依赖注入** 
 所有 MOD 存放在 `backend/mods/` 目录下。每个 MOD 是一个独立的文件夹，必须包含 `mod_init.py` 文件。
 
 ### 目录示例
+
 ```
 backend/mods/
   └── my_awesome_mod/
@@ -20,6 +21,7 @@ backend/mods/
 ```
 
 ### 入口文件 `mod_init.py`
+
 `mod_init.py` 必须包含一个 `init()` 函数。该函数会在系统启动时被自动调用。
 
 ```python
@@ -43,7 +45,7 @@ from core.event_bus import EventBus
 async def on_memory_save(ctx):
     content = ctx["content"]
     print(f"[监控] 正在保存记忆: {content}")
-    
+
     # 修改上下文 (如果允许)
     ctx["tags"] += ",hooked"
 
@@ -54,12 +56,12 @@ def init():
 
 ### 可用事件列表
 
-| 事件名 | 触发时机 | 上下文 (ctx) | 是否可修改 |
-| :--- | :--- | :--- | :--- |
-| `memory.save.pre` | 保存记忆前 | `content`, `tags`, `agent_id`, `cancel` (设为 True 可取消保存) | 是 |
-| `memory.save.post` | 保存记忆后 | `memory` (Memory对象) | 否 |
-| `prompt.build.pre` | 构建 Prompt 前 | `variables`, `user_message`, `session` | 是 (可修改 variables) |
-| `prompt.build.post` | 构建 Prompt 后 | `messages` (最终消息列表), `variables` | 是 (可修改 messages) |
+| 事件名              | 触发时机       | 上下文 (ctx)                                                   | 是否可修改            |
+| :------------------ | :------------- | :------------------------------------------------------------- | :-------------------- |
+| `memory.save.pre`   | 保存记忆前     | `content`, `tags`, `agent_id`, `cancel` (设为 True 可取消保存) | 是                    |
+| `memory.save.post`  | 保存记忆后     | `memory` (Memory对象)                                          | 否                    |
+| `prompt.build.pre`  | 构建 Prompt 前 | `variables`, `user_message`, `session`                         | 是 (可修改 variables) |
+| `prompt.build.post` | 构建 Prompt 后 | `messages` (最终消息列表), `variables`                         | 是 (可修改 messages)  |
 
 ## 4. 核心组件替换 (深度定制)
 
@@ -69,17 +71,18 @@ def init():
 
 接口定义在 `backend/interfaces/core.py` 中。
 
-| 接口名 | 描述 | 默认实现 |
-| :--- | :--- | :--- |
-| `IMemoryService` | 记忆服务，负责管理长期/短期记忆的存储与检索 | `MemoryService` |
-| `IPromptManager` | Prompt 管理器，负责构建发送给 LLM 的最终提示词 | `PromptManager` |
-| `IScorerService` | 评分服务，用于评估记忆相关性、上下文重要性等 | `ScorerService` |
-| `IPreprocessorManager` | 预处理器管理器，负责管理输入预处理管道 | `PreprocessorManager` |
-| `IPostprocessorManager` | 后处理器管理器，负责管理输出后处理管道 | `PostprocessorManager` |
+| 接口名                  | 描述                                           | 默认实现               |
+| :---------------------- | :--------------------------------------------- | :--------------------- |
+| `IMemoryService`        | 记忆服务，负责管理长期/短期记忆的存储与检索    | `MemoryService`        |
+| `IPromptManager`        | Prompt 管理器，负责构建发送给 LLM 的最终提示词 | `PromptManager`        |
+| `IScorerService`        | 评分服务，用于评估记忆相关性、上下文重要性等   | `ScorerService`        |
+| `IPreprocessorManager`  | 预处理器管理器，负责管理输入预处理管道         | `PreprocessorManager`  |
+| `IPostprocessorManager` | 后处理器管理器，负责管理输出后处理管道         | `PostprocessorManager` |
 
 ### 如何替换组件
 
 要替换组件，你需要：
+
 1.  定义一个类，实现对应的接口。
 2.  在 `mod_init.py` 的 `init()` 函数中，使用 `ComponentContainer.override()` 方法注册你的实现。
 
@@ -120,7 +123,7 @@ from interfaces.core import IMemoryService
 def some_function():
     # 从容器中获取当前的 MemoryService 实例
     memory_service = ComponentContainer.get(IMemoryService)
-    
+
     # 使用该服务
     memories = memory_service.get_memories("查询")
 ```
@@ -141,7 +144,7 @@ class MySensitiveFilter:
 def init():
     # 1. 获取当前的预处理器管理器
     pm = ComponentContainer.get(IPreprocessorManager)
-    
+
     # 2. 注册一个新的预处理器
     # 注意：这取决于 PreprocessorManager 的具体实现是否有 register 方法
     # 默认的 PreprocessorManager 支持 register

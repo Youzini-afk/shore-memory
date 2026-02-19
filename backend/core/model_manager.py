@@ -48,7 +48,7 @@ class ModelManager:
 
         # 确保目录存在
         os.makedirs(self.models_cache_dir, exist_ok=True)
-        
+
         logger.info(f"Models cache directory initialized at: {self.models_cache_dir}")
 
         # 设置环境变量

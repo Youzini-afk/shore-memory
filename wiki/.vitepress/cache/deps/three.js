@@ -435,8 +435,8 @@ import {
   setConsoleFunction,
   warn,
   warnOnce
-} from "./chunk-OE76NJSB.js";
-import "./chunk-5WRI5ZAA.js";
+} from './chunk-OE76NJSB.js'
+import './chunk-5WRI5ZAA.js'
 export {
   ACESFilmicToneMapping,
   AddEquation,
@@ -874,5 +874,5 @@ export {
   setConsoleFunction,
   warn,
   warnOnce
-};
+}
 //# sourceMappingURL=three.js.map

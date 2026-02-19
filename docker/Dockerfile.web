@@ -1,13 +1,41 @@
-# 构建阶段
+# --- Stage 1: Wasm Builder (Rust) ---
+FROM rust:latest AS wasm-builder
+
+# Install wasm-pack
+RUN curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
+
+WORKDIR /app
+
+# Copy Rust source for WASM module
+COPY backend/nit_core/nit_terminal_auditor/ backend/nit_core/nit_terminal_auditor/
+
+# Build WASM for web
+# Output to /out
+WORKDIR /app/backend/nit_core/nit_terminal_auditor
+RUN wasm-pack build --target web --out-dir /out --out-name auditor
+
+# --- Stage 2: Frontend Builder (Node) ---
 FROM node:18 AS builder
 WORKDIR /app
+
+# Copy package.json
 COPY package*.json ./
 RUN npm install
-COPY . .
-# 假设 vite build 输出到 dist
-RUN npm run build
 
-# 运行阶段
+# Copy source
+COPY . .
+
+# Copy built WASM to public assets
+# Assuming we want it in public/auditor.wasm and public/auditor.js
+COPY --from=wasm-builder /out/auditor_bg.wasm public/assets/wasm/auditor.wasm
+COPY --from=wasm-builder /out/auditor.js public/assets/wasm/auditor.js
+
+# Build Frontend
+# Ensure .env.docker is used or variables passed
+COPY .env.docker .env.production.local
+RUN npm run build:docker
+
+# --- Stage 3: Runner (Nginx) ---
 FROM nginx:alpine
 COPY --from=builder /app/dist /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf

@@ -2830,118 +2830,55 @@ class SocialService:
             logger.error(f"获取群成员信息失败: {e}")
             return {}
 
-    async def get_group_msg_history(self, group_id: int, count: int = 20):
+    async def search_social_memory(self, query: str):
         """
-        获取群消息历史记录。
-        """
-        # NapCatQQ/OneBot 11 可能使用 'get_group_msg_history'
-        # 通常返回 'messages' 列表。
-        try:
-            # 首先，如果需要，尝试获取最新的消息 seq，
-            # 但是如果未提供 seq，标准 get_group_msg_history 通常会处理 'latest'？
-            # 让我们先尝试不带 seq 调用它。
-            resp = await self._send_api_and_wait(
-                "get_group_msg_history", {"group_id": group_id}
-            )
-            messages = resp.get("data", {}).get("messages", [])
-
-            # 过滤/切片
-            if messages:
-                # 通常按时间顺序返回？还是倒序？
-                # 通常是按时间顺序。我们需要最后 N 个。
-                messages = messages[-count:]
-
-            # 解析为可读格式
-            result_text = (
-                f"--- 群组 {group_id} 历史记录 (最后 {len(messages)} 条) ---\n"
-            )
-            for msg in messages:
-                sender = msg.get("sender", {}).get("nickname", "未知")
-                content = msg.get("raw_message", "")  # 使用 raw 查看 CQ 码
-                # 时间 = datetime.fromtimestamp(msg.get("time", 0)).strftime('%H:%M:%S')
-                # 简单格式
-                result_text += f"[{sender}]: {content}\n"
-
-            return result_text
-        except Exception as e:
-            logger.error(f"获取群消息历史失败: {e}")
-            return f"获取历史记录失败: {e}"
-
-    async def read_memory(self, query: str, filter_str: str = ""):
-        """
-        读取社交记忆（从独立的 Social Database 搜索 QQMessage）
-        Args:
-            query: 搜索关键词
-            filter_str: 可选过滤条件，格式为 "session_id:type" (例如 "123456:group")
+        搜索社交记忆 (PEDSA 引擎 + 扩散)。
+        替代旧的 read_memory 和 get_group_msg_history。
         """
         try:
-            from sqlmodel import col, select
+            # 获取 SocialMemoryService 实例
+            from .social_memory_service import SocialMemoryService
 
-            from .social.database import get_social_db_session
-            from .social.models_db import QQMessage
+            memory_service = SocialMemoryService()
 
-            # Get injected IDs to exclude
-            exclude_ids = injected_msg_ids_var.get() or set()
+            # 调用搜索
+            memories = await memory_service.search_memories(query, limit=10)
 
-            async for db_session in get_social_db_session():
-                # 基础查询：内容匹配
-                statement = select(QQMessage).where(
-                    col(QQMessage.content).contains(query)
+            if not memories:
+                return "No relevant social memories found via PEDSA engine."
+
+            result_text = "Found Social Memories (PEDSA Diffusion):\n"
+
+            # 批量获取会话名称
+            session_names = {}
+            sessions_to_fetch = set()
+            for mem in memories:
+                sessions_to_fetch.add((mem.source_session_type, mem.source_session_id))
+
+            for s_type, s_id in sessions_to_fetch:
+                if s_type == "group":
+                    session_names[s_id] = await self.get_group_name(s_id) or s_id
+                elif s_type == "private":
+                    session_names[s_id] = await self.get_user_nickname(s_id) or s_id
+
+            for mem in memories:
+                time_str = mem.created_at.strftime("%Y-%m-%d %H:%M")
+                session_name = session_names.get(
+                    mem.source_session_id, mem.source_session_id
+                )
+                # 来源标注
+                source_label = f"[{mem.source_session_type}:{mem.source_session_id}({session_name})]"
+                # Sender 标记为 Memory (因为是总结)
+                sender_name = "Memory"
+
+                result_text += (
+                    f"{source_label} [{time_str}] {sender_name}: {mem.content}\n"
                 )
 
-                # 解析并应用过滤条件
-                if filter_str:
-                    # 尝试解析 "session_id:type" 或仅 "session_id"
-                    parts = filter_str.split(":")
-                    if len(parts) >= 1 and parts[0]:
-                        statement = statement.where(QQMessage.session_id == parts[0])
-                    if len(parts) >= 2 and parts[1]:
-                        statement = statement.where(QQMessage.session_type == parts[1])
-
-                # [Deduplication] If we have IDs to exclude, we might need to fetch more and filter in Python
-                # because passing a large list to SQL NOT IN might be slow or hit limits.
-                # Given we only exclude ~30 IDs max, SQL NOT IN is fine.
-                if exclude_ids:
-                    statement = statement.where(
-                        col(QQMessage.msg_id).notin_(exclude_ids)
-                    )
-
-                # 排序和限制
-                statement = statement.order_by(QQMessage.timestamp.desc()).limit(10)
-
-                results = (await db_session.exec(statement)).all()
-
-                if not results:
-                    return "No relevant social memories found in independent database."
-
-                result_text = "Found Social Memories (Independent DB):\n"
-
-                # Prepare to fetch session names (Group names / User nicknames)
-                session_names = {}
-                sessions_to_fetch = set()
-                for msg in results:
-                    sessions_to_fetch.add((msg.session_type, msg.session_id))
-
-                # Batch fetch session names
-                for s_type, s_id in sessions_to_fetch:
-                    if s_type == "group":
-                        session_names[s_id] = await self.get_group_name(s_id) or s_id
-                    elif s_type == "private":
-                        session_names[s_id] = await self.get_user_nickname(s_id) or s_id
-
-                for msg in results:
-                    time_str = msg.timestamp.strftime("%Y-%m-%d %H:%M")
-                    # Enhanced format: [group:12345(GroupName)] or [private:67890(NickName)]
-                    session_name = session_names.get(msg.session_id, msg.session_id)
-                    source_label = (
-                        f"[{msg.session_type}:{msg.session_id}({session_name})]"
-                    )
-                    result_text += f"{source_label} [{time_str}] {msg.sender_name}: {msg.content}\n"
-
-                return result_text
+            return result_text
 
         except Exception as e:
-            logger.error(f"从独立数据库读取社交记忆错误: {e}")
+            logger.error(f"搜索社交记忆失败: {e}")
             return f"Error: {e}"
 
     async def read_agent_memory(self, query: str):

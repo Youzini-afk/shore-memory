@@ -117,6 +117,11 @@ struct GraphEdge {
     /// 注意：虽然目前由于 i32 对齐导致 struct 仍占用 8 字节 (4+2+2pad)，
     /// 但这减少了有效数据载荷，为未来的 SoA 布局或磁盘存储压缩做好了准备。
     connection_strength: u16,
+    /// 边类型 (量化: 0-255)
+    /// 0: 普通关联 (associative)
+    /// 1: 类属关系 (is_instance_of)
+    /// 255: 抑制/阻断 (inhibition)
+    edge_type: u8,
 }
 
 // ============================================================================
@@ -158,11 +163,14 @@ impl CognitiveGraphEngine {
     }
 
     /// 批量添加连接关系 (带自动剪枝)
+    /// 输入格式: (src, tgt, weight, type_id)
     #[pyo3(text_signature = "($self, connections)")]
-    fn batch_add_connections(&mut self, connections: Vec<(i64, i64, f32)>) {
-        for (src, tgt, weight) in connections {
-            self.add_single_edge(src, tgt, weight);
-            self.add_single_edge(tgt, src, weight);
+    fn batch_add_connections(&mut self, connections: Vec<(i64, i64, f32, u8)>) {
+        for (src, tgt, weight, type_id) in connections {
+            self.add_single_edge(src, tgt, weight, type_id);
+            // 无向图处理：反向边通常具有相同属性
+            // 如果需要有向图，请在 Python 层控制传入数据
+            self.add_single_edge(tgt, src, weight, type_id);
         }
 
         // 自动剪枝
@@ -174,7 +182,7 @@ impl CognitiveGraphEngine {
         }
     }
 
-    fn add_single_edge(&mut self, src: i64, tgt: i64, weight: f32) {
+    fn add_single_edge(&mut self, src: i64, tgt: i64, weight: f32, type_id: u8) {
         let edges = self.dynamic_map.entry(src).or_default();
         // 量化权重: f32 [0.0, 1.0] -> u16 [0, 65535]
         let quantized_weight = (weight.clamp(0.0, 1.0) * 65535.0) as u16;
@@ -183,11 +191,13 @@ impl CognitiveGraphEngine {
         if let Some(existing) = edges.iter_mut().find(|e| e.target_node_id == tgt as i32) {
             if quantized_weight > existing.connection_strength {
                 existing.connection_strength = quantized_weight;
+                existing.edge_type = type_id; // 更新类型
             }
         } else {
             edges.push(GraphEdge {
                 target_node_id: tgt as i32,
                 connection_strength: quantized_weight,
+                edge_type: type_id,
             });
         }
     }
@@ -205,7 +215,7 @@ impl CognitiveGraphEngine {
         EngineManifest {
             version: CORE_VERSION.to_string(),
             simd_support: simd_info,
-            memory_layout: "Simulated CSR (Quantized u16)".to_string(),
+            memory_layout: "Simulated CSR (Quantized u16 + Type u8)".to_string(),
             optimization_level: if cfg!(debug_assertions) { "Debug" } else { "Release (Full O3)" }.to_string(),
         }
     }
@@ -220,6 +230,7 @@ impl CognitiveGraphEngine {
     /// 1. 动态阈值截断 (Dynamic Pruning): 每轮传播仅保留分数最高的 Top-N 节点
     /// 2. 权重衰减 (Decay): 防止分数无限发散
     /// 3. 并行计算: 利用 Rayon 进行并行规约
+    /// 4. 抑制机制 (Inhibition): 类型为 255 的边会传递负能量
     #[pyo3(text_signature = "($self, initial_scores, steps=1, decay=0.5, min_threshold=0.01, max_active_nodes_per_layer=10000)")]
     fn propagate_activation(
         &self,
@@ -236,14 +247,13 @@ impl CognitiveGraphEngine {
         for _ in 0..steps {
             let mut active_nodes: Vec<(&i64, &f32)> = current_scores
                 .iter()
-                .filter(|(_, &score)| score >= min_threshold)
+                .filter(|(_, &score)| score.abs() >= min_threshold) // 支持负激活
                 .collect();
 
-            // 动态截断：如果激活节点过多，只保留能量最高的 Top-K
-            // 这能显著减少长尾计算量，同时保留最重要的信号
+            // 动态截断：如果激活节点过多，只保留能量绝对值最高的 Top-K
             if active_nodes.len() > layer_limit {
                 active_nodes.select_nth_unstable_by(layer_limit, |a, b| {
-                    b.1.partial_cmp(a.1).unwrap_or(std::cmp::Ordering::Equal)
+                    b.1.abs().partial_cmp(&a.1.abs()).unwrap_or(std::cmp::Ordering::Equal)
                 });
                 active_nodes.truncate(layer_limit);
             }
@@ -261,8 +271,15 @@ impl CognitiveGraphEngine {
                             for edge in neighbors {
                                 // 反量化: u16 [0, 65535] -> f32 [0.0, 1.0]
                                 let weight = edge.connection_strength as f32 / 65535.0;
-                                let energy = score * weight * decay;
-                                if energy >= min_threshold * 0.5 {
+                                
+                                // 抑制边逻辑 (Type 255)
+                                let energy = if edge.edge_type == 255 {
+                                    -score.abs() * weight * decay * 2.0 // 抑制效果通常更强
+                                } else {
+                                    score * weight * decay
+                                };
+
+                                if energy.abs() >= min_threshold * 0.5 {
                                     *acc.entry(edge.target_node_id as i64).or_default() += energy;
                                 }
                             }
@@ -283,8 +300,11 @@ impl CognitiveGraphEngine {
             for (node_id, energy) in increments {
                 let entry = current_scores.entry(node_id).or_insert(0.0);
                 *entry += energy;
+                // 能量钳位 [-2.0, 2.0]
                 if *entry > 2.0 {
                     *entry = 2.0;
+                } else if *entry < -2.0 {
+                    *entry = -2.0;
                 }
             }
         }

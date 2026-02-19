@@ -1,6 +1,6 @@
 <template>
   <div class="dashboard-wrapper">
-    <CustomTitleBar :transparent="true" title="Pero Dashboard" />
+    <CustomTitleBar v-if="isElectron()" :transparent="true" title="Pero Dashboard" />
 
     <!-- 动态背景 -->
     <div class="background-blobs">
@@ -9,7 +9,7 @@
       <div class="blob blob-3"></div>
     </div>
 
-    <el-container class="main-layout pt-8">
+    <el-container class="main-layout" :class="{ 'pt-8': isElectron() }">
       <!-- 侧边导航栏 -->
       <el-aside width="260px" class="glass-sidebar">
         <div class="brand-area">
@@ -1999,7 +1999,7 @@
 <script setup>
 import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
-import { listen, invoke } from '@/utils/ipcAdapter'
+import { listen, invoke, isElectron } from '@/utils/ipcAdapter'
 import VoiceConfigPanel from '../components/settings/VoiceConfigPanel.vue'
 import AsyncMarkdown from '../components/markdown/AsyncMarkdown.vue'
 import * as echarts from 'echarts'

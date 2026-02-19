@@ -161,28 +161,16 @@ async def qq_get_group_member_info(group_id: str, user_id: str):
         return f"获取群成员信息失败: {e}"
 
 
-async def qq_get_group_history(group_id: str, count: int = 20):
+async def search_social_memory(query: str):
     """
-    Get historical messages from a QQ group.
-    Use this when you need more context about the current conversation (e.g. what they were talking about before you woke up).
-    """
-    service = get_social_service()
-    try:
-        gid = int(group_id)
-        return await service.get_group_msg_history(gid, count)
-    except Exception as e:
-        return f"获取群历史失败: {e}"
-
-
-async def read_social_memory(query: str, filter: str = ""):
-    """
-    阅读 Pero 的社交记忆日志（QQ 聊天记录）。
+    搜索社交记忆 (QQ 聊天记录总结/上下文)。
+    当需要了解过去的对话、特定话题或某人的发言时使用。
     """
     service = get_social_service()
     try:
-        return await service.read_memory(query, filter)
+        return await service.search_social_memory(query)
     except Exception as e:
-        return f"读取社交记忆失败: {e}"
+        return f"搜索社交记忆失败: {e}"
 
 
 async def read_agent_memory(query: str):

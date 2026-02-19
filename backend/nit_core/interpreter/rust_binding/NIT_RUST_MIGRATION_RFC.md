@@ -9,12 +9,14 @@
 ## 1. 背景与现状
 
 目前的 NIT 核心 (`nit_core`) 是一个纯 Python 实现的 AST 解释器，主要由以下组件构成：
+
 - `lexer.py`: 正则表达式驱动的词法分析器。
 - `parser.py`: 递归下降语法分析器。
 - `engine.py`: 基于 `isinstance` 反射的运行时解释器。
 - `security.py`: 基础的 HMAC 签名验证。
 
 ### 存在的问题
+
 1.  **安全边界“软”约束**: 变量数量 (`MAX_VARIABLES`) 和字符串长度 (`MAX_VAR_STRING_LENGTH`) 检查在 Python 层进行。这意味着恶意的大内存对象必须先被 Python 分配（可能导致 OOM），然后才能被检查逻辑拦截。
 2.  **CPU 密集型瓶颈**: 词法分析和语法分析是纯 Python 循环，处理长指令或高并发请求时占用大量 CPU 时间（GIL 锁问题）。
 3.  **类型安全弱**: 依赖运行时的动态类型检查，缺乏编译期的结构验证。
@@ -30,18 +32,18 @@
 ```mermaid
 graph TD
     UserInput[User Input] --> RustParser
-    
+
     subgraph "Rust Core (High Performance & Security)"
         RustParser[Lexer & Parser]
         RustAST[AST Definitions (PyO3)]
         NITScope[NITScope (Memory Container)]
     end
-    
+
     subgraph "Python Runtime (Async I/O & Dispatch)"
         NITRuntime[NIT Runtime / VM]
         ToolExecutor[Async Tool Executor]
     end
-    
+
     RustParser -->|Returns PyObject| RustAST
     RustAST -->|Fed into| NITRuntime
     NITRuntime -->|Read/Write| NITScope
@@ -50,12 +52,12 @@ graph TD
 
 ### 2.2 职责划分
 
-| 组件 | 语言 | 职责 | 优势 |
-| :--- | :--- | :--- | :--- |
-| **Lexer & Parser** | **Rust** | 将源代码转换为 AST | 50-100x 性能提升，绕过 GIL |
-| **AST Definitions** | **Rust** | 定义指令结构 (PyO3 Class) | 结构化数据，类型安全 |
-| **NITScope** | **Rust** | 变量存储容器 (`HashMap`) | **硬内存限制**，线程安全 |
-| **NITRuntime** | **Python** | 遍历 AST，调度异步工具 | 保持与 Python 异步生态 (`await`) 的完美兼容 |
+| 组件                | 语言       | 职责                      | 优势                                        |
+| :------------------ | :--------- | :------------------------ | :------------------------------------------ |
+| **Lexer & Parser**  | **Rust**   | 将源代码转换为 AST        | 50-100x 性能提升，绕过 GIL                  |
+| **AST Definitions** | **Rust**   | 定义指令结构 (PyO3 Class) | 结构化数据，类型安全                        |
+| **NITScope**        | **Rust**   | 变量存储容器 (`HashMap`)  | **硬内存限制**，线程安全                    |
+| **NITRuntime**      | **Python** | 遍历 AST，调度异步工具    | 保持与 Python 异步生态 (`await`) 的完美兼容 |
 
 ---
 
@@ -93,6 +95,7 @@ impl NITScope {
 ### 3.2 词法与语法分析
 
 将 `lexer.py` 和 `parser.py` 移植到 Rust。
+
 - **输入**: 原始 NIT 脚本字符串。
 - **输出**: Python 对象树 (由 PyO3 导出的 Rust 结构体构建)。
 

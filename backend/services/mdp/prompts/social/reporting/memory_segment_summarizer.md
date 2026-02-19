@@ -12,6 +12,7 @@ Injected Via: mdp.render("social/reporting/memory_segment_summarizer", ...)
 {{ chat_text }}
 
 要求:
+
 1. **总结**: 以 {{ agent_name }} 的**第一人称视角**写一段简洁的日记式总结（最多 50 字）。关注事实、事件和关键话题。忽略琐碎的问候。
    - 正确示例：“我和主人聊到了《鸣潮》，他好像很喜欢今汐。”
    - 错误示例：“{{user}}和AI讨论了游戏...”
@@ -19,6 +20,6 @@ Injected Via: mdp.render("social/reporting/memory_segment_summarizer", ...)
 
 输出格式 (JSON):
 {
-    "summary": "...",
-    "keywords": ["...", "..."]
+"summary": "...",
+"keywords": ["...", "..."]
 }

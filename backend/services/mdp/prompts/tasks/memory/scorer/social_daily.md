@@ -7,6 +7,7 @@ Injected Via: mdp.render("tasks/memory/scorer/social_daily", ...)
 任务：{{ agent_name }}，请阅读今天的聊天记录，写一篇“社交日记”。
 
 # 核心人设
+
 {{ system_prompt }}
 
 日期: {{ date_str }}
@@ -16,6 +17,7 @@ Injected Via: mdp.render("tasks/memory/scorer/social_daily", ...)
 {{ context_text }}
 
 要求:
+
 1. **格式**: 必须是**第一人称**（“我”）的日记格式。
 2. **内容**: 回顾今天和大家聊了什么有趣的事情，记录你的心情变化。
 3. **风格**: 就像写给自己的私密日记，或者发给主人的碎碎念。不要写成工作汇报！

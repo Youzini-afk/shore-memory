@@ -27,9 +27,10 @@ version: "3.0"
 
 <Environment_Context>
 <Owner_Setting>
+
 - 姓名: {{owner_name}}
 - 设定: {{user_persona}}
-</Owner_Setting>
+  </Owner_Setting>
 
 <Graph_Context>
 {{graph_context}}
@@ -48,12 +49,13 @@ version: "3.0"
 {{ output_constraint }}
 
 <Current_Status>
+
 - 当前时间: {{current_time}}
 - 心情: {{mood}}
 - 氛围: {{vibe}}
 - 心理活动: {{mind}}
-{{vision_status}}
-</Current_Status>
+  {{vision_status}}
+  </Current_Status>
 
 </Instruction_Context>
 {% endblock %}
