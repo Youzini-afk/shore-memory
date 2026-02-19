@@ -97,7 +97,34 @@ class HistoryPreprocessor(BasePreprocessor):
             return cleaned_msgs
 
         for log in logs:
+            # [Optimization] 优先使用 raw_content 以获取 NIT 工具调用信息
+            # 如果 raw_content 存在，我们尝试从中提取工具调用记录并格式化为 [工具调用历史: TOOLNAME]
+            raw_content = log.raw_content
             content = log.content
+
+            # 如果有 raw_content，尝试提取 NIT 标签
+            if raw_content:
+                # 匹配 <nit-TOOLNAME> 或 <nit>...</nit> (兼容旧版)
+                # 我们只提取工具名，忽略参数
+                # 匹配模式：<nit-([^>]+)> 或 <nit>
+                # 注意：raw_content 可能包含多个工具调用
+
+                # 1. 提取带名称的标签 <nit-xxx>
+                tool_calls = re.findall(r"<nit-([a-zA-Z0-9_]+)>", raw_content)
+
+                # 2. 如果没有带名称的标签，尝试提取旧版 <nit> 内部可能包含的信息（旧版较复杂，暂时只处理新版）
+                # 或者如果有 <nit> 但没有具体的 nit-xxx，可能是一个通用 nit 块
+
+                if tool_calls:
+                    # 去重并格式化
+                    # 例如: [工具调用历史: search_files, read_file]
+                    unique_tools = sorted(set(tool_calls))
+                    tools_str = ", ".join(unique_tools)
+                    # 将工具调用记录附加到 content 后面（或者前面？）
+                    # 通常工具调用是助手的行为，紧随其回复文本之后
+                    if log.role == "assistant":
+                        content += f"\n[工具调用历史: {tools_str}]"
+
             # 清理 XML 标签和 Thinking 块
             content = re.sub(
                 r"<!-- PERO_RAG_BLOCK_START.*?-->", "", content, flags=re.S
@@ -111,11 +138,9 @@ class HistoryPreprocessor(BasePreprocessor):
             content = content.strip()
 
             if content:
-                cleaned_msgs.append({
-                    "role": log.role, 
-                    "content": content,
-                    "timestamp": log.timestamp
-                })
+                cleaned_msgs.append(
+                    {"role": log.role, "content": content, "timestamp": log.timestamp}
+                )
 
         return cleaned_msgs
 
@@ -126,22 +151,22 @@ class HistoryPreprocessor(BasePreprocessor):
 
         flattened_lines = []
         now = datetime.datetime.now()
-        
+
         for msg in messages:
             role = msg["role"]
             content = msg["content"]
             ts = msg.get("timestamp")
-            
+
             # 格式化时间
             time_str = ""
             if ts:
                 try:
                     # 兼容秒级和毫秒级时间戳
-                    if ts > 1e11: # 毫秒
+                    if ts > 1e11:  # 毫秒
                         dt = datetime.datetime.fromtimestamp(ts / 1000.0)
-                    else: # 秒
+                    else:  # 秒
                         dt = datetime.datetime.fromtimestamp(ts)
-                    
+
                     # 如果不是今天的消息，增加日期显示 [MM-DD HH:MM]
                     if dt.date() != now.date():
                         time_str = dt.strftime("%m-%d %H:%M")
@@ -157,20 +182,25 @@ class HistoryPreprocessor(BasePreprocessor):
             elif role == "system":
                 display_name = "System"
             elif role == "user":
-                display_name = "User" # 或者 owner_name
-            
+                display_name = "User"  # 或者 owner_name
+
             # 转义内容，防止破坏 XML 结构
-            content = str(content).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+            content = (
+                str(content)
+                .replace("&", "&amp;")
+                .replace("<", "&lt;")
+                .replace(">", "&gt;")
+            )
 
             # 构建 XML 标签
             # <message role="user" name="User" time="12:00">Content</message>
             line = f'<message role="{role}" name="{display_name}"'
             if time_str:
                 line += f' time="{time_str}"'
-            line += f'>{content}</message>'
-            
+            line += f">{content}</message>"
+
             flattened_lines.append(line)
-            
+
         return "\n".join(flattened_lines)
 
     async def process(self, context: Dict[str, Any]) -> Dict[str, Any]:
@@ -184,62 +214,68 @@ class HistoryPreprocessor(BasePreprocessor):
 
         # 获取当前 Bot Name
         from core.config_manager import get_config_manager
+
         config_mgr = get_config_manager()
         bot_name = config_mgr.get("bot_name", "Pero")
-        
+
         # [配置读取]
         memory_config = config_mgr.get_json("memory_config")
-        
+
         # 确定当前模式
         mode_key = "desktop"
         if source == "social":
             mode_key = "social"
         elif source == "ide" or session_id.startswith("work_"):
             mode_key = "work"
-            
+
         # 动态获取 limit
-        limit = memory_config.get("modes", {}).get(mode_key, {}).get("context_limit", 20)
+        limit = (
+            memory_config.get("modes", {}).get(mode_key, {}).get("context_limit", 20)
+        )
 
         # [多源拉取策略]
         # 1. Group History (群聊模式)
         # 2. Desktop History (桌宠模式)
-        
+
         # limit 已由上方配置读取决定
-        
+
         # 拉取 Group History (需要去 GroupChatMessage 表拉取，目前 query_logs 只查 ConversationLog)
         # 这是一个问题：HistoryFetcher 目前只封装了 ConversationLog 的查询。
         # 我们需要在 query_logs 增加对 GroupChatMessage 的支持，或者在这里单独处理。
         # 为了快速实现，我们暂时假设 query_logs 已经支持或者我们在这里直接查 Group 表。
         # 但 GroupChatMessage 结构不同。
         # 临时方案：我们在这里直接查 GroupChatMessage 表。
-        
+
         from models import GroupChatMessage
         from services.chat.stronghold_service import StrongholdService
-        
+
         stronghold_service = StrongholdService(session)
         # 获取当前 Agent 所在的 Room
         current_room = await stronghold_service.get_agent_location(agent_id)
-        
+
         group_history_text = "（暂无群聊记录）"
         if current_room:
-            stmt = select(GroupChatMessage).where(GroupChatMessage.room_id == current_room.id).order_by(desc(GroupChatMessage.timestamp)).limit(limit)
+            stmt = (
+                select(GroupChatMessage)
+                .where(GroupChatMessage.room_id == current_room.id)
+                .order_by(desc(GroupChatMessage.timestamp))
+                .limit(limit)
+            )
             group_msgs = (await session.exec(stmt)).all()
             # 翻转为正序
             group_msgs.reverse()
-            
+
             # 转换为通用格式
             formatted_group_msgs = []
             for m in group_msgs:
-                formatted_group_msgs.append({
-                    "role": m.role, 
-                    "content": m.content,
-                    "timestamp": m.timestamp
-                })
-            
+                formatted_group_msgs.append(
+                    {"role": m.role, "content": m.content, "timestamp": m.timestamp}
+                )
+
             group_history_text = self._flatten_history(formatted_group_msgs, bot_name)
-            
+
         variables["flattened_group_history"] = group_history_text
-        
+
         # 拉取 Desktop History (查 ConversationLog)
         desktop_msgs = await self._fetch_and_clean_logs(
             session, memory_service, "desktop", limit, agent_id
@@ -248,13 +284,15 @@ class HistoryPreprocessor(BasePreprocessor):
         # 所以我们不需要再次翻转，除非我们需要倒序显示。
         # Group History 那边是手动 query DESC 然后 reverse 成 ASC。
         # 这里保持一致，使用 ASC。
-        
-        variables["flattened_desktop_history"] = self._flatten_history(desktop_msgs, bot_name)
+
+        variables["flattened_desktop_history"] = self._flatten_history(
+            desktop_msgs, bot_name
+        )
 
         # [Legacy Logic 兼容]
         # 为了兼容旧的逻辑（有些地方可能还在用 history_messages），我们保留原有逻辑
         # 但主要用于 Work 模式或 IDE 模式的流式上下文
-        
+
         enable_history = True
         if source == "social":
             enable_history = False
@@ -271,28 +309,36 @@ class HistoryPreprocessor(BasePreprocessor):
         # 如果是 Group 或 Desktop 模式，我们已经在上面压扁了，这里可以传空，或者为了保险起见传少量
         # 这里的 history_messages 将被 PromptManager 的 compose_messages 忽略（如果采用两轮制）
         # 但为了防止某些旧代码报错，我们还是拉取一下
-        
+
         context["history_messages"] = []
-        
+
         # 只有在 Work Mode 下，我们才需要“未压扁”的原始消息列表作为 Context，
         # 因为 Work Mode 可能需要精准的代码上下文，且我们还没有完全迁移 Work Mode 到两轮制（或者 Work Mode 也迁移？）
         # 根据 spec，Work Mode 也使用 XML 标签块拼接。
         # 所以这里的 history_messages 实际上可以为空了，因为所有的历史都进了 variables。
-        
+
         # 暂时保留 Work Mode 的特殊处理，以防万一
         is_work_context = session_id.startswith("work_") or source == "ide"
         if is_work_context:
-             work_msgs = await self._fetch_and_clean_logs(
-                session, memory_service, session_id, 50, agent_id # Work Mode session_id
+            work_msgs = await self._fetch_and_clean_logs(
+                session,
+                memory_service,
+                session_id,
+                50,
+                agent_id,  # Work Mode session_id
             )
-             context["history_messages"] = work_msgs
-             # Work Mode 的压扁历史可能需要特殊处理，或者直接用 recent_history_context
-             # 现在的 system.md 里 Work Mode 用的是 recent_history_context
-             # 我们把 work_msgs 压扁放进 recent_history_context
-             variables["recent_history_context"] = self._flatten_history(work_msgs, bot_name)
+            context["history_messages"] = work_msgs
+            # Work Mode 的压扁历史可能需要特殊处理，或者直接用 recent_history_context
+            # 现在的 system.md 里 Work Mode 用的是 recent_history_context
+            # 我们把 work_msgs 压扁放进 recent_history_context
+            variables["recent_history_context"] = self._flatten_history(
+                work_msgs, bot_name
+            )
 
-        context["full_context_messages"] = current_messages # 这里的 full_context 仅包含当前消息了
-        
+        context["full_context_messages"] = (
+            current_messages  # 这里的 full_context 仅包含当前消息了
+        )
+
         return context
 
 
@@ -352,6 +398,7 @@ class RAGPreprocessor(BasePreprocessor):
 
         # 获取用户配置
         from core.config_manager import get_config_manager
+
         config_mgr = get_config_manager()
         configs = {c.key: c.value for c in (await session.exec(select(Config))).all()}
         owner_name = configs.get("owner_name", "主人")
@@ -362,10 +409,14 @@ class RAGPreprocessor(BasePreprocessor):
         mode_key = "desktop"
         if source == "social":
             mode_key = "social"
-        elif source == "ide" or (context.get("session_id", "default").startswith("work_")):
+        elif source == "ide" or (
+            context.get("session_id", "default").startswith("work_")
+        ):
             mode_key = "work"
-            
-        rag_limit = memory_config.get("modes", {}).get(mode_key, {}).get("rag_limit", 10)
+
+        rag_limit = (
+            memory_config.get("modes", {}).get(mode_key, {}).get("rag_limit", 10)
+        )
 
         # 获取相关记忆
         try:
@@ -464,7 +515,9 @@ class RAGPreprocessor(BasePreprocessor):
 
                         # 计算加权平均值
                         merged_vec = np.zeros_like(embeddings[0])
-                        for emb, weight in zip(embeddings, normalized_weights, strict=False):
+                        for emb, weight in zip(
+                            embeddings, normalized_weights, strict=False
+                        ):
                             merged_vec += np.array(emb) * weight
                         query_vec = merged_vec.tolist()
 
@@ -789,11 +842,7 @@ class SystemPromptPreprocessor(BasePreprocessor):
 
         # [NIT Security] 将动态握手 ID 注入系统提示词
         # [修复] 社交模式也支持工具调用（如提醒），因此不再跳过 NIT 注入
-        if (
-            nit_id
-            and final_messages
-            and final_messages[0]["role"] == "system"
-        ):
+        if nit_id and final_messages and final_messages[0]["role"] == "system":
             from nit_core.security import NITSecurityManager
 
             security_prompt = NITSecurityManager.get_injection_prompt(nit_id)

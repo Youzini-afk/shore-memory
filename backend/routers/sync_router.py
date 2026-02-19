@@ -33,7 +33,8 @@ async def get_sync_config():
 
 @router.post("/config")
 async def update_sync_config(
-    config: SyncConfig, session: Session = Depends(get_session)  # noqa: B008
+    config: SyncConfig,
+    session: Session = Depends(get_session),  # noqa: B008
 ):
     """更新同步配置"""
     try:

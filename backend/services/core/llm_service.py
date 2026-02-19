@@ -177,20 +177,20 @@ class LLMService:
         try:
             # 仅在开发环境或显式开启 DEBUG 时打印完整 payload
             # 为了减少日志噪音，默认仅打印摘要
-            
+
             debug_payload = json.loads(json.dumps(payload))
             messages = debug_payload.get("messages", [])
-            
+
             summary = {
                 "model": debug_payload.get("model"),
                 "message_count": len(messages),
-                "messages_preview": []
+                "messages_preview": [],
             }
 
             for msg in messages:
                 content = msg.get("content")
                 role = msg.get("role")
-                
+
                 preview_content = "..."
                 if isinstance(content, str):
                     # 移除所有截断，显示完整内容
@@ -206,16 +206,16 @@ class LLMService:
                                 text_parts.append("[Image]")
                             else:
                                 text_parts.append(f"[{item.get('type', 'unknown')}]")
-                    
+
                     full_text = " ".join(text_parts)
                     preview_content = full_text or f"[{len(content)} items (No Text)]"
-                
+
                 summary["messages_preview"].append(f"[{role}] {preview_content}")
 
             print(
                 f"[LLM] 请求摘要 ({self.provider}): {json.dumps(summary, indent=2, ensure_ascii=False)}"
             )
-            
+
             # 原有的完整打印逻辑 (已注释，需要时取消注释)
             # print(
             #     f"[LLM] 请求 Payload ({self.provider}): {json.dumps(debug_payload, indent=2, ensure_ascii=False)}"
@@ -314,6 +314,7 @@ class LLMService:
 
             content_text = ""
             import contextlib
+
             with contextlib.suppress(Exception):
                 content_text = response.text
 
@@ -992,7 +993,10 @@ class LLMService:
 
             async with client.messages.stream(**kwargs) as stream:
                 async for event in stream:
-                    if event.type == "content_block_delta" and event.delta.type == "text_delta":
+                    if (
+                        event.type == "content_block_delta"
+                        and event.delta.type == "text_delta"
+                    ):
                         yield {"content": event.delta.text}
                     # SDK 处理复杂的工具事件，但将其映射到 OpenAI delta 格式需要小心处理。目前我们专注于文本。
                     # TODO: 如果需要，实现完整的工具流映射。

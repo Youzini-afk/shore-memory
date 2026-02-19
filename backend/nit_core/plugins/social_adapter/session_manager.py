@@ -566,9 +566,7 @@ class SocialSessionManager:
                     )
                 else:
                     # Already summoned: Do nothing (Accumulate)
-                    logger.info(
-                        f"[{session_id}] 在累积期间再次被提及。继续等待。"
-                    )
+                    logger.info(f"[{session_id}] 在累积期间再次被提及。继续等待。")
 
             elif len(session.buffer) >= self.BUFFER_MAX_SIZE:
                 logger.info(f"[{session_id}] 缓冲区已满！")

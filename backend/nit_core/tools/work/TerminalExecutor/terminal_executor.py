@@ -121,9 +121,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
     # 1. 向前端请求确认
     risk_info = {"level": risk_level, "reason": reason, "highlight": highlight}
 
-    logger.info(
-        f"请求用户确认指令: {command} (风险等级: {risk_level})"
-    )
+    logger.info(f"请求用户确认指令: {command} (风险等级: {risk_level})")
 
     approved = await realtime_session_manager.request_user_confirmation(
         command, risk_info=risk_info
@@ -208,9 +206,7 @@ async def execute_terminal_command(command: str, cwd: str = None) -> str:
             )
 
             if skip_task in done:
-                logger.info(
-                    f"用户跳过了等待指令 {command} (PID {process.pid})"
-                )
+                logger.info(f"用户跳过了等待指令 {command} (PID {process.pid})")
 
                 # 确保读取器和进程等待在后台继续
                 async def background_monitor():

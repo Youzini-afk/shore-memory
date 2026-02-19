@@ -22,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 class ConfigManager:
     _instance: Optional["ConfigManager"] = None
-    
+
     # 易失性配置列表：这些配置仅在内存中维护，不会从数据库加载或保存
     # 通常由环境变量或命令行参数控制
     VOLATILE_CONFIGS = {
@@ -41,27 +41,23 @@ class ConfigManager:
             "enable_social_mode": False,  # 默认关闭以确保安全
             "tts_enabled": True,
             # [Memory] 默认记忆配置 (JSON 结构)
-            "memory_config": json.dumps({
-                "modes": {
-                    "desktop": {
-                        "context_limit": 20,
-                        "rag_limit": 10
-                    },
-                    "work": {
-                        "context_limit": 50,
-                        "rag_limit": 15
-                    },
-                    "social": {
-                        "context_limit": 100,
-                        "rag_limit": 10,
-                        "advanced": {
-                            "image_limit": 2,
-                            "cross_context_users": 3,
-                            "cross_context_history": 10
-                        }
+            "memory_config": json.dumps(
+                {
+                    "modes": {
+                        "desktop": {"context_limit": 20, "rag_limit": 10},
+                        "work": {"context_limit": 50, "rag_limit": 15},
+                        "social": {
+                            "context_limit": 100,
+                            "rag_limit": 10,
+                            "advanced": {
+                                "image_limit": 2,
+                                "cross_context_users": 3,
+                                "cross_context_history": 10,
+                            },
+                        },
                     }
                 }
-            }),
+            ),
         }
 
         self.env_loaded_keys: Set[str] = set()
@@ -110,7 +106,9 @@ class ConfigManager:
     async def load_from_db(self):
         """将配置从数据库加载到内存中。"""
         try:
-            async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)  # type: ignore
+            async_session = sessionmaker(
+                engine, class_=AsyncSession, expire_on_commit=False
+            )  # type: ignore
             async with async_session() as session:  # type: ignore
                 statement = select(Config)
                 results = await session.exec(statement)

@@ -453,71 +453,172 @@
                     </el-card>
                   </el-col>
                 </el-row>
-              <!-- Memory Config Card -->
-              <el-row :gutter="20" style="margin-top: 20px">
+                <!-- Memory Config Card -->
+                <el-row :gutter="20" style="margin-top: 20px">
                   <el-col :span="24">
-                    <el-card shadow="hover" class="glass-card" :body-style="{ padding: '15px 20px' }">
-                      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px">
+                    <el-card
+                      shadow="hover"
+                      class="glass-card"
+                      :body-style="{ padding: '15px 20px' }"
+                    >
+                      <div
+                        style="
+                          display: flex;
+                          justify-content: space-between;
+                          align-items: center;
+                          margin-bottom: 15px;
+                        "
+                      >
                         <div style="display: flex; align-items: center; gap: 15px">
                           <div style="font-size: 24px">🧠</div>
                           <div>
-                            <div style="font-weight: bold; font-size: 16px">记忆系统配置 (Memory System)</div>
-                            <div style="font-size: 13px; color: #666; margin-top: 4px">配置不同模式下的记忆召回与上下文长度</div>
+                            <div style="font-weight: bold; font-size: 16px">
+                              记忆系统配置 (Memory System)
+                            </div>
+                            <div style="font-size: 13px; color: #666; margin-top: 4px">
+                              配置不同模式下的记忆召回与上下文长度
+                            </div>
                           </div>
                         </div>
-                        <el-button type="primary" size="small" @click="saveMemoryConfig" :loading="isSavingMemoryConfig">保存配置</el-button>
+                        <el-button
+                          type="primary"
+                          size="small"
+                          :loading="isSavingMemoryConfig"
+                          @click="saveMemoryConfig"
+                          >保存配置</el-button
+                        >
                       </div>
 
                       <el-tabs v-model="activeMemoryTab" class="memory-config-tabs">
                         <el-tab-pane label="桌面模式 (Desktop)" name="desktop">
-                            <el-form label-position="left" label-width="140px" style="margin-top: 10px;">
-                                <el-form-item label="短期记忆上下文">
-                                    <el-slider v-model="memoryConfig.modes.desktop.context_limit" :min="5" :max="50" show-input :step="1" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">最近对话的条数，用于维持对话连贯性。</div>
-                                </el-form-item>
-                                <el-form-item label="RAG 召回数量">
-                                    <el-slider v-model="memoryConfig.modes.desktop.rag_limit" :min="0" :max="30" show-input :step="1" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">从长期记忆库中检索的相关记忆条数。</div>
-                                </el-form-item>
-                            </el-form>
+                          <el-form
+                            label-position="left"
+                            label-width="140px"
+                            style="margin-top: 10px"
+                          >
+                            <el-form-item label="短期记忆上下文">
+                              <el-slider
+                                v-model="memoryConfig.modes.desktop.context_limit"
+                                :min="5"
+                                :max="50"
+                                show-input
+                                :step="1"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                最近对话的条数，用于维持对话连贯性。
+                              </div>
+                            </el-form-item>
+                            <el-form-item label="RAG 召回数量">
+                              <el-slider
+                                v-model="memoryConfig.modes.desktop.rag_limit"
+                                :min="0"
+                                :max="30"
+                                show-input
+                                :step="1"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                从长期记忆库中检索的相关记忆条数。
+                              </div>
+                            </el-form-item>
+                          </el-form>
                         </el-tab-pane>
                         <el-tab-pane label="工作模式 (Work)" name="work">
-                             <el-form label-position="left" label-width="140px" style="margin-top: 10px;">
-                                <el-form-item label="短期记忆上下文">
-                                    <el-slider v-model="memoryConfig.modes.work.context_limit" :min="10" :max="100" show-input :step="1" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">工作模式通常需要更长的上下文以理解代码或任务背景。</div>
-                                </el-form-item>
-                                <el-form-item label="RAG 召回数量">
-                                    <el-slider v-model="memoryConfig.modes.work.rag_limit" :min="0" :max="50" show-input :step="1" />
-                                </el-form-item>
-                            </el-form>
+                          <el-form
+                            label-position="left"
+                            label-width="140px"
+                            style="margin-top: 10px"
+                          >
+                            <el-form-item label="短期记忆上下文">
+                              <el-slider
+                                v-model="memoryConfig.modes.work.context_limit"
+                                :min="10"
+                                :max="100"
+                                show-input
+                                :step="1"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                工作模式通常需要更长的上下文以理解代码或任务背景。
+                              </div>
+                            </el-form-item>
+                            <el-form-item label="RAG 召回数量">
+                              <el-slider
+                                v-model="memoryConfig.modes.work.rag_limit"
+                                :min="0"
+                                :max="50"
+                                show-input
+                                :step="1"
+                              />
+                            </el-form-item>
+                          </el-form>
                         </el-tab-pane>
                         <el-tab-pane label="社交模式 (Social)" name="social">
-                            <el-form label-position="left" label-width="140px" style="margin-top: 10px;">
-                                <el-form-item label="决策上下文长度">
-                                    <el-slider v-model="memoryConfig.modes.social.context_limit" :min="20" :max="200" show-input :step="10" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">“秘书”决策和主动发言时参考的消息数量。较长上下文有助于更准确的“吃瓜”。</div>
-                                </el-form-item>
-                                <el-form-item label="RAG 召回数量">
-                                    <el-slider v-model="memoryConfig.modes.social.rag_limit" :min="0" :max="30" show-input :step="1" />
-                                </el-form-item>
-                                
-                                <el-divider content-position="left">高级配置 (Advanced)</el-divider>
-                                
-                                <el-form-item label="图片感知上限">
-                                    <el-input-number v-model="memoryConfig.modes.social.advanced.image_limit" :min="0" :max="4" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">每次处理消息时最多查看的最近图片数量 (Max 4)。</div>
-                                </el-form-item>
-                                <el-form-item label="跨会话感知人数">
-                                    <el-input-number v-model="memoryConfig.modes.social.advanced.cross_context_users" :min="0" :max="10" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">在群聊中同时关注的相关活跃用户数量。</div>
-                                </el-form-item>
-                                <el-form-item label="跨会话历史深度">
-                                    <el-input-number v-model="memoryConfig.modes.social.advanced.cross_context_history" :min="0" :max="50" />
-                                    <div style="font-size: 12px; color: #999; line-height: 1.2;">为每个相关用户/群组拉取的背景消息条数。</div>
-                                </el-form-item>
-                                <el-alert title="注意：调高高级配置参数可能会显著增加 Token 消耗及响应延迟。" type="warning" show-icon :closable="false" style="margin-top: 10px;" />
-                            </el-form>
+                          <el-form
+                            label-position="left"
+                            label-width="140px"
+                            style="margin-top: 10px"
+                          >
+                            <el-form-item label="决策上下文长度">
+                              <el-slider
+                                v-model="memoryConfig.modes.social.context_limit"
+                                :min="20"
+                                :max="200"
+                                show-input
+                                :step="10"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                “秘书”决策和主动发言时参考的消息数量。较长上下文有助于更准确的“吃瓜”。
+                              </div>
+                            </el-form-item>
+                            <el-form-item label="RAG 召回数量">
+                              <el-slider
+                                v-model="memoryConfig.modes.social.rag_limit"
+                                :min="0"
+                                :max="30"
+                                show-input
+                                :step="1"
+                              />
+                            </el-form-item>
+
+                            <el-divider content-position="left">高级配置 (Advanced)</el-divider>
+
+                            <el-form-item label="图片感知上限">
+                              <el-input-number
+                                v-model="memoryConfig.modes.social.advanced.image_limit"
+                                :min="0"
+                                :max="4"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                每次处理消息时最多查看的最近图片数量 (Max 4)。
+                              </div>
+                            </el-form-item>
+                            <el-form-item label="跨会话感知人数">
+                              <el-input-number
+                                v-model="memoryConfig.modes.social.advanced.cross_context_users"
+                                :min="0"
+                                :max="10"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                在群聊中同时关注的相关活跃用户数量。
+                              </div>
+                            </el-form-item>
+                            <el-form-item label="跨会话历史深度">
+                              <el-input-number
+                                v-model="memoryConfig.modes.social.advanced.cross_context_history"
+                                :min="0"
+                                :max="50"
+                              />
+                              <div style="font-size: 12px; color: #999; line-height: 1.2">
+                                为每个相关用户/群组拉取的背景消息条数。
+                              </div>
+                            </el-form-item>
+                            <el-alert
+                              title="注意：调高高级配置参数可能会显著增加 Token 消耗及响应延迟。"
+                              type="warning"
+                              show-icon
+                              :closable="false"
+                              style="margin-top: 10px"
+                            />
+                          </el-form>
                         </el-tab-pane>
                       </el-tabs>
                     </el-card>
@@ -1955,8 +2056,8 @@ const memoryConfig = ref({
   modes: {
     desktop: { context_limit: 20, rag_limit: 10 },
     work: { context_limit: 50, rag_limit: 15 },
-    social: { 
-      context_limit: 100, 
+    social: {
+      context_limit: 100,
       rag_limit: 10,
       advanced: {
         image_limit: 2,
@@ -2579,9 +2680,9 @@ const waitForBackend = async () => {
       const res = await fetchWithTimeout(`${API_BASE}/pet/state`, { silent: true }, 2000)
       if (res.ok) {
         isBackendOnline.value = true
-      await fetchAllData(true) // 后端上线后，拉取所有数据
-      fetchMemoryConfig() // 拉取记忆配置
-      return
+        await fetchAllData(true) // 后端上线后，拉取所有数据
+        fetchMemoryConfig() // 拉取记忆配置
+        return
       }
     } catch {
       // 忽略启动时的连接错误，静默重试

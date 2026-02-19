@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 
 class GatewayClient:
     def __init__(self, uri="ws://localhost:14747/ws"):
+        self._configure_proxy_bypass()
         self.uri = uri
         self.websocket = None
         self.running = False
@@ -22,6 +23,26 @@ class GatewayClient:
         # 优先从环境变量获取令牌，这是由 Electron 主进程传入的最新令牌
         self.token = os.getenv("GATEWAY_TOKEN", "python-token")
         self.listeners = {}  # event_name -> [callback]
+
+    def _configure_proxy_bypass(self):
+        """配置代理绕过，防止本地 VPN 拦截 localhost 连接"""
+        # 获取当前的 NO_PROXY 设置
+        no_proxy = os.environ.get("NO_PROXY", "")
+        no_proxy_list = no_proxy.split(",") if no_proxy else []
+
+        # 确保 localhost 和 127.0.0.1 在列表中
+        updates = []
+        if "localhost" not in no_proxy_list:
+            updates.append("localhost")
+        if "127.0.0.1" not in no_proxy_list:
+            updates.append("127.0.0.1")
+
+        if updates:
+            if no_proxy:
+                os.environ["NO_PROXY"] = f"{no_proxy},{','.join(updates)}"
+            else:
+                os.environ["NO_PROXY"] = ",".join(updates)
+            logger.info(f"已更新 NO_PROXY 配置: {os.environ['NO_PROXY']}")
 
     def set_token(self, token):
         self.token = token

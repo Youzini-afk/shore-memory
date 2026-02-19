@@ -728,7 +728,9 @@
           v-model="input"
           class="w-full bg-transparent text-sm p-4 focus:outline-none resize-none min-h-[56px] max-h-48 custom-scrollbar font-sans border-none"
           :class="[
-            workMode ? 'text-slate-200 placeholder-slate-500' : 'text-slate-800 placeholder-slate-400',
+            workMode
+              ? 'text-slate-200 placeholder-slate-500'
+              : 'text-slate-800 placeholder-slate-400',
             disabled ? 'opacity-50 cursor-not-allowed' : ''
           ]"
           :placeholder="disabled ? '工作区初始化中...' : `问 ${agentName} 任何问题...`"
@@ -802,22 +804,22 @@
         </div>
       </div>
       <div
-         class="text-center mt-3 text-[9px] font-bold tracking-widest opacity-30 uppercase"
-         :class="workMode ? 'text-slate-500' : 'text-slate-400'"
-       >
-         {{ AGENT_NAME }} AI AGENT · POWERED BY RE-ACT ENGINE
-       </div>
-     </div>
+        class="text-center mt-3 text-[9px] font-bold tracking-widest opacity-30 uppercase"
+        :class="workMode ? 'text-slate-500' : 'text-slate-400'"
+      >
+        {{ AGENT_NAME }} AI AGENT · POWERED BY RE-ACT ENGINE
+      </div>
+    </div>
 
-     <CustomDialog
-       v-model:visible="deleteDialogVisible"
-       type="confirm"
-       title="删除消息"
-       :message="deleteDialogMessage"
-       @confirm="handleConfirmDelete"
-     />
-   </div>
- </template>
+    <CustomDialog
+      v-model:visible="deleteDialogVisible"
+      type="confirm"
+      title="删除消息"
+      :message="deleteDialogMessage"
+      @confirm="handleConfirmDelete"
+    />
+  </div>
+</template>
 
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
@@ -886,7 +888,7 @@ onMounted(async () => {
             break
           }
         }
-      } 
+      }
       // [Fix] Check for pending ASSISTANT message
       else if (payload.role === 'assistant') {
         const lastMsgIndex = messages.value.length - 1
@@ -1339,28 +1341,28 @@ const handleVoiceUpdate = (data) => {
   } else if (params.type === 'text_response') {
     // Assistant response from Voice/Desktop (Incremental or Final)
     // [Fix] Even if isSending is true, we might receive async updates via Gateway (e.g. from Tool Output)
-    // But usually fetch handles the response. 
+    // But usually fetch handles the response.
     // HOWEVER, if the response is empty (e.g. tool call only), fetch might return empty.
     // Let's rely on Gateway for text updates if content is not empty.
-    
-    if (params.content) {
-       const content = params.content
-       const lastMsg = messages.value[messages.value.length - 1]
 
-       if (lastMsg && lastMsg.role === 'assistant') {
-         // Update existing message if it looks like a continuation or replacement
-         // Since RealtimeSessionManager sends full accumulated text in 'content', we can just replace it.
-         lastMsg.content = content
-         scrollToBottom()
-       } else {
-         // New message
-         messages.value.push({
-           role: 'assistant',
-           content: content,
-           timestamp: new Date().toISOString()
-         })
-         scrollToBottom()
-       }
+    if (params.content) {
+      const content = params.content
+      const lastMsg = messages.value[messages.value.length - 1]
+
+      if (lastMsg && lastMsg.role === 'assistant') {
+        // Update existing message if it looks like a continuation or replacement
+        // Since RealtimeSessionManager sends full accumulated text in 'content', we can just replace it.
+        lastMsg.content = content
+        scrollToBottom()
+      } else {
+        // New message
+        messages.value.push({
+          role: 'assistant',
+          content: content,
+          timestamp: new Date().toISOString()
+        })
+        scrollToBottom()
+      }
     }
   }
 

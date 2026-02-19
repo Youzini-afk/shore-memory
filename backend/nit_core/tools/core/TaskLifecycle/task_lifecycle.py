@@ -230,9 +230,7 @@ async def finish_task(
                 print(f"[TaskLifecycle] 广播状态更新失败: {e}")
 
         else:
-            print(
-                "[TaskLifecycle] 警告: 无可用数据库会话。更改未持久化。"
-            )
+            print("[TaskLifecycle] 警告: 无可用数据库会话。更改未持久化。")
 
         # 实时广播
         if triggers:

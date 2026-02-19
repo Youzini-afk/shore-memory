@@ -51,6 +51,7 @@ class BrowserBridgeService:
         if websocket in self.client_activity:
             del self.client_activity[websocket]
         import contextlib
+
         with contextlib.suppress(Exception):
             await websocket.close()
 

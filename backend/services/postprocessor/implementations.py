@@ -23,17 +23,30 @@ class ThinkingFilterPostprocessor(BasePostprocessor):
         """
         if context.get("source") == "social":
             import re
+
             # 移除 【Thinking:...】, [Thinking:...], (Thinking:...) 等块
             # 这种非流式处理使用简单的正则
-            content = re.sub(r"【Thinking:.*?】", "", content, flags=re.DOTALL | re.IGNORECASE)
-            content = re.sub(r"\[Thinking:.*?\]", "", content, flags=re.DOTALL | re.IGNORECASE)
-            content = re.sub(r"\(Thinking:.*?\)", "", content, flags=re.DOTALL | re.IGNORECASE)
-            
+            content = re.sub(
+                r"【Thinking:.*?】", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
+            content = re.sub(
+                r"\[Thinking:.*?\]", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
+            content = re.sub(
+                r"\(Thinking:.*?\)", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
+
             # [兼容性保留] 移除旧版 【Monologue:...】 等块，确保历史记录或意外输出不溢出到社交平台
-            content = re.sub(r"【Monologue:.*?】", "", content, flags=re.DOTALL | re.IGNORECASE)
-            content = re.sub(r"\[Monologue:.*?\]", "", content, flags=re.DOTALL | re.IGNORECASE)
-            content = re.sub(r"\(Monologue:.*?\)", "", content, flags=re.DOTALL | re.IGNORECASE)
-        
+            content = re.sub(
+                r"【Monologue:.*?】", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
+            content = re.sub(
+                r"\[Monologue:.*?\]", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
+            content = re.sub(
+                r"\(Monologue:.*?\)", "", content, flags=re.DOTALL | re.IGNORECASE
+            )
+
         return content
 
     async def process_stream(
@@ -44,12 +57,13 @@ class ThinkingFilterPostprocessor(BasePostprocessor):
         """
         if context.get("source") == "social":
             from nit_core.dispatcher import ThinkingBlockStreamFilter
+
             thinking_filter = ThinkingBlockStreamFilter()
             async for chunk in stream:
                 filtered = thinking_filter.filter(chunk)
                 if filtered:
                     yield filtered
-            
+
             # Flush
             remaining = thinking_filter.flush()
             if remaining:

@@ -1,15 +1,13 @@
-import contextlib
 import os
 from typing import List, Optional
 
 import numpy as np
 
+from core.model_manager import model_manager
+
 # 为了避免在导入时就下载模型，我们使用延迟加载
 # 并且设置本地缓存目录
-data_dir = os.environ.get(
-    "PERO_DATA_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-)
-os.environ["SENTENCE_TRANSFORMERS_HOME"] = os.path.join(data_dir, "models_cache")
+os.environ["SENTENCE_TRANSFORMERS_HOME"] = model_manager.models_cache_dir
 # 设置 HuggingFace 镜像，解决国内连接问题
 os.environ["HF_ENDPOINT"] = "https://hf-mirror.com"
 # 同时设置 HF_HOME，确保 huggingface_hub也能找到缓存
@@ -129,93 +127,61 @@ class EmbeddingService:
             from sentence_transformers import SentenceTransformer
 
             # model_name = "BAAI/bge-small-zh-v1.5"
-            model_name = "sentence-transformers/all-MiniLM-L6-v2"
-            
+            # 使用 ModelManager 中定义的 embedding 模型
+            model_key = "embedding"
+
             try:
-                # 尝试从本地加载，如果失败再从 Hub 加载
-                local_path = self._resolve_local_path(model_name)
-                if local_path:
+                # 尝试从 ModelManager 获取路径
+                if model_manager.check_model_exists(model_key):
+                    local_path = model_manager.get_actual_model_path(model_key)
                     self._model = SentenceTransformer(local_path, device="cpu")
                 else:
-                    self._model = SentenceTransformer(model_name, device="cpu")
-            except Exception:
-                # 最后的降级方案
-                self._model = SentenceTransformer(model_name, device="cpu")
+                    # 如果不存在，尝试下载（使用 ModelManager）
+                    print("[Embedding] Embedding 模型未找到，尝试下载...", flush=True)
+                    local_path = model_manager.download_model(model_key)
+                    self._model = SentenceTransformer(local_path, device="cpu")
+            except Exception as e:
+                print(f"[Embedding] 加载模型失败: {e}", flush=True)
+                # 最后的降级方案，尝试在线加载默认名称
+                default_name = model_manager.models[model_key].repo_id
+                self._model = SentenceTransformer(default_name, device="cpu")
 
     def _load_reranker(self):
         if self._cross_encoder is None:
             print(
-                "[Embedding] 正在加载重排序模型 (BAAI/bge-reranker-v2-m3)...",
+                "[Embedding] 正在加载重排序模型...",
                 flush=True,
             )
             from sentence_transformers import CrossEncoder
 
-            # 策略：首先尝试手动路径解析
-            model_name = "BAAI/bge-reranker-v2-m3"
+            model_key = "reranker"
 
-            # 1. 尝试手动路径解析
-            local_path = self._resolve_local_path(model_name)
-            if local_path:
-                try:
-                    # print(f"[Embedding] 发现本地缓存路径: {local_path}，尝试直接加载...", flush=True)
+            try:
+                # 尝试从 ModelManager 获取路径
+                if model_manager.check_model_exists(model_key):
+                    local_path = model_manager.get_actual_model_path(model_key)
                     self._cross_encoder = CrossEncoder(local_path)
                     print("[Embedding] 已从本地缓存路径加载重排序模型。", flush=True)
                     return
-                except Exception as manual_e:
-                    print(f"[Embedding] 手动路径加载失败: {manual_e}", flush=True)
-
-            # 2. 尝试库本地加载（回退）严格本地模式
-            with contextlib.suppress(Exception):
-                # 使用 model_kwargs 代替 automodel_args（已弃用）
-                # 确保将 local_files_only=True 传递给底层 transformer
-                self._cross_encoder = CrossEncoder(
-                    "BAAI/bge-reranker-v2-m3",
-                    trust_remote_code=True,
-                    automodel_args={"local_files_only": True},  # 旧版
-                )
-
-            try:
-                # 尝试基于警告的“新方法”
-                print("[Embedding] 尝试使用 model_kwargs 加载...", flush=True)
-                self._cross_encoder = CrossEncoder(
-                    "BAAI/bge-reranker-v2-m3", model_kwargs={"local_files_only": True}
-                )
-                print(
-                    "[Embedding] 已从本地缓存加载重排序模型 (model_kwargs)。",
-                    flush=True,
-                )
-                return
+                else:
+                    print("[Embedding] Reranker 模型未找到，尝试下载...", flush=True)
+                    local_path = model_manager.download_model(model_key)
+                    self._cross_encoder = CrossEncoder(local_path)
+                    print("[Embedding] 重排序模型下载并加载完成。", flush=True)
+                    return
             except Exception as e:
-                print(f"[Embedding] model_kwargs 加载失败: {e}", flush=True)
-
-            try:
-                # 回退到“旧方法”
-                print("[Embedding] 尝试使用 automodel_args 加载...", flush=True)
-                self._cross_encoder = CrossEncoder(
-                    "BAAI/bge-reranker-v2-m3", automodel_args={"local_files_only": True}
-                )
-                print(
-                    "[Embedding] 已从本地缓存加载重排序模型 (automodel_args)。",
-                    flush=True,
-                )
-                return
-            except Exception as e:
-                print(f"[Embedding] automodel_args 加载失败: {e}", flush=True)
-
-            print(
-                "[Embedding] 本地缓存未命中 (BAAI/bge-reranker-v2-m3)。准备下载...",
-                flush=True,
-            )
-
-            try:
-                # 3. 从镜像下载
-                self._cross_encoder = CrossEncoder(
-                    "BAAI/bge-reranker-v2-m3", local_files_only=False
-                )
-                print("[Embedding] 重排序模型下载并加载完成。", flush=True)
-            except Exception as net_e:
-                print(f"[Embedding] 致命错误: 无法下载重排序模型: {net_e}", flush=True)
-                raise net_e
+                print(f"[Embedding] 加载重排序模型失败: {e}", flush=True)
+                # 尝试在线加载
+                try:
+                    default_name = model_manager.models[model_key].repo_id
+                    self._cross_encoder = CrossEncoder(
+                        default_name, trust_remote_code=True
+                    )
+                except Exception as net_e:
+                    print(
+                        f"[Embedding] 致命错误: 无法下载重排序模型: {net_e}", flush=True
+                    )
+                    raise net_e
 
     def warm_up(self):
         """

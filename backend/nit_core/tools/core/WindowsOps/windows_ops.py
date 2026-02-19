@@ -381,7 +381,13 @@ def automation_execute(
 
             try:
                 subprocess.run(
-                    ["powershell", "-ExecutionPolicy", "Bypass", "-Command", modern_ps_script],
+                    [
+                        "powershell",
+                        "-ExecutionPolicy",
+                        "Bypass",
+                        "-Command",
+                        modern_ps_script,
+                    ],
                     capture_output=True,
                     check=True,
                 )

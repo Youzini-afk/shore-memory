@@ -29,6 +29,7 @@ def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None)
         except AttributeError:
             # Python 3.7 之前的版本或某些环境可能不支持 reconfigure
             import io
+
             sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
     # 配置 Loguru (如果已安装)

@@ -39,9 +39,7 @@ async def websocket_endpoint(websocket: WebSocket):
     if x_self_id:
         logger.info(f"[Social] WebSocket 已连接 QQ: {x_self_id}")
     else:
-        logger.info(
-            "[Social] WebSocket 已连接 (无 X-Self-ID，作为默认/回退连接)。"
-        )
+        logger.info("[Social] WebSocket 已连接 (无 X-Self-ID，作为默认/回退连接)。")
 
     try:
         while True:

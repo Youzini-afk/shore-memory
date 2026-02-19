@@ -320,7 +320,10 @@ class MultimodalTriggerCoordinator:
 
         # 冷却检查
         in_cooldown = False
-        if self.last_trigger_time and current_time - self.last_trigger_time < self.trigger_cooldown:
+        if (
+            self.last_trigger_time
+            and current_time - self.last_trigger_time < self.trigger_cooldown
+        ):
             in_cooldown = True
 
         # 决策逻辑

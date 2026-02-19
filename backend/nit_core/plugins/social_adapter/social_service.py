@@ -58,7 +58,7 @@ class SocialService:
         self.bot_infos: Dict[str, Dict[str, Any]] = {}
         # [兼容性] 单 Bot 信息缓存
         self.bot_info: Dict[str, Any] = {}
-        
+
         # [Fix] Initialize sticker map
         self._sticker_map: Dict[str, str] = {}
         self._sticker_base_dir: Optional[str] = None
@@ -88,16 +88,10 @@ class SocialService:
                 social_cfg = getattr(agent, "social_config", None) or getattr(
                     agent, "social_binding", None
                 )
-                if (
-                    social_cfg
-                    and social_cfg.get("enabled")
-                    and social_cfg.get("qq_id")
-                ):
+                if social_cfg and social_cfg.get("enabled") and social_cfg.get("qq_id"):
                     qq_id = str(social_cfg.get("qq_id"))
                     self.qq_agent_map[qq_id] = agent_id
-                    logger.info(
-                        f"[Social] 已加载映射: QQ {qq_id} -> Agent {agent_id}"
-                    )
+                    logger.info(f"[Social] 已加载映射: QQ {qq_id} -> Agent {agent_id}")
         except Exception as e:
             logger.error(f"[Social] 加载 Agent 映射失败: {e}")
 
@@ -108,13 +102,9 @@ class SocialService:
             # 检查此 QQ 是否有 Agent 映射
             agent_id = self.qq_agent_map.get(str(self_id))
             if agent_id:
-                logger.info(
-                    f"[Social] 已为 Agent {agent_id} 注册连接 (QQ: {self_id})"
-                )
+                logger.info(f"[Social] 已为 Agent {agent_id} 注册连接 (QQ: {self_id})")
             else:
-                logger.warning(
-                    f"[Social] 已为 QQ {self_id} 注册连接，但未映射 AGENT！"
-                )
+                logger.warning(f"[Social] 已为 QQ {self_id} 注册连接，但未映射 AGENT！")
         else:
             self.default_ws = websocket
             logger.info("[Social] 已注册默认连接 (无 X-Self-ID)")
@@ -219,13 +209,13 @@ class SocialService:
             async for session in get_social_db_session():
                 stmt = select(SocialDailyReport).where(
                     SocialDailyReport.date_str == date_str,
-                    SocialDailyReport.agent_id == agent_id
+                    SocialDailyReport.agent_id == agent_id,
                 )
                 result = await session.exec(stmt)
                 if result.first():
                     report_exists = True
                 break
-            
+
             if report_exists:
                 return
 
@@ -234,7 +224,7 @@ class SocialService:
             agent_workspace = get_workspace_root(agent_id)
             report_dir = os.path.join(agent_workspace, "social_reports")
             os.makedirs(report_dir, exist_ok=True)
-            
+
             file_path = os.path.join(report_dir, f"{date_str}.md")
             if os.path.exists(file_path):
                 # 补录到 DB? 暂时跳过
@@ -246,25 +236,31 @@ class SocialService:
             from sqlmodel import and_
 
             from .models_db import QQMessage
-            
+
             start_time = datetime.strptime(date_str, "%Y-%m-%d")
             end_time = start_time + timedelta(days=1)
-            
+
             messages = []
             async for session in get_social_db_session():
-                stmt = select(QQMessage).where(
-                    and_(
-                        QQMessage.timestamp >= start_time,
-                        QQMessage.timestamp < end_time,
-                        QQMessage.agent_id == agent_id
+                stmt = (
+                    select(QQMessage)
+                    .where(
+                        and_(
+                            QQMessage.timestamp >= start_time,
+                            QQMessage.timestamp < end_time,
+                            QQMessage.agent_id == agent_id,
+                        )
                     )
-                ).order_by(QQMessage.timestamp)
-                
+                    .order_by(QQMessage.timestamp)
+                )
+
                 messages = (await session.exec(stmt)).all()
                 break
-                
+
             if not messages:
-                logger.info(f"[Social] {agent_id} 在 {date_str} 无消息记录，跳过日报生成。")
+                logger.info(
+                    f"[Social] {agent_id} 在 {date_str} 无消息记录，跳过日报生成。"
+                )
                 return
 
             # 3. 格式化上下文
@@ -274,29 +270,33 @@ class SocialService:
                 time_str = msg.timestamp.strftime("%H:%M:%S")
                 type_str = "Group" if msg.session_type == "group" else "Private"
                 # 简单过滤过长消息
-                content = msg.content[:500] + "..." if len(msg.content) > 500 else msg.content
+                content = (
+                    msg.content[:500] + "..." if len(msg.content) > 500 else msg.content
+                )
                 context_lines.append(f"[{time_str}] [{type_str}] {sender}: {content}")
-            
+
             context_text = "\n".join(context_lines)
-            
+
             # 4. 调用 ScorerService 生成
             from sqlalchemy.orm import sessionmaker
             from sqlmodel.ext.asyncio.session import AsyncSession
 
             from database import engine
             from services.memory.scorer_service import ScorerService
-            
-            async_session_factory = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+            async_session_factory = sessionmaker(
+                engine, class_=AsyncSession, expire_on_commit=False
+            )
             async with async_session_factory() as main_session:
                 scorer = ScorerService(main_session)
-                
+
                 report_content = await scorer.generate_social_daily_report(
                     context_text=context_text,
                     date_str=date_str,
                     total_messages=len(messages),
-                    agent_name=agent_id
+                    agent_name=agent_id,
                 )
-                
+
             if not report_content:
                 logger.warning(f"[Social] 日报生成返回空内容 ({agent_id}, {date_str})")
                 return
@@ -317,7 +317,7 @@ class SocialService:
                         date_str=date_str,
                         content=report_content,
                         total_messages=len(messages),
-                        agent_id=agent_id
+                        agent_id=agent_id,
                     )
                     session.add(report)
                     await session.commit()
@@ -325,7 +325,7 @@ class SocialService:
                 logger.info("[Social] 日报已归档到数据库。")
             except Exception as e:
                 logger.error(f"[Social] 保存日报到数据库失败: {e}")
-                
+
         except Exception as e:
             logger.error(f"[Social] 处理 {agent_id} 的日报失败: {e}", exc_info=True)
 
@@ -387,9 +387,7 @@ class SocialService:
                     agent_id = "pero"  # Default
                 else:
                     # 我们有映射，但此 QQ 未映射。忽略？
-                    logger.debug(
-                        f"[Social] 忽略未映射 QQ 的消息: {self_id}"
-                    )
+                    logger.debug(f"[Social] 忽略未映射 QQ 的消息: {self_id}")
                     return
 
             # 更新 Bot 自身 ID 信息
@@ -554,8 +552,10 @@ class SocialService:
                 target_id = None
                 if self.connections:
                     target_id = next(iter(self.connections.keys()))
-                
-                resp = await self._send_api_and_wait("get_version_info", {}, self_id=target_id, timeout=2)
+
+                resp = await self._send_api_and_wait(
+                    "get_version_info", {}, self_id=target_id, timeout=2
+                )
                 if resp and resp.get("status") == "ok":
                     status["api_responsive"] = True
                     # 计算延迟
@@ -651,7 +651,6 @@ class SocialService:
             try:
                 await asyncio.sleep(30)
 
-
                 if not self.running or not self.enabled:
                     continue
 
@@ -720,7 +719,9 @@ class SocialService:
 
                 # 决定下次检查时间
                 if spoke:
-                    interval = 120 if is_active else random.randint(1800, 3600)  # 主动冒泡后进入贤者模式
+                    interval = (
+                        120 if is_active else random.randint(1800, 3600)
+                    )  # 主动冒泡后进入贤者模式
                 elif is_active:
                     interval = 60
                 else:
@@ -780,7 +781,7 @@ class SocialService:
 
                         session.next_scan_time = now + timedelta(seconds=next_interval)
                         logger.debug(
-                            f"[Social-Private] {session.session_name} 下次检查在 {next_interval//3600} 小时后。"
+                            f"[Social-Private] {session.session_name} 下次检查在 {next_interval // 3600} 小时后。"
                         )
 
             except asyncio.CancelledError:
@@ -881,7 +882,7 @@ class SocialService:
             memory_config = self.config_manager.get_json("memory_config")
             social_config = memory_config.get("modes", {}).get("social", {})
             history_limit = social_config.get("context_limit", 100)
-            
+
             recent_messages = await self.session_manager.get_recent_messages(
                 target_session.session_id,
                 target_session.session_type,
@@ -905,9 +906,12 @@ class SocialService:
                 # 1. 检查 sender_id 是否为 "self" (Agent 刚发出的消息)
                 # 2. 检查 sender_id 是否为当前 Bot 的 QQ 号 (从 DB 恢复的历史记录)
                 is_bot = (
-                    msg.sender_id == "self" 
+                    msg.sender_id == "self"
                     or msg.sender_id in self.bot_infos
-                    or (self.bot_info and msg.sender_id == str(self.bot_info.get("user_id")))
+                    or (
+                        self.bot_info
+                        and msg.sender_id == str(self.bot_info.get("user_id"))
+                    )
                 )
 
                 if is_bot:
@@ -920,7 +924,7 @@ class SocialService:
                 msg_time = ""
                 if hasattr(msg, "timestamp") and msg.timestamp:
                     msg_time = f" ({msg.timestamp.strftime('%m-%d %H:%M')})"
-                
+
                 recent_context += f"[{sender_display}]{msg_time}: {clean_content}\n"
 
             if not recent_context:
@@ -1013,9 +1017,7 @@ class SocialService:
                 processed_images.reverse()
 
             # 构造消息
-            user_content_payload = [
-                {"type": "text", "text": "Decision?"}
-            ]
+            user_content_payload = [{"type": "text", "text": "Decision?"}]
 
             if processed_images:
                 logger.debug(
@@ -1537,7 +1539,7 @@ class SocialService:
             memory_config = self.config_manager.get_json("memory_config")
             social_config = memory_config.get("modes", {}).get("social", {})
             history_limit = social_config.get("context_limit", 100)
-            
+
             # 高级配置
             advanced_config = social_config.get("advanced", {})
             cross_context_users = advanced_config.get("cross_context_users", 3)
@@ -1594,9 +1596,11 @@ class SocialService:
             seen_users = set()
 
             # Check last N messages (or fewer if not enough)
-            scan_limit = cross_context_history # Reuse history limit for scan range
+            scan_limit = cross_context_history  # Reuse history limit for scan range
             scan_range = (
-                recent_messages[-scan_limit:] if len(recent_messages) >= scan_limit else recent_messages
+                recent_messages[-scan_limit:]
+                if len(recent_messages) >= scan_limit
+                else recent_messages
             )
 
             # Self ID
@@ -1690,7 +1694,7 @@ class SocialService:
                             continue
 
                         content = self._clean_cq_codes(pm.content)
-                        xml_context += f"      <msg sender=\"{pm.sender_name}\" sender_id=\"{pm.sender_id}\" id=\"{pm.msg_id}\" time=\"{pm.timestamp.strftime('%H:%M:%S')}\">{content}</msg>\n"
+                        xml_context += f'      <msg sender="{pm.sender_name}" sender_id="{pm.sender_id}" id="{pm.msg_id}" time="{pm.timestamp.strftime("%H:%M:%S")}">{content}</msg>\n'
                     xml_context += "    </session>\n"
                 xml_context += "  </related_private_contexts>\n"
 
@@ -1748,7 +1752,7 @@ class SocialService:
                 content = self._clean_cq_codes(msg.content)
                 img_tag = ""
 
-                xml_context += f"      <msg sender=\"{msg.sender_name}\" sender_id=\"{msg.sender_id}\" id=\"{msg.msg_id}\" time=\"{msg.timestamp.strftime('%H:%M:%S')}\">{content}{img_tag}</msg>\n"
+                xml_context += f'      <msg sender="{msg.sender_name}" sender_id="{msg.sender_id}" id="{msg.msg_id}" time="{msg.timestamp.strftime("%H:%M:%S")}">{content}{img_tag}</msg>\n'
 
             # [Multimodal Enhancement] Collect images from recent history (last 2 turns) + buffer
             # This ensures Pero can see images sent just before the trigger.
@@ -2411,7 +2415,7 @@ class SocialService:
                 except Exception as api_err:
                     if attempt < max_retries - 1:
                         logger.warning(
-                            f"[Social] 总结 API 调用失败 (尝试 {attempt+1}/{max_retries}): {api_err}. 2秒后重试..."
+                            f"[Social] 总结 API 调用失败 (尝试 {attempt + 1}/{max_retries}): {api_err}. 2秒后重试..."
                         )
                         await asyncio.sleep(2)
                     else:
@@ -2541,9 +2545,9 @@ class SocialService:
             response = await asyncio.wait_for(future, timeout=timeout)
             return response
         except asyncio.TimeoutError:
-                if echo_id in self.pending_requests:
-                    del self.pending_requests[echo_id]
-                raise TimeoutError(f"API {action} timed out.") from None
+            if echo_id in self.pending_requests:
+                del self.pending_requests[echo_id]
+            raise TimeoutError(f"API {action} timed out.") from None
 
     def _load_agent_stickers(self, agent_id: str) -> str:
         """
@@ -2557,6 +2561,7 @@ class SocialService:
         try:
             # Import here just in case, though module level import exists
             from services.agent.agent_manager import AgentManager
+
             agent_manager = AgentManager()
 
             # Try agent-specific directory first
@@ -2577,7 +2582,9 @@ class SocialService:
                     os.path.join(
                         os.path.dirname(
                             os.path.dirname(
-                                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                                os.path.dirname(
+                                    os.path.dirname(os.path.abspath(__file__))
+                                )
                             )
                         ),
                         "assets",
@@ -2599,14 +2606,14 @@ class SocialService:
                         stickers.append(name)
                         # Update internal map for sending
                         self._sticker_map[name] = entry.path
-                
+
                 if stickers:
                     sticker_list = ", ".join(stickers)
                     # logger.debug(f"[Social] Loaded {len(stickers)} stickers for agent {agent_id}.")
 
         except Exception as e:
             logger.error(f"[Social] Failed to load stickers for agent {agent_id}: {e}")
-            
+
         return sticker_list
 
     def _ensure_sticker_map(self):
@@ -2625,13 +2632,21 @@ class SocialService:
                     base_dir, "assets", "stickers", "index.json"
                 )
                 logger.debug(f"[Social] Loading sticker map from: {sticker_path}")
-                
+
                 if not os.path.exists(sticker_path):
                     # Fallback to default agent sticker path
                     fallback_path = os.path.join(
-                        base_dir, "services", "mdp", "agents", "pero", "stickers", "index.json"
+                        base_dir,
+                        "services",
+                        "mdp",
+                        "agents",
+                        "pero",
+                        "stickers",
+                        "index.json",
                     )
-                    logger.debug(f"[Social] Primary sticker path not found. Trying fallback: {fallback_path}")
+                    logger.debug(
+                        f"[Social] Primary sticker path not found. Trying fallback: {fallback_path}"
+                    )
                     if os.path.exists(fallback_path):
                         sticker_path = fallback_path
 
@@ -2639,17 +2654,21 @@ class SocialService:
                     with open(sticker_path, "r", encoding="utf-8") as f:
                         self._sticker_map = json.load(f)
                     self._sticker_base_dir = os.path.dirname(sticker_path)
-                    logger.info(f"[Social] Sticker map loaded from {sticker_path}. Count: {len(self._sticker_map)}")
+                    logger.info(
+                        f"[Social] Sticker map loaded from {sticker_path}. Count: {len(self._sticker_map)}"
+                    )
                 else:
-                    logger.warning(f"[Social] Sticker index not found at {sticker_path} (or fallback)")
+                    logger.warning(
+                        f"[Social] Sticker index not found at {sticker_path} (or fallback)"
+                    )
                     self._sticker_map = {}
                     # Do not set _sticker_base_dir to "" so we can retry if file appears later
-                    # self._sticker_base_dir = "" 
+                    # self._sticker_base_dir = ""
             except Exception as e:
                 logger.error(f"Failed to load sticker index: {e}")
                 self._sticker_map = {}
                 # Allow retry on next attempt
-                # self._sticker_base_dir = "" 
+                # self._sticker_base_dir = ""
 
     def _process_stickers(self, message: str) -> str:
         """
@@ -2664,7 +2683,7 @@ class SocialService:
         def replace_match(match):
             # Clean up the sticker name: remove whitespace
             sticker_name_raw = match.group(1).strip()
-            
+
             # Debug log
             # logger.debug(f"[Sticker] Processing tag: {sticker_name_raw}")
 
@@ -2678,7 +2697,7 @@ class SocialService:
                         filename = v
                         # logger.debug(f"[Sticker] Found case-insensitive match: {k} -> {filename}")
                         break
-            
+
             if filename:
                 # Construct absolute path for NapCat/OneBot
                 # OneBot usually supports file:// protocol
@@ -2686,13 +2705,15 @@ class SocialService:
                 full_path = os.path.join(base_dir, filename)
                 # Convert to forward slashes for compatibility
                 full_path = full_path.replace("\\", "/")
-                
+
                 cq_code = f"[CQ:image,file=file:///{full_path}]"
                 # logger.debug(f"[Sticker] Generated CQ: {cq_code}")
                 return cq_code
 
             # If still not found, keep original text to let user know it failed (or silently fail)
-            logger.warning(f"[Sticker] Sticker not found in map: '{sticker_name_raw}'. Map size: {len(self._sticker_map)}")
+            logger.warning(
+                f"[Sticker] Sticker not found in map: '{sticker_name_raw}'. Map size: {len(self._sticker_map)}"
+            )
             return match.group(0)
 
         # Regex to find [sticker:xxx]

@@ -304,12 +304,16 @@ class ScorerService:
                 return content
             except Exception as e:
                 last_error = e
-                print(f"[秘书] 生成社交日报 LLM 请求失败 (尝试 {i+1}/{retry_count}): {e}")
+                print(
+                    f"[秘书] 生成社交日报 LLM 请求失败 (尝试 {i + 1}/{retry_count}): {e}"
+                )
                 import asyncio
 
                 await asyncio.sleep(2 * (i + 1))
 
-        print(f"[秘书] 生成社交日报失败，已重试 {retry_count} 次。最后错误: {last_error}")
+        print(
+            f"[秘书] 生成社交日报失败，已重试 {retry_count} 次。最后错误: {last_error}"
+        )
         return ""
 
     async def generate_work_log_summary(
@@ -419,6 +423,7 @@ class ScorerService:
             current_texts = {}
             if current_config:
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     current_texts = json.loads(current_config.value)
 
@@ -489,6 +494,7 @@ class ScorerService:
             # 获取当前 Agent 名称
             config_manager = get_config_manager()
             from services.agent.agent_manager import AgentManager
+
             agent_manager = AgentManager()
             agent_profile = agent_manager.agents.get(agent_id)
             bot_name = (
@@ -496,7 +502,7 @@ class ScorerService:
                 if agent_profile
                 else config_manager.get("bot_name", "Pero")
             )
-            
+
             # 获取风格描述 (从 AgentProfile 或配置中获取，目前先从 Identity.md 中提取或默认)
             # 暂时使用默认风格
             tone_style = "可爱、元气、偶尔调皮或温柔"

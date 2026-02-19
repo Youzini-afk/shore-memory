@@ -114,6 +114,7 @@ class GroupChatService:
         if role in ["user", "assistant"] and sender_id != "Butler":
             # 异步触发，不阻塞当前请求
             import asyncio
+
             asyncio.create_task(self._trigger_dispatch(room_id))
 
         return msg
@@ -123,7 +124,7 @@ class GroupChatService:
         # 需要新的 Session
         from database import get_session
         from services.chat.group_chat_dispatcher import GroupChatDispatcher
-        
+
         # 获取最近历史
         # 这里使用一个新的 session 上下文
         async for session in get_session():
@@ -131,10 +132,10 @@ class GroupChatService:
                 # 重新初始化 service 以使用新 session
                 service = GroupChatService(session)
                 history = await service.get_history(room_id, limit=10)
-                
+
                 dispatcher = GroupChatDispatcher(session)
                 next_agent = await dispatcher.decide_next_turn(room_id, history)
-                
+
                 if next_agent:
                     print(f"[GroupChat] 调度器决定下一位发言者: {next_agent}")
                     await dispatcher.run_turn(room_id, next_agent)
@@ -142,7 +143,7 @@ class GroupChatService:
                     print("[GroupChat] 调度器决定: 无人接话")
             except Exception as e:
                 print(f"[GroupChat] 调度异常: {e}")
-            break # 只运行一次
+            break  # 只运行一次
 
     async def get_history(
         self, room_id: str, limit: int = 50

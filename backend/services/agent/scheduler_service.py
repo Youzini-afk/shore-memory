@@ -40,7 +40,9 @@ class SchedulerService:
         # 我们需要提供一个同步数据库 URL。
         # 假设 sqlite:///./backend/data/pero.db
 
-        backend_dir = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+        backend_dir = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
         db_path = os.path.join(backend_dir, "data", "pero.db")
         db_url = f"sqlite:///{db_path}"
 

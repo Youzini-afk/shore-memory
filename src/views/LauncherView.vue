@@ -780,6 +780,81 @@
                     <AlertCircle v-else :size="20" class="text-amber-500" title="性能将受限" />
                   </div>
                 </div>
+
+                <!-- AI 模型组件 -->
+                <div
+                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex flex-col gap-3 group hover:border-slate-700 transition-colors"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-500">
+                        <BrainCircuit :size="20" />
+                      </div>
+                      <div>
+                        <div class="font-bold text-sm">AI 模型组件</div>
+                        <div class="text-xs text-slate-500 mt-0.5">
+                          Embedding / Reranker / Whisper
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-3">
+                      <button
+                        v-if="!allModelsExist"
+                        :disabled="isDownloadingModels"
+                        class="px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2"
+                        @click="downloadModels"
+                      >
+                        <Download v-if="!isDownloadingModels" :size="14" />
+                        <span
+                          v-else
+                          class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"
+                        ></span>
+                        {{ isDownloadingModels ? '下载中...' : '一键下载' }}
+                      </button>
+                      <CheckCircle2 v-else :size="20" class="text-emerald-500" />
+                    </div>
+                  </div>
+
+                  <!-- 模型详细状态 -->
+                  <div class="grid grid-cols-3 gap-2 mt-2">
+                    <div class="flex items-center gap-2 text-xs bg-slate-800/50 p-2 rounded-lg">
+                      <div
+                        class="w-1.5 h-1.5 rounded-full"
+                        :class="envReport.embedding_model_exists ? 'bg-emerald-500' : 'bg-rose-500'"
+                      ></div>
+                      <span
+                        :class="
+                          envReport.embedding_model_exists ? 'text-slate-300' : 'text-slate-500'
+                        "
+                        >Embedding</span
+                      >
+                    </div>
+                    <div class="flex items-center gap-2 text-xs bg-slate-800/50 p-2 rounded-lg">
+                      <div
+                        class="w-1.5 h-1.5 rounded-full"
+                        :class="envReport.reranker_model_exists ? 'bg-emerald-500' : 'bg-rose-500'"
+                      ></div>
+                      <span
+                        :class="
+                          envReport.reranker_model_exists ? 'text-slate-300' : 'text-slate-500'
+                        "
+                        >Reranker</span
+                      >
+                    </div>
+                    <div class="flex items-center gap-2 text-xs bg-slate-800/50 p-2 rounded-lg">
+                      <div
+                        class="w-1.5 h-1.5 rounded-full"
+                        :class="envReport.whisper_model_exists ? 'bg-emerald-500' : 'bg-rose-500'"
+                      ></div>
+                      <span
+                        :class="
+                          envReport.whisper_model_exists ? 'text-slate-300' : 'text-slate-500'
+                        "
+                        >Whisper</span
+                      >
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -965,17 +1040,36 @@
         >
           <span class="flex items-center gap-2">
             <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            {{ downloadProgress.status }}
+            {{ downloadProgress.percent >= 0 ? '下载中...' : '下载中 (请稍候)...' }}
           </span>
-          <span>{{ downloadProgress.percent }}%</span>
+          <span v-if="downloadProgress.percent >= 0">{{ downloadProgress.percent }}%</span>
         </div>
-        <div class="w-full bg-slate-800/50 h-1.5 rounded-full overflow-hidden">
+
+        <!-- 进度条容器 -->
+        <div class="w-full bg-slate-800/50 h-1.5 rounded-full overflow-hidden relative">
+          <!-- 确定性进度条 -->
           <div
+            v-if="downloadProgress.percent >= 0"
             class="bg-gradient-to-r from-emerald-500 to-cyan-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
             :style="{ width: `${downloadProgress.percent}%` }"
           >
             <div class="absolute inset-0 bg-white/20 shimmer-effect w-full h-full"></div>
           </div>
+
+          <!-- 不确定性进度条 (Indeterminate) -->
+          <div v-else class="absolute inset-0 bg-emerald-500/20 h-full w-full overflow-hidden">
+            <div
+              class="indeterminate-bar bg-gradient-to-r from-emerald-500 to-cyan-500 h-full w-1/3 absolute top-0"
+            ></div>
+          </div>
+        </div>
+
+        <!-- 状态日志显示区域 -->
+        <div
+          class="mt-1 text-[10px] text-slate-400 font-mono truncate max-w-full opacity-80"
+          :title="downloadProgress.status"
+        >
+          {{ downloadProgress.status }}
         </div>
       </div>
     </div>
@@ -986,9 +1080,6 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
-import NotificationManager from '../components/ui/NotificationManager.vue'
-import PetNotificationManager from '../components/ui/PetNotificationManager.vue'
-import ContextMenu from '../components/ui/ContextMenu.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
 import {
   Sparkles,
@@ -1014,7 +1105,9 @@ import {
   CheckCircle2,
   XCircle,
   AlertCircle,
-  Terminal
+  Terminal,
+  BrainCircuit,
+  Download
 } from 'lucide-vue-next'
 
 const activeTab = ref('home')
@@ -1040,6 +1133,8 @@ const plugins = ref([])
 const isInstallingES = ref(false)
 const appConfig = ref({})
 const isSocialEnabled = ref(true)
+const isDownloadingModels = ref(false)
+const allModelsExist = ref(false)
 const downloadProgress = ref({
   active: false,
   percent: 0,
@@ -1141,6 +1236,24 @@ onMounted(async () => {
         downloadProgress.value.active = false
       }, 5000)
     }
+  })
+
+  // 监听模型下载进度
+  await listen('download-progress', (payload) => {
+    // 这里的 percent 可能是 -1，表示未知进度
+    // 如果是 -1，保留 -1 以触发不确定性进度条
+    const percent = payload.percent
+
+    downloadProgress.value = {
+      active: true,
+      percent: percent,
+      status: payload.status,
+      error: false,
+      completed: false
+    }
+
+    // 如果消息包含 "complete" 或 "下载完成"，则视为完成
+    // 但实际上后端脚本执行完毕后 IPC 调用才会返回，所以这里的监听主要用于实时日志
   })
 
   // 加载插件
@@ -1263,6 +1376,18 @@ const checkEnvironment = async () => {
     if (isSocialEnabled.value && !report.napcat_installed) warning = true // Optional based on setting
     if (isSocialEnabled.value && !report.node_exists) warning = true // Node.js required for NapCat
 
+    // 模型检查
+    if (
+      report.embedding_model_exists &&
+      report.reranker_model_exists &&
+      report.whisper_model_exists
+    ) {
+      allModelsExist.value = true
+    } else {
+      allModelsExist.value = false
+      warning = true // 模型缺失视为警告
+    }
+
     if (criticalMissing) {
       envStatus.value = 'error'
     } else if (warning) {
@@ -1313,12 +1438,12 @@ const toggleLaunch = async () => {
         try {
           // 检查是否已安装
           const isInstalled = await invoke('check_napcat')
-          
+
           if (!isInstalled) {
             addLog('[SYSTEM] 未检测到 NapCat，开始自动下载...')
             // 注意：install_napcat 在后端是阻塞的，直到下载安装完成才会返回
             const success = await invoke('install_napcat')
-            
+
             if (!success) {
               throw new Error('NapCat 自动安装失败，无法启动。请检查网络或手动安装。')
             }
@@ -1388,6 +1513,46 @@ const installES = async () => {
     addLog(`[ERROR] ES Install failed: ${e}`)
   } finally {
     isInstallingES.value = false
+  }
+}
+
+const downloadModels = async () => {
+  if (isDownloadingModels.value || allModelsExist.value) return
+  isDownloadingModels.value = true
+  downloadProgress.value.active = true
+  downloadProgress.value.status = '准备下载模型...'
+
+  try {
+    addLog('[SYSTEM] 开始下载 AI 模型...')
+    await invoke('download_models')
+    addLog('[SYSTEM] AI 模型下载完成。')
+    // 重新检查环境
+    await checkEnvironment()
+
+    downloadProgress.value.status = '下载完成'
+    downloadProgress.value.percent = 100
+    downloadProgress.value.completed = true
+
+    if (window.$notify) {
+      window.$notify('AI 模型下载完成', 'success', '系统就绪')
+    }
+  } catch (e) {
+    console.error('Model download failed', e)
+    addLog(`[ERROR] 模型下载失败: ${e}`)
+
+    downloadProgress.value.error = true
+    downloadProgress.value.status = '下载失败'
+
+    if (window.$notify) {
+      window.$notify(`模型下载失败: ${e}`, 'error', '下载错误')
+    }
+  } finally {
+    isDownloadingModels.value = false
+    setTimeout(() => {
+      if (downloadProgress.value.completed || downloadProgress.value.error) {
+        downloadProgress.value.active = false
+      }
+    }, 3000)
   }
 }
 
@@ -1482,5 +1647,18 @@ watch(activeTab, (val) => {
 
 .animate-bounce-in {
   animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+}
+
+@keyframes indeterminate {
+  0% {
+    left: -35%;
+  }
+  100% {
+    left: 100%;
+  }
+}
+
+.indeterminate-bar {
+  animation: indeterminate 1.5s infinite cubic-bezier(0.65, 0.815, 0.735, 0.395);
 }
 </style>

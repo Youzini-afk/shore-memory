@@ -224,7 +224,7 @@ class NITBridge:
                             try:
                                 fixed_json = v.replace("'", '"')
                                 converted[target_key] = json.loads(fixed_json)
-                            except Exception:# 实在修不好，保留原值
+                            except Exception:  # 实在修不好，保留原值
                                 converted[target_key] = v
                     else:
                         converted[target_key] = v

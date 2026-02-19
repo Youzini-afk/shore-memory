@@ -46,9 +46,7 @@ class MemoryImporter:
 
         try:
             print("[MemoryImporter] 调用 LLM 进行事件拆解...")
-            response = await llm.chat(
-                messages, temperature=0.3
-            )  # 低温以获得结构化输出
+            response = await llm.chat(messages, temperature=0.3)  # 低温以获得结构化输出
             content = response["choices"][0]["message"]["content"]
 
             # 清理 JSON

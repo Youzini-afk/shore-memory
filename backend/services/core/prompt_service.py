@@ -32,37 +32,39 @@ class PromptManager:
         """
         from database import get_session
         from services.chat.stronghold_service import StrongholdService
-        
+
         context = {
             "current_room_name": "未知区域",
             "current_facility_name": "未知设施",
             "environment_json_display": "（无环境数据）",
-            "active_agents_list": "（暂无其他成员）"
+            "active_agents_list": "（暂无其他成员）",
         }
-        
+
         async for session in get_session():
             service = StrongholdService(session)
-            
+
             # 1. 获取当前位置
             room = await service.get_agent_location(agent_id)
             if room:
                 context["current_room_name"] = room.name
                 context["environment_json_display"] = room.environment_json
-                
+
                 # 2. 获取设施信息
                 if room.facility_id:
                     # 注意：这里需要额外查询 Facility，暂时简化处理或假设 Facility 已知
                     # 可以在 StrongholdService 中增加 get_facility(id)
-                    pass 
-                
+                    pass
+
                 # 3. 获取同房间人员
                 agents = await service.get_room_agents(room.id)
                 # 过滤掉自己
                 others = [a for a in agents if a != agent_id]
-                context["active_agents_list"] = ", ".join(others) if others else "（只有你自己）"
-                
-            break # 只使用一个 session
-            
+                context["active_agents_list"] = (
+                    ", ".join(others) if others else "（只有你自己）"
+                )
+
+            break  # 只使用一个 session
+
         return context
 
     def _enrich_variables(
@@ -133,7 +135,7 @@ class PromptManager:
         if is_social_mode:
             # [Fix] 社交模式下不再强制清空 NIT 能力，而是交由模板 (social_rules.md) 控制
             # 我们只需要确保不加载不需要的组件即可
-            
+
             # [修复] 注入表情包列表 (表情包列表注入)
             sticker_list_str = "（无可用表情包）"
             agent_id = variables.get("agent_id") or config.get("agent_id", "pero")
@@ -253,7 +255,10 @@ class PromptManager:
         # 优先使用 Agent 配置文件中定义的 work_custom_persona，如果没有则回退到全局配置
         variables["custom_persona"] = variables.get(
             "work_custom_persona"
-        ) or config.get("work_custom_persona", "你是一个全能的 AI 助手，你的名字是 {{ agent_name }}。")
+        ) or config.get(
+            "work_custom_persona",
+            "你是一个全能的 AI 助手，你的名字是 {{ agent_name }}。",
+        )
 
         # [社交模式修正]
         # 如果是社交模式，使用 social_custom_persona 覆盖 custom_persona
@@ -281,18 +286,24 @@ class PromptManager:
             # [Fix] 注入 social.md 所需的上下文变量
             if "xml_context" not in variables:
                 # 优先使用群聊历史，其次是私聊/桌面历史
-                hist = variables.get("flattened_group_history") or variables.get("flattened_desktop_history") or variables.get("recent_history_context")
+                hist = (
+                    variables.get("flattened_group_history")
+                    or variables.get("flattened_desktop_history")
+                    or variables.get("recent_history_context")
+                )
                 variables["xml_context"] = hist if hist else "（暂无历史消息）"
-            
+
             # 3. 渲染 sticker_expression (依赖 sticker_list)
             # [Fix] 强制渲染 sticker_expression，即使之前已加载了原始内容
             prompt = self.mdp.get_prompt("social/abilities/sticker_expression")
             content = prompt.content if prompt else ""
             if self.mdp.jinja_env and "{{" in content:
                 try:
-                    variables["sticker_expression"] = self.mdp.jinja_env.from_string(content).render(variables)
+                    variables["sticker_expression"] = self.mdp.jinja_env.from_string(
+                        content
+                    ).render(variables)
                 except Exception:
-                        variables["sticker_expression"] = content
+                    variables["sticker_expression"] = content
             else:
                 variables["sticker_expression"] = content
 
@@ -303,9 +314,9 @@ class PromptManager:
                 # 必须手动渲染，因为 social.md 的渲染不会递归处理变量中的占位符
                 if self.mdp.jinja_env and "{{" in content:
                     try:
-                        variables["social_instructions"] = self.mdp.jinja_env.from_string(
-                            content
-                        ).render(variables)
+                        variables["social_instructions"] = (
+                            self.mdp.jinja_env.from_string(content).render(variables)
+                        )
                     except Exception as e:
                         logger.warning(f"渲染 social_instructions 失败: {e}")
                         variables["social_instructions"] = content
@@ -319,12 +330,13 @@ class PromptManager:
             if "instruction_prompt" not in variables:
                 prompt = self.mdp.get_prompt("social/instruction_prompt")
                 variables["instruction_prompt"] = prompt.content if prompt else ""
-        
+
         # [群聊模式修正]
         # 如果是群聊模式，加载专属上下文
         is_group_mode = variables.get("mode") == "group"
         if is_group_mode:
             import asyncio
+
             try:
                 # 获取 Agent ID，默认为 pero
                 agent_id = variables.get("agent_id") or config.get("agent_id", "pero")
@@ -339,29 +351,37 @@ class PromptManager:
                     # 更好的方案是：将 _enrich_variables 变为 async，或在调用它的地方提前获取数据。
                     pass
                 else:
-                    stronghold_data = loop.run_until_complete(self._get_stronghold_context(agent_id))
+                    stronghold_data = loop.run_until_complete(
+                        self._get_stronghold_context(agent_id)
+                    )
                     variables.update(stronghold_data)
             except Exception as e:
                 logger.error(f"[PromptManager] 获取据点上下文失败: {e}")
                 # 兜底数据
-                variables.update({
-                    "current_room_name": "未知区域",
-                    "current_facility_name": "未知设施",
-                    "environment_json_display": "（数据获取失败）",
-                    "active_agents_list": "（未知）"
-                })
-            
+                variables.update(
+                    {
+                        "current_room_name": "未知区域",
+                        "current_facility_name": "未知设施",
+                        "environment_json_display": "（数据获取失败）",
+                        "active_agents_list": "（未知）",
+                    }
+                )
+
             # 加载群聊专属 Prompt 组件
             prompt = self.mdp.get_prompt("group/environment_display")
-            variables["stronghold_environment"] = self.mdp.render_string(prompt.content, variables) if prompt else ""
-            
+            variables["stronghold_environment"] = (
+                self.mdp.render_string(prompt.content, variables) if prompt else ""
+            )
+
             prompt = self.mdp.get_prompt("group/interaction_rules")
             variables["group_interaction_rules"] = prompt.content if prompt else ""
-            
+
             prompt = self.mdp.get_prompt("group/output_format")
             variables["group_output_format"] = prompt.content if prompt else ""
-            
-            variables["current_room_state"] = f"当前位置: {variables.get('current_room_name')} ({variables.get('current_facility_name')})"
+
+            variables["current_room_state"] = (
+                f"当前位置: {variables.get('current_room_name')} ({variables.get('current_facility_name')})"
+            )
 
         # [人设加载]
         agent_id = variables.get("agent_id") or config.get("agent_id", "pero")
@@ -394,13 +414,18 @@ class PromptManager:
                 if not is_social_mode:
                     try:
                         from nit_core.dispatcher import get_dispatcher
+
                         dispatcher = get_dispatcher()
-                        
+
                         # 默认仅获取 core 类别作为兜底，以保证安全
-                        tools_desc = dispatcher.get_tools_description(category_filter="core")
+                        tools_desc = dispatcher.get_tools_description(
+                            category_filter="core"
+                        )
                         if tools_desc:
                             variables["available_tools_desc"] = tools_desc
-                            logger.warning("[PromptManager] dynamic_tools 缺失，已从 Dispatcher 获取 core 工具作为回退")
+                            logger.warning(
+                                "[PromptManager] dynamic_tools 缺失，已从 Dispatcher 获取 core 工具作为回退"
+                            )
                         else:
                             variables["available_tools_desc"] = "（当前无可用工具）"
                     except Exception as e:
@@ -411,10 +436,15 @@ class PromptManager:
                     # 这确保 social_rules.md 中的 {{ available_tools_desc }} 不为空
                     try:
                         from nit_core.dispatcher import get_dispatcher
+
                         dispatcher = get_dispatcher()
                         # 仅加载核心工具，避免在社交模式暴露敏感操作
-                        tools_desc = dispatcher.get_tools_description(category_filter="core")
-                        variables["available_tools_desc"] = tools_desc or "（当前无可用工具）"
+                        tools_desc = dispatcher.get_tools_description(
+                            category_filter="core"
+                        )
+                        variables["available_tools_desc"] = (
+                            tools_desc or "（当前无可用工具）"
+                        )
                     except Exception:
                         variables["available_tools_desc"] = "（当前模式下无可用工具）"
 
@@ -431,6 +461,7 @@ class PromptManager:
         # 尝试获取 Dispatcher
         try:
             from nit_core.dispatcher import get_dispatcher
+
             dispatcher = get_dispatcher()
         except ImportError:
             dispatcher = None
@@ -439,23 +470,23 @@ class PromptManager:
         for tool in tools:
             func = tool.get("function", {})
             name = func.get("name")
-            
+
             # 1. 尝试从 Dispatcher 获取自然语言描述 (优先)
             if dispatcher:
                 nat_desc = dispatcher.get_tool_natural_description(name)
                 if nat_desc:
                     desc = nat_desc.get("description", "")
                     param = nat_desc.get("parameter", "")
-                    
+
                     full_desc = f"- **{name}**: {desc}"
                     if not (full_desc.endswith("。") or full_desc.endswith(".")):
                         full_desc += "。"
-                    
+
                     if param and "无" not in param and param != "":
                         full_desc += f" 参数 {param}"
                         if not (full_desc.endswith("。") or full_desc.endswith(".")):
                             full_desc += "。"
-                    
+
                     lines.append(full_desc)
                     continue
 
@@ -520,13 +551,18 @@ class PromptManager:
             # 1. 覆盖 NIT 工具描述 (由 dynamic_tools 生成以确保过滤策略生效)
             dynamic_tools = variables.get("dynamic_tools")
             if dynamic_tools:
-                variables["available_tools_desc"] = self._generate_tools_description(dynamic_tools)
+                variables["available_tools_desc"] = self._generate_tools_description(
+                    dynamic_tools
+                )
             else:
                 # 回退：仅在 dynamic_tools 缺失时尝试从 Dispatcher 获取核心工具
                 try:
                     from nit_core.dispatcher import get_dispatcher
+
                     dispatcher = get_dispatcher()
-                    tools_desc = dispatcher.get_tools_description(category_filter="core")
+                    tools_desc = dispatcher.get_tools_description(
+                        category_filter="core"
+                    )
                     if not tools_desc or len(tools_desc) < 10:
                         tools_desc = dispatcher.get_tools_description()
                     variables["available_tools_desc"] = tools_desc
@@ -588,8 +624,10 @@ class PromptManager:
             # 注意：templates/lightweight.md 也应该有 block header/footer 结构
             config = get_config_manager()
             is_lightweight = config.get("lightweight_mode", False)
-            template_name = "templates/lightweight" if is_lightweight else "templates/system"
-            
+            template_name = (
+                "templates/lightweight" if is_lightweight else "templates/system"
+            )
+
             blocks = self.mdp.render_blocks(template_name, variables)
             return blocks.get("footer", "")
 
@@ -701,33 +739,45 @@ class PromptManager:
     ) -> List[Dict[str, str]]:
         """
         组装最终发送给 LLM 的消息列表。
-        
+
         [MDP 重构 v3.0]
         不再使用传统的 history 列表追加模式。
         而是采用 "Two-Turn" (两轮制) 或 "Single-Turn" (单轮制) 模式。
         所有的历史记录（History）都已经通过 Preprocessor 被压扁（Flatten）并在 _enrich_variables 阶段
         注入到了 system_prompt 的各个占位符中（如 {{flattened_desktop_history}}）。
-        
+
         因此，这里的 messages 列表通常只包含：
         1. System Message (包含所有上下文、记忆、历史)
         2. User Message (当前用户输入)
         """
-        
+        from core.event_bus import EventBus
+
+        # [Hook] prompt.build.pre
+        # 允许 MOD 修改变量 (variables)
+        ctx = {
+            "variables": variables,
+            "is_social_mode": is_social_mode,
+            "is_work_mode": is_work_mode,
+            "user_message": user_message,
+            "session": session,
+        }
+        await EventBus.publish("prompt.build.pre", ctx)
+
         # 1. 构建 System Prompt
         # 注意：这里 session 参数是必须的，用于获取动态配置
         if not session:
-             # 如果调用方没传 session，这可能是一个潜在的 bug，或者我们在同步上下文中
-             # 暂时尝试从 variables 中获取，或者创建一个临时的
-             # 但 compose_messages 通常在 pipeline 中被调用，pipeline 应该有 session
-             logger.warning("[PromptService] compose_messages called without session!")
-             system_content = "System Error: Session missing."
+            # 如果调用方没传 session，这可能是一个潜在的 bug，或者我们在同步上下文中
+            # 暂时尝试从 variables 中获取，或者创建一个临时的
+            # 但 compose_messages 通常在 pipeline 中被调用，pipeline 应该有 session
+            logger.warning("[PromptService] compose_messages called without session!")
+            system_content = "System Error: Session missing."
         else:
-             system_content = await self.get_rendered_system_prompt(
-                 session,
-                 is_social_mode=is_social_mode,
-                 is_work_mode=is_work_mode,
-                 extra_variables=variables,
-             )
+            system_content = await self.get_rendered_system_prompt(
+                session,
+                is_social_mode=is_social_mode,
+                is_work_mode=is_work_mode,
+                extra_variables=variables,
+            )
 
         messages = [{"role": "system", "content": system_content}]
 
@@ -735,16 +785,21 @@ class PromptManager:
         # 即使是空消息（例如触发式对话），也最好发一个 user message 以符合某些 LLM 的规范
         # 或者某些情况下 system prompt 已经包含了 user input（如 social 模式的 xml_context）
         # 但通常保持 system + user 结构是最稳健的。
-        
+
         if user_message or is_multimodal:
-             # 多模态处理逻辑保持不变
-             # ...
-             if is_multimodal:
-                 # 假设 history[-1] 是当前的多模态消息，或者我们需要从 variables 中获取
-                 # 这里简化处理，假设 variables['user_input_multimodal'] 存在
-                 content = variables.get("user_input_multimodal", user_message)
-                 messages.append({"role": "user", "content": content})
-             else:
-                 messages.append({"role": "user", "content": user_message})
-        
+            # 多模态处理逻辑保持不变
+            # ...
+            if is_multimodal:
+                # 假设 history[-1] 是当前的多模态消息，或者我们需要从 variables 中获取
+                # 这里简化处理，假设 variables['user_input_multimodal'] 存在
+                content = variables.get("user_input_multimodal", user_message)
+                messages.append({"role": "user", "content": content})
+            else:
+                messages.append({"role": "user", "content": user_message})
+
+        # [Hook] prompt.build.post
+        # 允许 MOD 修改最终的消息列表 (messages)
+        ctx = {"messages": messages, "variables": variables}
+        await EventBus.publish("prompt.build.post", ctx)
+
         return messages

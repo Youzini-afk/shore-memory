@@ -27,7 +27,8 @@ class SendMessageRequest(BaseModel):
 
 @router.post("/rooms", response_model=GroupChatRoom)
 async def create_room(
-    request: CreateRoomRequest, session: Session = Depends(get_session)  # noqa: B008
+    request: CreateRoomRequest,
+    session: Session = Depends(get_session),  # noqa: B008
 ):
     service = GroupChatService(session)
     return await service.create_room(
@@ -43,7 +44,9 @@ async def list_rooms(session: Session = Depends(get_session)):  # noqa: B008
 
 @router.get("/rooms/{room_id}/history", response_model=List[GroupChatMessage])
 async def get_room_history(
-    room_id: str, limit: int = 50, session: Session = Depends(get_session)  # noqa: B008
+    room_id: str,
+    limit: int = 50,
+    session: Session = Depends(get_session),  # noqa: B008
 ):
     service = GroupChatService(session)
     return await service.get_history(room_id, limit)
@@ -51,7 +54,9 @@ async def get_room_history(
 
 @router.post("/rooms/{room_id}/messages", response_model=GroupChatMessage)
 async def send_message(
-    room_id: str, request: SendMessageRequest, session: Session = Depends(get_session)  # noqa: B008
+    room_id: str,
+    request: SendMessageRequest,
+    session: Session = Depends(get_session),  # noqa: B008
 ):
     service = GroupChatService(session)
     # 验证房间是否存在

@@ -109,7 +109,7 @@ def train_aura_vision(vision_data_dir, epochs=50, batch_size=16, save_path=None)
     for epoch in range(epochs):
         avg_loss = trainer.train_epoch(dataloader)
         if (epoch + 1) % 5 == 0:
-            logger.info(f"Epoch {epoch+1}/{epochs} - Loss: {avg_loss:.4f}")
+            logger.info(f"Epoch {epoch + 1}/{epochs} - Loss: {avg_loss:.4f}")
 
     trainer.save_checkpoint(save_path)
     return trainer.model

@@ -28,9 +28,9 @@ export async function startGateway(window: WindowLike) {
   } else {
     // 开发环境: 查找优先级
     const devPaths = [
-      path.join(process.cwd(), 'gateway', execName),           // 当前项目下的 gateway/gateway.exe
-      path.join(process.cwd(), 'resources/bin', execName),     // 当前项目下的 resources/bin/gateway.exe
-      path.join(process.cwd(), '../PeroLink', execName),       // 兼容旧路径
+      path.join(process.cwd(), 'gateway', execName), // 当前项目下的 gateway/gateway.exe
+      path.join(process.cwd(), 'resources/bin', execName), // 当前项目下的 resources/bin/gateway.exe
+      path.join(process.cwd(), '../PeroLink', execName) // 兼容旧路径
     ]
 
     for (const p of devPaths) {

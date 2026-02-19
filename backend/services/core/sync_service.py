@@ -151,9 +151,7 @@ class SyncService:
             envelope = perolink_pb2.Envelope()
             envelope.id = str(uuid.uuid4())
             envelope.source_id = self.client.device_id
-            envelope.target_id = (
-                "master"  # 通常以云端的主节点为目标
-            )
+            envelope.target_id = "master"  # 通常以云端的主节点为目标
             envelope.timestamp = int(time.time() * 1000)
 
             envelope.request.action_name = "sync_push"

@@ -143,6 +143,11 @@ if os.name == "nt":
     if sys.stderr is not None:
         sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8")
 
+# [Bootstrap] 核心组件初始化与Mod加载
+from core.bootstrap import bootstrap
+
+bootstrap()
+
 # 初始化日志
 # configure_logging 已经在最前面调用过一次了，这里不需要重复初始化
 # log_file = os.environ.get("PERO_LOG_FILE")

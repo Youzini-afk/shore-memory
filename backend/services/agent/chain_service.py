@@ -224,7 +224,7 @@ class ThinkingChainService:
 
         output = ["### 自动化周报生成上下文 (Thinking Pipeline Phase 2)"]
         output.append(
-            f"报告周期: {datetime.fromtimestamp(one_week_ago/1000).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}"
+            f"报告周期: {datetime.fromtimestamp(one_week_ago / 1000).strftime('%Y-%m-%d')} 至 {datetime.now().strftime('%Y-%m-%d')}"
         )
 
         all_weekly_contents = []  # 存储用于历史搜索

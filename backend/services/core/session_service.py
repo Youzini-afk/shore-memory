@@ -200,7 +200,7 @@ async def exit_work_mode() -> str:
             importance=6,
             memory_type="work_log",
             source="system",
-            agent_id=agent_id
+            agent_id=agent_id,
         )
 
         # [NIT] 停用工作工具链

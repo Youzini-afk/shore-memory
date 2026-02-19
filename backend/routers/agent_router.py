@@ -82,7 +82,8 @@ async def set_active_agent(request: ActiveAgentRequest):
 
 @router.post("/preview_prompt")
 async def preview_prompt(
-    request: PromptPreviewRequest, session: AsyncSession = Depends(get_session)  # noqa: B008
+    request: PromptPreviewRequest,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """预览给定日志的完整提示词。"""
     service = AgentService(session)

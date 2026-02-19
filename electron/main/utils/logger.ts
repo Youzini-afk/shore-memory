@@ -1,7 +1,14 @@
 import dayjs from 'dayjs'
 
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
-export type LogSource = 'Main' | 'Renderer' | 'Gateway' | 'Backend' | 'Plugin' | 'System'
+export type LogSource =
+  | 'Main'
+  | 'Renderer'
+  | 'Gateway'
+  | 'Backend'
+  | 'Plugin'
+  | 'System'
+  | 'ModelDownload'
 
 class Logger {
   private static instance: Logger

@@ -17,21 +17,15 @@ import httpx
 from faster_whisper import WhisperModel, download_model
 from sqlmodel import select
 
+from core.model_manager import model_manager
 from database import get_session
 from models import VoiceConfig
 
 
 class ASRService:
     def __init__(self):
-        # 统一缓存目录，与EmbeddingService一致
-        self.data_dir = os.environ.get(
-            "PERO_DATA_DIR", os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-        )
-        self.models_cache_dir = os.path.join(self.data_dir, "models_cache")
-
-        # 确保缓存目录存在
-        if not os.path.exists(self.models_cache_dir):
-            os.makedirs(self.models_cache_dir, exist_ok=True)
+        # 统一缓存目录，使用 ModelManager 管理
+        self.models_cache_dir = model_manager.models_cache_dir
 
         self.device = "cpu"
         self.compute_type = "int8"
@@ -65,7 +59,7 @@ class ASRService:
         for attempt in range(max_retries):
             try:
                 print(
-                    f"[ASR] 正在检查/下载模型 '{model_name}' (尝试 {attempt+1}/{max_retries})...",
+                    f"[ASR] 正在检查/下载模型 '{model_name}' (尝试 {attempt + 1}/{max_retries})...",
                     flush=True,
                 )
                 # download_model返回模型目录路径
@@ -98,9 +92,31 @@ class ASRService:
         """延迟加载模型"""
         if self._model is None:
             try:
-                # 先尝试确保模型已下载 (如果是远程模型名)
-                # 如果是本地路径，_download_with_retry 会直接返回原路径
-                real_model_path = self._download_with_retry(model_path)
+                # 尝试从 ModelManager 获取路径（如果 model_path 是预定义的 key）
+                # 如果 model_path 是 'tiny', 'base' 等，这里会返回完整路径
+                # 如果 model_path 是自定义路径，则保留原样
+                try:
+                    if model_manager.check_model_exists(model_path):
+                        real_model_path = model_manager.get_actual_model_path(
+                            model_path
+                        )
+                        print(
+                            f"[ASR] 使用预定义的模型: {model_path} -> {real_model_path}",
+                            flush=True,
+                        )
+                    else:
+                        # 如果预定义模型不存在，尝试下载
+                        print(
+                            f"[ASR] 预定义模型 {model_path} 未找到，尝试下载...",
+                            flush=True,
+                        )
+                        real_model_path = model_manager.download_model(model_path)
+                except ValueError:
+                    # model_path 不是预定义的 key，假设是路径或 HF repo id
+                    real_model_path = model_path
+                    # 尝试使用原始下载逻辑作为回退（针对非标准模型）
+                    if not os.path.exists(real_model_path):
+                        real_model_path = self._download_with_retry(model_path)
 
                 print(
                     f"正在 {device} 上加载 Whisper 模型: {real_model_path}...",
@@ -111,7 +127,9 @@ class ASRService:
                 local_files_only = False
                 if os.path.exists(real_model_path) and (
                     os.path.isfile(os.path.join(real_model_path, "model.bin"))
-                    or os.path.isfile(os.path.join(real_model_path, "model.safetensors"))
+                    or os.path.isfile(
+                        os.path.join(real_model_path, "model.safetensors")
+                    )
                 ):
                     local_files_only = True
 

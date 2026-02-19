@@ -123,7 +123,10 @@ async function setupPython() {
       // 下载 get-pip.py
       await downloadFile(GET_PIP_URL, getPipPath)
       // 使用清华源加速安装 pip
-      execSync(`"${pythonExe}" "${getPipPath}" --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`, { stdio: 'inherit' })
+      execSync(
+        `"${pythonExe}" "${getPipPath}" --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`,
+        { stdio: 'inherit' }
+      )
       fs.unlinkSync(getPipPath)
     }
 
@@ -134,9 +137,12 @@ async function setupPython() {
     } catch {
       log('Installing uv...')
       // 使用清华源
-      execSync(`"${pythonExe}" -m pip install uv --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`, {
-        stdio: 'inherit'
-      })
+      execSync(
+        `"${pythonExe}" -m pip install uv --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`,
+        {
+          stdio: 'inherit'
+        }
+      )
     }
     // 3. 安装构建工具 (maturin)
     try {
@@ -144,9 +150,12 @@ async function setupPython() {
     } catch {
       log('Installing maturin...')
       // 使用清华源
-      execSync(`"${pythonExe}" -m pip install maturin --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`, {
-        stdio: 'inherit'
-      })
+      execSync(
+        `"${pythonExe}" -m pip install maturin --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`,
+        {
+          stdio: 'inherit'
+        }
+      )
     }
   } catch (err) {
     log(`Failed to setup pip/uv: ${err.message}`, 'error')
@@ -198,7 +207,9 @@ function buildRustExtensions() {
     execSync(`"${pythonExe}" -m maturin --version`, { stdio: 'ignore' })
   } catch {
     log('Maturin not found in embedded Python. Installing...', 'warning')
-    execSync(`"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`, { stdio: 'inherit' })
+    execSync(`"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`, {
+      stdio: 'inherit'
+    })
   }
 
   const extensions = [
@@ -290,7 +301,10 @@ function buildRustExtensions() {
           execSync(`"${pythonExe}" -m maturin --version`, { stdio: 'ignore' })
         } catch {
           log('Installing maturin...', 'warning')
-          execSync(`"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`, { stdio: 'inherit' })
+          execSync(
+            `"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`,
+            { stdio: 'inherit' }
+          )
         }
 
         execSync(

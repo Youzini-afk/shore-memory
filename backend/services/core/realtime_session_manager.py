@@ -359,6 +359,7 @@ class RealtimeSessionManager:
         finally:
             if os.path.exists(temp_audio_path):
                 import contextlib
+
                 with contextlib.suppress(Exception):
                     os.remove(temp_audio_path)
 

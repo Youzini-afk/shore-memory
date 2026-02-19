@@ -39,9 +39,7 @@ def write_workspace_file(filename: str, content: str) -> str:
     """
     _ensure_workspace()
     if not _is_safe_path(filename):
-        return (
-            "错误: 拒绝访问。你只能写入工作空间内的文件。"
-        )
+        return "错误: 拒绝访问。你只能写入工作空间内的文件。"
 
     try:
         workspace_root = get_workspace_root()

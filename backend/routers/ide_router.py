@@ -230,7 +230,9 @@ async def read_file(request: ReadFileRequest):
             content = f.read()
         return {"content": content}
     except UnicodeDecodeError:
-        raise HTTPException(status_code=400, detail="Binary file not supported") from None
+        raise HTTPException(
+            status_code=400, detail="Binary file not supported"
+        ) from None
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from None
 
@@ -330,7 +332,8 @@ async def rename_file(request: RenameFileRequest):
 
 @router.post("/work_mode/enter")
 async def api_enter_work_mode(
-    request: WorkModeRequest, session: AsyncSession = Depends(get_session)  # noqa: B008
+    request: WorkModeRequest,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     # 注入Session至SessionOps上下文
     from services.core.session_service import set_current_session_context

@@ -95,7 +95,7 @@ export class WindowManager {
     this.launcherWin.loadURL(this.getPageUrl('/launcher'))
     logger.info('Main', `Loading URL: ${this.getPageUrl('/launcher')}`)
 
-  this.launcherWin.on('ready-to-show', () => {
+    this.launcherWin.on('ready-to-show', () => {
       logger.info('Main', 'Window ready-to-show event fired')
       this.launcherWin?.show()
     })
@@ -148,7 +148,7 @@ export class WindowManager {
     }
 
     this.strongholdWin.loadURL(this.getPageUrl('/stronghold'))
-    
+
     this.strongholdWin.on('ready-to-show', () => {
       this.strongholdWin?.show()
     })

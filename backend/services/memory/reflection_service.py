@@ -40,9 +40,7 @@ class ReflectionService:
 
         api_key = configs.get("global_llm_api_key", "")
         api_base = configs.get("global_llm_api_base", "https://api.openai.com")
-        model = (
-            "gpt-4o"  # 如果一切都失败则回退，但我们首先尝试使用主模型
-        )
+        model = "gpt-4o"  # 如果一切都失败则回退，但我们首先尝试使用主模型
 
         if reflection_model_id:
             model_config = await self.session.get(
@@ -430,7 +428,7 @@ class ReflectionService:
             api_base=config["api_base"],
             model=config["model"],
         )
-        
+
         self.created_ids = []
         self.deleted_data = []
         self.modified_data = []
@@ -467,9 +465,9 @@ class ReflectionService:
             for agent_id in agent_ids:
                 print(f"[Reflection] 正在处理代理: {agent_id}")
                 # 1. 提取偏好 (已按需关闭)
-                report[
-                    "preferences_extracted"
-                ] += 0  # await self._extract_preferences(llm, agent_id)
+                report["preferences_extracted"] += (
+                    0  # await self._extract_preferences(llm, agent_id)
+                )
 
                 # 2. 标记重要性
                 report["important_tagged"] += await self._tag_importance(llm, agent_id)
@@ -500,16 +498,19 @@ class ReflectionService:
                 report["retired_count"] += await self._handle_maintenance_boundary(
                     agent_id
                 )
-            
+
             # 7. 调用 ScorerService 更新台词 (因为这是生成任务)
             # 维护任务现在不再负责更新台词，而是由 ScorerService 负责
             # 但为了保持兼容性，我们可以顺便触发一下 ScorerService
             try:
                 from services.memory.scorer_service import ScorerService
+
                 scorer_service = ScorerService(self.session)
                 # 为每个 active agent 更新
                 for agent_id in agent_ids:
-                     report["waifu_texts_updated"] += await scorer_service.update_waifu_texts(agent_id)
+                    report[
+                        "waifu_texts_updated"
+                    ] += await scorer_service.update_waifu_texts(agent_id)
             except Exception as e:
                 print(f"[Reflection] 触发 Scorer 更新台词失败: {e}")
 
@@ -531,7 +532,7 @@ class ReflectionService:
             self.session.add(record)
             await self.session.commit()
             await self.session.refresh(record)
-            
+
             report["record_id"] = record.id
             print(f"[Reflection] 维护完成。记录 ID: {record.id}, 报告: {report}")
             return report
@@ -618,6 +619,7 @@ class ReflectionService:
         except Exception as e:
             print(f"清理记忆时出错: {e}")
             import traceback
+
             traceback.print_exc()
         return 0
 
@@ -693,6 +695,7 @@ class ReflectionService:
         except Exception as e:
             print(f"提取偏好时出错: {e}")
             import traceback
+
             traceback.print_exc()
         return 0
 
@@ -922,7 +925,7 @@ class ReflectionService:
             "tasks/memory/reflection/memory_consolidator",
             {
                 "agent_name": bot_name,
-                "memory_data": json.dumps(mem_data, ensure_ascii=False)
+                "memory_data": json.dumps(mem_data, ensure_ascii=False),
             },
         )
 
@@ -958,7 +961,7 @@ class ReflectionService:
                         content=merge["new_content"],
                         tags=",".join(filter(None, new_tags)),
                         importance=merge.get("importance", 3),
-                        source="reflection_merge", # Changed from secretary_merge
+                        source="reflection_merge",  # Changed from secretary_merge
                         type="event",
                         realTime=batch_memories[0].realTime,
                         agent_id=agent_id,
@@ -1141,31 +1144,32 @@ class ReflectionService:
                 .offset(1000)
                 .limit(100)
             )
-            
+
             old_memories = (await self.session.exec(statement)).all()
             if not old_memories:
                 return 0
-                
+
             count = 0
             for mem in old_memories:
                 if mem.importance < 3:  # 仅自动删除低重要性的
                     self.deleted_data.append(mem.dict())
                     await self.session.delete(mem)
-                    
+
                     # 同步删除向量
                     try:
                         from services.core.vector_service import vector_service
+
                         vector_service.delete_memory(mem.id, agent_id=agent_id)
                     except Exception as ve:
                         print(f"[Reflection] 向量删除失败: {ve}")
-                        
+
                     count += 1
-            
+
             if count > 0:
                 await self.session.commit()
                 print(f"[Reflection] 边界维护清理了 {count} 条陈旧记忆。")
             return count
-            
+
         except Exception as e:
             print(f"边界维护出错: {e}")
             return 0
@@ -1432,12 +1436,13 @@ class ReflectionService:
                     # 批量删除
                     statement = select(Memory).where(col(Memory.id).in_(created_ids))
                     created_memories = (await self.session.exec(statement)).all()
-                    
+
                     for mem in created_memories:
                         await self.session.delete(mem)
                         # 同步删除向量
                         try:
                             from services.core.vector_service import vector_service
+
                             vector_service.delete_memory(mem.id, agent_id=mem.agent_id)
                         except Exception:
                             pass
@@ -1451,7 +1456,7 @@ class ReflectionService:
                     mem_id = old_state.get("id")
                     if not mem_id:
                         continue
-                    
+
                     mem = await self.session.get(Memory, mem_id)
                     if mem:
                         # 恢复关键字段
@@ -1459,18 +1464,24 @@ class ReflectionService:
                         mem.tags = old_state.get("tags", mem.tags)
                         mem.clusters = old_state.get("clusters", mem.clusters)
                         mem.content = old_state.get("content", mem.content)
-                        mem.type = old_state.get("type", mem.type) # e.g. archived_event -> event
-                        
+                        mem.type = old_state.get(
+                            "type", mem.type
+                        )  # e.g. archived_event -> event
+
                         self.session.add(mem)
-                        
+
                         # 恢复向量 (重新生成)
                         try:
                             from services.core.embedding_service import (
                                 embedding_service,
                             )
                             from services.core.vector_service import vector_service
-                            
-                            enriched = f"{mem.tags} {mem.tags} {mem.content}" if mem.tags else mem.content
+
+                            enriched = (
+                                f"{mem.tags} {mem.tags} {mem.content}"
+                                if mem.tags
+                                else mem.content
+                            )
                             vec = embedding_service.encode_one(enriched)
                             if vec:
                                 vector_service.add_memory(
@@ -1483,11 +1494,11 @@ class ReflectionService:
                                         "importance": float(mem.importance),
                                         "tags": mem.tags,
                                         "agent_id": mem.agent_id,
-                                    }
+                                    },
                                 )
                         except Exception:
                             pass
-                            
+
                         count_restored += 1
                 print(f"[Reflection] 已恢复 {count_restored} 条被修改的记忆。")
 
@@ -1502,15 +1513,19 @@ class ReflectionService:
                         # 重新创建，保持原 ID
                         new_mem = Memory(**old_mem)
                         self.session.add(new_mem)
-                        
+
                         # 恢复向量
                         try:
                             from services.core.embedding_service import (
                                 embedding_service,
                             )
                             from services.core.vector_service import vector_service
-                            
-                            enriched = f"{new_mem.tags} {new_mem.tags} {new_mem.content}" if new_mem.tags else new_mem.content
+
+                            enriched = (
+                                f"{new_mem.tags} {new_mem.tags} {new_mem.content}"
+                                if new_mem.tags
+                                else new_mem.content
+                            )
                             vec = embedding_service.encode_one(enriched)
                             if vec:
                                 vector_service.add_memory(
@@ -1523,11 +1538,11 @@ class ReflectionService:
                                         "importance": float(new_mem.importance),
                                         "tags": new_mem.tags,
                                         "agent_id": new_mem.agent_id,
-                                    }
+                                    },
                                 )
                         except Exception:
                             pass
-                            
+
                         count_recreated += 1
                 print(f"[Reflection] 已恢复 {count_recreated} 条被删除的记忆。")
 
@@ -1540,5 +1555,6 @@ class ReflectionService:
         except Exception as e:
             print(f"[Reflection] 撤销维护失败: {e}")
             import traceback
+
             traceback.print_exc()
             return False

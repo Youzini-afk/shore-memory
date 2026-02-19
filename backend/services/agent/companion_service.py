@@ -41,7 +41,9 @@ class CompanionService:
             cls._instance.prompt_manager = PromptManager()
             # 初始化 MDPManager
             # Assuming services/agent/companion_service.py -> services/mdp/prompts
-            mdp_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "mdp", "prompts")
+            mdp_dir = os.path.join(
+                os.path.dirname(os.path.dirname(__file__)), "mdp", "prompts"
+            )
             cls._instance.mdp = MDPManager(mdp_dir)
             cls._instance.tts_service = get_tts_service()
             cls._instance.last_activity_time = datetime.now()
@@ -205,7 +207,7 @@ class CompanionService:
                 if summary and not summary.startswith("Error:"):
                     # 保存到 Memory 表
                     from services.memory.memory_service import MemoryService
-                    
+
                     config = get_config_manager()
                     agent_id = config.get("agent_id", "pero")
 
@@ -267,6 +269,7 @@ class CompanionService:
                 # 并且如果用户空闲超过 15 秒（以避免覆盖活动聊天）
                 if not first_run and elapsed > 15:
                     import contextlib
+
                     with contextlib.suppress(Exception):
                         # 我们在此处不发送 status:idle 以避免中断动画，仅发送文本
                         await realtime_session_manager.broadcast(
@@ -479,7 +482,9 @@ class CompanionService:
                     session_id="companion_mode",
                     on_status=on_status_update,
                     skip_save=True,
-                    initial_variables={"ability_nit": "【系统通知】当前处于陪伴模式，NIT工具调用功能已禁用。请直接输出对话回复。"}
+                    initial_variables={
+                        "ability_nit": "【系统通知】当前处于陪伴模式，NIT工具调用功能已禁用。请直接输出对话回复。"
+                    },
                 ):
                     if chunk:
                         full_content += chunk
@@ -615,6 +620,7 @@ class CompanionService:
 
                         # 清理
                         import contextlib
+
                         with contextlib.suppress(Exception):
                             os.remove(audio_path)
                     except Exception as e:

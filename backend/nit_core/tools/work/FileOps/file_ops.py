@@ -248,9 +248,7 @@ async def write_file(file_path: str, content: str, **kwargs) -> str:
         errors = validate_code(safe_path, content)
         validation_msg = ""
         if errors:
-            validation_msg = "\n\n[警告] 代码验证问题:\n" + "\n".join(
-                errors
-            )
+            validation_msg = "\n\n[警告] 代码验证问题:\n" + "\n".join(errors)
             # 我们不阻止写入，但会警告用户。
 
         # 2. 写入文件
@@ -289,9 +287,7 @@ async def apply_diff(file_path: str, diff_content: str, **kwargs) -> str:
         errors = validate_code(safe_path, new_content)
         validation_msg = ""
         if errors:
-            validation_msg = "\n\n[警告] 代码验证问题:\n" + "\n".join(
-                errors
-            )
+            validation_msg = "\n\n[警告] 代码验证问题:\n" + "\n".join(errors)
 
         # 4. 写回
         with open(safe_path, "w", encoding="utf-8") as f:

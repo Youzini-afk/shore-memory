@@ -8,7 +8,14 @@ from typing import Any, AsyncIterable, Dict, List, Optional
 from sqlmodel import desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from core.component_container import ComponentContainer
 from core.nit_manager import get_nit_manager
+from interfaces.core import (
+    IPostprocessorManager,
+    IPreprocessorManager,
+    IPromptManager,
+)
+from interfaces.memory import IMemoryService
 from models import (
     AIModelConfig,
     Config,
@@ -23,25 +30,8 @@ from nit_core.tools.core.WindowsOps.windows_ops import get_active_windows
 from services.agent.task_manager import task_manager
 from services.core.llm_service import LLMService
 from services.core.mcp_service import McpClient
-from services.core.prompt_service import PromptManager
 from services.core.session_service import set_current_session_context
-from services.memory.memory_service import MemoryService
 from services.memory.scorer_service import ScorerService
-from services.postprocessor.implementations import (
-    NITFilterPostprocessor,
-    ThinkingFilterPostprocessor,
-)
-from services.postprocessor.manager import PostprocessorManager
-from services.preprocessor.implementations import (
-    ConfigPreprocessor,
-    GraphFlashbackPreprocessor,
-    HistoryPreprocessor,
-    PerceptionPreprocessor,  # 新增
-    RAGPreprocessor,
-    SystemPromptPreprocessor,
-    UserInputPreprocessor,  # 新增
-)
-from services.preprocessor.manager import PreprocessorManager
 
 
 class AgentService:
@@ -53,34 +43,32 @@ class AgentService:
 
         agent_id = "pero"
         import contextlib
+
         with contextlib.suppress(Exception):
             agent_id = get_agent_manager().active_agent_id
 
         set_current_session_context(session, agent_id)
-        self.memory_service = MemoryService()
-        self.scorer_service = ScorerService(session)
-        self.prompt_manager = PromptManager()
+        self.memory_service = ComponentContainer.get(IMemoryService)
+        # 暂时 ScorerService 还需要 session 初始化，这里演示混合模式
+        # 如果 ScorerService 也被完全 DI，需要工厂支持参数或上下文
+        # 简单起见，这里假设 IScorerService 的实现不需要 session 或能自我获取
+        # 但现有实现需要 session。我们先保持原样，或修改接口。
+        # 鉴于时间，我们先只替换无状态或单例组件。
+
+        self.scorer_service = ScorerService(
+            session
+        )  # ComponentContainer.get(IScorerService)
+
+        self.prompt_manager = ComponentContainer.get(IPromptManager)
 
         # 初始化辅助MDP(集中式)
         self.mdp = self.prompt_manager.mdp
 
-        # 初始化预处理器管道
-        self.preprocessor_manager = PreprocessorManager()
-        self.preprocessor_manager.register(UserInputPreprocessor())
-        self.preprocessor_manager.register(HistoryPreprocessor())
-        # 根据用户请求禁用WeeklyReportPreprocessor(文档已静态化)
-        self.preprocessor_manager.register(RAGPreprocessor())
-        self.preprocessor_manager.register(GraphFlashbackPreprocessor())
-        self.preprocessor_manager.register(ConfigPreprocessor())
-        self.preprocessor_manager.register(
-            PerceptionPreprocessor()
-        )  # 新增: 注入静默感知日志
-        self.preprocessor_manager.register(SystemPromptPreprocessor())
+        # 初始化预处理器管道 (从容器获取)
+        self.preprocessor_manager = ComponentContainer.get(IPreprocessorManager)
 
-        # 初始化后处理器管道
-        self.postprocessor_manager = PostprocessorManager()
-        self.postprocessor_manager.register(NITFilterPostprocessor())
-        self.postprocessor_manager.register(ThinkingFilterPostprocessor())
+        # 初始化后处理器管道 (从容器获取)
+        self.postprocessor_manager = ComponentContainer.get(IPostprocessorManager)
 
     def _log_to_file(self, msg: str):
         try:
@@ -877,9 +865,7 @@ class AgentService:
                 )
                 tasks_to_cancel = (await self.session.exec(statement)).all()
                 if tasks_to_cancel:
-                    print(
-                        f"[Agent] 用户交互，取消{len(tasks_to_cancel)}个反应任务"
-                    )
+                    print(f"[Agent] 用户交互，取消{len(tasks_to_cancel)}个反应任务")
                     for t in tasks_to_cancel:
                         await self.session.delete(t)
                     await self.session.commit()
@@ -968,10 +954,14 @@ class AgentService:
                 # 回退到 desktop 策略，如果 group 策略未定义
                 policy = agent_profile.tool_policies.get("desktop", {})
                 if policy:
-                    print(f"[Agent] Group 策略未定义，回退到 Desktop 策略 (Agent: {current_agent_id})")
-            
+                    print(
+                        f"[Agent] Group 策略未定义，回退到 Desktop 策略 (Agent: {current_agent_id})"
+                    )
+
             if policy:
-                print(f"[Agent] 使用工具策略: {policy_mode} (Agent: {current_agent_id})")
+                print(
+                    f"[Agent] 使用工具策略: {policy_mode} (Agent: {current_agent_id})"
+                )
 
         # 3. 回退默认(兼容性)
         if not policy:
@@ -1161,9 +1151,9 @@ class AgentService:
                 continue
             if t_name in ["take_screenshot", "see_screen"] and not enable_vision:
                 # Modify description for non-vision mode
-                tool["function"][
-                    "description"
-                ] = "获取当前屏幕的视觉分析报告。系统将调用视觉 MCP 服务器分析屏幕内容并返回详细的文字描述。当你需要了解屏幕上的视觉信息、或出于好奇想看看主人在做什么但无法直接看到图片时，请使用此工具。"
+                tool["function"]["description"] = (
+                    "获取当前屏幕的视觉分析报告。系统将调用视觉 MCP 服务器分析屏幕内容并返回详细的文字描述。当你需要了解屏幕上的视觉信息、或出于好奇想看看主人在做什么但无法直接看到图片时，请使用此工具。"
+                )
                 if "count" in tool["function"]["parameters"]["properties"]:
                     tool["function"]["parameters"]["properties"]["count"][
                         "description"
@@ -1192,21 +1182,28 @@ class AgentService:
             # Here we assume tool_tags_map contains category-like tags.
             # If tags are not sufficient, we might need a hardcoded whitelist of tool names.
             # Let's try to filter by tags first, assuming tags include category names.
-            
+
             # Since we don't have category metadata in 'tool' dict directly (it's in tool_tags_map),
             # we iterate and check.
             lightweight_tools = []
             for tool in final_tools:
                 t_name = tool["function"]["name"]
                 t_tags = set(tool_tags_map.get(t_name, []))
-                
+
                 # Check intersection with allowed categories
                 # Note: Tags might be lowercase, so we handle case sensitivity
-                if not t_tags.isdisjoint({c.lower() for c in lightweight_allowed_categories}) or \
-                   not t_tags.isdisjoint(lightweight_allowed_categories) or t_name in ["finish_task", "take_screenshot", "see_screen"]:
+                if (
+                    not t_tags.isdisjoint(
+                        {c.lower() for c in lightweight_allowed_categories}
+                    )
+                    or not t_tags.isdisjoint(lightweight_allowed_categories)
+                    or t_name in ["finish_task", "take_screenshot", "see_screen"]
+                ):
                     lightweight_tools.append(tool)
-            
-            print(f"[Agent] 轻量模式开启: 工具列表已精简 ({len(lightweight_tools)}/{len(final_tools)})")
+
+            print(
+                f"[Agent] 轻量模式开启: 工具列表已精简 ({len(lightweight_tools)}/{len(final_tools)})"
+            )
             final_tools = lightweight_tools
 
         dynamic_tools = final_tools
@@ -1243,12 +1240,18 @@ class AgentService:
         if system_trigger_instruction:
             print(f"[Agent] 追加系统触发指令: {system_trigger_instruction}")
             if final_messages and final_messages[0]["role"] == "system":
-                final_messages[0]["content"] += f"\n\n<System_Trigger>\n{system_trigger_instruction}\n</System_Trigger>"
+                final_messages[0]["content"] += (
+                    f"\n\n<System_Trigger>\n{system_trigger_instruction}\n</System_Trigger>"
+                )
             else:
                 final_messages.insert(
-                    0, {"role": "system", "content": f"<System_Trigger>\n{system_trigger_instruction}\n</System_Trigger>"}
+                    0,
+                    {
+                        "role": "system",
+                        "content": f"<System_Trigger>\n{system_trigger_instruction}\n</System_Trigger>",
+                    },
                 )
-            
+
             if not user_message:
                 user_message = f"【系统触发】{system_trigger_instruction}"
 
@@ -1258,7 +1261,9 @@ class AgentService:
             if final_messages and final_messages[0]["role"] == "system":
                 final_messages[0]["content"] += f"\n\n{mobile_instruction}"
             else:
-                final_messages.insert(0, {"role": "system", "content": mobile_instruction})
+                final_messages.insert(
+                    0, {"role": "system", "content": mobile_instruction}
+                )
             print("[Agent] 已注入移动端来源感知。")
 
         # [功能] 活跃窗口注入
@@ -1282,7 +1287,9 @@ class AgentService:
                     if final_messages and final_messages[0]["role"] == "system":
                         final_messages[0]["content"] += f"\n\n{state_msg}"
                     else:
-                        final_messages.insert(0, {"role": "system", "content": state_msg})
+                        final_messages.insert(
+                            0, {"role": "system", "content": state_msg}
+                        )
             except Exception as e:
                 print(f"[Agent] 注入活跃窗口失败: {e}")
 
@@ -1322,7 +1329,7 @@ class AgentService:
             else False
         )
         tools_to_pass = None if disable_native_tools else dynamic_tools
-        
+
         # [Fix] Companion 模式下不传递 Tools 给 LLM，避免 Function Calling 干扰纯文本回复
         # 社交模式 (Social) 现在允许调用一小部分 NIT 工具，因此不再禁用
         if session_id == "companion_mode":
@@ -1345,7 +1352,9 @@ class AgentService:
         # [Config] 社交模式/轻量模式/陪伴模式强制单轮 ReAct (1次工具调用 + 1次回复 = 2轮)
         if source in ["social", "lightweight"] or session_id == "companion_mode":
             MAX_TURNS = 1 if session_id == "companion_mode" else 2
-            print(f"[Agent] {source if session_id != 'companion_mode' else 'companion'} 模式: 限制为单轮 ReAct (MAX_TURNS={MAX_TURNS})")
+            print(
+                f"[Agent] {source if session_id != 'companion_mode' else 'companion'} 模式: 限制为单轮 ReAct (MAX_TURNS={MAX_TURNS})"
+            )
 
         consecutive_error_count = 0  # 连续错误计数器
 
@@ -1380,9 +1389,13 @@ class AgentService:
 
                 # Define Raw Stream Generator
                 async def raw_stream_source(
-                    tools_to_pass=tools_to_pass, collected_tool_calls=collected_tool_calls
+                    tools_to_pass=tools_to_pass,
+                    collected_tool_calls=collected_tool_calls,
                 ):
-                    nonlocal current_turn_text, full_response_text, has_tool_calls_in_this_turn
+                    nonlocal \
+                        current_turn_text, \
+                        full_response_text, \
+                        has_tool_calls_in_this_turn
 
                     async for delta in llm.chat_stream_deltas(
                         final_messages, temperature=temperature, tools=tools_to_pass
@@ -1717,7 +1730,7 @@ class AgentService:
                                 print("⚠️ [Agent] 检测到 NIT 工具执行错误，触发反思...")
                                 history_context = "\n".join(
                                     [
-                                        f"{m['role']}: {str(m.get('content',''))[:200]}"
+                                        f"{m['role']}: {str(m.get('content', ''))[:200]}"
                                         for m in final_messages[-5:]
                                     ]
                                 )
@@ -2013,7 +2026,7 @@ class AgentService:
                                         content.append(
                                             {
                                                 "type": "text",
-                                                "text": f"--- 截图 {i+1} (捕获时间: {shot['time_str']}) ---",
+                                                "text": f"--- 截图 {i + 1} (捕获时间: {shot['time_str']}) ---",
                                             }
                                         )
                                         content.append(
@@ -2242,7 +2255,7 @@ class AgentService:
                     print("⚠️ [Agent] 检测到工具执行错误，触发反思...")
                     history_context = "\n".join(
                         [
-                            f"{m['role']}: {str(m.get('content',''))[:200]}"
+                            f"{m['role']}: {str(m.get('content', ''))[:200]}"
                             for m in final_messages[-5:]
                         ]
                     )
@@ -2564,6 +2577,7 @@ class AgentService:
             # 最后的兜底处理，清理 MCP 客户端资源
             if "mcp_clients" in locals():
                 import contextlib
+
                 for client in mcp_clients:
                     with contextlib.suppress(Exception):
                         await client.close()

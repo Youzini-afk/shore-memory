@@ -25,6 +25,7 @@ def set_dpi_awareness():
             )  # 2 = Process_Per_Monitor_DPI_Aware
         except Exception:
             import contextlib
+
             with contextlib.suppress(Exception):
                 # 备选方案 (Windows Vista+)
                 ctypes.windll.user32.SetProcessDPIAware()

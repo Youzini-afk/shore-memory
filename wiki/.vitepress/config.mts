@@ -56,6 +56,7 @@ export default defineConfig({
       {
         text: '🌐 生态扩展',
         items: [
+          { text: 'MOD组件', link: '/ecosystem/mod' },
           { text: '社交模式', link: '/ecosystem/social' },
           { text: '浏览器插件', link: '/ecosystem/extension' },
           { text: '移动端 App', link: '/ecosystem/mobile' },

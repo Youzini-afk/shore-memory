@@ -27,7 +27,8 @@ class ImportStoryRequest(BaseModel):
 
 @router.post("/import_story")
 async def import_story(
-    request: ImportStoryRequest, session: AsyncSession = Depends(get_session)  # noqa: B008
+    request: ImportStoryRequest,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     """
     导入故事/日记初始化长期记忆（LLM提取事件）。
@@ -50,7 +51,8 @@ async def run_memory_secretary(session: AsyncSession = Depends(get_session)):  #
 
 @legacy_memories_router.delete("/by_timestamp/{msg_timestamp}")
 async def delete_memory_by_timestamp(
-    msg_timestamp: str, session: AsyncSession = Depends(get_session)  # noqa: B008
+    msg_timestamp: str,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     service = MemoryService()
     await service.delete_by_msg_timestamp(session, msg_timestamp)

@@ -28,9 +28,9 @@ _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
 _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, "proto.perolink_pb2", _globals)
 if not _descriptor._USE_C_DESCRIPTORS:
     _globals["DESCRIPTOR"]._loaded_options = None
-    _globals["DESCRIPTOR"]._serialized_options = (
-        b"Z*github.com/YoKONCy/PeroLink/proto;perolink"
-    )
+    _globals[
+        "DESCRIPTOR"
+    ]._serialized_options = b"Z*github.com/YoKONCy/PeroLink/proto;perolink"
     _globals["_ACTIONREQUEST_PARAMSENTRY"]._loaded_options = None
     _globals["_ACTIONREQUEST_PARAMSENTRY"]._serialized_options = b"8\001"
     _globals["_ENVELOPE"]._serialized_start = 35

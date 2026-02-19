@@ -372,22 +372,27 @@ class NITDispatcher:
         """
         norm_name = normalize_nit_key(tool_name)
         manifest = self.tool_to_manifest.get(norm_name)
-        
+
         if not manifest:
             return None
-            
+
         commands = []
-        if "capabilities" in manifest and "invocationCommands" in manifest["capabilities"]:
+        if (
+            "capabilities" in manifest
+            and "invocationCommands" in manifest["capabilities"]
+        ):
             commands = manifest["capabilities"]["invocationCommands"]
-        elif "capabilities" in manifest and "toolDefinitions" in manifest["capabilities"]:
+        elif (
+            "capabilities" in manifest and "toolDefinitions" in manifest["capabilities"]
+        ):
             commands = manifest["capabilities"]["toolDefinitions"]
-            
+
         for cmd in commands:
             cmd_id = cmd.get("commandIdentifier")
             if normalize_nit_key(cmd_id) == norm_name:
                 return {
                     "description": cmd.get("description", "").strip(),
-                    "parameter": cmd.get("parameter", "")
+                    "parameter": cmd.get("parameter", ""),
                 }
         return None
 
@@ -397,7 +402,7 @@ class NITDispatcher:
         目标格式: - **tool_name**: 功能描述。参数 arg1: desc1; arg2: desc2。
         """
         lines = []
-        
+
         # 收集所有符合条件的清单
         target_manifests = []
         for manifest in self.pm.get_all_manifests():
@@ -412,9 +417,15 @@ class NITDispatcher:
 
         for manifest in target_manifests:
             commands = []
-            if "capabilities" in manifest and "invocationCommands" in manifest["capabilities"]:
+            if (
+                "capabilities" in manifest
+                and "invocationCommands" in manifest["capabilities"]
+            ):
                 commands = manifest["capabilities"]["invocationCommands"]
-            elif "capabilities" in manifest and "toolDefinitions" in manifest["capabilities"]:
+            elif (
+                "capabilities" in manifest
+                and "toolDefinitions" in manifest["capabilities"]
+            ):
                 commands = manifest["capabilities"]["toolDefinitions"]
 
             for cmd in commands:
@@ -425,18 +436,18 @@ class NITDispatcher:
 
                 # 新规范支持：直接获取 parameter 字段
                 param_str = cmd.get("parameter", "")
-                
+
                 if param_str:
                     # 使用新格式直接拼接
                     full_desc = f"- **{name}**: {desc}"
                     if not (full_desc.endswith("。") or full_desc.endswith(".")):
                         full_desc += "。"
-                    
+
                     # 只有当参数不为空且不是“无”的时候才添加
                     if param_str and "无" not in param_str and param_str != "":
-                         full_desc += f" 参数 {param_str}"
-                         if not (full_desc.endswith("。") or full_desc.endswith(".")):
-                             full_desc += "。"
+                        full_desc += f" 参数 {param_str}"
+                        if not (full_desc.endswith("。") or full_desc.endswith(".")):
+                            full_desc += "。"
                     lines.append(full_desc)
                     continue
 
@@ -448,7 +459,7 @@ class NITDispatcher:
                     arg_desc = arg.get("description", "")
                     is_required = arg.get("required", False)
                     req_mark = "" if is_required else "(可选)"
-                    
+
                     if arg_desc:
                         param_parts.append(f"{arg_name}: {arg_desc}{req_mark}")
                     else:
@@ -459,7 +470,7 @@ class NITDispatcher:
                     if not (full_desc.endswith("。") or full_desc.endswith(".")):
                         full_desc += "。"
                     full_desc += " 参数 " + "; ".join(param_parts) + "。"
-                
+
                 lines.append(full_desc)
 
         return "\n".join(lines)
@@ -579,9 +590,7 @@ class NITDispatcher:
                             "status": "error",
                             "output": f"脚本错误: {str(e)}",
                             "raw_block": full_tag,
-                            "executed_tools": list(
-                                current_block_tools
-                            ),  # 复制部分列表
+                            "executed_tools": list(current_block_tools),  # 复制部分列表
                         }
                     )
 
@@ -618,7 +627,10 @@ class NITDispatcher:
 
             # 轻量模式检查
             config = get_config_manager()
-            if config.get("lightweight_mode", False) and plugin_id not in ["ScreenVision", "TaskLifecycle"]:
+            if config.get("lightweight_mode", False) and plugin_id not in [
+                "ScreenVision",
+                "TaskLifecycle",
+            ]:
                 logger.warning(f"轻量模式拦截: {plugin_name}")
                 return f"错误: 工具 '{plugin_name}' 在轻量聊天模式下受限。仅 ScreenVision 和 TaskLifecycle 可用。"
 

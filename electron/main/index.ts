@@ -27,6 +27,10 @@ import axios from 'axios'
 import { parseArgs } from './utils/args'
 import { startCli } from '../cli/index'
 import { logger } from './utils/logger'
+import { spawn } from 'child_process'
+import path from 'path'
+import { isDev, paths } from './utils/env'
+import fs from 'fs-extra'
 
 // 立即检查 CLI 模式
 const args = parseArgs(process.argv)
@@ -309,6 +313,120 @@ if (args.cliMode) {
     const win = windowManager.launcherWin
     if (!win) return false
     return await installEs(win)
+  })
+
+  // 下载模型 IPC
+  ipcMain.handle('download_models', async (event) => {
+    const win = BrowserWindow.fromWebContents(event.sender)
+    if (!win) return false
+
+    try {
+      const diag = await getDiagnostics()
+      const pythonPath = diag.python_path
+      if (!diag.python_exists) {
+        throw new Error('Python environment not found')
+      }
+
+      const workspaceRoot = isDev ? path.resolve(__dirname, '../../..') : paths.app
+
+      let cliScript = path.join(workspaceRoot, 'backend/scripts/model_cli.py')
+      // 生产环境资源目录逻辑
+      const resourceDir = isDev ? workspaceRoot : paths.resources
+      if (!(await fs.pathExists(cliScript))) {
+        cliScript = path.join(resourceDir, 'backend/scripts/model_cli.py')
+      }
+      if (!(await fs.pathExists(cliScript))) {
+        cliScript = path.join(path.dirname(diag.script_path), 'scripts/model_cli.py')
+      }
+
+      if (!(await fs.pathExists(cliScript))) {
+        throw new Error('model_cli.py not found')
+      }
+
+      logger.info('Main', `Starting model download with ${pythonPath} ${cliScript}`)
+
+      // 构造环境变量
+      const env = { ...process.env }
+      env['HF_ENDPOINT'] = 'https://hf-mirror.com' // 强制使用 HF 镜像
+      env['PYTHONUNBUFFERED'] = '1' // 强制 Python 输出不缓冲，防止下载大文件时日志卡住
+      if (isDev) {
+        env['PYTHONPATH'] = path.join(workspaceRoot)
+      } else {
+        env['PYTHONPATH'] = path.dirname(path.dirname(cliScript))
+      }
+
+      return new Promise((resolve, reject) => {
+        const child = spawn(pythonPath, [cliScript, 'download', '--model', 'all'], {
+          env: env
+        })
+
+        child.stdout.on('data', (data) => {
+          const lines = data.toString().split('\n')
+          for (const line of lines) {
+            if (line.trim()) {
+              logger.info('ModelDownload', line.trim())
+              // 发送进度到前端
+              win.webContents.send('download-progress', {
+                percent: -1, // 不确定进度
+                status: line.trim()
+              })
+            }
+          }
+        })
+
+        child.stderr.on('data', (data) => {
+          const str = data.toString()
+          // 仅当包含明确的错误关键词时才记录为 ERROR
+          if (
+            (str.includes('Error') || str.includes('Exception') || str.includes('Traceback')) &&
+            !str.includes('UserWarning') // 忽略警告
+          ) {
+            logger.error('ModelDownload', str)
+          } else {
+            logger.info('ModelDownload', str)
+
+            // 尝试更智能地解析进度条
+            // 匹配 huggingface_hub 的 tqdm 进度条格式:
+            // Fetching 6 files:  17%|#6        | 1/6 [00:01<00:07,  1.42s/it]
+            // model.bin:  25%|##5       | 100M/400M [00:05<00:15, 20.0MB/s]
+
+            let percent = -1
+            let status = str.trim()
+
+            // 尝试提取百分比
+            const percentMatch = str.match(/(\d+)%/)
+            if (percentMatch) {
+              percent = parseInt(percentMatch[1])
+            }
+
+            // 如果是 "Fetching X files" 这种总体进度，权重更高
+            if (str.includes('Fetching') && str.includes('files')) {
+              // 这是一个总体进度，可以直接使用
+            } else if (percent === 100) {
+              // 单个文件下载完成，不应该让整体进度条直接跳到 100%
+              // 我们可以忽略单个文件的 100%，或者将其视为中间状态
+              percent = -1
+            }
+
+            win.webContents.send('download-progress', {
+              percent: percent,
+              status: status
+            })
+          }
+        })
+
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(true)
+          } else {
+            reject(new Error(`Model download failed with code ${code}`))
+          }
+        })
+      })
+    } catch (e: any) {
+      logger.error('Main', `Model download error: ${e.message}`)
+      throw e
+    }
   })
 
   ipcMain.handle('install_napcat', async () => {

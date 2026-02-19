@@ -22,7 +22,7 @@ if (fs.existsSync(path.join(GATEWAY_SRC_DIR, 'gateway/main.go'))) {
     // Check if Go is installed
     try {
       execSync('go version', { stdio: 'ignore' })
-    } catch (e) {
+    } catch {
       console.warn('Warning: Go is not installed or not in PATH. Skipping Gateway build.')
       if (!fs.existsSync(GATEWAY_DEST_FILE)) {
         console.error('Error: Gateway binary not found and Go is not available to build it.')

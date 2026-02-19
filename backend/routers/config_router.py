@@ -22,7 +22,8 @@ async def get_all_configs(session: AsyncSession = Depends(get_session)):  # noqa
 
 @router.post("")
 async def update_configs(
-    configs: Dict[str, str], session: AsyncSession = Depends(get_session)  # noqa: B008
+    configs: Dict[str, str],
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     # 检查：工作模式下禁止启用不兼容功能
     try:
@@ -91,6 +92,7 @@ async def get_memory_config():
 @router.post("/memory")
 async def set_memory_config(config: Dict = Body(...)):
     import json
+
     await get_config_manager().set("memory_config", json.dumps(config))
     return {"status": "success", "config": config}
 
@@ -192,14 +194,17 @@ async def set_companion_mode(
     if enabled:
         config_entry = await session.get(Config, "current_model_id")
         if not config_entry:
-            raise HTTPException(status_code=400, detail="未配置当前对话模型，无法开启陪伴模式。")
-        
+            raise HTTPException(
+                status_code=400, detail="未配置当前对话模型，无法开启陪伴模式。"
+            )
+
         from models import AIModelConfig
+
         model_config = await session.get(AIModelConfig, int(config_entry.value))
         if not model_config or not model_config.enable_vision:
             raise HTTPException(
-                status_code=400, 
-                detail="当前对话模型未开启“图片模态”能力，陪伴模式需要模型能够理解屏幕截图。"
+                status_code=400,
+                detail="当前对话模型未开启“图片模态”能力，陪伴模式需要模型能够理解屏幕截图。",
             )
 
     await config_mgr.set("companion_mode_enabled", enabled)

@@ -63,7 +63,8 @@ async def sync_reminders(payload: Dict[str, Any] = Body(...)):  # noqa: B008
 
 @router.get("/tasks", response_model=List[ScheduledTask])
 async def get_tasks(
-    agent_id: Optional[str] = None, session: AsyncSession = Depends(get_session)  # noqa: B008
+    agent_id: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     statement = select(ScheduledTask).where(not ScheduledTask.is_triggered)
     if agent_id:
@@ -88,9 +89,7 @@ async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)
 async def check_tasks(session: AsyncSession = Depends(get_session)):  # noqa: B008
     now = datetime.now()
     tasks = (
-        await session.exec(
-            select(ScheduledTask).where(not ScheduledTask.is_triggered)
-        )
+        await session.exec(select(ScheduledTask).where(not ScheduledTask.is_triggered))
     ).all()
     triggered_prompts = []
 

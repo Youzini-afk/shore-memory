@@ -54,6 +54,10 @@ dependencies = [
     "dateparser~=1.2.0",
     "rich>=13.9.4",
     "onnxruntime==1.19.2",
+    "pywin32>=311",
+    "pygame>=2.6.1",
+    "python-pptx>=1.0.2",
+    "protobuf>=6.33.5",
 ]
 
 [dependency-groups]

@@ -81,11 +81,7 @@
             </div>
             <div
               class="text-xs truncate"
-              :class="
-                activeAgentId === agent.id
-                  ? 'text-sky-600'
-                  : 'text-slate-400'
-              "
+              :class="activeAgentId === agent.id ? 'text-sky-600' : 'text-slate-400'"
             >
               {{ activeAgentId === agent.id ? 'Active' : 'Standby' }}
             </div>
@@ -112,9 +108,7 @@
         class="h-14 px-6 flex items-center justify-between border-b border-white/20 bg-white/20 backdrop-blur-sm"
       >
         <div class="flex items-center gap-3">
-          <span class="text-lg font-bold text-slate-800">
-            与 {{ activeAgentName }} 聊天中
-          </span>
+          <span class="text-lg font-bold text-slate-800"> 与 {{ activeAgentName }} 聊天中 </span>
           <span
             class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
           >

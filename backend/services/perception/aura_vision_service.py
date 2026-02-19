@@ -74,7 +74,9 @@ class AuraVisionService:
 
         # 模型路径
         self.model_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            ),
             "models",
             "AuraVision",
             "weights",
@@ -83,7 +85,10 @@ class AuraVisionService:
 
         # 锚点数据路径
         base_dir = os.environ.get(
-            "PERO_DATA_DIR", os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+            "PERO_DATA_DIR",
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            ),
         )
         self.anchors_path = os.path.join(
             base_dir, "data", "rust_db", "intent_anchors.json"

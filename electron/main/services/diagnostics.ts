@@ -22,6 +22,10 @@ export interface DiagnosticReport {
   node_exists: boolean
   node_path: string
   node_version: string
+  // 新增模型字段
+  embedding_model_exists: boolean
+  reranker_model_exists: boolean
+  whisper_model_exists: boolean
   errors: string[]
 }
 
@@ -262,6 +266,61 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     logger.error('Main', `[诊断] checkNapCatInstalled 错误: ${e}`)
   }
 
+  // 7. 检查 AI 模型状态
+  let embeddingModelExists = false
+  let rerankerModelExists = false
+  let whisperModelExists = false
+
+  if (pythonExists) {
+    try {
+      // 构造 model_cli.py 的路径
+      // 在开发环境中：backend/scripts/model_cli.py
+      // 在生产环境中：resources/backend/scripts/model_cli.py (或者与 main.py 同级)
+
+      let cliScript = path.join(workspaceRoot, 'backend/scripts/model_cli.py')
+      if (!(await fs.pathExists(cliScript))) {
+        cliScript = path.join(resourceDir, 'backend/scripts/model_cli.py')
+      }
+      if (!(await fs.pathExists(cliScript))) {
+        // 尝试相对于 main.py 寻找
+        cliScript = path.join(path.dirname(scriptPath), 'scripts/model_cli.py')
+      }
+
+      if (await fs.pathExists(cliScript)) {
+        logger.info('Main', `[诊断] 正在检查模型状态: ${cliScript}`)
+        // 确保设置 PYTHONPATH 以便脚本能找到 backend 包
+        // 注意：在 execSync 中设置 env 可能会覆盖其他 env，所以我们要合并
+        const env = { ...process.env }
+        if (isDev) {
+          env['PYTHONPATH'] = path.join(workspaceRoot)
+        } else {
+          // 生产环境通常不需要，因为相对导入会工作，或者我们已经打包了
+          env['PYTHONPATH'] = path.dirname(path.dirname(cliScript))
+        }
+
+        const statusJson = execSync(`"${pythonPath}" "${cliScript}" check`, {
+          encoding: 'utf8',
+          stdio: 'pipe',
+          env: env
+        }).trim()
+
+        try {
+          const status = JSON.parse(statusJson)
+          embeddingModelExists = status['embedding']?.exists || false
+          rerankerModelExists = status['reranker']?.exists || false
+          // 只要有一个 whisper 模型存在就算存在，或者检查默认的 tiny
+          whisperModelExists = status['tiny']?.exists || false
+        } catch (e) {
+          logger.error('Main', `[诊断] 解析模型状态 JSON 失败: ${e}`)
+        }
+      } else {
+        logger.warn('Main', `[诊断] 未找到 model_cli.py 脚本`)
+      }
+    } catch (e: any) {
+      logger.error('Main', `[诊断] 模型状态检查失败: ${e.message}`)
+    }
+  }
+
   return {
     python_exists: pythonExists,
     python_path: pythonPath,
@@ -278,6 +337,9 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     node_exists: nodeExists,
     node_path: nodePath,
     node_version: nodeVersion,
+    embedding_model_exists: embeddingModelExists,
+    reranker_model_exists: rerankerModelExists,
+    whisper_model_exists: whisperModelExists,
     errors
   }
 }

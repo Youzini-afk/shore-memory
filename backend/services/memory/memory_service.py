@@ -90,13 +90,48 @@ class MemoryService:
         source: str = "desktop",
         memory_type: str = "event",
         agent_id: str = "pero",  # 多 Agent 隔离
-    ) -> Memory:
+    ) -> Optional[Memory]:
         from datetime import datetime
 
         from sqlmodel import desc
 
+        from core.event_bus import EventBus
         from services.core.embedding_service import embedding_service
         from services.core.vector_service import vector_service
+
+        # [Hook] memory.save.pre
+        # 允许 MOD 修改参数或取消保存
+        ctx = {
+            "session": session,
+            "content": content,
+            "tags": tags,
+            "clusters": clusters,
+            "importance": importance,
+            "base_importance": base_importance,
+            "sentiment": sentiment,
+            "msg_timestamp": msg_timestamp,
+            "source": source,
+            "memory_type": memory_type,
+            "agent_id": agent_id,
+            "cancel": False,
+        }
+        await EventBus.publish("memory.save.pre", ctx)
+
+        if ctx.get("cancel"):
+            print("[MemoryService] memory.save.pre 钩子取消了保存操作。")
+            return None
+
+        # 从上下文更新变量 (允许 MOD 修改)
+        content = ctx["content"]
+        tags = ctx["tags"]
+        clusters = ctx["clusters"]
+        importance = ctx["importance"]
+        base_importance = ctx["base_importance"]
+        sentiment = ctx["sentiment"]
+        msg_timestamp = ctx["msg_timestamp"]
+        source = ctx["source"]
+        memory_type = ctx["memory_type"]
+        agent_id = ctx["agent_id"]
 
         # 1. 查找上一条记忆 (时间轴末尾)
         # 增加 agent_id 过滤，确保只链接到同一个 Agent 的记忆链
@@ -241,6 +276,9 @@ class MemoryService:
                     )
             except Exception:
                 pass
+
+        # [Hook] memory.save.post
+        await EventBus.publish("memory.save.post", memory)
 
         return memory
 
@@ -572,9 +610,7 @@ class MemoryService:
                 flashback_scores = activation_scores
 
             # 3. 提取关联结果 (排除锚点)
-            associated_ids = [
-                mid for mid in flashback_scores if mid not in anchor_ids
-            ]
+            associated_ids = [mid for mid in flashback_scores if mid not in anchor_ids]
             if not associated_ids:
                 associated_ids = anchor_ids
 
