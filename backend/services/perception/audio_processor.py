@@ -43,12 +43,12 @@ class AudioProcessor:
             )
 
             # 保存结果
-            # 输出 mp3 需先存 wav (parselmouth 不支持)
+            # 输出 mp3 需先存 wav (parselmouth 不支持直接输出)
             if output_path.lower().endswith(".mp3"):
                 temp_wav = output_path.replace(".mp3", "_temp.wav")
                 new_sound.save(temp_wav, "WAV")
 
-                # 使用 ffmpeg 转换 (若装 pydub)
+                # 使用 ffmpeg 转换 (若安装了 pydub)
                 try:
                     from pydub import AudioSegment
 
@@ -58,7 +58,7 @@ class AudioProcessor:
                         os.remove(temp_wav)
                 except ImportError:
                     logger.warning("未安装 pydub，保留 wav 格式作为后备")
-                    # 无 pydub 则存为 wav
+                    # 如果没有 pydub 则存为 wav
                     new_sound.save(output_path, "WAV")
             else:
                 new_sound.save(output_path, "WAV")

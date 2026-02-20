@@ -2,6 +2,7 @@ import { BrowserWindow, shell, screen } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { logger } from '../utils/logger'
+import { initSteam } from '../services/steam'
 
 export class WindowManager {
   private static instance: WindowManager
@@ -93,10 +94,10 @@ export class WindowManager {
     }
 
     this.launcherWin.loadURL(this.getPageUrl('/launcher'))
-    logger.info('Main', `Loading URL: ${this.getPageUrl('/launcher')}`)
+    logger.info('Main', `正在加载 URL: ${this.getPageUrl('/launcher')}`)
 
     this.launcherWin.on('ready-to-show', () => {
-      logger.info('Main', 'Window ready-to-show event fired')
+      logger.info('Main', '窗口 ready-to-show 事件已触发')
       this.launcherWin?.show()
     })
 
@@ -143,7 +144,7 @@ export class WindowManager {
       try {
         this.strongholdWin.setBackgroundMaterial('acrylic')
       } catch {
-        // ignore
+        // 忽略
       }
     }
 
@@ -297,10 +298,9 @@ export class WindowManager {
     // 注意：Steam Overlay 通常只能依附于一个渲染进程。
     // 我们选择 DashboardView 作为主要依附对象，因为它是一个标准窗口，适合展示 Overlay。
     try {
-       const { initSteam } = require('../services/steam')
-       initSteam()
+      initSteam()
     } catch (e) {
-       logger.error('Main', `Dashboard Steam 初始化失败: ${e}`)
+      logger.error('Main', `Dashboard Steam 初始化失败: ${e}`)
     }
 
     this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
@@ -361,7 +361,7 @@ export class WindowManager {
       try {
         this.ideWin.setBackgroundMaterial('acrylic')
       } catch {
-        // ignore
+        // 忽略
       }
     }
 

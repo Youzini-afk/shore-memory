@@ -62,7 +62,7 @@ async def skip_terminal_command(request: SkipCommandRequest):
 
     success = realtime_session_manager.skip_command(request.pid)
     if not success:
-        raise HTTPException(status_code=404, detail="Command not found or not active")
+        raise HTTPException(status_code=404, detail="未找到命令或命令未激活")
     return {"status": "ok"}
 
 
@@ -216,23 +216,21 @@ async def read_file(request: ReadFileRequest):
     target_path = os.path.abspath(os.path.join(base_dir, request.path))
 
     if not target_path.startswith(base_dir):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="拒绝访问")
 
     if not os.path.exists(target_path):
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="未找到文件")
 
     try:
         # 检查文件大小 (限1MB防卡死)
         if os.path.getsize(target_path) > 1024 * 1024:
-            raise HTTPException(status_code=400, detail="File too large")
+            raise HTTPException(status_code=400, detail="文件过大")
 
         with open(target_path, "r", encoding="utf-8") as f:
             content = f.read()
         return {"content": content}
     except UnicodeDecodeError:
-        raise HTTPException(
-            status_code=400, detail="Binary file not supported"
-        ) from None
+        raise HTTPException(status_code=400, detail="不支持二进制文件") from None
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from None
 
@@ -243,10 +241,10 @@ async def create_file_or_dir(request: CreateFileRequest):
     target_path = os.path.abspath(os.path.join(base_dir, request.path))
 
     if not target_path.startswith(base_dir):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="拒绝访问")
 
     if os.path.exists(target_path):
-        raise HTTPException(status_code=400, detail="Path already exists")
+        raise HTTPException(status_code=400, detail="路径已存在")
 
     try:
         if request.is_directory:
@@ -267,7 +265,7 @@ async def write_file(request: WriteFileRequest):
     target_path = os.path.abspath(os.path.join(base_dir, request.path))
 
     if not target_path.startswith(base_dir):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="拒绝访问")
 
     try:
         # 自动创建父目录
@@ -285,10 +283,10 @@ async def delete_file(request: DeleteFileRequest):
     target_path = os.path.abspath(os.path.join(base_dir, request.path))
 
     if not target_path.startswith(base_dir):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="拒绝访问")
 
     if not os.path.exists(target_path):
-        raise HTTPException(status_code=404, detail="Path not found")
+        raise HTTPException(status_code=404, detail="未找到路径")
 
     try:
         if os.path.isdir(target_path):
@@ -308,16 +306,16 @@ async def rename_file(request: RenameFileRequest):
     target_path = os.path.abspath(os.path.join(base_dir, request.path))
 
     if not target_path.startswith(base_dir):
-        raise HTTPException(status_code=403, detail="Access denied")
+        raise HTTPException(status_code=403, detail="拒绝访问")
 
     if not os.path.exists(target_path):
-        raise HTTPException(status_code=404, detail="Path not found")
+        raise HTTPException(status_code=404, detail="未找到路径")
 
     parent_dir = os.path.dirname(target_path)
     new_path = os.path.join(parent_dir, request.new_name)
 
     if os.path.exists(new_path):
-        raise HTTPException(status_code=400, detail="New name already exists")
+        raise HTTPException(status_code=400, detail="新名称已存在")
 
     try:
         os.rename(target_path, new_path)

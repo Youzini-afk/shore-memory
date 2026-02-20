@@ -89,7 +89,7 @@ def audit_command_via_wasm(command: str) -> dict:
         return result
 
     except Exception as e:
-        logger.error(f"Wasm execution error: {e}")
+        logger.error(f"Wasm 执行错误: {e}")
         return {"level": 2, "reason": f"Wasm执行异常: {e}", "highlight": None}
 
 

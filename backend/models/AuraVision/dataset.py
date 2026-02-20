@@ -9,26 +9,26 @@ from torchvision import transforms
 
 class AuraVisionDataset(Dataset):
     """
-    Dataset for Pero AuraVision Triplet Training
-    Automatically loads (Raw, Edge, Gray) and Intent labels from vision_data directory.
+    Pero AuraVision 三元组训练数据集
+    自动从 vision_data 目录加载 (Raw, Edge, Gray) 和意图标签。
     """
 
     def __init__(self, vision_data_dir, transform=None, mode="edge"):
         """
         Args:
-            vision_data_dir: Path to 'vision_data' directory.
-            transform: Custom transforms.
-            mode: "edge", "gray", or "raw".
+            vision_data_dir: 'vision_data' 目录的路径。
+            transform: 自定义转换。
+            mode: "edge", "gray" 或 "raw"。
         """
         self.input_dir = os.path.join(vision_data_dir, "input")
         self.output_dir = os.path.join(vision_data_dir, "output")
         self.mode = mode
 
-        # 1. Scan for valid groups (must have both image and json)
+        # 1. 扫描有效的组（必须同时具有图像和 json）
         self.samples = []
         json_files = [f for f in os.listdir(self.output_dir) if f.endswith(".json")]
 
-        # Group by timestamp
+        # 按时间戳分组
         self.label_to_indices = {}
 
         for jf in json_files:
@@ -63,7 +63,7 @@ class AuraVisionDataset(Dataset):
         self.labels = list(self.label_to_indices.keys())
         print(f"加载了 {len(self.samples)} 个样本，共 {len(self.labels)} 个意图类别")
 
-        # Default transforms for desensitized 64x64 images
+        # 针对脱敏后的 64x64 图像的默认转换
         self.transform = transform or transforms.Compose(
             [
                 transforms.Resize((64, 64)),
@@ -77,12 +77,12 @@ class AuraVisionDataset(Dataset):
         return len(self.samples)
 
     def __getitem__(self, index):
-        # 1. Anchor
+        # 1. 锚点 (Anchor)
         anchor_sample = self.samples[index]
         anchor_label = anchor_sample["label"]
         anchor_img = self._load_img(anchor_sample["img_path"])
 
-        # 2. Positive
+        # 2. 正样本 (Positive)
         pos_indices = self.label_to_indices[anchor_label]
         if len(pos_indices) > 1:
             pos_idx = random.choice([i for i in pos_indices if i != index])
@@ -90,7 +90,7 @@ class AuraVisionDataset(Dataset):
             pos_idx = index
         pos_img = self._load_img(self.samples[pos_idx]["img_path"])
 
-        # 3. Negative
+        # 3. 负样本 (Negative)
         other_labels = [label for label in self.labels if label != anchor_label]
         if not other_labels:
             neg_idx = index

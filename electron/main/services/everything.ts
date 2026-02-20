@@ -38,7 +38,7 @@ export async function installEs(window: WindowLike) {
     try {
       if (!window.isDestroyed()) window.webContents.send('es-log', msg)
     } catch {
-      // ignore
+      // 忽略
     }
   }
 

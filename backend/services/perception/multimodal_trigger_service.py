@@ -2,7 +2,7 @@
 多模态主动触发协调器 (Multimodal Trigger Coordinator)
 
 第三阶段核心组件：统一调度三个感知维度
-1. 视觉意图 (Visual Intent) - 来自 AuraVisionService
+1. 视觉意图 (Visual Intent) - 来自 VisionIntentMemoryManager
 2. 语义扩散 (Semantic Spreading) - 来自 CognitiveGraphEngine
 3. 时间感知 (Time Awareness) - 来自 TimeAwarenessService
 

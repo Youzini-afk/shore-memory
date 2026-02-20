@@ -180,7 +180,7 @@
                         >
                           <span>当前状态</span>
                           <div style="display: flex; align-items: center; gap: 15px">
-                            <!-- NapCat Status Indicator -->
+                            <!-- NapCat 状态指示器 -->
                             <div
                               v-if="!napCatStatus.disabled"
                               class="status-badge"
@@ -213,7 +213,7 @@
                             </div>
 
                             <div style="display: flex; align-items: center; gap: 10px">
-                              <span style="font-size: 12px; color: #909399">Active Agent:</span>
+                              <span style="font-size: 12px; color: #909399">当前代理:</span>
                               <el-dropdown
                                 trigger="click"
                                 :disabled="isSwitchingAgent"
@@ -230,7 +230,7 @@
                                     font-weight: bold;
                                   "
                                 >
-                                  {{ activeAgent?.name || 'Unknown' }}
+                                  {{ activeAgent?.name || '未知' }}
                                   <el-icon class="el-icon--right"><ArrowDown /></el-icon>
                                 </span>
                                 <template #dropdown>
@@ -246,7 +246,7 @@
                                         <span
                                           v-if="!agent.is_enabled"
                                           style="font-size: 10px; color: #999"
-                                          >(Disabled)</span
+                                          >(已禁用)</span
                                         >
                                       </div>
                                     </el-dropdown-item>
@@ -296,17 +296,16 @@
                         <div class="nit-header">
                           <div class="nit-title">
                             <el-icon><Connection /></el-icon>
-                            <span>NIT Protocol Status</span>
-                            <el-tag size="small" effect="dark" type="success">Active</el-tag>
+                            <span>NapCat 协议状态</span>
+                            <el-tag size="small" effect="dark" type="success">有效</el-tag>
                           </div>
                           <div class="nit-metrics">
                             <span class="metric">
-                              <strong>{{ nitStatus.plugins_count }}</strong> Plugins Loaded
+                              <strong>{{ nitStatus.plugins_count }}</strong> 插件已加载
                             </span>
                             <el-divider direction="vertical" />
                             <span class="metric">
-                              <strong>{{ nitStatus.active_mcp_count }}</strong> MCP Servers
-                              Connected
+                              <strong>{{ nitStatus.active_mcp_count }}</strong> MCP 服务已连接
                             </span>
                           </div>
                         </div>
@@ -325,7 +324,7 @@
                             {{ p.name }}
                           </el-tag>
                           <span v-if="nitStatus.plugins.length > 8" class="more-tag"
-                            >...and {{ nitStatus.plugins.length - 8 }} more</span
+                            >...及其他 {{ nitStatus.plugins.length - 8 }} 个</span
                           >
                         </div>
                       </div>
@@ -390,8 +389,8 @@
                         </div>
                         <el-switch
                           v-model="isAuraVisionEnabled"
-                          active-text="ON"
-                          inactive-text="OFF"
+                          active-text="开"
+                          inactive-text="关"
                           :loading="isTogglingAuraVision"
                           @change="toggleAuraVision"
                         />
@@ -442,8 +441,8 @@
                         >
                           <el-switch
                             v-model="isCompanionEnabled"
-                            active-text="ON"
-                            inactive-text="OFF"
+                            active-text="开"
+                            inactive-text="关"
                             :disabled="!isLightweightEnabled || !isCurrentModelVisionEnabled"
                             :loading="isTogglingCompanion"
                             @change="toggleCompanion"
@@ -453,7 +452,7 @@
                     </el-card>
                   </el-col>
                 </el-row>
-                <!-- Memory Config Card -->
+                <!-- 记忆配置卡片 -->
                 <el-row :gutter="20" style="margin-top: 20px">
                   <el-col :span="24">
                     <el-card
@@ -737,7 +736,7 @@
                     <div class="bubble-content-box">
                       <div class="bubble-meta">
                         <span class="role-name">{{
-                          log.role === 'user' ? 'You' : activeAgent?.name || 'Pero'
+                          log.role === 'user' ? '你' : activeAgent?.name || 'Pero'
                         }}</span>
                         <span class="time">{{ log.displayTime }}</span>
 
@@ -784,7 +783,6 @@
                         </el-tooltip>
                       </div>
 
-                      <!-- Image Preview -->
                       <!-- 图片预览 -->
                       <div
                         v-if="log.images && log.images.length > 0"
@@ -1870,7 +1868,7 @@
       </template>
     </el-dialog>
 
-    <!-- Debug Log Dialog -->
+    <!-- 调试日志弹窗 -->
     <el-dialog
       v-model="showDebugDialog"
       title="对话调试详情 (Debug View)"
@@ -5537,7 +5535,7 @@ onUnmounted(() => {
   padding-bottom: 20px;
 }
 
-/* Ensure form labels inside dialogs are visible */
+/* 确保对话框内的表单标签可见 */
 :deep(.el-form-item__label) {
   color: var(--healing-text);
   font-weight: 500;
@@ -5586,7 +5584,7 @@ onUnmounted(() => {
   color: #c0c4cc;
 }
 
-/* Models Grid */
+/* 模型网格 */
 .models-grid-layout {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));

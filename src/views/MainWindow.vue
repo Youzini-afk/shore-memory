@@ -106,7 +106,7 @@ watch(isWorkMode, async (newVal) => {
         console.warn('[工作模式] 被阻止:', data.message)
         errorMessage.value = data.message.replace('Error: ', '')
         showErrorDialog.value = true
-        isWorkMode.value = false // Revert state
+        isWorkMode.value = false // 恢复状态
         return
       }
 

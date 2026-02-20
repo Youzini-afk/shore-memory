@@ -5,32 +5,32 @@ import sys
 try:
     from pero_memory_core import CognitiveGraphEngine
 except ImportError:
-    print("Error: PeroCore Rust module (pero_memory_core) not found.")
+    print("错误: 未找到 PeroCore Rust 模块 (pero_memory_core)。")
     sys.exit(1)
 
 
 def run_synthetic_knowledge_web_test(node_count=50000, relation_density=5):
     print("=" * 80)
-    print("      BENCHMARK 3: SYNTHETIC KNOWLEDGE WEB INTEGRATION")
+    print("      基准测试 3: 合成知识网络集成")
     print("=" * 80)
     print(
-        f"Scenario: Simulating a complex, non-linear knowledge graph with {node_count:,} concepts."
+        f"场景：模拟包含 {node_count:,} 个概念的复杂非线性知识图谱。"
     )
     print(
-        "Objective: Test associative recall stability in a 'Power-Law' distribution graph."
+        "目标：测试在“幂律”分布图谱中的联想召回稳定性。"
     )
     print("-" * 80)
 
     engine = CognitiveGraphEngine()
 
-    # 1. Generate Power-Law graph (Synthetic World)
-    # A few "hub" nodes (super-concepts) and many leaf nodes.
-    print(f"[*] Generating synthetic knowledge web (Density: {relation_density})...")
+    # 1. 生成幂律图谱 (合成世界)
+    # 少量“枢纽”节点 (超级概念) 和大量叶子节点。
+    print(f"[*] 正在生成合成知识网络 (密度: {relation_density})...")
 
     connections = []
-    # Hub nodes: 1-100
+    # 枢纽节点: 1-100
     for i in range(101, node_count):
-        # Each node connects to 1-3 hubs and 2 random other nodes
+        # 每个节点连接到 1-3 个枢纽和 2 个随机其他节点
         num_hubs = random.randint(1, 3)
         for _ in range(num_hubs):
             hub = random.randint(1, 100)
@@ -44,23 +44,23 @@ def run_synthetic_knowledge_web_test(node_count=50000, relation_density=5):
     engine.batch_add_connections(connections)
     ingest_time = (time.perf_counter() - start_ingest) * 1000
 
-    print(f"[+] Web generated and ingested in {ingest_time:.2f} ms.")
+    print(f"[+] 图谱生成并摄入耗时 {ingest_time:.2f} ms。")
 
-    # 2. Test Associative Recall
-    # Pick a random "leaf" node and see if it can activate its related "hub"
-    # through indirect associations.
+    # 2. 测试联想召回
+    # 随机选择一个“叶子”节点，查看它是否能激活其相关的“枢纽”
+    # 通过间接关联。
     test_node = random.randint(101, node_count)
-    print(f"[*] Simulating 'Subconscious Flashback' from Concept {test_node}...")
+    print(f"[*] 正在模拟从概念 {test_node} 的“潜意识闪回”...")
 
     start_prop = time.perf_counter()
-    # 4 steps of association
+    # 4 步关联
     activated = engine.propagate_activation(
         {test_node: 1.0}, steps=4, decay=0.7, min_threshold=0.01
     )
     prop_time = (time.perf_counter() - start_prop) * 1000
 
-    # 3. Analyze results
-    # Hubs should generally have higher scores due to many connections (Power-law)
+    # 3. 分析结果
+    # 由于连接众多 (幂律)，枢纽通常应具有较高的分数
     sorted_results = sorted(activated.items(), key=lambda x: x[1], reverse=True)
 
     hub_activation_count = 0
@@ -70,23 +70,23 @@ def run_synthetic_knowledge_web_test(node_count=50000, relation_density=5):
         if 1 <= nid <= 100:
             hub_activation_count += 1
 
-    print("\n[Results]:")
-    print(f"  - Propagation Latency: {prop_time:.4f} ms")
-    print(f"  - Top 20 Activation Hub Density: {hub_activation_count / 20 * 100:.1f}%")
-    print(f"  - Total Activated Concepts: {len(activated):,}")
+    print("\n[结果]:")
+    print(f"  - 传播延迟: {prop_time:.4f} ms")
+    print(f"  - 前 20 名激活枢纽密度: {hub_activation_count / 20 * 100:.1f}%")
+    print(f"  - 激活概念总数: {len(activated):,}")
 
     if hub_activation_count > 0:
         print(
-            "  - Status: ✅ SUCCESS (System successfully associated leaf concept to hub concepts)"
+            "  - 状态: ✅ 成功 (系统成功将叶子概念关联到枢纽概念)"
         )
     else:
         print(
-            "  - Status: ⚠️ NEUTRAL (No major hubs activated, possibly an isolated cluster)"
+            "  - 状态: ⚠️ 中立 (未激活主要枢纽，可能是孤立的簇)"
         )
 
     print("-" * 80)
     print(
-        "Conclusion: CognitiveGraphEngine maintains stability in complex, hub-and-spoke topologies."
+        "结论：CognitiveGraphEngine 在复杂的枢纽-辐条拓扑中保持稳定性。"
     )
     print("=" * 80 + "\n")
 

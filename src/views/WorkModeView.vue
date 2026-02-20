@@ -319,7 +319,6 @@ const dirtyFiles = ref(new Set())
 onMounted(() => {
   console.log('WorkModeView Mounted')
   fetchActiveAgent()
-  // Instant ready for smoother transition since parent handles overlap
   // 立即就绪，以便更平滑的过渡，因为父级处理重叠
   internalReady.value = true
 })
@@ -343,7 +342,7 @@ const onFileSelected = async (fileNode) => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fileNode.path })
     })
-    if (!res.ok) throw new Error('Failed to read file')
+    if (!res.ok) throw new Error('读取文件失败')
     const data = await res.json()
 
     const newFile = { ...fileNode, content: data.content }
@@ -433,7 +432,6 @@ const saveFile = async (content) => {
 
     if (res.ok) {
       dirtyFiles.value.delete(currentFile.value.path)
-      // Optional: Toast notification
       // 可选：Toast 通知
     } else {
       showDialog({ type: 'alert', title: '错误', message: '保存文件失败' })

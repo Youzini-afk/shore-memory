@@ -114,7 +114,7 @@ class MemoryService:
         from services.core.embedding_service import embedding_service
         from services.core.vector_service import vector_service
 
-        # [Hook] memory.save.pre
+        # [钩子] memory.save.pre
         # 允许 MOD 修改参数或取消保存
         ctx = {
             "session": session,
@@ -162,7 +162,7 @@ class MemoryService:
         prev_id = last_memory.id if last_memory else None
 
         # 2. 创建新记忆
-        # 生成 Embedding (用于写入 VectorDB)
+        # 生成 Embedding (用于写入向量数据库)
         embedding_vec = embedding_service.encode_one(content)
 
         if not embedding_vec:
@@ -190,17 +190,17 @@ class MemoryService:
         await session.commit()
         await session.refresh(memory)
 
-        # 3. 同步写入 VectorDB
+        # 3. 同步写入向量数据库
         if embedding_vec:
             try:
-                # [Feature] 标签加权向量
+                # [特性] 标签加权向量
                 # 如果有 tags，生成混合文本 "tags tags content" 增强权重
                 final_embedding = embedding_vec
                 if tags:
                     enriched_text = f"{tags} {tags} {content}"
                     final_embedding = embedding_service.encode_one(enriched_text)
 
-                    # [Feature] TagMemo Indexing - 独立索引标签
+                    # [特性] 标签记忆索引 - 独立索引标签
                     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
                     if tag_list:
                         try:
@@ -220,7 +220,7 @@ class MemoryService:
                     "agent_id": agent_id,
                 }
 
-                # [Feature] 簇过滤支持
+                # [特性] 簇过滤支持
                 if clusters:
                     cluster_list = [c.strip() for c in clusters.split(",") if c.strip()]
                     for c in cluster_list:
@@ -235,7 +235,7 @@ class MemoryService:
                     metadata=metadata_dict,
                 )
             except Exception as e:
-                print(f"[MemoryService] 同步到 VectorDB 失败: {e}")
+                print(f"[MemoryService] 同步到向量数据库失败: {e}")
         else:
             # Embedding 为空时的同步重试策略
             print(
@@ -250,7 +250,7 @@ class MemoryService:
                     session.add(memory)
                     await session.commit()
 
-                    # 写入 VectorDB
+                    # 写入向量数据库
                     vector_service.add_memory(
                         memory_id=memory.id,
                         content=content,
@@ -278,7 +278,7 @@ class MemoryService:
             session.add(last_memory)
             await session.commit()
 
-            # [Optimization] 同步更新全局 Rust 引擎单例
+            # [优化] 同步更新全局 Rust 引擎单例
             try:
                 engine = await get_rust_engine(session)
                 if engine:
@@ -496,7 +496,7 @@ class MemoryService:
                     ConversationLog.timestamp >= start_dt
                 ).where(ConversationLog.timestamp <= end_dt)
             except ValueError:
-                print(f"[MemoryService] Invalid date format: {date_str}")
+                print(f"[MemoryService] 无效的日期格式: {date_str}")
 
         # 6. 排序
         # 始终首先按时间戳倒序排列以获取“最近”日志。
@@ -678,10 +678,10 @@ class MemoryService:
         agent_id: str = "pero",
     ) -> List[Memory]:
         """
-        [混合检索策略] (Hybrid Search Strategy)
-        1. 锚点定位 (Anchoring): 使用关键词/Tag 命中 Entity Node
-        2. 扩散激活 (Diffusion): 利用 Rust 引擎进行能量扩散
-        3. 向量重排 (Re-ranking): 结合向量相似度输出最终结果
+        [混合检索策略]
+        1. 锚点定位: 使用关键词/标签命中实体节点
+        2. 扩散激活: 利用 Rust 引擎进行能量扩散
+        3. 向量重排: 结合向量相似度输出最终结果
         """
         import math
 
@@ -690,7 +690,7 @@ class MemoryService:
         from services.core.embedding_service import embedding_service
         from services.core.vector_service import vector_service
 
-        # --- 1. 锚点定位 (Anchoring) ---
+        # --- 1. 锚点定位 ---
         # 简单分词 (未来可接入 AC 自动机)
         keywords = set(re.findall(r"[\w]+", text))
 
@@ -711,7 +711,7 @@ class MemoryService:
                 )
                 entity_anchors = (await session.exec(stmt)).all()
 
-        # --- 2. 向量检索 (Vector Search) ---
+        # --- 2. 向量检索 ---
         if query_vec is None:
             query_vec = embedding_service.encode_one(text)
 
@@ -723,7 +723,7 @@ class MemoryService:
             query_vec, limit=20, agent_id=agent_id
         )
 
-        # --- 3. 扩散激活 (Spreading Activation) ---
+        # --- 3. 扩散激活 ---
         # 初始能量源:
         # - Vector Top-N: 能量 = score
         # - Entity Anchors: 能量 = 2.0 (最大值，因为是精确匹配)
@@ -749,7 +749,7 @@ class MemoryService:
                 initial_scores=initial_energy, steps=2, decay=0.6, min_threshold=0.05
             )
 
-        # --- 4. 结果重排 (Re-ranking) ---
+        # --- 4. 结果重排 ---
         # 结合: 扩散分数 + 向量相似度 (如果存在) + 时间衰减 + 重要性
 
         # 获取所有涉及的记忆 ID
@@ -968,13 +968,13 @@ class MemoryService:
         date_end: str = None,
         tags: str = None,
         memory_type: str = None,
-        agent_id: str = None,  # Allow filtering by agent
+        agent_id: str = None,  # 允许按代理过滤
     ) -> List[Memory]:
         from datetime import datetime
 
         statement = select(Memory)
 
-        # Agent Filter
+        # 代理过滤器
         if agent_id:
             statement = statement.where(Memory.agent_id == agent_id)
 

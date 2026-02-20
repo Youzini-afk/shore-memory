@@ -97,7 +97,7 @@
           <div
             class="flex items-center gap-4 bg-slate-900/40 px-5 py-2.5 rounded-full border border-slate-700/30 backdrop-blur-md shadow-sm"
           >
-            <!-- Steam User Status -->
+            <!-- Steam 用户状态 -->
             <div
               v-if="steamUser"
               class="flex items-center gap-2 border-r border-slate-700/50 pr-4 mr-1"
@@ -426,7 +426,7 @@
             <div
               class="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-[10px] font-bold text-purple-500 uppercase tracking-widest"
             >
-              Total: {{ plugins.length }}
+              总计: {{ plugins.length }}
             </div>
           </div>
 
@@ -558,7 +558,7 @@
                       class="text-[10px] font-mono text-slate-600 hidden md:inline-block max-w-[150px] truncate"
                       :title="envReport.python_path"
                     >
-                      {{ envReport.python_path || 'PATH NOT FOUND' }}
+                      {{ envReport.python_path || '未找到路径' }}
                     </span>
                     <CheckCircle2
                       v-if="envReport.python_exists"
@@ -738,7 +738,7 @@
                     <span
                       v-if="!isSocialEnabled"
                       class="text-[10px] uppercase font-bold text-slate-600 bg-slate-800 px-2 py-1 rounded"
-                      >Disabled</span
+                      >已禁用</span
                     >
                     <CheckCircle2
                       v-else-if="envReport.napcat_installed"
@@ -1597,7 +1597,7 @@ const fetchAgents = async () => {
 }
 
 const toggleAgentEnabled = async (agent) => {
-  // Optimistic update
+  // 乐观更新
   // const originalState = agent.is_enabled
   agent.is_enabled = !agent.is_enabled
 
@@ -1605,7 +1605,7 @@ const toggleAgentEnabled = async (agent) => {
 }
 
 const setAsActive = async (agent) => {
-  // Update local state
+  // 更新本地状态
   agentList.value.forEach((a) => (a.is_active = a.id === agent.id))
   await saveAgentConfig()
   addLog(`[CONFIG] Active agent set to: ${agent.name}`)

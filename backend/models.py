@@ -132,7 +132,7 @@ class GroupChatMember(SQLModel, table=True):
 class GroupChatMessage(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
     room_id: str = Field(foreign_key="groupchatroom.id", index=True)
-    sender_id: str = Field(index=True)  # 'user' or agent_id
+    sender_id: str = Field(index=True)  # 发送者ID: 'user' 或 agent_id
     content: str = Field(sa_column=Column(Text))
     role: str  # user, assistant, system
     timestamp: datetime = Field(default_factory=get_local_now)
@@ -145,8 +145,8 @@ class ScheduledTask(SQLModel, table=True):
     """存储 <REMINDER> 和 <TOPIC>"""
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    type: str  # "reminder" or "topic"
-    time: str  # YYYY-MM-DD HH:mm:ss
+    type: str  # 类型: "reminder" 或 "topic"
+    time: str  # 时间格式: YYYY-MM-DD HH:mm:ss
     content: str
     is_triggered: bool = False
     created_at: datetime = Field(default_factory=get_local_now)
@@ -159,12 +159,12 @@ class Config(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
     # 新增：是否启用反思模型
-    # reflection_enabled: bool (stored as string "true"/"false")
-    # reflection_model_id: int (stored as string)
+    # reflection_enabled: bool (存储为字符串 "true"/"false")
+    # reflection_model_id: int (存储为字符串)
 
     # 新增：是否启用辅助模型（用于文件搜索分析等）
-    # aux_model_enabled: bool (stored as string "true"/"false")
-    # aux_model_id: int (stored as string)
+    # aux_model_enabled: bool (存储为字符串 "true"/"false")
+    # aux_model_id: int (存储为字符串)
 
 
 class AIModelConfig(SQLModel, table=True):
@@ -177,7 +177,9 @@ class AIModelConfig(SQLModel, table=True):
 
     # 基础配置
     model_id: str  # 实际模型ID，如 "gpt-4", "claude-3-opus"
-    provider: str = Field(default="openai")  # "openai", "gemini", "anthropic" etc.
+    provider: str = Field(
+        default="openai"
+    )  # 提供商: "openai", "gemini", "anthropic" 等
     provider_type: str = "global"  # "global" (继承全局) 或 "custom" (独立配置)
 
     # 独立配置 (当 provider_type == 'custom' 时使用)
@@ -208,7 +210,9 @@ class VoiceConfig(SQLModel, table=True):
     name: str = Field(
         unique=True, index=True
     )  # 显示名称，如 "Whisper Local", "Azure TTS"
-    provider: str  # "local_whisper", "edge_tts", "openai_compatible", "azure", etc.
+    provider: (
+        str  # 提供商: "local_whisper", "edge_tts", "openai_compatible", "azure" 等
+    )
 
     # API 配置
     api_key: Optional[str] = None

@@ -26,6 +26,7 @@ export class AnimationController {
     }
   }
 
+  // 进入指定状态，执行 on_entry 脚本
   enterState(stateName: string) {
     const state = this.states[stateName]
     if (!state) return
@@ -38,6 +39,7 @@ export class AnimationController {
     this.stateTime = 0
   }
 
+  // 更新控制器状态，处理状态转换和动画播放
   update(dt: number) {
     const state = this.states[this.currentStateName]
     if (!state) return
@@ -86,12 +88,8 @@ export class AnimationManager {
   legacyAnim: any = null
   startTime: number = 0
   isPlaying: boolean = false
-  boneMap: any = {} // Passed from loader
-  // Passed from loader
-  // 从 loader 传递
-  debugAnim: any = null // For forced debug playback
-  // For forced debug playback
-  // 用于强制调试播放
+  boneMap: any = {} // 从加载器传递
+  debugAnim: any = null // 用于强制调试播放
   debugStartTime: number = 0
   headBones: any[] | null = null
   lastTime: number = 0
@@ -103,7 +101,7 @@ export class AnimationManager {
 
   setBoneMap(map: any) {
     this.boneMap = map
-    this.headBones = null // Reset cache
+    this.headBones = null // 重置缓存
   }
 
   async load(config: any) {
@@ -112,7 +110,7 @@ export class AnimationManager {
     this.controllers = []
     this.legacyAnim = null
 
-    // Helper for fetch with timeout
+    // 带超时的 Fetch 辅助函数
     const fetchWithTimeout = async (url: string, timeout = 10000) => {
       const controller = new AbortController()
       const id = setTimeout(() => controller.abort(), timeout)
@@ -126,7 +124,7 @@ export class AnimationManager {
       }
     }
 
-    // 1. Load Animations (Serial)
+    // 1. 加载动画 (串行)
     let animPaths: string[] = []
     if (config.animation) {
       animPaths = Array.isArray(config.animation) ? config.animation : [config.animation]
@@ -136,7 +134,6 @@ export class AnimationManager {
 
     for (const path of animPaths) {
       try {
-        // Remove cache busting to allow browser caching
         // 移除缓存破坏以允许浏览器缓存
         const response = await fetchWithTimeout(path)
         if (!response.ok) {
@@ -155,7 +152,6 @@ export class AnimationManager {
       }
     }
 
-    // 2. Load Controllers (Serial)
     // 2. 加载控制器 (串行)
     if (config.animation_controllers) {
       const ctrlPaths = Array.isArray(config.animation_controllers)
@@ -181,17 +177,15 @@ export class AnimationManager {
       }
     }
 
-    // Auto-start
+    // 自动开始
     if (this.controllers.length > 0) {
       this.isPlaying = true
       this.startTime = Date.now() / 1000
       this.lastTime = this.startTime
     } else {
-      // Legacy Mode
       // 遗留模式
       const animNames = Object.keys(this.animations)
       if (animNames.length > 0) {
-        // Prioritize 'idle' over 'tac:idle'
         // 优先于 'tac:idle' 选择 'idle'
         let idleAnim: string | undefined = animNames.find((n) => n === 'idle')
 
@@ -206,7 +200,6 @@ export class AnimationManager {
             ) || animNames[0]
         }
 
-        // Check if idleAnim is defined before passing it
         // 传递前检查 idleAnim 是否已定义
         if (idleAnim) {
           this.playLegacy(idleAnim)
@@ -302,7 +295,7 @@ export class AnimationManager {
 
     const now = Date.now() / 1000
     let dt = now - this.lastTime
-    // Safety clamp for large gaps (e.g. tab switching or initialization)
+    // 针对大间隔（例如标签切换或初始化）的安全钳位
     if (dt > 0.1 || dt < 0) {
       dt = 1 / 60
     }
@@ -313,7 +306,7 @@ export class AnimationManager {
     this.resetBones()
 
     if (this.debugAnim) {
-      // Debug mode: play forced animation
+      // 调试模式：播放强制动画
       let time = now - this.debugStartTime
       if (this.debugAnim.loop && this.debugAnim.length > 0) {
         time = time % this.debugAnim.length
@@ -350,7 +343,6 @@ export class AnimationManager {
     const headX = molangContext.query.head_x_rotation
     const headY = molangContext.query.head_y_rotation
 
-    // Always cache head bones if not done yet
     // 如果尚未完成，始终缓存头部骨骼
     if (!this.headBones) {
       this.headBones = []
@@ -365,8 +357,8 @@ export class AnimationManager {
 
     this.headBones.forEach((g) => {
       g.userData.animRot = true
-      // Apply rotation on top of existing animation
-      // Using same coordinate convention as applyAnimationToBones (-x, -y)
+      // 在现有动画之上应用旋转
+      // 使用与 applyAnimationToBones 相同的坐标约定 (-x, -y)
       g.rotation.x += THREE.MathUtils.degToRad(-headX)
       g.rotation.y += THREE.MathUtils.degToRad(-headY)
     })
@@ -445,7 +437,6 @@ export class AnimationManager {
           }
         }
 
-        // Position
         // 位置
         if (tracks.position) {
           const val = this.evaluateTrack(tracks.position, t)
@@ -473,7 +464,6 @@ export class AnimationManager {
           }
         }
 
-        // Scale
         // 缩放
         if (tracks.scale) {
           const val = this.evaluateTrack(tracks.scale, t)

@@ -19,7 +19,7 @@ except ImportError:
 
 class IntentLoss(nn.Module):
     """
-    Triplet Loss for Semantic Alignment
+    用于语义对齐的三元组损失 (Triplet Loss)
     """
 
     def __init__(self, margin=0.5):
@@ -27,10 +27,10 @@ class IntentLoss(nn.Module):
         self.margin = margin
 
     def forward(self, anchor, positive, negative):
-        # Euclidean distance
+        # 欧几里得距离
         pos_dist = (anchor - positive).pow(2).sum(1)
         neg_dist = (anchor - negative).pow(2).sum(1)
-        # Triplet loss formula: relu(d(a,p) - d(a,n) + margin)
+        # 三元组损失公式: relu(d(a,p) - d(a,n) + margin)
         loss = torch.clamp(pos_dist - neg_dist + self.margin, min=0.0)
         return loss.mean()
 
@@ -44,7 +44,7 @@ class AuraVisionTrainer:
         self.model.to(self.device)
         self.optimizer = optim.AdamW(self.model.parameters(), lr=lr, weight_decay=1e-2)
         self.criterion = IntentLoss(margin=0.5)
-        logger.info(f"AuraVisionTrainer initialized on {self.device}")
+        logger.info(f"AuraVisionTrainer 已在 {self.device} 上初始化")
 
     def train_epoch(self, dataloader):
         self.model.train()
@@ -58,15 +58,15 @@ class AuraVisionTrainer:
 
             self.optimizer.zero_grad()
 
-            # Forward pass
+            # 前向传播
             v_a = self.model(anchor)
             v_p = self.model(pos)
             v_n = self.model(neg)
 
-            # Loss
+            # 计算损失
             loss = self.criterion(v_a, v_p, v_n)
 
-            # Backward pass
+            # 反向传播
             loss.backward()
             self.optimizer.step()
 
@@ -78,20 +78,20 @@ class AuraVisionTrainer:
         os.makedirs(os.path.dirname(path), exist_ok=True)
 
         if use_safetensors and HAS_SAFETENSORS:
-            # Safetensors is preferred for Candle
+            # Safetensors 是 Candle 框架的首选格式
             state_dict = self.model.state_dict()
-            # Ensure all tensors are contiguous
+            # 确保所有张量是连续的
             state_dict = {k: v.contiguous() for k, v in state_dict.items()}
             save_file(state_dict, path)
-            logger.info(f"Model saved to {path} (Safetensors)")
+            logger.info(f"模型已保存至 {path} (Safetensors)")
         else:
             torch.save(self.model.state_dict(), path)
-            logger.info(f"Model saved to {path} (PyTorch .pth)")
+            logger.info(f"模型已保存至 {path} (PyTorch .pth)")
 
 
 def train_aura_vision(vision_data_dir, epochs=50, batch_size=16, save_path=None):
     if save_path is None:
-        # Default save path relative to script dir
+        # 默认保存路径相对于脚本目录
         base_dir = os.path.dirname(os.path.abspath(__file__))
         save_path = os.path.join(base_dir, "weights", "auravision_v1.safetensors")
 

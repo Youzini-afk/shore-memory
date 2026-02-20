@@ -271,12 +271,12 @@ class GatewayClient:
         if req.action_name == "ping":
             resp_envelope.response.request_id = envelope.id
             resp_envelope.response.status = 0
-            resp_envelope.response.data = "Pong from Python!"
+            resp_envelope.response.data = "Pong from Python! (Python 后端)"
             await self.send(resp_envelope)
         elif req.action_name == "echo":
             resp_envelope.response.request_id = envelope.id
             resp_envelope.response.status = 0
-            resp_envelope.response.data = f"Echo: {req.params.get('text', '')}"
+            resp_envelope.response.data = f"Echo (回声): {req.params.get('text', '')}"
             await self.send(resp_envelope)
         # 移除了硬编码的 'chat' 处理程序，通过事件监听器委托给 RealtimeSessionManager
 

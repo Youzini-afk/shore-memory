@@ -41,12 +41,12 @@ async def sync_reminders(payload: Dict[str, Any] = Body(...)):  # noqa: B008
             trigger_time = dateparser.parse(time_str)
             if not trigger_time:
                 results.append(
-                    {"status": "error", "message": f"Invalid time format: {time_str}"}
+                    {"status": "error", "message": f"无效的时间格式: {time_str}"}
                 )
                 continue
 
             if trigger_time <= datetime.now() and not repeat:
-                results.append({"status": "skipped", "message": "Time is in the past"})
+                results.append({"status": "skipped", "message": "时间已过去"})
                 continue
 
             # 添加到调度器
@@ -77,7 +77,7 @@ async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)
     try:
         task = await session.get(ScheduledTask, task_id)
         if not task:
-            raise HTTPException(status_code=404, detail="Task not found")
+            raise HTTPException(status_code=404, detail="未找到任务")
         await session.delete(task)
         await session.commit()
         return {"status": "success"}

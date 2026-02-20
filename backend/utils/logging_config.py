@@ -71,7 +71,7 @@ def configure_logging(level: int = logging.INFO, log_file: Optional[str] = None)
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
-    # Silence ML libraries
+    # 静音 ML 库
     logging.getLogger("transformers").setLevel(logging.ERROR)
     logging.getLogger("sentence_transformers").setLevel(logging.ERROR)
 

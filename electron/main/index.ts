@@ -1,9 +1,7 @@
 import { app, BrowserWindow, shell, ipcMain, screen, Notification } from 'electron'
 import { release } from 'os'
 import { join } from 'path'
-import { initSteam, getSteamUser } from './services/steam.js'
-
-
+import { getSteamUser } from './services/steam.js'
 
 import { startBackend, stopBackend, getBackendLogs } from './services/python.js'
 import { startGateway, stopGateway } from './services/gateway.js'

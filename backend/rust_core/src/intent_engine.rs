@@ -63,7 +63,7 @@ pub struct IntentEngine {
 impl IntentEngine {
     /// 创建新的意图引擎
     ///
-    /// # Arguments
+    /// # 参数
     /// * `dim` - 向量维度 (应为 384)
     pub fn new(dim: usize) -> Result<Self> {
         if dim == 0 {
@@ -78,13 +78,13 @@ impl IntentEngine {
 
     /// 添加意图锚点
     ///
-    /// # Arguments
+    /// # 参数
     /// * `anchor` - 要添加的锚点 (向量会被自动 L2 归一化)
     ///
-    /// # Returns
+    /// # 返回
     /// * 锚点 ID
     ///
-    /// # Errors
+    /// # 错误
     /// * 向量维度不匹配
     pub fn add_anchor(&mut self, mut anchor: IntentAnchor) -> Result<u64> {
         if anchor.vector.len() != self.dim {
@@ -117,14 +117,14 @@ impl IntentEngine {
 
     /// SIMD 加速的 Top-K 相似度搜索
     ///
-    /// # Arguments
+    /// # 参数
     /// * `query` - 查询向量 (会被自动 L2 归一化)
     /// * `top_k` - 返回的最相似锚点数量
     ///
-    /// # Returns
+    /// # 返回
     /// * 按相似度降序排列的 (相似度, 锚点引用) 列表
     ///
-    /// # Performance
+    /// # 性能
     /// * 对于 1000 个锚点，预期延迟 < 1ms (release 模式)
     pub fn search(&self, query: &[f32], top_k: usize) -> Result<Vec<(f32, &IntentAnchor)>> {
         if query.len() != self.dim {
@@ -207,7 +207,7 @@ impl IntentEngine {
     }
 
     /// 手写 AVX2 点积实现
-    /// 
+    ///
     /// 使用 _mm256_loadu_ps (非对齐加载) 和 _mm256_add_ps / _mm256_mul_ps
     #[cfg(all(target_arch = "x86_64", target_feature = "avx2"))]
     #[target_feature(enable = "avx2")]
@@ -221,12 +221,12 @@ impl IntentEngine {
         while i + 8 <= len {
             let va = _mm256_loadu_ps(a.as_ptr().add(i));
             let vb = _mm256_loadu_ps(b.as_ptr().add(i));
-            
-            // FMA (Fused Multiply-Add) check omitted for simplicity; 
-            // Standard AVX2 mul + add is sufficient for now.
+
+            // 为简化起见省略了 FMA (融合乘加) 检查;
+            // 标准 AVX2 乘+加目前已足够。
             let prod = _mm256_mul_ps(va, vb);
             sum_vec = _mm256_add_ps(sum_vec, prod);
-            
+
             i += 8;
         }
 
@@ -238,11 +238,11 @@ impl IntentEngine {
         let lo_128 = _mm256_castps256_ps128(sum_vec);
         let hi_128 = _mm256_extractf128_ps(sum_vec, 1);
         let sum_128 = _mm_add_ps(lo_128, hi_128);
-        
+
         // _mm_hadd_ps 相邻相加: [a, b, c, d] -> [a+b, c+d, a+b, c+d]
         let sum_128 = _mm_hadd_ps(sum_128, sum_128);
         let sum_128 = _mm_hadd_ps(sum_128, sum_128);
-        
+
         // 取出结果
         let mut sum = _mm_cvtss_f32(sum_128);
 

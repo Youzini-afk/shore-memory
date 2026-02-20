@@ -29,7 +29,6 @@
       </div>
 
       <div class="flex items-center gap-2">
-        <!-- Quick Actions -->
         <!-- 快捷操作 -->
         <button
           v-if="!isCollapsed && activeTerminal && activeTerminal.active"
@@ -166,7 +165,7 @@ import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { listen } from '@/utils/ipcAdapter'
 import { Terminal, ChevronDown, ChevronUp, Square } from 'lucide-vue-next'
 
-const isCollapsed = ref(true) // Default collapsed // 默认折叠
+const isCollapsed = ref(true) // 默认折叠
 const height = ref(300)
 const terminals = ref([])
 const activePid = ref(null)
@@ -179,15 +178,15 @@ const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
 }
 
-// Resizing Logic
 // 调整大小逻辑
 let startY = 0
 let startHeight = 0
 
 const handleMouseDown = (e) => {
-  // Only resize if clicking on the header itself, not buttons
   // 仅在点击标题栏本身时调整大小，而不是按钮
   if (isCollapsed.value) return
+  // @ts-ignore
+  if (e.target.closest('button')) return
   startResize(e)
 }
 

@@ -63,7 +63,7 @@ export const invoke = async (cmd: string, args?: any) => {
 
   // 浏览器模式: 本地拦截特定指令
   if (cmd.startsWith('window-')) {
-    console.log('[IPC Adapter] Mocking window command:', cmd)
+    console.log('[IPC Adapter] 模拟窗口指令:', cmd)
     return null
   }
 
@@ -73,7 +73,7 @@ export const invoke = async (cmd: string, args?: any) => {
       window.open(url, '_blank')
       return true
     }
-    console.warn('[IPC Adapter] Cannot open non-web URL in browser:', url)
+    console.warn('[IPC Adapter] 无法在浏览器中打开非 Web URL:', url)
     return false
   }
 

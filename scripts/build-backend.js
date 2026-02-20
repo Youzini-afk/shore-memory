@@ -5,18 +5,22 @@ const { execSync } = require('child_process')
 const https = require('https')
 const AdmZip = require('adm-zip')
 
-// Configuration
-// 配置
+// 检测 GitHub Actions 环境
+const IS_GITHUB_ACTIONS = process.env.GITHUB_ACTIONS === 'true'
+
 const PYTHON_VERSION = '3.10.11'
-// 使用淘宝镜像加速 Python 下载
-const PYTHON_URL = `https://npmmirror.com/mirrors/python/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`
+// 使用淘宝镜像加速 Python 下载 (仅非 GitHub Actions 环境)
+const PYTHON_MIRROR = 'https://npmmirror.com/mirrors/python'
+const PYTHON_OFFICIAL = 'https://www.python.org/ftp/python'
+const PYTHON_BASE_URL = IS_GITHUB_ACTIONS ? PYTHON_OFFICIAL : PYTHON_MIRROR
+const PYTHON_URL = `${PYTHON_BASE_URL}/${PYTHON_VERSION}/python-${PYTHON_VERSION}-embed-amd64.zip`
+
 const PROJECT_ROOT = path.resolve(__dirname, '..')
 const RESOURCES_DIR = path.join(PROJECT_ROOT, 'resources')
 const PYTHON_DEST = path.join(RESOURCES_DIR, 'python')
 const SITE_PACKAGES = path.join(PYTHON_DEST, 'Lib', 'site-packages')
 const BACKEND_DIR = path.join(PROJECT_ROOT, 'backend')
 
-// Colors for console output
 // 控制台输出颜色
 const colors = {
   reset: '\x1b[0m',
@@ -70,8 +74,11 @@ function ensureDir(dir) {
 
 const GET_PIP_URL = 'https://bootstrap.pypa.io/get-pip.py'
 
+// 如果不在 GitHub Actions 中，则仅使用清华镜像
+const PIP_INDEX_ARGS = IS_GITHUB_ACTIONS ? '' : '-i https://pypi.tuna.tsinghua.edu.cn/simple'
+
 async function setupPython() {
-  log('Step 1: Setting up Embedded Python Environment...')
+  log('步骤 1: 设置嵌入式 Python 环境...')
 
   ensureDir(PYTHON_DEST)
   const zipPath = path.join(RESOURCES_DIR, 'python.zip')
@@ -80,20 +87,20 @@ async function setupPython() {
 
   // 检查 Python 是否已安装
   if (fs.existsSync(pythonExe)) {
-    log('Python environment appears to be already set up.', 'warning')
+    log('Python 环境似乎已设置。', 'warning')
   } else {
-    log(`Downloading Python ${PYTHON_VERSION}...`)
+    log(`正在下载 Python ${PYTHON_VERSION}...`)
     try {
       await downloadFile(PYTHON_URL, zipPath)
-      log('Download complete. Extracting...')
+      log('下载完成。正在解压...')
 
       const zip = new AdmZip(zipPath)
       zip.extractAllTo(PYTHON_DEST, true)
 
       fs.unlinkSync(zipPath) // 清理
-      log('Extraction complete.', 'success')
+      log('解压完成。', 'success')
     } catch (e) {
-      log(`Failed to setup Python: ${e.message}`, 'error')
+      log(`Python 设置失败: ${e.message}`, 'error')
       process.exit(1)
     }
   }
@@ -108,7 +115,7 @@ async function setupPython() {
     if (content.includes('#import site')) {
       content = content.replace('#import site', 'import site')
       fs.writeFileSync(pthFile, content)
-      log('Updated .pth file to enable site-packages.', 'success')
+      log('已更新 .pth 文件以启用 site-packages。', 'success')
     }
   }
 
@@ -117,54 +124,50 @@ async function setupPython() {
     // 1. 检查/安装 pip
     try {
       execSync(`"${pythonExe}" -m pip --version`, { stdio: 'ignore' })
-      log('pip is already installed in embedded Python.', 'success')
+      log('嵌入式 Python 中已安装 pip。', 'success')
     } catch {
-      log('pip not found. Installing via get-pip.py...')
+      log('未找到 pip。正在通过 get-pip.py 安装...')
       // 下载 get-pip.py
       await downloadFile(GET_PIP_URL, getPipPath)
-      // 使用清华源加速安装 pip
-      execSync(
-        `"${pythonExe}" "${getPipPath}" --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`,
-        { stdio: 'inherit' }
-      )
+      // 使用清华源加速安装 pip (仅非 GitHub Actions 环境)
+      execSync(`"${pythonExe}" "${getPipPath}" --no-warn-script-location ${PIP_INDEX_ARGS}`, {
+        stdio: 'inherit'
+      })
       fs.unlinkSync(getPipPath)
     }
 
     // 2. 安装 uv
     try {
       execSync(`"${pythonExe}" -m pip show uv`, { stdio: 'ignore' })
-      log('uv is already installed.', 'success')
+      log('uv 已安装。', 'success')
     } catch {
-      log('Installing uv...')
-      // 使用清华源
-      execSync(
-        `"${pythonExe}" -m pip install uv --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`,
-        {
-          stdio: 'inherit'
-        }
-      )
+      log('正在安装 uv...')
+      // 使用清华源 (仅非 GitHub Actions 环境)
+      execSync(`"${pythonExe}" -m pip install uv --no-warn-script-location ${PIP_INDEX_ARGS}`, {
+        stdio: 'inherit'
+      })
     }
     // 3. 安装构建工具 (maturin)
     try {
       execSync(`"${pythonExe}" -m pip show maturin`, { stdio: 'ignore' })
     } catch {
-      log('Installing maturin...')
-      // 使用清华源
+      log('正在安装 maturin...')
+      // 使用清华源 (仅非 GitHub Actions 环境)
       execSync(
-        `"${pythonExe}" -m pip install maturin --no-warn-script-location -i https://pypi.tuna.tsinghua.edu.cn/simple`,
+        `"${pythonExe}" -m pip install maturin --no-warn-script-location ${PIP_INDEX_ARGS}`,
         {
           stdio: 'inherit'
         }
       )
     }
   } catch (err) {
-    log(`Failed to setup pip/uv: ${err.message}`, 'error')
+    log(`设置 pip/uv 失败: ${err.message}`, 'error')
     process.exit(1)
   }
 }
 
 function installDependencies() {
-  log('Step 2: Installing Python Dependencies via uv...')
+  log('步骤 2: 通过 uv 安装 Python 依赖...')
 
   ensureDir(SITE_PACKAGES)
   const pythonExe = path.join(PYTHON_DEST, 'python.exe')
@@ -174,7 +177,7 @@ function installDependencies() {
     // 我们使用 `python -m uv pip sync` 或类似方法安装到当前环境
     // 由于我们处于嵌入式环境，应该指示 uv 安装到其中。
 
-    log('Syncing dependencies from pyproject.toml...')
+    log('正在从 pyproject.toml 同步依赖...')
     // 注意：对于嵌入式 Python，我们可以使用等同于 `uv pip install -r pyproject.toml` 的命令
     // 但 uv sync 依赖于 virtualenv。在这里，我们本质上是将嵌入式 Python 视为 venv。
     // 所以我们使用 `uv pip install` 针对系统进行安装。
@@ -185,20 +188,23 @@ function installDependencies() {
     // 我们需要确保使用安装在嵌入式 Python 中的 uv
     // 命令：python.exe -m uv pip install . --system（如果我们想安装到系统，但这已经是嵌入式的，所以它就是系统）
     // 实际上对于嵌入式 Python，只要我们指向它，`uv pip install` 就可以工作。
-    // 使用清华源
-    const env = { ...process.env, UV_INDEX_URL: 'https://pypi.tuna.tsinghua.edu.cn/simple' }
+    // 使用清华源 (仅非 GitHub Actions 环境)
+    const env = { ...process.env }
+    if (!IS_GITHUB_ACTIONS) {
+      env.UV_INDEX_URL = 'https://pypi.tuna.tsinghua.edu.cn/simple'
+    }
 
     execSync(`"${pythonExe}" -m uv pip install "${BACKEND_DIR}"`, { stdio: 'inherit', env })
 
-    log('Dependencies installed successfully via uv.', 'success')
+    log('依赖已通过 uv 成功安装。', 'success')
   } catch (e) {
-    log(`Failed to install dependencies: ${e.message}`, 'error')
+    log(`安装依赖失败: ${e.message}`, 'error')
     process.exit(1)
   }
 }
 
 function buildRustExtensions() {
-  log('Step 3: Building/Installing Rust Core Extensions...')
+  log('步骤 3: 构建/安装 Rust 核心扩展...')
 
   const pythonExe = path.join(PYTHON_DEST, 'python.exe')
 
@@ -206,8 +212,8 @@ function buildRustExtensions() {
   try {
     execSync(`"${pythonExe}" -m maturin --version`, { stdio: 'ignore' })
   } catch {
-    log('Maturin not found in embedded Python. Installing...', 'warning')
-    execSync(`"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`, {
+    log('在嵌入式 Python 中未找到 Maturin。正在安装...', 'warning')
+    execSync(`"${pythonExe}" -m pip install maturin ${PIP_INDEX_ARGS}`, {
       stdio: 'inherit'
     })
   }
@@ -296,7 +302,7 @@ function buildRustExtensions() {
     }
 
     if (!reused) {
-      log(`Building ${ext.name}...`)
+      log(`正在构建 ${ext.name}...`)
       try {
         // 使用嵌入式 Python 的 maturin 构建 wheel
         // 我们使用 --interpreter 确保它是为我们的嵌入式 Python 版本构建的
@@ -305,11 +311,8 @@ function buildRustExtensions() {
         try {
           execSync(`"${pythonExe}" -m maturin --version`, { stdio: 'ignore' })
         } catch {
-          log('Installing maturin...', 'warning')
-          execSync(
-            `"${pythonExe}" -m pip install maturin -i https://pypi.tuna.tsinghua.edu.cn/simple`,
-            { stdio: 'inherit' }
-          )
+          log('正在安装 maturin...', 'warning')
+          execSync(`"${pythonExe}" -m pip install maturin ${PIP_INDEX_ARGS}`, { stdio: 'inherit' })
         }
 
         execSync(
@@ -324,7 +327,7 @@ function buildRustExtensions() {
         ) // Rust crate 名称使用下划线
 
         if (wheel) {
-          log(`Installing ${wheel}...`)
+          log(`正在安装 ${wheel}...`)
           const wheelPath = path.join(distDir, wheel)
           execSync(`"${pythonExe}" -m pip install "${wheelPath}" --force-reinstall --no-deps`, {
             stdio: 'inherit'
@@ -332,10 +335,10 @@ function buildRustExtensions() {
           // 清理 wheel
           fs.unlinkSync(wheelPath)
         } else {
-          log(`Failed to find wheel for ${ext.name}`, 'error')
+          log(`未找到 ${ext.name} 的 wheel`, 'error')
         }
       } catch (e) {
-        log(`Failed to build/install ${ext.name}: ${e.message}`, 'error')
+        log(`构建/安装 ${ext.name} 失败: ${e.message}`, 'error')
       }
     }
   }
@@ -347,14 +350,14 @@ function buildRustExtensions() {
 }
 
 function buildBinaryTools() {
-  log('Step 4: Building Binary Tools...')
+  log('步骤 4: 构建二进制工具...')
 
   // 检查并复制现有二进制文件的辅助函数
   const checkAndCopy = (srcDirs, dest, name) => {
     for (const dir of srcDirs) {
       const possiblePath = path.join(dir, name)
       if (fs.existsSync(possiblePath)) {
-        log(`Found existing binary for ${name} at ${possiblePath}. Reusing...`, 'success')
+        log(`在 ${possiblePath} 发现 ${name} 的现有二进制文件。正在复用...`, 'success')
         fs.copyFileSync(possiblePath, dest)
         return true
       }
@@ -378,7 +381,7 @@ function buildBinaryTools() {
     ]
 
     if (!checkAndCopy(searchPaths, codeSearcherDest, 'CodeSearcher.exe')) {
-      log('Building CodeSearcher...')
+      log('正在构建 CodeSearcher...')
       try {
         execSync(
           `cargo build --release --manifest-path "${path.join(codeSearcherSrc, 'Cargo.toml')}"`,
@@ -386,10 +389,10 @@ function buildBinaryTools() {
         )
         // 构建后再次尝试复制
         if (!checkAndCopy(searchPaths, codeSearcherDest, 'CodeSearcher.exe')) {
-          log('Could not locate built CodeSearcher.exe even after build', 'error')
+          log('构建后仍无法定位 CodeSearcher.exe', 'error')
         }
       } catch (e) {
-        log(`Failed to build CodeSearcher: ${e.message}`, 'error')
+        log(`构建 CodeSearcher 失败: ${e.message}`, 'error')
       }
     }
   }
@@ -405,7 +408,7 @@ function buildBinaryTools() {
     ]
 
     if (!checkAndCopy(searchPaths, auditorDest, 'nit_terminal_auditor.wasm')) {
-      log('Building nit_terminal_auditor (Wasm)...')
+      log('正在构建 nit_terminal_auditor (Wasm)...')
       try {
         try {
           execSync('rustup target add wasm32-unknown-unknown', { stdio: 'ignore' })
@@ -419,17 +422,17 @@ function buildBinaryTools() {
         )
 
         if (!checkAndCopy(searchPaths, auditorDest, 'nit_terminal_auditor.wasm')) {
-          log('Could not locate built nit_terminal_auditor.wasm', 'error')
+          log('无法定位已构建的 nit_terminal_auditor.wasm', 'error')
         }
       } catch (e) {
-        log(`Failed to build nit_terminal_auditor: ${e.message}`, 'error')
+        log(`构建 nit_terminal_auditor 失败: ${e.message}`, 'error')
       }
     }
   }
 }
 
 async function main() {
-  log('Starting Local Backend Build Process...', 'bright')
+  log('开始本地后端构建流程...', 'bright')
 
   await setupPython()
   installDependencies()

@@ -14,7 +14,7 @@ class IpcPayload(BaseModel):
 
 @router.post("/{command}")
 async def handle_ipc_command(command: str, payload: list | None = None):
-    # Support both raw body list or wrapped args
+    # 支持原始 body 列表或包装的 args
     # args = payload if payload else []
 
     if command == "get_system_stats":
@@ -38,6 +38,6 @@ async def handle_ipc_command(command: str, payload: list | None = None):
     if command == "ping":
         return "pong"
 
-    # Default: Log and return None (or error if strict)
-    # Returning None simulates Electron's void return
+    # 默认: 记录日志并返回 None (如果严格模式则报错)
+    # 返回 None 模拟 Electron 的 void 返回
     return None

@@ -97,7 +97,7 @@ class HistoryPreprocessor(BasePreprocessor):
             return cleaned_msgs
 
         for log in logs:
-            # [Optimization] 优先使用 raw_content 以获取 NIT 工具调用信息
+            # [优化] 优先使用 raw_content 以获取 NIT 工具调用信息
             # 如果 raw_content 存在，我们尝试从中提取工具调用记录并格式化为 [工具调用历史: TOOLNAME]
             raw_content = log.raw_content
             content = log.content

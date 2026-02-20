@@ -17,7 +17,7 @@ setInterval(async () => {
     const load = await si.currentLoad()
     lastCpuLoad = load.currentLoad
   } catch {
-    // ignore
+    // 忽略
   }
 }, 5000)
 
@@ -70,7 +70,7 @@ export function getGatewayToken(): string {
       const data = fs.readJsonSync(process.env.GATEWAY_TOKEN_PATH)
       return data.token || ''
     } catch {
-      // ignore
+      // 忽略
     }
   }
 

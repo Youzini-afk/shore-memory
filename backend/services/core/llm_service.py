@@ -11,7 +11,6 @@ from google.genai import types
 from services.core.gateway_client import gateway_client
 from services.core.moderation_service import moderation_service
 
-
 # 默认 API Base URL 配置 (用户未提供时使用)
 DEFAULT_API_BASES = {
     "openai": "https://api.openai.com",
@@ -436,7 +435,7 @@ class LLMService:
             )
             raise
 
-    # ... (Keep helper methods like _convert_to_genai_contents, etc. - will copy them below) ...
+    # ... (保留辅助方法如 _convert_to_genai_contents 等 - 将在下面复制) ...
 
     def _convert_to_genai_contents(
         self, messages: List[Dict[str, Any]]
@@ -715,7 +714,7 @@ class LLMService:
             else self.provider
         )
 
-        # [Debug] 打印流式模式的 Payload (修复缺失日志)
+        # [Debug] 打印流式模式的负载 (修复缺失日志)
         debug_payload = {
             "model": model_id,
             "messages": messages,
@@ -725,14 +724,14 @@ class LLMService:
         if tools:
             debug_payload["tools"] = tools
 
-        # 如果 provider 不同，临时交换以进行日志记录
+        # 如果提供商不同，临时交换以进行日志记录
         original_provider = self.provider
         if provider != self.provider:
             self.provider = provider
 
         self._debug_print_payload(debug_payload)
 
-        # 恢复 provider
+        # 恢复提供商
         self.provider = original_provider
 
         # 动态更新 api_base 如果需要默认值

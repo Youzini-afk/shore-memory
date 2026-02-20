@@ -28,7 +28,7 @@ social_engine = create_async_engine(
 
 async def init_social_db():
     """初始化社交数据库表"""
-    # [Fix] Import models to ensure they are registered with SQLModel.metadata
+    # [修复] 导入模型以确保它们已注册到 SQLModel.metadata
     from . import models_db  # noqa: F401
 
     async with social_engine.begin() as conn:

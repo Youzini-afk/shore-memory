@@ -91,7 +91,6 @@
           <button class="tool-btn" title="最小化到托盘" @click.stop="minimizeToTray">➖</button>
         </div>
 
-        <!-- PTT Floating Button (Voxel Style) -->
         <!-- PTT 悬浮按钮 (体素风格) -->
         <transition name="fade">
           <div
@@ -143,7 +142,7 @@
                   @change="avatarRef.updateClothing()"
                 />
                 <span class="checkmark"></span>
-                Armour
+                盔甲
               </label>
               <label class="voxel-checkbox">
                 <input
@@ -152,7 +151,7 @@
                   @change="avatarRef.updateClothing()"
                 />
                 <span class="checkmark"></span>
-                Hat
+                帽子
               </label>
               <label class="voxel-checkbox">
                 <input
@@ -170,7 +169,7 @@
                   @change="avatarRef.updateClothing()"
                 />
                 <span class="checkmark"></span>
-                Censored
+                打码
               </label>
             </div>
 
@@ -257,7 +256,7 @@ const bubbleLeft = ref('50%')
 const avatarRef = ref(null)
 let bubbleTimer = null
 
-// Debug refs
+// 调试 refs
 
 const isContentOverflowing = ref(false)
 const bubbleScrollArea = ref(null)
@@ -282,9 +281,9 @@ const mindText = ref(localStorage.getItem('ppc.mind') || '发呆')
 const isWorkMode = ref(false)
 const voiceMode = ref(parseInt(localStorage.getItem('ppc.voice_mode') || '0'))
 const isThinking = ref(false)
-const isPTTRecording = ref(false) // PTT State
-const isSpeaking = ref(false) // TTS State
-// const voiceWs = ref(null); // Deprecated
+const isPTTRecording = ref(false) // PTT 状态
+const isSpeaking = ref(false) // TTS 状态
+// const voiceWs = ref(null); // 已弃用
 const audioContext = ref(null)
 const mediaStream = ref(null)
 const scriptProcessor = ref(null)
@@ -422,7 +421,7 @@ const cycleVoiceMode = async () => {
   voiceMode.value = nextMode
   localStorage.setItem('ppc.voice_mode', nextMode.toString())
 
-  // Show mode change in bubble
+  // 在气泡中显示模式变更
   if (nextMode === 0) {
     currentText.value = '语音对话: 已关闭'
     stopVoiceMode()
@@ -436,7 +435,7 @@ const cycleVoiceMode = async () => {
 
   if (nextMode !== 0) {
     // 如果还没开启麦克风，则开启
-    // if (!voiceWs.value) { // WS check removed
+    // if (!voiceWs.value) { // WS 检查已移除
     await startVoiceMode()
     // }
   }
@@ -464,10 +463,10 @@ const startVoiceMode = async () => {
     console.log('[语音] 已获得麦克风权限:', audioTracks[0].label)
 
     // 2. Gateway 连接 (假设已经连接，只需注册监听器)
-    // 监听来自 Backend 的 Voice Update Request
+    // 监听来自后端的语音更新请求
     gatewayClient.on('action:voice_update', handleVoiceUpdateRequest)
 
-    // 监听来自 Backend 的 Audio Stream (TTS)
+    // 监听来自后端的音频流 (TTS)
     gatewayClient.on('stream', handleAudioStream)
 
     console.log('语音网关监听器已注册')
@@ -484,7 +483,7 @@ const startVoiceMode = async () => {
 }
 
 const stopVoiceMode = () => {
-  // Remove listeners
+  // 移除监听器
   gatewayClient.off('action:voice_update', handleVoiceUpdateRequest)
   gatewayClient.off('stream', handleAudioStream)
 
@@ -669,7 +668,7 @@ const encodeWAV = (samples, sampleRate) => {
   return new Blob([view], { type: 'audio/wav' })
 }
 
-// Handler for Voice Update Requests (Status, Text, etc.)
+// 处理语音更新请求 (状态、文本等)
 const handleVoiceUpdateRequest = (req) => {
   const params = req.params || {}
   const type = params.type
@@ -709,17 +708,17 @@ const handleVoiceUpdateRequest = (req) => {
   }
 }
 
-// Handler for Audio Stream (TTS)
+// 处理音频流 (TTS)
 const handleAudioStream = (stream) => {
   if (stream.data) {
     playAudio(stream.data)
   }
 }
 
-// Removed handleVoiceMessage (Legacy WS)
+// 移除了 handleVoiceMessage (旧版 WS)
 
 const stopAudioPlayback = (clearQueue = false) => {
-  stopLipSync() // Stop lip sync immediately
+  stopLipSync() // 立即停止口型同步
   if (clearQueue) {
     audioQueue.value = []
     isAudioPlaying.value = false
@@ -729,7 +728,7 @@ const stopAudioPlayback = (clearQueue = false) => {
     try {
       currentAudioSource.value.stop()
     } catch {
-      // ignore
+      // 忽略
     }
     currentAudioSource.value = null
   }
@@ -760,8 +759,8 @@ const startLipSync = (analyserNode) => {
 
     // 计算相关频段（人声范围）的平均音量
     let sum = 0
-    const startBin = 2 // Skip very low rumble
-    const endBin = 32 // Approx 0-2.7kHz
+    const startBin = 2 // 跳过极低频
+    const endBin = 32 // 约 0-2.7kHz
     for (let i = startBin; i < endBin; i++) {
       sum += dataArray[i]
     }
@@ -818,7 +817,7 @@ const processAudioQueue = async () => {
   try {
     let arrayBuffer
     if (typeof audioData === 'string') {
-      // Fallback for base64 string
+      // Base64 字符串回退
       const binaryString = window.atob(audioData)
       const len = binaryString.length
       const bytes = new Uint8Array(len)
@@ -827,7 +826,7 @@ const processAudioQueue = async () => {
       }
       arrayBuffer = bytes.buffer
     } else if (audioData instanceof Uint8Array) {
-      // Uint8Array from Protobuf
+      // 来自 Protobuf 的 Uint8Array
       arrayBuffer = new Uint8Array(audioData).buffer
     } else {
       throw new Error('未知音频数据类型')
@@ -839,7 +838,7 @@ const processAudioQueue = async () => {
     source.buffer = audioBuffer
     currentAudioSource.value = source
 
-    // Create Analyser for Lip Sync
+    // 创建分析器用于口型同步
     const analyserNode = ctx.createAnalyser()
     analyserNode.fftSize = 256
     analyser.value = analyserNode
@@ -863,7 +862,7 @@ const processAudioQueue = async () => {
   }
 }
 
-// --- Global Key Handlers ---
+// --- 全局按键处理 ---
 
 const handleGlobalKeyDown = (e) => {
   if (isWorkMode.value) return
@@ -896,7 +895,7 @@ const handleGlobalKeyUp = (e) => {
   }
 }
 
-// --- Agent Logic ---
+// --- Agent 逻辑 ---
 const fetchActiveAgent = async () => {
   try {
     const res = await fetch(`${API_BASE}/agents`)
@@ -912,7 +911,7 @@ const fetchActiveAgent = async () => {
   }
 }
 
-// --- Lifecycle & IPC ---
+// --- 生命周期 & IPC ---
 let unlistenFunctions = []
 
 const setIgnoreMouse = (ignore) => {
@@ -941,7 +940,7 @@ const onUILeave = () => {
   }
 }
 
-// Dragging State
+// 拖拽状态
 let startX = 0
 let startY = 0
 const isDragging = ref(false)
@@ -958,7 +957,7 @@ const onMouseDown = (e) => {
 
     if (!isDragging.value && (movedX > 5 || movedY > 5)) {
       isDragging.value = true
-      // Tell main process to start dragging
+      // 通知主进程开始拖拽
       const offsetX = e.screenX - window.screenX
       const offsetY = e.screenY - window.screenY
 
@@ -995,7 +994,7 @@ onMounted(async () => {
   fetchActiveAgent()
   loadLocalTexts()
 
-  // Initial Fetch of Pet State (Sync with Backend)
+  // 初始获取 Pet 状态 (与后端同步)
   const fetchPetState = async () => {
     try {
       const API_BASE = 'http://localhost:9120/api'
@@ -2056,7 +2055,7 @@ const minimizeToTray = () => {
   border-color: #5fb878;
 }
 
-/* Appearance Menu (Voxel) */
+/* 外观菜单 (体素风格) */
 .appearance-menu {
   position: absolute;
   left: 50%;

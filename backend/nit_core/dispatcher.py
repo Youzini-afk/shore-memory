@@ -519,7 +519,7 @@ class NITDispatcher:
 
             # 定义 Runtime 的执行器回调
             async def runtime_tool_executor(name: str, params: Dict[str, Any]):
-                # --- Whitelist Check ---
+                # --- 白名单检查 ---
                 if normalized_allowed is not None:
                     norm_name = normalize_nit_key(name)
                     # 同时检查直接名称以防万一
@@ -543,7 +543,7 @@ class NITDispatcher:
                 # 重置当前 block 的工具列表
                 current_block_tools = []
 
-                # --- Security Validation ---
+                # --- 安全验证 ---
                 if expected_nit_id:
                     if extracted_id:
                         # ID 存在，必须匹配
@@ -563,7 +563,7 @@ class NITDispatcher:
                             )
                             continue
                     else:
-                        # ID 不存在 (<nit>) -> Fallback Mode
+                        # ID 不存在 (<nit>) -> 回退模式
                         logger.warning(
                             f"NIT 回退: 使用了标准 <nit> 标签而非 <nit-{expected_nit_id}>。允许执行。"
                         )

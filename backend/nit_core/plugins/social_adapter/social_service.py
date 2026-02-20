@@ -59,7 +59,7 @@ class SocialService:
         # [兼容性] 单 Bot 信息缓存
         self.bot_info: Dict[str, Any] = {}
 
-        # [Fix] Initialize sticker map
+        # [修复] 初始化表情包映射
         self._sticker_map: Dict[str, str] = {}
         self._sticker_base_dir: Optional[str] = None
 
@@ -84,7 +84,7 @@ class SocialService:
             # 这里我们只实例化 AgentManager，它会在 __init__ 中加载配置
             am = AgentManager()
             for agent_id, agent in am.agents.items():
-                # [Fix] Support both social_config (legacy/tauri) and social_binding (new profile)
+                # [修复] 支持 social_config (旧版/Tauri) 和 social_binding (新版配置文件)
                 social_cfg = getattr(agent, "social_config", None) or getattr(
                     agent, "social_binding", None
                 )
@@ -204,7 +204,7 @@ class SocialService:
             from .database import get_social_db_session
             from .models_db import SocialDailyReport
 
-            # A. 检查 DB
+            # A. 检查数据库
             report_exists = False
             async for session in get_social_db_session():
                 stmt = select(SocialDailyReport).where(
@@ -219,7 +219,7 @@ class SocialService:
             if report_exists:
                 return
 
-            # B. 检查文件 (作为双重确认，或者如果 DB 没存但文件有了)
+            # B. 检查文件 (作为双重确认，或者如果数据库没存但文件有了)
             # 定位 workspace
             agent_workspace = get_workspace_root(agent_id)
             report_dir = os.path.join(agent_workspace, "social_reports")
@@ -227,7 +227,7 @@ class SocialService:
 
             file_path = os.path.join(report_dir, f"{date_str}.md")
             if os.path.exists(file_path):
-                # 补录到 DB? 暂时跳过
+                # 补录到数据库? 暂时跳过
                 return
 
             logger.info(f"[Social] 正在为 {agent_id} 生成 {date_str} 的社交日报...")
@@ -302,7 +302,7 @@ class SocialService:
                 return
 
             # 5. 保存结果
-            # A. Save to File
+            # A. 保存到文件
             try:
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(report_content)
@@ -310,7 +310,7 @@ class SocialService:
             except Exception as e:
                 logger.error(f"[Social] 保存日报文件失败: {e}")
 
-            # B. Save to DB
+            # B. 保存到数据库
             try:
                 async for session in get_social_db_session():
                     report = SocialDailyReport(
@@ -404,7 +404,7 @@ class SocialService:
                 f"[Social] 处理消息事件: type={msg_type}, user={user_id} -> Agent: {agent_id}"
             )
 
-            # 2. 转交 Session Manager 处理完整逻辑 (Buffer, Persistence, Trigger)
+            # 2. 转交 Session Manager 处理完整逻辑 (缓冲、持久化、触发)
             # [多 Agent] 传递 agent_id 上下文
             await self.session_manager.handle_message(event, agent_id=agent_id)
 
@@ -562,7 +562,7 @@ class SocialService:
                     latency = (datetime.now() - start_time).total_seconds() * 1000
                     status["latency_ms"] = int(latency)
             except Exception:
-                # logger.warning(f"[Social] Status check failed: {e}")
+                # logger.warning(f"[Social] 状态检查失败: {e}")
                 pass
 
         return status
@@ -799,7 +799,7 @@ class SocialService:
 
         import re
 
-        # --- Helper for Images ---
+        # --- 图片助手 ---
         def replace_cq_image(match):
             full_tag = match.group(0)
             summary_match = re.search(r"summary=\[(.*?)\]", full_tag)
@@ -819,7 +819,7 @@ class SocialService:
                 return f"[{summary_text}]"
             return "[图片]"
 
-        # --- Helper for Files ---
+        # --- 文件助手 ---
         def replace_cq_file(match):
             full_tag = match.group(0)
 
@@ -873,7 +873,7 @@ class SocialService:
             engine, class_=AsyncSession, expire_on_commit=False
         )
         async with async_session() as db_session:
-            # Import locally to avoid circular dependency
+            # 局部导入以避免循环依赖
             from services.agent.agent_manager import AgentManager
 
             agent_manager = AgentManager()
@@ -930,7 +930,7 @@ class SocialService:
             if not recent_context:
                 recent_context = "(本地缓存为空)"
 
-            # 秘书 Prompt
+            # 秘书人设 Prompt
             self.config_manager.get("owner_qq") or "未知"
             session_type_str = (
                 "群聊 (Group)"
@@ -965,7 +965,7 @@ class SocialService:
                 "custom_persona": agent_profile.social_custom_persona
                 if agent_profile
                 else "",
-                "recent_history": recent_context,  # [Fix] Inject history context!
+                "recent_history": recent_context,  # [修复] 注入历史上下文！
             }
 
             prompt = mdp.render(template_name, prompt_context)
@@ -2027,27 +2027,27 @@ class SocialService:
                     f"[{session.session_id}] 准备调用 agent.chat (Unified Pipeline)..."
                 )
 
-                # [Stage 3 Refactor] Use unified chat pipeline with Capability Filter
+                # [阶段 3 重构] 使用带有能力过滤器的统一聊天管道
                 response_text = ""
                 try:
                     logger.debug(
                         f"[{session.session_id}] 调用 AgentService.chat (source=social, MDP-Driven)..."
                     )
 
-                    # [MDP Integration] Inject variables into AgentService context via initial_variables
+                    # [MDP 集成] 通过 initial_variables 将变量注入到 AgentService 上下文中
 
                     chat_gen = agent.chat(
                         messages,
                         source="social",
                         session_id=f"social_{session.session_id}",
                         capabilities=["social"],
-                        skip_system_prompt=False,  # [MDP] Enable System Prompt Generation
+                        skip_system_prompt=False,  # [MDP] 启用系统提示词生成
                         agent_id_override=(
                             agent_manager.active_agent_id
                             if "agent_manager" in locals()
                             else None
                         ),
-                        initial_variables=prompt_variables,  # [New] Pass variables
+                        initial_variables=prompt_variables,  # [新增] 传递变量
                     )
 
                     async for chunk in chat_gen:
@@ -2058,7 +2058,7 @@ class SocialService:
                         f"[{session.session_id}] Agent.chat 调用失败: {e}",
                         exc_info=True,
                     )
-                    response_text = ""  # Fallback
+                    response_text = ""  # 回退
 
                 logger.debug(
                     f"[{session.session_id}] agent.chat 完成。收到响应长度: {len(response_text)}"

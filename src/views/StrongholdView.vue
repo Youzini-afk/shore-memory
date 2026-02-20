@@ -3,11 +3,11 @@
     <CustomTitleBar v-if="isElectron()" title="Stronghold" :show-mode-toggle="false" />
 
     <div :class="['absolute left-0 right-0 bottom-0 flex', isElectron() ? 'top-8' : 'top-0']">
-      <!-- Left Sidebar: Facilities & Rooms -->
+      <!-- 左侧边栏：设施与房间 -->
       <div
         class="w-64 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md z-10"
       >
-        <!-- Stronghold Header -->
+        <!-- 据点标题 -->
         <div class="p-4 border-b border-slate-200 dark:border-slate-800">
           <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
             <component :is="'HomeFilled'" class="w-5 h-5 text-indigo-500" />
@@ -16,7 +16,7 @@
           <p class="text-xs text-slate-500 mt-1">据点管理系统</p>
         </div>
 
-        <!-- Facilities Tabs (Horizontal or Vertical Icons) -->
+        <!-- 设施标签页（水平或垂直图标） -->
         <div
           class="flex overflow-x-auto p-2 gap-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800"
         >
@@ -34,7 +34,7 @@
             <div class="w-6 h-6 rounded-full bg-current opacity-20 mb-1"></div>
             <span class="text-[10px] font-medium truncate w-full text-center">{{ fac.name }}</span>
           </button>
-          <!-- Create Facility Button (Hidden by default, can be re-enabled if needed) -->
+          <!-- 创建设施按钮（默认隐藏，如需可重新启用） -->
           <!-- 
         <button
           class="flex flex-col items-center justify-center p-2 rounded-lg min-w-[60px] text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
@@ -45,7 +45,7 @@
         </button>
         --></div>
 
-        <!-- Rooms List -->
+        <!-- 房间列表 -->
         <div class="flex-1 overflow-y-auto p-2 space-y-1">
           <div v-if="loading" class="text-center py-4 text-slate-400 text-xs">加载中...</div>
           <template v-else>
@@ -75,17 +75,17 @@
         </div>
       </div>
 
-      <!-- Center: Chat Area -->
+      <!-- 中间：聊天区域 -->
       <div
         class="flex-1 flex flex-col min-w-0 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-md relative"
       >
-        <!-- Background Gradient (Copied from ChatModeView) -->
+        <!-- 背景渐变（复制自 ChatModeView） -->
         <div
           class="absolute inset-0 bg-gradient-to-br from-sky-200/20 via-sky-100/10 to-transparent pointer-events-none z-0"
         ></div>
 
         <div v-if="currentRoom" class="flex flex-col h-full relative z-10">
-          <!-- Room Header -->
+          <!-- 房间标题 -->
           <header
             class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex justify-between items-center shadow-sm z-20"
           >
@@ -103,15 +103,15 @@
               <p class="text-xs text-slate-500 mt-0.5">{{ currentRoom.description }}</p>
             </div>
             <div class="flex items-center gap-2">
-              <!-- Room Actions -->
+              <!-- 房间操作 -->
               <button class="p-2 text-slate-400 hover:text-indigo-500 transition-colors">
                 <component :is="'Setting'" class="w-5 h-5" />
               </button>
             </div>
           </header>
 
-          <!-- Chat Interface Reuse -->
-          <!-- Use key to force remount when room changes, ensuring history is fetched for the new room -->
+          <!-- 复用聊天界面 -->
+          <!-- 使用 key 强制在房间切换时重新挂载，确保为新房间获取历史记录 -->
           <ChatInterface
             :key="currentRoom.id"
             mode="group"
@@ -122,7 +122,7 @@
           />
         </div>
 
-        <!-- No Room Selected State -->
+        <!-- 未选择房间状态 -->
         <div
           v-else
           class="flex flex-col items-center justify-center h-full text-slate-400 relative z-10"
@@ -133,7 +133,7 @@
         </div>
       </div>
 
-      <!-- Right Sidebar: Room Info & Agents -->
+      <!-- 右侧边栏：房间信息与智能体 -->
       <div
         class="w-72 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hidden lg:flex flex-col"
       >
@@ -143,7 +143,7 @@
           <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm uppercase tracking-wider">
             当前状态
           </h3>
-          <!-- Call Butler Button -->
+          <!-- 呼叫管家按钮 -->
           <button
             class="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-2 py-1 rounded transition-colors flex items-center gap-1"
             @click="openButlerModal"
@@ -153,7 +153,7 @@
           </button>
         </div>
 
-        <!-- Room Env -->
+        <!-- 房间环境 -->
         <div v-if="currentRoom" class="p-4 border-b border-slate-200 dark:border-slate-800">
           <h4 class="text-xs font-bold text-slate-500 mb-2">环境参数</h4>
           <div
@@ -169,9 +169,9 @@
           </div>
         </div>
 
-        <!-- Agents Lists -->
+        <!-- 智能体列表 -->
         <div class="flex-1 overflow-y-auto p-4 space-y-6">
-          <!-- Section 1: In This Room -->
+          <!-- 第一部分：本房间 -->
           <div>
             <h4 class="text-xs font-bold text-slate-500 mb-3 flex justify-between items-center">
               本房间
@@ -210,7 +210,7 @@
             </div>
           </div>
 
-          <!-- Section 2: All Residents -->
+          <!-- 第二部分：所有居民 -->
           <div>
             <h4 class="text-xs font-bold text-slate-500 mb-3 flex justify-between items-center">
               据点全员
@@ -249,7 +249,7 @@
           </div>
         </div>
 
-        <!-- Butler Status -->
+        <!-- 管家状态 -->
         <div
           class="p-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-800"
         >
@@ -267,7 +267,7 @@
       </div>
     </div>
 
-    <!-- Butler Call Modal -->
+    <!-- 呼叫管家弹窗 -->
     <div
       v-if="showButlerModal"
       class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
@@ -345,7 +345,7 @@ const {
 // const showCreateFacility = ref(false)
 // const showCreateRoom = ref(false)
 
-// Butler Modal
+// 管家弹窗
 const showButlerModal = ref(false)
 const butlerQuery = ref('')
 const callingButler = ref(false)
@@ -364,15 +364,15 @@ const submitButlerCall = async () => {
     showButlerModal.value = false
     butlerQuery.value = ''
 
-    // Refresh room list and environment after butler action
+    // 管家操作后刷新房间列表和环境
     if (currentFacility.value) {
       await fetchRooms(currentFacility.value.id)
     }
-    // Also re-fetch current room to get updated env json
+    // 同时重新获取当前房间以获得更新的环境 json
     if (currentRoom.value) {
-      // Small trick: re-select room to refresh its data
-      // But better: useStronghold should expose a way to refresh current room
-      // For now, fetchRooms updates the list, we just need to update currentRoom ref from list
+      // 小技巧：重新选择房间以刷新数据
+      // 更好做法：useStronghold 应该暴露一种刷新当前房间的方法
+      // 目前 fetchRooms 更新列表，我们只需从列表更新 currentRoom 引用
       const updatedRoom = rooms.value.find((r) => r.id === currentRoom.value.id)
       if (updatedRoom) {
         selectRoom(updatedRoom)
@@ -380,25 +380,25 @@ const submitButlerCall = async () => {
     }
   } catch (e) {
     console.error(e)
-    // Error handling (maybe toast)
+    // 错误处理（可能是 toast）
   } finally {
     callingButler.value = false
   }
 }
 
-// Helper to quickly summon agent via text
+// 辅助函数：通过文本快速召唤智能体
 const summonAgent = (agentName) => {
   butlerQuery.value = `把 ${agentName} 叫到这里来`
   showButlerModal.value = true
 }
 
-// Computed: Filter agents in current room
+// 计算属性：过滤当前房间中的智能体
 const currentRoomAgents = computed(() => {
   if (!currentRoom.value || !agentsStatus.value) return []
   return agentsStatus.value.filter((a) => a.room_id === currentRoom.value.id)
 })
 
-// Poll agents status periodically
+// 定期轮询智能体状态
 let pollTimer = null
 
 onMounted(async () => {
@@ -406,7 +406,7 @@ onMounted(async () => {
   await fetchButler()
   await fetchAgentsStatus()
 
-  // Simple polling for status updates (every 5s)
+  // 简单的状态更新轮询（每 5 秒）
   pollTimer = setInterval(fetchAgentsStatus, 5000)
 })
 
@@ -418,7 +418,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Custom Scrollbar */
+/* 自定义滚动条 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

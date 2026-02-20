@@ -11,8 +11,6 @@
       @click="toggle"
       @contextmenu.prevent.stop="$emit('contextmenu', { event: $event, item })"
     >
-      <!-- Icon -->
-      <!-- Icon -->
       <!-- 图标 -->
       <span v-if="item.type === 'directory'" class="mr-2 flex-shrink-0 opacity-70">
         <FolderOpenIcon v-if="isOpen" class="w-4 h-4 text-amber-400" />
@@ -25,14 +23,10 @@
         <FileIcon v-else class="w-4 h-4 text-slate-500" />
       </span>
 
-      <!-- Name -->
-      <!-- Name -->
       <!-- 名称 -->
       <span class="truncate text-xs">{{ item.name }}</span>
     </div>
 
-    <!-- Children -->
-    <!-- Children -->
     <!-- 子项 -->
     <div
       v-if="isOpen && item.type === 'directory'"
@@ -66,14 +60,14 @@ const props = defineProps({
   item: { type: Object, default: () => ({}) },
   level: { type: Number, default: 0 }
 })
-// ... rest of script stays mostly same, but need to check imports
+// ... 其余脚本保持不变，但需要检查导入
 
 const emit = defineEmits(['select', 'contextmenu'])
 
 const isOpen = ref(false)
 const children = ref([])
 const loading = ref(false)
-const isSelected = ref(false) // TODO: Sync with parent // TODO: 与父级同步 // TODO: 与父级同步
+const isSelected = ref(false) // TODO: 与父级同步
 
 const toggle = async () => {
   if (props.item.type === 'directory') {
@@ -87,7 +81,7 @@ const toggle = async () => {
           children.value = await res.json()
         }
       } catch (e) {
-        console.error('Failed to load directory', e)
+        console.error('加载目录失败', e)
       } finally {
         loading.value = false
       }

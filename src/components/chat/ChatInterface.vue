@@ -282,7 +282,6 @@
                 ? msg.senderId[0].toUpperCase()
                 : AGENT_AVATAR_TEXT
             }}</span>
-            <!-- Online Status Dot -->
             <!-- 在线状态点 -->
             <div
               class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"
@@ -583,7 +582,7 @@
                 </div>
               </div>
 
-              <!-- Content -->
+              <!-- 内容 -->
               <div
                 v-if="!msg.isCollapsed"
                 class="max-h-[400px] overflow-y-auto custom-scrollbar"
@@ -641,7 +640,7 @@
                   </div>
                 </div>
 
-                <!-- Actions -->
+                <!-- 操作 -->
                 <div
                   v-if="msg.isThinking"
                   class="px-4 py-2 flex gap-2 border-t"
@@ -870,7 +869,7 @@ const getRiskLevelColor = (level, type) => {
 
   // 颜色映射表
   const colors = {
-    // Level 0: Safe (Green)
+    // Level 0: 安全 (绿色)
     0: {
       header: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/30',
       icon: 'bg-emerald-100 dark:bg-emerald-800/40 text-emerald-600 dark:text-emerald-400',
@@ -883,7 +882,7 @@ const getRiskLevelColor = (level, type) => {
       warning_text: 'text-emerald-600 dark:text-emerald-400',
       button: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30'
     },
-    // Level 1: Notice (Blue/Cyan)
+    // Level 1: 注意 (蓝色/青色)
     1: {
       header: 'bg-sky-50 dark:bg-sky-900/20 border-sky-100 dark:border-sky-800/30',
       icon: 'bg-sky-100 dark:bg-sky-800/40 text-sky-600 dark:text-sky-400',
@@ -895,7 +894,7 @@ const getRiskLevelColor = (level, type) => {
       warning_text: 'text-sky-600 dark:text-sky-400',
       button: 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30'
     },
-    // Level 2: Low Risk (Amber/Yellow)
+    // Level 2: 低风险 (琥珀色/黄色)
     2: {
       header: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30',
       icon: 'bg-amber-100 dark:bg-amber-800/40 text-amber-600 dark:text-amber-400',
@@ -907,7 +906,7 @@ const getRiskLevelColor = (level, type) => {
       warning_text: 'text-amber-600 dark:text-amber-400',
       button: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'
     },
-    // Level 3: Medium Risk (Orange)
+    // Level 3: 中风险 (橙色)
     3: {
       header: 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800/30',
       icon: 'bg-orange-100 dark:bg-orange-800/40 text-orange-600 dark:text-orange-400',
@@ -919,7 +918,7 @@ const getRiskLevelColor = (level, type) => {
       warning_text: 'text-orange-600 dark:text-orange-400',
       button: 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30'
     },
-    // Level 4: High Risk (Red)
+    // Level 4: 高风险 (红色)
     4: {
       header: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/30',
       icon: 'bg-red-100 dark:bg-red-800/40 text-red-600 dark:text-red-400 animate-pulse',
@@ -932,7 +931,7 @@ const getRiskLevelColor = (level, type) => {
     }
   }
 
-  // Fallback
+  // 回退
   if (!colors[safeLevel]) {
     return safeLevel >= 2 ? colors[4][type] : colors[2][type]
   }
@@ -948,25 +947,25 @@ onMounted(async () => {
   checkVisionCapability()
   fetchHistory(true)
 
-  // 1. Listen for WebSocket messages forwarded from parent or global bus (via Gateway)
+  // 1. 监听从父级或全局总线转发的 WebSocket 消息（通过 Gateway）
   gatewayClient.on('action:new_message', (data) => {
     const payload = data.params || data
-    // Append new message if it belongs to current session or is relevant
-    // We assume default session for now or check payload.session_id
+    // 如果新消息属于当前会话或相关，则追加
+    // 暂时假设默认会话或检查 payload.session_id
     console.log('[ChatInterface] Received new message via Gateway:', payload)
 
-    // Check duplication
-    // 1. Check exact ID match
+    // 检查重复
+    // 1. 检查精确 ID 匹配
     const exists = messages.value.some((m) => m.id == payload.id)
 
-    // 2. Check for pending message (no ID) that matches this content
-    // This handles the transition from "Streamed/Pending" -> "Persisted"
+    // 2. 检查是否有匹配此内容的待定消息（无 ID）
+    // 这处理从“流式/待定” -> “已持久化”的过渡
     let pendingMatchIndex = -1
 
     if (!exists) {
-      // [Fix] Check for pending USER message (optimistic update)
+      // [修复] 检查待定用户消息（乐观更新）
       if (payload.role === 'user') {
-        // Look backwards for a pending user message
+        // 向后查找待定用户消息
         for (let i = messages.value.length - 1; i >= 0; i--) {
           const m = messages.value[i]
           if (m.role === 'user' && !m.id && m.content === payload.content) {
@@ -975,14 +974,14 @@ onMounted(async () => {
           }
         }
       }
-      // [Fix] Check for pending ASSISTANT message
+      // [修复] 检查待定助手消息
       else if (payload.role === 'assistant') {
         const lastMsgIndex = messages.value.length - 1
         const lastMsg = messages.value[lastMsgIndex]
 
-        // If last message is assistant, has no ID, and content is similar or it's just the last one
+        // 如果最后一条消息是助手，没有 ID，且内容相似或者是最后一条
         if (lastMsg && lastMsg.role === 'assistant' && !lastMsg.id) {
-          // We assume this is the persisted version of the stream
+          // 我们假设这是流的持久化版本
           pendingMatchIndex = lastMsgIndex
         }
       }
@@ -990,25 +989,25 @@ onMounted(async () => {
 
     if (!exists) {
       if (pendingMatchIndex !== -1) {
-        // Update the pending message with real ID and final content
+        // 更新待定消息的真实 ID 和最终内容
         const msg = messages.value[pendingMatchIndex]
         msg.id = payload.id
-        msg.content = payload.raw_content || payload.content // Use raw_content to keep NIT logs
+        msg.content = payload.raw_content || payload.content // 使用 raw_content 保留 NIT 日志
         msg.timestamp = payload.timestamp
         msg.senderId = payload.agent_id || 'pero'
         msg.pair_id = payload.pair_id
         msg.metadata = JSON.parse(payload.metadata || '{}')
-        // Images usually handled separately, but if payload has them, update
+        // 图片通常单独处理，但如果 payload 包含它们，则更新
       } else {
-        // Add as new message
+        // 添加为新消息
         messages.value.push({
           id: payload.id,
           role: payload.role,
-          content: payload.raw_content || payload.content, // Use raw_content to keep NIT logs
+          content: payload.raw_content || payload.content, // 使用 raw_content 保留 NIT 日志
           timestamp: payload.timestamp,
           senderId: payload.agent_id || 'pero',
           pair_id: payload.pair_id,
-          images: [], // Images handled separately or via metadata
+          images: [], // 图片单独处理或通过 metadata
           metadata: JSON.parse(payload.metadata || '{}')
         })
         scrollToBottom()
@@ -1045,14 +1044,14 @@ const highlightCommand = (command, highlight) => {
 const respondConfirmation = async (approved) => {
   if (!pendingConfirmation.value) return
 
-  // Send back via Gateway
+  // 通过 Gateway 发送回执
   try {
     await gatewayClient.sendRequest('backend', 'confirm', {
       id: pendingConfirmation.value.id,
       approved: approved ? 'true' : 'false'
     })
   } catch (e) {
-    console.error('Failed to send confirmation response:', e)
+    console.error('发送确认响应失败:', e)
   }
 
   pendingConfirmation.value = null
@@ -1070,11 +1069,10 @@ const skipCommandWait = async () => {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pid: activeCommand.value.pid })
     })
-    // Optimistically clear the overlay
     // 乐观地清除覆盖层
     activeCommand.value = null
   } catch (e) {
-    console.error('Failed to skip command', e)
+    console.error('跳过指令失败', e)
   }
 }
 
@@ -1201,13 +1199,11 @@ const handleFileSelect = (event) => {
     reader.onload = (e) => {
       pendingImages.value.push({
         file: file,
-        url: e.target.result // Data URL for preview and sending
-        // Data URL 用于预览和发送
+        url: e.target.result // Data URL 用于预览和发送
       })
     }
     reader.readAsDataURL(file)
   }
-  // Reset input
   // 重置输入
   event.target.value = ''
 }
@@ -1231,11 +1227,8 @@ const parseMessage = (content) => {
   const segments = []
 
   // 健壮的正则模式
-  // 1. Thinking/Monologue: 【Thinking: ...】 or 【Monologue: ...】
   // 1. 思考/独白: 【Thinking: ...】 或 【Monologue: ...】 (Monologue 为旧版兼容)
-  // 2. NIT Tool: <nit>...</nit> or <nit-ID>...</nit-ID> or [[[NIT_CALL]]]...[[[NIT_END]]]
   // 2. NIT 工具: <nit>...</nit> 或 <nit-ID>...</nit-ID> 或 [[[NIT_CALL]]]...[[[NIT_END]]]
-  // 3. DeepSeek Thinking: <think>...</think>
   // 3. DeepSeek 思考: <think>...</think>
 
   const regex =
@@ -1245,7 +1238,6 @@ const parseMessage = (content) => {
   let match
 
   while ((match = regex.exec(content)) !== null) {
-    // Add text before match
     // 添加匹配前的文本
     if (match.index > lastIndex) {
       const text = content.slice(lastIndex, match.index)
@@ -1270,13 +1262,10 @@ const parseMessage = (content) => {
         content: match[6].trim()
       })
     } else if (match[3] || match[5]) {
-      // NIT Tool (XML or Bracket)
       // NIT 工具（XML 或括号）
       const nitTag = match[3]
-      const code = match[4] || match[5] // Group 4 for XML, Group 5 for Bracket
-      // Group 4 用于 XML，Group 5 用于括号
+      const code = match[4] || match[5] // Group 4 用于 XML，Group 5 用于括号
 
-      // Extract ID from tag if present (e.g. nit-123 -> 123)
       // 如果存在，从标签中提取 ID（例如 nit-123 -> 123）
       let toolId = 'unknown'
       if (nitTag && nitTag.startsWith('nit-')) {
@@ -1302,11 +1291,11 @@ const parseMessage = (content) => {
     lastIndex = regex.lastIndex
   }
 
-  // Add remaining text
+  // 添加剩余文本
   if (lastIndex < content.length) {
     let text = content.slice(lastIndex)
 
-    // Remove NIT data lines completely
+    // 移除 NIT 数据行
     text = text.replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '$1')
 
     if (text.trim()) {
@@ -1340,7 +1329,6 @@ const isCollapsed = (msgIdx, segIdx) => {
   return collapsedStates.value.has(`${msgIdx}-${segIdx}`)
 }
 
-// --- Editing Logic ---
 // --- 编辑逻辑 ---
 const editingMsgId = ref(null)
 const editingContent = ref('')
@@ -1411,37 +1399,37 @@ const handleConfirmDelete = async () => {
   }
 }
 
-// --- Gateway Event Logic ---
+// --- Gateway 事件逻辑 ---
 const handleVoiceUpdate = (data) => {
   const params = data.params || data
   if (params.target === 'pet_view_only') return
 
-  // [Fix] Handle text_response and transcription from RealtimeSessionManager (Voice/Desktop Mode)
+  // [修复] 处理来自 RealtimeSessionManager 的 text_response 和 transcription（语音/桌面模式）
   if (params.type === 'transcription') {
-    // User input from Voice/Desktop
+    // 来自语音/桌面的用户输入
     if (!isSending.value) {
       const content = params.content || params.text
       messages.value.push({ role: 'user', content: content, timestamp: new Date().toISOString() })
       scrollToBottom()
     }
   } else if (params.type === 'text_response') {
-    // Assistant response from Voice/Desktop (Incremental or Final)
-    // [Fix] Even if isSending is true, we might receive async updates via Gateway (e.g. from Tool Output)
-    // But usually fetch handles the response.
-    // HOWEVER, if the response is empty (e.g. tool call only), fetch might return empty.
-    // Let's rely on Gateway for text updates if content is not empty.
+    // 来自语音/桌面的助手回复（增量或最终）
+    // [修复] 即使 isSending 为 true，我们可能会通过 Gateway 接收异步更新（例如来自工具输出）
+    // 但通常 fetch 处理响应。
+    // 然而，如果响应为空（例如仅工具调用），fetch 可能会返回空。
+    // 如果内容不为空，让我们依赖 Gateway 进行文本更新。
 
     if (params.content) {
       const content = params.content
       const lastMsg = messages.value[messages.value.length - 1]
 
       if (lastMsg && lastMsg.role === 'assistant') {
-        // Update existing message if it looks like a continuation or replacement
-        // Since RealtimeSessionManager sends full accumulated text in 'content', we can just replace it.
+        // 如果看起来是延续或替换，则更新现有消息
+        // 由于 RealtimeSessionManager 发送完整的累积文本到 'content'，我们可以直接替换它。
         lastMsg.content = content
         scrollToBottom()
       } else {
-        // New message
+        // 新消息
         messages.value.push({
           role: 'assistant',
           content: content,
@@ -1477,21 +1465,21 @@ const handleTextStream = (data) => {
   const params = data.params || data
   if (params.target === 'pet_view_only') return
 
-  // Ignore stream updates if we are actively sending (handled by fetch)
+  // 如果我们正在主动发送，则忽略流更新（由 fetch 处理）
   if (isSending.value) return
 
-  // Smart Append for Passive Updates
+  // 智能追加被动更新
   const lastMsg = messages.value[messages.value.length - 1]
   if (lastMsg && lastMsg.role === 'assistant') {
-    // If content is just being extended, update it
-    // Simple heuristic: if new content starts with old content
+    // 如果内容只是被扩展，更新它
+    // 简单启发式：如果新内容以旧内容开头
     if (params.content.startsWith(lastMsg.content)) {
       lastMsg.content = params.content
       scrollToBottom()
       return
     }
-    // If new content is a delta (how to know?), append?
-    // For now, assuming full content replacement if not matched.
+    // 如果新内容是增量（如何知道？），追加？
+    // 目前，如果不匹配，假设完全内容替换。
   }
 
   messages.value.push({
@@ -1502,9 +1490,9 @@ const handleTextStream = (data) => {
   scrollToBottom()
 }
 
-// [Fix] Add handler for text_response (Final/Full response broadcast)
+// [修复] 添加 text_response 处理程序（最终/完整响应广播）
 const handleTextResponse = (data) => {
-  // Logic is same as text_stream for now, as both carry 'content'
+  // 目前逻辑与 text_stream 相同，因为两者都携带 'content'
   handleTextStream(data)
 }
 
@@ -1607,11 +1595,11 @@ const formatTime = (ts) => {
 }
 
 const fetchHistory = async (append = false) => {
-  // If in work mode, use 'ide' source.
-  // If in chat mode (workMode false), use 'desktop' source to sync with PetView.
+  // 如果在工作模式下，使用 'ide' 源。
+  // 如果在聊天模式下（workMode false），使用 'desktop' 源与 PetView 同步。
   const source = props.workMode ? 'ide' : 'desktop'
-  // [Fix] In desktop/direct mode, the session_id in DB is usually 'default'.
-  // We use agent_id param to filter by character, not session_id.
+  // [修复] 在桌面/直接模式下，DB 中的 session_id 通常为 'default'。
+  // 我们使用 agent_id 参数按角色过滤，而不是 session_id。
   const sessionId = props.workMode ? 'current_work_session' : 'default'
 
   try {
@@ -1673,16 +1661,16 @@ const fetchHistory = async (append = false) => {
           }
         })
 
-      // Reverse to get [Oldest, ..., Newest] order for display
-      // Direct history returns DESC (Newest first), so reverse needed.
-      // Group history returns ASC (Oldest first), so NO reverse needed.
+      // 反转以获得 [最旧, ..., 最新] 的显示顺序
+      // 直接历史记录返回 DESC（最新优先），因此需要反转。
+      // 群组历史记录返回 ASC（最旧优先），因此不需要反转。
       if (props.mode !== 'group') {
         newMsgs.reverse()
       }
 
       if (append) {
-        // Prepend older messages (history) to the top
-        // Save scroll position
+        // 将较旧的消息（历史记录）预置到顶部
+        // 保存滚动位置
         if (msgContainer.value) {
           const oldHeight = msgContainer.value.scrollHeight
           const oldTop = msgContainer.value.scrollTop
@@ -1690,14 +1678,14 @@ const fetchHistory = async (append = false) => {
           messages.value.unshift(...newMsgs)
 
           await nextTick()
-          // Restore scroll position relative to the new content
+          // 恢复相对于新内容的滚动位置
           const newHeight = msgContainer.value.scrollHeight
           msgContainer.value.scrollTop = newHeight - oldHeight + oldTop
         } else {
           messages.value.unshift(...newMsgs)
         }
       } else {
-        // Initial load
+        // 初始加载
         messages.value = newMsgs
         await nextTick()
         scrollToBottom()
@@ -1711,7 +1699,7 @@ const fetchHistory = async (append = false) => {
 }
 
 const loadMore = async () => {
-  // Fix: If messages are empty (initial load failed), do NOT increment offset
+  // 修复：如果消息为空（初始加载失败），不要增加偏移量
   if (messages.value.length === 0) {
     offset.value = 0
   } else {
@@ -1729,10 +1717,10 @@ const startGroupPolling = () => {
   groupPollingInterval = setInterval(async () => {
     if (document.hidden) return // Optimization
     try {
-      // Use fetchHistory with append=true to get new messages?
+      // 使用 fetchHistory with append=true 获取新消息？
       // Actually fetchHistory implementation for group chat might need adjustment or we use a separate endpoint.
-      // For now, let's reuse fetchHistory but we need to handle duplication carefully.
-      // Or better, just fetch latest messages.
+      // 目前，让我们重用 fetchHistory，但我们需要小心处理重复。
+      // 或者更好的是，只获取最新消息。
       // Let's stick to simple polling for now.
       await fetchHistory(true)
     } catch (e) {
@@ -1755,7 +1743,7 @@ let visionCheckInterval = null
 onMounted(async () => {
   gatewayClient.on('action:voice_update', handleVoiceUpdate)
   gatewayClient.on('action:text_stream', handleTextStream)
-  // [Fix] Listen for text_response
+  // [修复] 监听 text_response
   gatewayClient.on('action:text_response', handleTextResponse)
   gatewayClient.on('action:transcription', handleTranscription)
   gatewayClient.on('action:command_running', handleCommandRunning)
@@ -1765,12 +1753,12 @@ onMounted(async () => {
   fetchHistory()
   startGroupPolling()
   checkVisionCapability()
-  // Poll for vision capability changes (e.g. model switch)
+  // 轮询视觉能力更改（例如模型切换）
   visionCheckInterval = setInterval(checkVisionCapability, 5000)
 
-  // Setup Tauri Event Listeners for Chat Sync
+  // 设置用于聊天同步的 Tauri 事件监听器
   try {
-    // Listen for log deletion
+    // 监听日志删除
     unlistenDelete = await listen('log-deleted', (event) => {
       const deletedLogId = event.payload
       if (deletedLogId) {
@@ -1782,7 +1770,7 @@ onMounted(async () => {
     unlistenSync = await listen('sync-chat-to-ide', (event) => {
       const { role, content, timestamp } = event.payload
 
-      // Helper to normalize content for comparison (strip NIT data and whitespace)
+      // 用于比较的规范化内容助手（去除 NIT 数据和空格）
       const normalize = (str) => {
         return (str || '').replace(/(\n|^)\s*data:\s*\{"triggers":[\s\S]*?(\n|$)/g, '').trim()
       }
@@ -1790,11 +1778,11 @@ onMounted(async () => {
       const incomingNorm = normalize(content)
 
       // 避免重复添加 (Enhanced Dedup Logic)
-      // 1. Check exact match at the end (Normalized)
+      // 1. 检查末尾的精确匹配（规范化）
       const lastMsg = messages.value[messages.value.length - 1]
       if (lastMsg && lastMsg.role === role) {
         const lastNorm = normalize(lastMsg.content)
-        // If content is identical or incoming is a subset (e.g. streaming artifact), skip
+        // 如果内容相同或传入内容是子集（例如流式传输伪影），则跳过
         if (
           lastNorm === incomingNorm ||
           (incomingNorm.length > 0 && lastNorm.includes(incomingNorm))
@@ -1803,18 +1791,18 @@ onMounted(async () => {
         }
       }
 
-      // 2. Check user message sent optimistically (no ID, same content, recent)
+      // 2. 检查乐观发送的用户消息（无 ID，相同内容，最近）
       if (role === 'user') {
-        // Look backwards for a pending user message
+        // 向后查找待定用户消息
         for (let i = messages.value.length - 1; i >= 0; i--) {
           const m = messages.value[i]
           const mNorm = normalize(m.content)
 
-          // If we find a user message without ID (optimistic) and same content
+          // 如果我们找到没有 ID（乐观）且内容相同的用户消息
           if (m.role === 'user' && !m.id && mNorm === incomingNorm) {
             return
           }
-          // If we find a user message WITH ID, we probably passed the optimistic zone
+          // 如果我们找到带有 ID 的用户消息，我们可能已经通过了乐观区域
           if (m.role === 'user' && m.id) break
         }
       }
@@ -1859,7 +1847,7 @@ onUnmounted(() => {
   if (unlistenDelete) unlistenDelete()
 })
 
-// --- Chat Logic ---
+// --- 聊天逻辑 ---
 const handleEnter = (e) => {
   if (e.shiftKey) return
   sendMessage()
@@ -1870,7 +1858,7 @@ const sendMessage = async () => {
 
   const content = input.value
 
-  // Capture images for local display
+  // 捕获图像以进行本地显示
   const currentImages = pendingImages.value.map((p) => p.url)
 
   const userMsg = {
@@ -1881,7 +1869,7 @@ const sendMessage = async () => {
   }
   messages.value.push(userMsg)
 
-  // Emit sync event for PetView if not in Work Mode
+  // 如果不在工作模式，则为 PetView 发送同步事件
   if (!props.workMode) {
     emit('sync-chat-to-pet', { role: 'user', content, timestamp: new Date().toISOString() })
   }
@@ -1905,7 +1893,7 @@ const sendMessage = async () => {
   await nextTick()
   scrollToBottom()
 
-  // Pre-add assistant message for immediate feedback
+  // 预添加助手消息以获得即时反馈
   const assistantMsg = { role: 'assistant', content: '', timestamp: new Date().toISOString() }
   messages.value.push(assistantMsg)
   await nextTick()
@@ -1923,15 +1911,15 @@ const sendMessage = async () => {
         })
       })
       if (res.ok) {
-        assistantMsg.content = '' // Clear placeholder
-        messages.value.pop() // Remove placeholder assistant msg
+        assistantMsg.content = '' // 清除占位符
+        messages.value.pop() // 移除占位符助手消息
       } else {
         assistantMsg.content = 'Failed to send message.'
       }
       return
     }
 
-    // Construct messages list for API
+    // 构造 API 消息列表
     const historyMsgs = messages.value
       .slice(0, -1)
       .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -1940,7 +1928,7 @@ const sendMessage = async () => {
       if (m === userMsg) {
         return { role: 'user', content: payloadContent }
       }
-      return { role: m.role, content: m.content } // History is always text
+      return { role: m.role, content: m.content } // 历史记录总是文本
     })
 
     const res = await fetch(`${API_BASE}/api/ide/chat`, {
@@ -1968,7 +1956,7 @@ const sendMessage = async () => {
     }
   } catch (e) {
     assistantMsg.content = `Error: ${e.message}`
-    // Force reset thought chain on error
+    // 出错时强制重置思维链
     if (activeThoughtChain.value) {
       activeThoughtChain.value.isThinking = false
       activeThoughtChain.value = null
@@ -2001,7 +1989,7 @@ const scrollToBottom = () => {
   animation: float 6s ease-in-out infinite;
 }
 
-/* Add random delays for natural feel */
+/* 添加随机延迟以获得自然感 */
 .animate-float:nth-child(odd) {
   animation-delay: 0s;
 }
@@ -2012,7 +2000,7 @@ const scrollToBottom = () => {
   animation-delay: 4s;
 }
 
-/* Custom Scrollbar */
+/* 自定义滚动条 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }

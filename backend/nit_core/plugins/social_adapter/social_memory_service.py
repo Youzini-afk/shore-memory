@@ -220,7 +220,7 @@ class SocialMemoryService:
             if self._social_engine:
                 try:
                     ts = int(memory.created_at.timestamp())
-                    # vec is already calculated above as `vec`
+                    # vec 已在上方计算为 vec
                     vec_float = [float(x) for x in vec]
                     kws = [k.strip() for k in keywords if k.strip()]
                     self._social_engine.add_memory(
@@ -252,7 +252,7 @@ class SocialMemoryService:
                 except Exception:
                     pass
 
-                # Search Top 20
+                # 搜索前 20 条
                 results = self._social_engine.search(query, ref_time, 20, query_vec)
                 entry_points.update([mid for mid, score in results])
             except Exception as e:

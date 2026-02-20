@@ -344,11 +344,11 @@ class PromptManager:
                 loop = asyncio.get_event_loop()
                 if loop.is_running():
                     # 如果已经在事件循环中（例如 FastAPI 路由处理），我们不能直接 run_until_complete
-                    # 这里有一个 hacky 的做法，或者我们假设 _enrich_variables 可以在异步上下文中被调用
+                    # 这里有一个权宜之计，或者我们假设 _enrich_variables 可以在异步上下文中被调用
                     # 但目前的 PromptService 设计是同步的。
                     # 为了规避这个问题，我们使用一个简单的同步兜底，或者修改调用方为异步。
                     # 由于这是一个较大的架构变动，我们暂时尝试使用 run_in_executor 或直接创建新 loop (不安全)
-                    # 更好的方案是：将 _enrich_variables 变为 async，或在调用它的地方提前获取数据。
+                    # 更好的方案是：将 _enrich_variables 变为异步，或在调用它的地方提前获取数据。
                     pass
                 else:
                     stronghold_data = loop.run_until_complete(
@@ -417,14 +417,14 @@ class PromptManager:
 
                         dispatcher = get_dispatcher()
 
-                        # 默认仅获取 core 类别作为兜底，以保证安全
+                        # 默认仅获取核心类别作为兜底，以保证安全
                         tools_desc = dispatcher.get_tools_description(
                             category_filter="core"
                         )
                         if tools_desc:
                             variables["available_tools_desc"] = tools_desc
                             logger.warning(
-                                "[PromptManager] dynamic_tools 缺失，已从 Dispatcher 获取 core 工具作为回退"
+                                "[PromptManager] dynamic_tools 缺失，已从 Dispatcher 获取核心工具作为回退"
                             )
                         else:
                             variables["available_tools_desc"] = "（当前无可用工具）"
@@ -432,7 +432,7 @@ class PromptManager:
                         logger.error(f"[PromptManager] 工具回退获取失败: {e}")
                         variables["available_tools_desc"] = "加载工具出错。"
                 else:
-                    # 社交模式下，如果没有 dynamic_tools，也尝试加载 core 工具作为兜底
+                    # 社交模式下，如果没有 dynamic_tools，也尝试加载核心工具作为兜底
                     # 这确保 social_rules.md 中的 {{ available_tools_desc }} 不为空
                     try:
                         from nit_core.dispatcher import get_dispatcher
@@ -495,14 +495,14 @@ class PromptManager:
 
             # [NIT Protocol Adapter]
             # 如果是原生 NIT 工具，desc 通常已经包含了详细的参数说明 (例如 "搜索文件。参数 query: ...")
-            # 这种情况下我们不需要从 parameters schema 重新生成，以免重复或格式混乱。
+            # 这种情况下我们不需要从参数模式重新生成，以免重复或格式混乱。
             # 简单的判断依据是检查是否包含 "参数" 关键字。
             if "参数" in desc or "Parameters" in desc or "Args:" in desc:
                 lines.append(f"- **{name}**: {desc}")
                 continue
 
-            # 对于 MCP 工具或其他 Schema 定义的工具，desc 通常只包含功能描述
-            # 我们需要从 parameters 中提取参数说明，以符合 NIT 协议要求的格式
+            # 对于 MCP 工具或其他模式定义的工具，desc 通常只包含功能描述
+            # 我们需要从参数中提取参数说明，以符合 NIT 协议要求的格式
             params = func.get("parameters", {})
             props = params.get("properties", {})
             required = params.get("required", [])
@@ -608,20 +608,20 @@ class PromptManager:
         is_work_mode: bool = False,
     ) -> str:
         """
-        构建指令部分的 Prompt (Rules, Tools, COT)
-        通常放在消息列表的最后，作为 System Message 提醒模型
+        构建指令部分的提示词 (规则, 工具, 思维链)
+        通常放在消息列表的最后，作为系统消息提醒模型
         """
         # [工作模式]
-        # 使用 templates/work 注入到 Context 末尾 (Recency Effect)
+        # 使用 templates/work 注入到上下文末尾 (近因效应)
         if is_work_mode:
             blocks = self.mdp.render_blocks("templates/work", variables)
             return blocks.get("footer", "")
 
         # [主程序模式] (非社交, 非工作)
-        # 使用 templates/system 注入到 Context 末尾 (Recency Effect)
+        # 使用 templates/system 注入到上下文末尾 (近因效应)
         if not is_social_mode:
-            # 轻量模式下，Instruction Prompt 也需要从轻量模板提取
-            # 注意：templates/lightweight.md 也应该有 block header/footer 结构
+            # 轻量模式下，指令提示词也需要从轻量模板提取
+            # 注意：templates/lightweight.md 也应该有块头/尾结构
             config = get_config_manager()
             is_lightweight = config.get("lightweight_mode", False)
             template_name = (
@@ -632,7 +632,7 @@ class PromptManager:
             return blocks.get("footer", "")
 
         # [社交模式]
-        # 社交模式目前暂不追加额外的指令，以免引入不必要的复杂性 (如 Thinking/Monologue 可能不适合 QQ)
+        # 社交模式目前暂不追加额外的指令，以免引入不必要的复杂性 (如思考/独白可能不适合 QQ)
         # 如果未来需要，可以创建 instruction_social.md
 
         return ""
@@ -645,7 +645,7 @@ class PromptManager:
         extra_variables: Dict[str, Any] = None,
     ) -> str:
         """
-        获取渲染后的完整 System Prompt。
+        获取渲染后的完整系统提示词。
         1. 加载所有组件
         2. 合并变量
         3. 渲染
@@ -678,7 +678,7 @@ class PromptManager:
                 try:
                     data = json.loads(val)
                     if isinstance(data, dict):
-                        # 优先取同名 key，否则取第一个字符串值
+                        # 优先取同名键，否则取第一个字符串值
                         return str(
                             data.get(field_name)
                             or next(
@@ -741,14 +741,14 @@ class PromptManager:
         组装最终发送给 LLM 的消息列表。
 
         [MDP 重构 v3.0]
-        不再使用传统的 history 列表追加模式。
+        不再使用传统的历史列表追加模式。
         而是采用 "Two-Turn" (两轮制) 或 "Single-Turn" (单轮制) 模式。
-        所有的历史记录（History）都已经通过 Preprocessor 被压扁（Flatten）并在 _enrich_variables 阶段
-        注入到了 system_prompt 的各个占位符中（如 {{flattened_desktop_history}}）。
+        所有的历史记录都已经通过预处理器被压扁并在 _enrich_variables 阶段
+        注入到了系统提示词的各个占位符中（如 {{flattened_desktop_history}}）。
 
         因此，这里的 messages 列表通常只包含：
-        1. System Message (包含所有上下文、记忆、历史)
-        2. User Message (当前用户输入)
+        1. 系统消息 (包含所有上下文、记忆、历史)
+        2. 用户消息 (当前用户输入)
         """
         from core.event_bus import EventBus
 
@@ -763,14 +763,14 @@ class PromptManager:
         }
         await EventBus.publish("prompt.build.pre", ctx)
 
-        # 1. 构建 System Prompt
+        # 1. 构建系统提示词
         # 注意：这里 session 参数是必须的，用于获取动态配置
         if not session:
             # 如果调用方没传 session，这可能是一个潜在的 bug，或者我们在同步上下文中
             # 暂时尝试从 variables 中获取，或者创建一个临时的
-            # 但 compose_messages 通常在 pipeline 中被调用，pipeline 应该有 session
-            logger.warning("[PromptService] compose_messages called without session!")
-            system_content = "System Error: Session missing."
+            # 但 compose_messages 通常在流水线中被调用，流水线应该有 session
+            logger.warning("[PromptService] compose_messages 调用时缺少会话！")
+            system_content = "系统错误：会话丢失。"
         else:
             system_content = await self.get_rendered_system_prompt(
                 session,
@@ -781,16 +781,16 @@ class PromptManager:
 
         messages = [{"role": "system", "content": system_content}]
 
-        # 2. 添加 User Message
-        # 即使是空消息（例如触发式对话），也最好发一个 user message 以符合某些 LLM 的规范
-        # 或者某些情况下 system prompt 已经包含了 user input（如 social 模式的 xml_context）
-        # 但通常保持 system + user 结构是最稳健的。
+        # 2. 添加用户消息
+        # 即使是空消息（例如触发式对话），也最好发一个用户消息以符合某些 LLM 的规范
+        # 或者某些情况下系统提示词已经包含了用户输入（如 social 模式的 xml_context）
+        # 但通常保持系统 + 用户结构是最稳健的。
 
         if user_message or is_multimodal:
             # 多模态处理逻辑保持不变
             # ...
             if is_multimodal:
-                # 假设 history[-1] 是当前的多模态消息，或者我们需要从 variables 中获取
+                # 假设历史记录的最后一条是当前的多模态消息，或者我们需要从 variables 中获取
                 # 这里简化处理，假设 variables['user_input_multimodal'] 存在
                 content = variables.get("user_input_multimodal", user_message)
                 messages.append({"role": "user", "content": content})

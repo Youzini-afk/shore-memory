@@ -22,7 +22,7 @@ async def _wrap_result_with_content(result: dict) -> str:
         msg = f"❌ 执行失败: {error_msg}"
 
     output = f"{msg}\n\n"
-    output += "--- 当前页面内容 (Simplified Markdown) ---\n"
+    output += "--- 当前页面内容 (简化 Markdown) ---\n"
     output += content
     return output
 
@@ -43,7 +43,7 @@ async def browser_fetch_text(url: str, **kwargs) -> str:
             response = await client.get(url, headers=headers)
             response.raise_for_status()
 
-            # Encoding
+            # 编码
             if response.encoding is None:
                 response.encoding = "utf-8"  # 默认回退
 
@@ -62,7 +62,7 @@ async def browser_fetch_text(url: str, **kwargs) -> str:
             chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
             text = "\n".join(chunk for chunk in chunks if chunk)
 
-            return f"### Content from {url}\n\n{text[:20000]}" + (
+            return f"### 来自 {url} 的内容\n\n{text[:20000]}" + (
                 "\n...[Truncated]" if len(text) > 20000 else ""
             )
 
@@ -74,11 +74,11 @@ async def browser_open_url(url: str = None, target: str = None, **kwargs) -> str
     """
     控制连接的浏览器打开指定的 URL。
 
-    Args:
+    参数:
         url (str): 要打开的 URL。
         target (str): url 的别名，用于兼容性。
 
-    Returns:
+    返回:
         str: 执行状态和新页面内容。
     """
     # 兼容性处理：如果缺少 url 但提供了 target
@@ -99,7 +99,7 @@ async def _retry_command(
     """帮助函数：重试可能因时序问题（如元素未就绪）而失败的命令。"""
     import asyncio
 
-    last_result = {"status": "error", "error": "Unknown error"}
+    last_result = {"status": "error", "error": "未知错误"}
 
     for i in range(max_retries):
         last_result = await browser_bridge_service.send_command(command, **kwargs)

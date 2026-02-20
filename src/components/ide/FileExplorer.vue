@@ -163,7 +163,6 @@ const contextMenu = reactive({
   targetItem: null
 })
 
-// Dialog State
 // 对话框状态
 const dialog = reactive({
   visible: false,
@@ -196,7 +195,7 @@ const handleDialogConfirm = (value) => {
 }
 
 const handleDialogCancel = () => {
-  if (dialog.resolve) dialog.resolve(false) // false for confirm, null/false for prompt cancel
+  if (dialog.resolve) dialog.resolve(false) // false 表示确认取消，null/false 表示 prompt 取消
   dialog.visible = false
 }
 
@@ -230,7 +229,6 @@ const onSelect = (fileNode) => {
   emit('file-selected', fileNode)
 }
 
-// --- Context Menu Logic ---
 // --- 上下文菜单逻辑 ---
 
 const closeContextMenu = () => {
@@ -251,17 +249,15 @@ const handleRootContextMenu = (e) => {
 }
 
 const handleItemContextMenu = (payload) => {
-  // Handle payload format from FileTreeItem emit
   // 处理来自 FileTreeItem 发出的 payload 格式
   const event = payload.event || payload
   const item = payload.item
 
   if (!event || !event.clientX) {
-    console.error('Invalid context menu event', payload)
+    console.error('无效的上下文菜单事件', payload)
     return
   }
 
-  // Safe check for item type
   // 项目类型的安全检查
   const isDir = item && item.type === 'directory'
 

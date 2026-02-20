@@ -15,7 +15,7 @@ export interface Envelope {
   id: string
   /** 发送方 Node ID */
   sourceId: string
-  /** 接收方 Node ID ("master", "broadcast", or specific UUID) */
+  /** 接收方节点 ID ("master", "broadcast" 或特定 UUID) */
   targetId: string
   /** Unix 时间戳 */
   timestamp: number
@@ -41,19 +41,19 @@ export interface Heartbeat {
 export interface Hello {
   /** 鉴权 Token */
   token: string
-  /** 设备名称 (e.g. "My iPhone") */
+  /** 设备名称 (例如 "My iPhone") */
   deviceName: string
   /** 客户端版本 */
   clientVersion: string
   /** "android", "windows", "linux" */
   platform: string
-  /** 简易能力列表 (e.g. ["audio.out", "screen.ocr"]) */
+  /** 简易能力列表 (例如 ["audio.out", "screen.ocr"]) */
   capabilities: string[]
 }
 
 /** 能力定义 */
 export interface Capability {
-  /** 能力名称 (e.g. "camera.take_photo") */
+  /** 能力名称 (例如 "camera.take_photo") */
   name: string
   /** 描述 */
   description: string
@@ -82,9 +82,9 @@ export interface ActionRequest_ParamsEntry {
 export interface ActionResponse {
   /** 对应的请求 ID */
   requestId: string
-  /** 0=OK, 1=Error */
+  /** 0=成功, 1=错误 */
   status: number
-  /** 结果数据 (JSON string or text) */
+  /** 结果数据 (JSON 字符串或文本) */
   data: string
   /** 错误信息 */
   errorMsg: string

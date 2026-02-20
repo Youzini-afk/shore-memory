@@ -232,7 +232,7 @@ export function stopBackend() {
             // 回退尝试
             try {
               process.kill(backendProcess!.pid!)
-            } catch (e) {
+            } catch {
               // 忽略
             }
           }

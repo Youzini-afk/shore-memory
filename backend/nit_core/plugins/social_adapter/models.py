@@ -28,7 +28,7 @@ class SocialSession:
     表示一个社交会话（群聊或私聊）。
     """
 
-    session_id: str  # group_id or user_id
+    session_id: str  # 群号或用户ID
     session_type: Literal["group", "private"]
     session_name: str = ""
     agent_id: str = "pero"  # 所属 Agent ID

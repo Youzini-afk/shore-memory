@@ -12,7 +12,7 @@
     </div>
 
     <div ref="logContainer" class="terminal-content">
-      <!-- Download Progress Bar -->
+      <!-- 下载进度条 -->
       <div v-if="downloadProgress.active" class="download-progress-bar">
         <div class="progress-info">
           <span>{{ downloadProgress.status }}</span>
@@ -60,7 +60,6 @@ import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
 import { ChatDotSquare, Delete, Monitor, ArrowRight } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { listen, invoke } from '@/utils/ipcAdapter'
-// State
 // 状态
 const logs = ref([])
 const inputValue = ref('')
@@ -75,7 +74,6 @@ const downloadProgress = ref({
 let unlistenFn = null
 let unlistenProgressFn = null
 
-// Actions
 // 操作
 const clearLogs = () => {
   logs.value = []
@@ -99,7 +97,6 @@ const sendCommand = async () => {
   try {
     await invoke('send_napcat_command_wrapper', { command: cmd })
 
-    // Mirror the input to the terminal
     // 将输入镜像到终端
     logs.value.push({
       time: new Date().toLocaleTimeString(),
@@ -113,28 +110,25 @@ const sendCommand = async () => {
   }
 }
 
-// ANSI to HTML helper
 // ANSI 转 HTML 辅助函数
 const ansiToHtml = (text) => {
   if (!text) return ''
   let result = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
 
-  // Basic ANSI colors
   // 基本 ANSI 颜色
   const colors = {
     0: 'reset',
-    30: 'text-slate-500', // black
-    31: 'text-red-400', // red
-    32: 'text-emerald-400', // green
-    33: 'text-amber-400', // yellow
-    34: 'text-blue-400', // blue
-    35: 'text-purple-400', // magenta
-    36: 'text-cyan-400', // cyan
-    37: 'text-slate-200', // white
-    90: 'text-slate-600' // bright black
+    30: 'text-slate-500', // 黑色
+    31: 'text-red-400', // 红色
+    32: 'text-emerald-400', // 绿色
+    33: 'text-amber-400', // 黄色
+    34: 'text-blue-400', // 蓝色
+    35: 'text-purple-400', // 洋红
+    36: 'text-cyan-400', // 青色
+    37: 'text-slate-200', // 白色
+    90: 'text-slate-600' // 亮黑
   }
 
-  // Very basic implementation
   // 非常基础的实现
   // eslint-disable-next-line no-control-regex
   result = result.replace(/\x1b\[(\d+)m/g, (match, code) => {
@@ -149,7 +143,6 @@ const ansiToHtml = (text) => {
 
 onMounted(async () => {
   try {
-    // 1. Fetch history first to show past logs (including QR code)
     // 1. 首先获取历史记录以显示过去的日志（包括二维码）
     const history = await (await import('@/utils/ipcAdapter')).invoke('get_napcat_logs')
     if (history && history.length > 0) {
@@ -160,7 +153,6 @@ onMounted(async () => {
       }))
     }
 
-    // 2. Start listening for new logs
     // 2. 开始监听新日志
     unlistenFn = await listen('napcat_log', (payload) => {
       // 在 Electron 中，payload 就是日志内容本身 (字符串)
@@ -178,9 +170,9 @@ onMounted(async () => {
       if (logs.value.length > 500) logs.value.shift()
     })
 
-    // 3. Listen for download progress
+    // 3. 监听下载进度
     unlistenProgressFn = await listen('napcat-download-progress', (payload) => {
-      // payload: { percent, status, url, error, completed }
+      // payload 格式: { percent, status, url, error, completed }
       downloadProgress.value = {
         active: true,
         percent: payload.percent,
@@ -270,7 +262,6 @@ onUnmounted(() => {
   word-break: break-all;
 }
 
-/* Scrollbar */
 /* 滚动条 */
 .terminal-content::-webkit-scrollbar {
   width: 8px;
@@ -301,7 +292,6 @@ onUnmounted(() => {
   flex: 1;
 }
 
-/* Empty State */
 /* 空状态 */
 .empty-state {
   height: 100%;
@@ -317,7 +307,6 @@ onUnmounted(() => {
   opacity: 0.5;
 }
 
-/* Input Area */
 /* 输入区域 */
 .terminal-input-area {
   display: flex;
@@ -348,7 +337,6 @@ onUnmounted(() => {
   color: #666;
 }
 
-/* Tailwind-like text colors for ANSI */
 /* 类似 Tailwind 的 ANSI 文本颜色 */
 .text-slate-500 {
   color: #64748b;

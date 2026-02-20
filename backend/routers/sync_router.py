@@ -64,7 +64,7 @@ async def update_sync_config(
         # 重载同步服务
         await sync_service.reload()
 
-        return {"status": "success", "message": "Config updated and service reloaded"}
+        return {"status": "success", "message": "配置已更新，服务已重载"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from None
 

@@ -1,1 +1,1 @@
-# Init for social_adapter plugin package
+# social_adapter 插件包的初始化

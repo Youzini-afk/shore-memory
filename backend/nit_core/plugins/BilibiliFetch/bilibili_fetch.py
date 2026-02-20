@@ -4,12 +4,12 @@ import re
 
 import requests
 
-# --- Constants ---
+# --- 常量 ---
 BILIBILI_VIDEO_BASE_URL = "https://www.bilibili.com/video/"
 PAGELIST_API_URL = "https://api.bilibili.com/x/player/pagelist"
 PLAYER_WBI_API_URL = "https://api.bilibili.com/x/player/wbi/v2"
 
-# --- Helper Functions ---
+# --- 辅助函数 ---
 
 
 def extract_bvid(video_input: str) -> str | None:
@@ -38,7 +38,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
         headers["Cookie"] = user_cookie
 
     try:
-        # Step 1: Get AID
+        # 步骤 1: 获取 AID
         resp = requests.get(
             f"{BILIBILI_VIDEO_BASE_URL}{bvid}/", headers=headers, timeout=10
         )
@@ -49,7 +49,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
         aid = aid_match.group(1) if aid_match else None
 
         if not aid:
-            # Fallback to initial state
+            # 回退到初始状态提取
             state_match = re.search(
                 r"window\.__INITIAL_STATE__\s*=\s*(\{.*?\});?", text
             )
@@ -63,7 +63,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
         if not aid:
             return json.dumps({"error": "无法找到 AID"}, ensure_ascii=False)
 
-        # Step 2: Get CID
+        # 步骤 2: 获取 CID
         cid_resp = requests.get(
             PAGELIST_API_URL, params={"bvid": bvid}, headers=headers, timeout=10
         )
@@ -72,7 +72,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
             return json.dumps({"error": "无法找到 CID"}, ensure_ascii=False)
         cid = cid_data["data"][0]["cid"]
 
-        # Step 3: Get Subtitle List
+        # 步骤 3: 获取字幕列表
         params = {"aid": aid, "cid": cid}
         player_resp = requests.get(
             PLAYER_WBI_API_URL, params=params, headers=headers, timeout=10
@@ -83,7 +83,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
         if not subtitles:
             return json.dumps({"body": []})
 
-        # Step 4: Fetch Subtitle Content (Prefer zh-CN)
+        # 步骤 4: 获取字幕内容 (优先 zh-CN)
         target_sub = next(
             (s for s in subtitles if s.get("lan") == "zh-CN"), subtitles[0]
         )
@@ -100,7 +100,7 @@ def get_subtitle_json_string(bvid: str, user_cookie: str | None = None) -> str:
     return json.dumps({"body": []})
 
 
-# --- Exported Tools ---
+# --- 导出工具 ---
 
 
 async def bilibili_get_subtitles(url: str, **kwargs) -> str:
@@ -111,8 +111,8 @@ async def bilibili_get_subtitles(url: str, **kwargs) -> str:
     if not bvid:
         return "错误: 无效的 Bilibili 链接或 BV 号。"
 
-    # Run synchronous request in executor if needed, but for now simple call
-    # Note: In production, consider run_in_executor
+    # 如果需要，在执行器中运行同步请求，但目前使用简单调用
+    # 注意：在生产环境中，考虑使用 run_in_executor
     try:
         result = get_subtitle_json_string(bvid)
         return result

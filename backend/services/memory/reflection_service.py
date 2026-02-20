@@ -143,7 +143,7 @@ class ReflectionService:
         agent_id: str = "pero",
     ):
         """
-        [Memory Consolidation]
+        [记忆整合]
         压缩低重要性、陈旧的记忆为陈述性总结。
         """
         print(
@@ -175,7 +175,7 @@ class ReflectionService:
         # 2. 按日期分组
         grouped = defaultdict(list)
         for m in candidates:
-            # key by YYYY-MM-DD
+            # 按 YYYY-MM-DD 分组
             date_key = m.realTime.split(" ")[0] if m.realTime else "unknown"
             grouped[date_key].append(m)
 
@@ -310,7 +310,7 @@ class ReflectionService:
         start_of_day = datetime.combine(target_date, datetime.min.time())
         end_of_day = datetime.combine(target_date, datetime.max.time())
 
-        # 2. 获取对话记录 (Exclude social)
+        # 2. 获取对话记录 (排除社交模式)
         stmt = (
             select(ConversationLog)
             .where(
@@ -961,7 +961,7 @@ class ReflectionService:
                         content=merge["new_content"],
                         tags=",".join(filter(None, new_tags)),
                         importance=merge.get("importance", 3),
-                        source="reflection_merge",  # Changed from secretary_merge
+                        source="reflection_merge",  # 更改自 secretary_merge
                         type="event",
                         realTime=batch_memories[0].realTime,
                         agent_id=agent_id,

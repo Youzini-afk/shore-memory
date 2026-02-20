@@ -20,7 +20,7 @@ class TestNITInterpreter(unittest.TestCase):
         self.assertIn("^--- 这里可能有错", str(err))
 
     def test_parser_error_position(self):
-        source = "$var = tool_call(arg1='val'"  # Missing RPAREN
+        source = "$var = tool_call(arg1='val'"  # 缺少右括号
         lexer = Lexer(source)
         tokens = lexer.tokenize()
         parser = Parser(tokens, source)
@@ -29,7 +29,7 @@ class TestNITInterpreter(unittest.TestCase):
             parser.parse()
 
         err = cm.exception
-        # The error should be at the end of tokens (EOF)
+        # 错误应位于 token 的末尾 (EOF)
         self.assertIn("Expected TokenType.RPAREN", str(err))
         self.assertIn("^--- 这里可能有错", str(err))
 

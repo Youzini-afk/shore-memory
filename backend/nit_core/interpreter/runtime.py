@@ -34,7 +34,7 @@ except ImportError:
         get_agent_manager = None
 
 # 全局变量，用于保存会话引用 (由 AgentService 注入)
-# 这有点 hacky，但对于 tool-to-service 通信是有效的
+# 这有点权宜之计，但对于 tool-to-service 通信是有效的
 _CURRENT_SESSION_CONTEXT = {}
 
 
@@ -46,7 +46,7 @@ async def enter_work_mode(task_name: str = "Unknown Task") -> str:
     """
     进入 'Work Mode' (隔离模式)。
     为编码或复杂任务创建一个临时的、隔离的会话。
-    此会话的历史记录不会污染主聊天，但稍后会被汇总。
+    此会话的历史记录不会干扰主聊天，但稍后会被汇总。
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
     if not session:
@@ -86,13 +86,13 @@ async def enter_work_mode(task_name: str = "Unknown Task") -> str:
 
     except Exception as e:
         await session.rollback()
-        return f"Error entering Work Mode: {e}"
+        return f"进入工作模式时发生错误: {e}"
 
 
 async def exit_work_mode() -> str:
     """
     退出 'Work Mode'。
-    将整个工作会话汇总为 'Handwritten Log' 并保存到长期记忆中。
+    将整个工作会话汇总为 '手写日志' 并保存到长期记忆中。
     恢复主聊天会话。
     """
     session = _CURRENT_SESSION_CONTEXT.get("db_session")
@@ -113,7 +113,7 @@ async def exit_work_mode() -> str:
             return "错误: 当前不在工作模式。"
 
         work_session_id = config_id.value
-        task_name = config_task.value if config_task else "Unnamed Task"
+        task_name = config_task.value if config_task else "未命名任务"
 
         # 2. 获取此会话的所有日志
         logs = (
@@ -176,7 +176,7 @@ async def exit_work_mode() -> str:
                 config_id.value = "default"
                 await session.commit()
             except Exception as final_e:
-                print(f"[Runtime] Critical Error restoring session: {final_e}")
+                print(f"[Runtime] 恢复会话时发生严重错误: {final_e}")
 
 
 class NITRuntime:

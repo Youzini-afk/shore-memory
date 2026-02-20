@@ -28,13 +28,18 @@ export class GatewayClient {
     if (url) {
       this.url = url
     } else if (!(window as any).electron) {
-      // Browser mode: derive from current location
+      // 浏览器模式：从当前位置派生
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
       this.url = `${protocol}//${window.location.host}/gateway/ws`
-      console.log(`[Gateway] Using Browser URL: ${this.url}`)
+      console.log(`[Gateway] 使用浏览器 URL: ${this.url}`)
     }
   }
 
+  /**
+   * 注册事件监听器
+   * @param event 事件名称
+   * @param callback 回调函数
+   */
   on(event: string, callback: (...args: any[]) => void) {
     if (!this.listeners.has(event)) {
       this.listeners.set(event, [])
@@ -42,6 +47,11 @@ export class GatewayClient {
     this.listeners.get(event)!.push(callback)
   }
 
+  /**
+   * 移除事件监听器
+   * @param event 事件名称
+   * @param callback 回调函数
+   */
   off(event: string, callback: (...args: any[]) => void) {
     if (!this.listeners.has(event)) return
     const callbacks = this.listeners.get(event)!
@@ -51,6 +61,11 @@ export class GatewayClient {
     }
   }
 
+  /**
+   * 触发本地事件
+   * @param event 事件名称
+   * @param args 参数
+   */
   private emit(event: string, ...args: any[]) {
     const callbacks = this.listeners.get(event)
     if (callbacks) {
@@ -97,16 +112,16 @@ export class GatewayClient {
         stream: undefined
       }
 
-      // Store promise
+      // 存储 promise
       this.pendingRequests.set(envelope.id, { resolve, reject, onProgress })
 
-      // Set timeout
+      // 设置超时
       setTimeout(() => {
         if (this.pendingRequests.has(envelope.id)) {
           this.pendingRequests.delete(envelope.id)
           reject(new Error('请求超时'))
         }
-      }, 10000) // 10s timeout
+      }, 10000) // 10秒超时
 
       this.send(envelope)
     })
@@ -131,7 +146,7 @@ export class GatewayClient {
       stream: {
         streamId: this.generateId(),
         data: data,
-        isEnd: true, // Assuming one-shot for now
+        isEnd: true, // 暂时假设为一次性传输
         contentType: contentType
       },
       request: undefined,
@@ -145,26 +160,26 @@ export class GatewayClient {
   }
 
   async connect() {
-    // Try to get token
+    // 尝试获取令牌
     try {
       const token = await invoke('get_gateway_token')
       if (token) {
         this.token = token
-        logToMain(`Using Gateway Token: ${token.substring(0, 8)}...`)
+        logToMain(`使用 Gateway 令牌: ${token.substring(0, 8)}...`)
       } else {
-        logToMain('Warning: Received empty token')
+        logToMain('警告: 收到空令牌')
       }
     } catch {
-      logToMain('Failed to get token')
+      logToMain('获取令牌失败')
     }
 
-    logToMain(`Connecting to Gateway at ${this.url}...`)
+    logToMain(`正在连接到 Gateway: ${this.url}...`)
     try {
       this.ws = new WebSocket(this.url)
       this.ws.binaryType = 'arraybuffer'
 
       this.ws.onopen = () => {
-        logToMain('Connected to Gateway')
+        logToMain('已连接到 Gateway')
         this.isConnected = true
         this.sendHello()
         this.startHeartbeat()
@@ -173,17 +188,17 @@ export class GatewayClient {
       this.ws.onmessage = (event) => {
         try {
           if (typeof event.data === 'string') {
-            // Try to handle text message (maybe legacy JSON?)
-            // console.warn('Received text frame on Gateway WS:', event.data);
-            // For now, ignore or try to decode if base64?
-            // Usually Gateway sends binary.
-            logToMain(`Received unexpected text frame: ${event.data.substring(0, 50)}...`)
+            // 尝试处理文本消息 (可能是旧版 JSON?)
+            // console.warn('Gateway WS 收到文本帧:', event.data);
+            // 目前忽略，或者如果是 Base64 则尝试解码?
+            // 通常 Gateway 发送二进制数据。
+            logToMain(`收到意外的文本帧: ${event.data.substring(0, 50)}...`)
             return
           }
 
           const data = new Uint8Array(event.data as ArrayBuffer)
           if (data.length === 0) {
-            logToMain('Received empty binary message')
+            logToMain('收到空二进制消息')
             return
           }
 
@@ -192,19 +207,19 @@ export class GatewayClient {
             this.handleMessage(envelope)
           } catch (decodeErr: any) {
             logToMain(
-              `Failed to decode Protobuf message (len=${data.length}): ${decodeErr.message || decodeErr}`
+              `解码 Protobuf 消息失败 (长度=${data.length}): ${decodeErr.message || decodeErr}`
             )
           }
         } catch (e: any) {
-          logToMain('Error processing message', e.message || e)
+          logToMain('处理消息时出错', e.message || e)
         }
       }
 
       this.ws.onclose = () => {
-        // Only log "Disconnected" if we were actually connected before
-        // This avoids spamming during startup when the backend is not yet ready
+        // 仅在之前实际连接过的情况下记录“已断开连接”
+        // 这避免了在后端尚未准备好的启动期间刷屏
         if (this.isConnected) {
-          logToMain('Disconnected from Gateway')
+          logToMain('已从 Gateway 断开连接')
         }
         this.isConnected = false
         this.stopHeartbeat()
@@ -212,12 +227,12 @@ export class GatewayClient {
       }
 
       this.ws.onerror = () => {
-        // Only log error if not in reconnect loop to avoid spam
+        // 仅在不在重连循环中时记录错误，以避免刷屏
         // logToMain('WebSocket Error', error);
         this.ws?.close()
       }
     } catch (e) {
-      logToMain('Failed to create WebSocket', e)
+      logToMain('创建 WebSocket 失败', e)
     }
   }
 
@@ -289,20 +304,20 @@ export class GatewayClient {
 
   private handleMessage(envelope: Envelope) {
     // 降级日志，不再发送到主进程终端
-    console.debug('Received envelope from ' + envelope.sourceId)
+    console.debug('收到来自 ' + envelope.sourceId + ' 的信封')
 
     if (envelope.request) {
-      // Server pushed request (e.g. voice_update)
+      // 服务器推送请求（例如 voice_update）
       this.emit('request', envelope.request)
       this.emit(`action:${envelope.request.actionName}`, envelope.request)
     }
 
     if (envelope.stream) {
-      // Server pushed stream (audio)
+      // 服务器推送流（音频）
       this.emit('stream', envelope.stream)
     }
 
-    // Handle ActionResponse
+    // 处理 ActionResponse
     if (envelope.response) {
       const resp = envelope.response
       const requestId = resp.requestId
@@ -311,16 +326,16 @@ export class GatewayClient {
         const { resolve, reject, onProgress } = this.pendingRequests.get(requestId)!
 
         if (resp.status === 2) {
-          // Partial response (Streaming)
+          // 部分响应（流式传输）
           if (onProgress) {
             onProgress(resp)
           }
         } else if (resp.status === 0) {
-          // Final success response
+          // 最终成功响应
           this.pendingRequests.delete(requestId)
           resolve(resp)
         } else {
-          // Error
+          // 错误
           this.pendingRequests.delete(requestId)
           reject(new Error(resp.errorMsg || '后端未知错误'))
         }

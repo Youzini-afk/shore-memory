@@ -11,7 +11,7 @@ class VectorService:
             cls._instance = super(VectorService, cls).__new__(cls)
         return cls._instance
 
-    # --- Memory Operations ---
+    # --- 记忆操作 ---
 
     def add_memory(
         self,
@@ -60,7 +60,7 @@ class VectorService:
         self, limit: int = 10, filter_criteria: Dict = None
     ) -> List[Dict]:
         """
-        DEPRECATED: Use MemoryService.get_memories_by_filter instead.
+        已弃用：请改用 MemoryService.get_memories_by_filter。
         """
         print("[VectorService] 错误: query_memories 已弃用。请使用 MemoryService。")
         return []
@@ -72,7 +72,7 @@ class VectorService:
         # HNSW 不容易支持（如果不进行遍历）
         return []
 
-    # --- Tag Operations ---
+    # --- 标签操作 ---
 
     def add_tag(self, tag_name: str, embedding: List[float]):
         vector_store.add_tag(tag_name, embedding)

@@ -214,7 +214,7 @@ onMounted(async () => {
     }
   } catch (e) {
     console.error('设置 Tauri 监听器失败', e)
-    addLog('system', 'error', 'Failed to connect to backend logs.')
+    addLog('system', 'error', '无法连接到后端日志。')
   }
 })
 

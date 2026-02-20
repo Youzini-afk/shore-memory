@@ -9,7 +9,7 @@ export const molangContext: any = {
       is_moving: 0,
       ground_speed: 0,
       yaw_speed: 0,
-      is_on_ground: 1, // Default to on ground // 默认为在地面上
+      is_on_ground: 1, // 默认为在地面上
       vertical_speed: 0,
       is_riding: 0,
       is_sprinting: 0,
@@ -65,7 +65,6 @@ export const molangContext: any = {
     clamp: (val: number, min: number, max: number) => Math.min(Math.max(val, min), max),
     lerp: (a: number, b: number, t: number) => a + (b - a) * t,
     lerprotate: (a: number, b: number, t: number) => {
-      // Shortest path interpolation for angles
       // 角度的最短路径插值
       let diff = b - a
       while (diff > 180) diff -= 360
@@ -112,14 +111,10 @@ export class Molang {
 
     let jsExpr = expression
 
-    // Handle Bedrock Molang quirks
-    // 处理 Bedrock Molang 怪癖
-    // 1. Implied return
-    // 1. 隐含返回
-    // 2. Snake_case variables allowed
+    // 处理 Bedrock Molang 的怪癖
+    // 1. 隐式返回
     // 2. 允许 Snake_case 变量
 
-    // Handle multiple statements
     // 处理多语句
     if (jsExpr.includes(';')) {
       jsExpr = jsExpr
@@ -128,32 +123,29 @@ export class Molang {
         .join(',')
     }
 
-    // Handle 'return'
     // 处理 'return'
     if (jsExpr.startsWith('return ')) {
       jsExpr = jsExpr.substring(7)
     }
 
     try {
-      // Create function with context aliases
       // 创建带有上下文别名的函数
-      // Avoids regex replacement for v., q., etc.
       // 避免对 v., q. 等进行正则替换
       const funcBody = `
                 const query = context.query;
                 const q = context.query;
                 const variable = context.variable;
                 const v = context.variable;
-                const V = context.variable; // Alias V for capital usage // 别名 V
+                const V = context.variable; // 别名 V
                 const temp = context.temp;
                 const t = context.temp;
-                const T = context.temp; // Alias T for capital usage // 别名 T
-                const ctrl = context.control; // Add ctrl alias // 别名 ctrl
+                const T = context.temp; // 别名 T
+                const ctrl = context.control; // 别名 ctrl
                 const c = context.control;
                 const math = context.math;
-                const Math = context.math; // Allow capital Math // 允许大写 Math
-                const Q = context.query; // Alias Q for capital usage // 别名 Q
-                
+                const Math = context.math; // 允许大写 Math
+                const Q = context.query; // 别名 Q
+
                 try { 
                     return ${jsExpr}; 
                 } catch(e) { 

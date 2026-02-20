@@ -40,7 +40,7 @@ class CompanionService:
             cls._instance.vision_task = None
             cls._instance.prompt_manager = PromptManager()
             # 初始化 MDPManager
-            # Assuming services/agent/companion_service.py -> services/mdp/prompts
+            # 假设路径: services/agent/companion_service.py -> services/mdp/prompts
             mdp_dir = os.path.join(
                 os.path.dirname(os.path.dirname(__file__)), "mdp", "prompts"
             )

@@ -112,7 +112,7 @@ class ASRService:
                         )
                         real_model_path = model_manager.download_model(model_path)
                 except ValueError:
-                    # model_path 不是预定义的 key，假设是路径或 HF repo id
+                    # model_path 不是预定义的 key，假设是路径或 HuggingFace 仓库 ID
                     real_model_path = model_path
                     # 尝试使用原始下载逻辑作为回退（针对非标准模型）
                     if not os.path.exists(real_model_path):
@@ -123,7 +123,7 @@ class ASRService:
                     flush=True,
                 )
 
-                # [Optimize] 检查本地模型是否存在，如果存在则设置 local_files_only=True
+                # [优化] 检查本地模型是否存在，如果存在则设置 local_files_only=True
                 local_files_only = False
                 if os.path.exists(real_model_path) and (
                     os.path.isfile(os.path.join(real_model_path, "model.bin"))
@@ -134,7 +134,7 @@ class ASRService:
                     local_files_only = True
 
                 try:
-                    # Explicitly set download_root to project's models_cache to avoid issues with default system cache
+                    # 显式将 download_root 设置为项目的 models_cache，以避免默认系统缓存的问题
                     self._model = WhisperModel(
                         real_model_path,
                         device=device,
@@ -175,7 +175,7 @@ class ASRService:
         """
         config = await self._get_active_config()
         if not config:
-            # Fallback to local whisper
+            # 回退到本地 Whisper
             return await self._transcribe_local(audio_path, {}, None)
 
         try:
@@ -247,7 +247,7 @@ class ASRService:
 
             headers = {"Authorization": f"Bearer {config.api_key}"}
 
-            # 准备 multipart/form-data
+            # 准备 multipart/form-data 数据
             data = {
                 "model": config.model or "whisper-1",
             }
@@ -258,7 +258,7 @@ class ASRService:
 
             async with httpx.AsyncClient(timeout=60.0) as client:
                 with open(audio_path, "rb") as f:
-                    # 使用文件名作为 file 字段 filename
+                    # 使用文件名作为 file 字段的文件名
                     files = {"file": (os.path.basename(audio_path), f, "audio/wav")}
                     response = await client.post(
                         url, headers=headers, data=data, files=files

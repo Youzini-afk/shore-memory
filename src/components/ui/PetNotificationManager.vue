@@ -58,7 +58,7 @@ onMounted(async () => {
   // 监听系统级错误 (与 Dashboard 同步)
   unlistenFn = await listen('system-error', (event) => {
     let msg = ''
-    let title = 'System Alert'
+    let title = '系统提示'
     let type = 'error'
 
     if (typeof event === 'string') {
@@ -72,10 +72,10 @@ onMounted(async () => {
     }
 
     // 如果没有 title，尝试推断
-    if (title === 'System Alert' || title === '系统错误') {
-      if (msg.includes('Python')) title = 'Backend Error'
-      else if (msg.includes('NapCat')) title = 'NapCat Error'
-      else if (msg.includes('WebView2')) title = 'Runtime Error'
+    if (title === '系统警告' || title === '系统错误') {
+      if (msg.includes('Python')) title = '后端错误'
+      else if (msg.includes('NapCat')) title = 'NapCat 错误'
+      else if (msg.includes('WebView2')) title = '运行时错误'
     }
 
     add(msg, type, title, 10000)

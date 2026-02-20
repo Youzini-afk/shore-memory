@@ -93,7 +93,7 @@ async def get_all_agents_status(session: AsyncSession = Depends(get_session)):
             {
                 "name": agent.name,
                 "avatar": agent.avatar,
-                "room_name": loc.name if loc else "Unknown",
+                "room_name": loc.name if loc else "未知区域",
                 "room_id": loc.id if loc else None,
             }
         )

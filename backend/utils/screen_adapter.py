@@ -46,7 +46,7 @@ class ScreenAdapter:
             try:
                 self.screen_width, self.screen_height = pyautogui.size()
             except Exception:
-                # Headless or error
+                # 无头模式或错误
                 self.screen_width, self.screen_height = 1920, 1080
         else:
             self.screen_width, self.screen_height = 1920, 1080

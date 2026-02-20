@@ -1,2 +1,2 @@
-# This directory is reserved for future third-party plugins.
-# Native tools have been moved to ../tools/
+# 此目录保留给未来的第三方插件。
+# 原生工具已移动到 ../tools/

@@ -7,7 +7,6 @@
     <div
       class="bg-[#252526] border border-[#454545] rounded-lg shadow-2xl w-[400px] overflow-hidden transform transition-all"
     >
-      <!-- Header -->
       <!-- 头部 -->
       <div
         class="px-4 py-3 border-b border-[#333333] flex justify-between items-center bg-[#2d2d2d]"
@@ -31,7 +30,6 @@
         </button>
       </div>
 
-      <!-- Body -->
       <!-- 内容 -->
       <div class="p-4">
         <p v-if="message" class="text-sm text-[#cccccc] mb-4 whitespace-pre-wrap">{{ message }}</p>
@@ -47,7 +45,6 @@
         </div>
       </div>
 
-      <!-- Footer -->
       <!-- 底部 -->
       <div class="px-4 py-3 bg-[#2d2d2d] flex justify-end gap-2">
         <button
@@ -117,7 +114,6 @@ watch(
   }
 )
 
-// Handle confirm action
 // 处理确认操作
 const handleConfirm = () => {
   if (props.type === 'prompt') {
@@ -128,14 +124,12 @@ const handleConfirm = () => {
   emit('update:visible', false)
 }
 
-// Handle cancel action
 // 处理取消操作
 const handleCancel = () => {
   emit('cancel')
   emit('update:visible', false)
 }
 
-// Handle overlay click
 // 处理遮罩层点击
 const handleOverlayClick = () => {
   if (props.type !== 'alert') {

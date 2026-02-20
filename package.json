@@ -1,7 +1,7 @@
 {
   "name": "pero-core",
   "private": true,
-  "version": "0.7.0",
+  "version": "0.7.1",
   "description": "A powerful desktop application powered by PeroCore",
   "author": "YoKONCy",
   "license": "Apache-2.0",
@@ -24,6 +24,9 @@
     "docs:dev": "vitepress dev wiki --port 6657",
     "docs:build": "vitepress build wiki",
     "docs:preview": "vitepress preview wiki --port 6657",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "lint": "eslint . --ext .vue,.js,.ts,.jsx,.tsx --fix",
     "format": "prettier --write ."
   },
@@ -74,6 +77,7 @@
     "@typescript-eslint/eslint-plugin": "^8.54.0",
     "@typescript-eslint/parser": "^8.54.0",
     "@vitejs/plugin-vue": "^6.0.1",
+    "@vue/test-utils": "^2.4.6",
     "autoprefixer": "^10.4.24",
     "concurrently": "^9.2.1",
     "cross-env": "^10.1.0",
@@ -85,6 +89,7 @@
     "eslint-plugin-only-warn": "^1.1.0",
     "eslint-plugin-prettier": "^5.5.5",
     "eslint-plugin-vue": "^9.33.0",
+    "jsdom": "^28.1.0",
     "markdown-it-mathjax3": "^4.3.2",
     "postcss": "^8.5.6",
     "prettier": "^3.8.1",
@@ -94,6 +99,7 @@
     "typescript": "^5.9.3",
     "vite": "^6.2.0",
     "vitepress": "^1.6.4",
+    "vitest": "^4.0.18",
     "vue-eslint-parser": "^10.4.0",
     "wait-on": "^9.0.3"
   },

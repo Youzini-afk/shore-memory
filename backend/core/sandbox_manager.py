@@ -83,7 +83,7 @@ class SecurityVisitor(ast.NodeVisitor):
             self.imports.add(name)
             if name in self.RISK_RULES["imports"]:
                 level = self.RISK_RULES["imports"][name]
-                self._add_risk(level, f"Import detected: {name}")
+                self._add_risk(level, f"检测到导入: {name}")
         self.generic_visit(node)
 
     def visit_ImportFrom(self, node):
@@ -92,7 +92,7 @@ class SecurityVisitor(ast.NodeVisitor):
             self.imports.add(module_name)
             if module_name in self.RISK_RULES["imports"]:
                 level = self.RISK_RULES["imports"][module_name]
-                self._add_risk(level, f"Import detected: {module_name}")
+                self._add_risk(level, f"检测到导入: {module_name}")
         self.generic_visit(node)
 
     def visit_Call(self, node):
@@ -102,7 +102,7 @@ class SecurityVisitor(ast.NodeVisitor):
             self.calls.add(name)
             if name in self.RISK_RULES["calls"]:
                 level = self.RISK_RULES["calls"][name]
-                self._add_risk(level, f"Function call detected: {name}")
+                self._add_risk(level, f"检测到函数调用: {name}")
 
         # 检查属性调用，如 os.system()
         elif isinstance(node.func, ast.Attribute):
@@ -113,7 +113,7 @@ class SecurityVisitor(ast.NodeVisitor):
                 full_name = f"{module}.{method}"
                 if full_name in self.RISK_RULES["attributes"]:
                     level = self.RISK_RULES["attributes"][full_name]
-                    self._add_risk(level, f"Attribute call detected: {full_name}")
+                    self._add_risk(level, f"检测到属性调用: {full_name}")
 
         self.generic_visit(node)
 

@@ -8,11 +8,11 @@
    - 纪念日提醒 (Anniversary Reminder)
 
 2. 周期性行为检测 (Periodic Behavior Detection)
-   - 用户作息规律
-   - 异常熬夜检测
+   - 用户作息规律 (User Schedule)
+   - 异常熬夜检测 (Abnormal Late Night Detection)
 
 3. 时间上下文注入 (Time Context Injection)
-   - 为其他模态提供时间背景
+   - 为其他模态提供时间背景 (Provide Time Context)
 
 版本: 1.0.0
 """

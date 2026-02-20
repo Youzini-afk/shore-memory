@@ -8,7 +8,7 @@ from utils.workspace_utils import get_workspace_root
 # 工作区位于 PeroCore/pero_workspace
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 WORKSPACE_ROOT = os.path.join(BASE_DIR, "pero_workspace")
-# LOG_ROOT = os.path.join(WORKSPACE_ROOT, "log") # Deprecated global log root
+# LOG_ROOT = os.path.join(WORKSPACE_ROOT, "log") # 已弃用的全局日志根目录
 
 
 class MemoryFileManager:

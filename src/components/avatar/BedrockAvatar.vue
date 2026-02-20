@@ -29,32 +29,27 @@ const errorMsg = ref('')
 const animList = ref<string[]>([])
 const selectedAnim = ref('')
 
-let dragInfluence = 0 // 0 = Normal, 1 = Full Drag Effect
+let dragInfluence = 0 // 0 = 正常, 1 = 完全拖拽效果
 
 const clothingState = ref({
   dress: true,
   armour: true,
   hat: true,
   underwear: true,
-  censored: false // Force hide red blocks by default
-  // 默认强制隐藏红色方块
+  censored: false // 默认强制隐藏红色方块
 })
 
-// Derived state for expressions
 // 表情的派生状态
 const isShy = ref(false)
 
 const updateClothing = () => {
   if (!characterModel) return
 
-  // Calculate Shy State: If dress is removed, she becomes shy
   // 计算害羞状态：如果裙子被脱掉，她会变害羞
   isShy.value = !clothingState.value.dress || !clothingState.value.underwear
 
   characterModel.traverse((child: any) => {
-    // Check if it's a mesh or group that might represent a part
     // 检查它是否是可能代表部件的网格或组
-    // BedrockLoader uses names from main.json
     // BedrockLoader 使用 main.json 中的名称
     const name = child.name
     if (!name) return
@@ -70,13 +65,11 @@ const updateClothing = () => {
     } else if (name.includes('Censored')) {
       child.visible = clothingState.value.censored
     } else if (name.includes('embarrassed')) {
-      // Toggle Blush visibility based on shy state
       // 根据害羞状态切换腮红可见性
       child.visible = isShy.value
 
-      // Fix: Move blush slightly forward to prevent z-fighting
       // 修复：将腮红稍微向前移动，以防止 z-fighting
-      // Head face is around Z = -3.5. Embarrassed default Z is -2.5 (inside).
+      // 头部面部约为 Z = -3.5。害羞默认 Z 为 -2.5 (内部)。
       if (child.position.z > -3.0) {
         child.position.z -= 1.2
       }
@@ -92,20 +85,18 @@ watch(
   { deep: true }
 )
 
-// Expose methods for parent component
 // 暴露给父组件的方法
 defineExpose({
   playAnimation: (name: string) => {
     animManager.playDebug(name)
   },
   resetAnimation: () => {
-    // Reset to idle or controller logic
     // 重置为空闲或控制器的逻辑
     if (animList.value.includes('idle')) {
       animManager.playDebug('idle')
     }
   },
-  // Expose state for parent UI
+  // 暴露状态给父 UI
   clothingState,
   updateClothing,
   animList,
@@ -148,7 +139,6 @@ let isPetting = false
 let currentSquint = 1.0
 let initialEyebrowY = 0
 let currentEyebrowOffset = 0
-// Lip Sync State
 // 口型同步状态
 const lipSyncTarget = ref(0)
 const currentLipSync = ref(0)
@@ -166,9 +156,7 @@ watch(selectedAnim, (newVal) => {
   if (newVal) {
     animManager.playDebug(newVal)
   } else {
-    // Stop debug or reset?
     // 停止调试或重置？
-    // Ideally we might want to revert to controller logic, but playDebug overrides it.
     // 理想情况下，我们可能希望恢复控制器逻辑，但 playDebug 会覆盖它。
   }
 })
@@ -193,7 +181,6 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', onMouseDown)
   window.removeEventListener('mouseup', onMouseUp)
 
-  // Cleanup
   // 清理
   if (renderer.value) {
     renderer.value.dispose()
@@ -204,19 +191,16 @@ onUnmounted(() => {
 function initThree() {
   if (!container.value || !canvasContainer.value) return
 
-  // Cleanup existing renderer to avoid duplicate canvases
   // 清理现有的渲染器以避免重复的画布
   if (renderer.value) {
     renderer.value.dispose()
   }
 
-  // Clear canvas container content only
   // 仅清除画布容器内容
   while (canvasContainer.value.firstChild) {
     canvasContainer.value.removeChild(canvasContainer.value.firstChild)
   }
 
-  // Reset character reference since we are creating a new scene
   // 重置角色引用，因为我们要创建一个新场景
   characterModel = null
 
@@ -248,12 +232,11 @@ function initThree() {
 
   // 4. 控制器（右键旋转）
   const ctrl = new OrbitControls(c, r.domElement)
-  ctrl.target.set(0, 21, 0) // Look at Chest/Neck (Y=21)
+  ctrl.target.set(0, 21, 0) // 观察胸部/颈部 (Y=21)
   ctrl.enableDamping = true
   ctrl.dampingFactor = 0.05
-  ctrl.enableZoom = false // Disable zoom (scroll wheel)
+  ctrl.enableZoom = false // 禁用缩放（滚轮）
 
-  // Track interaction state
   // 追踪交互状态
   ctrl.addEventListener('start', () => {
     isInteracting = true
@@ -263,10 +246,9 @@ function initThree() {
     isInteracting = false
   })
 
-  // Mouse button config
   // 鼠标按钮配置
   ctrl.mouseButtons = {
-    LEFT: null, // Disable left drag (reserved for window drag)
+    LEFT: null, // 禁用左键拖拽（保留给窗口拖拽）
     MIDDLE: THREE.MOUSE.DOLLY,
     RIGHT: THREE.MOUSE.ROTATE
   }
@@ -278,21 +260,21 @@ function initThree() {
   s.add(ambient)
 
   // 半球光（自然天空/地面变化）
-  const hemi = new THREE.HemisphereLight(0xddeeff, 0x202020, 0.5) // Sky blue to dark gray
+  const hemi = new THREE.HemisphereLight(0xddeeff, 0x202020, 0.5) // 天蓝色到深灰色
   s.add(hemi)
 
   // 主定向光（太阳）
   const dirLight = new THREE.DirectionalLight(0xffffff, 1.5)
-  dirLight.position.set(20, 50, 30) // Higher angle for better shadows
+  dirLight.position.set(20, 50, 30) // 更高的角度以获得更好的阴影
   dirLight.castShadow = true
   dirLight.shadow.mapSize.width = 2048
   dirLight.shadow.mapSize.height = 2048
   dirLight.shadow.bias = -0.0001
-  dirLight.shadow.normalBias = 0.05 // Reduces shadow acne
+  dirLight.shadow.normalBias = 0.05 // 减少阴影伪影
   s.add(dirLight)
 
   // 补光灯（柔化刺眼的阴影）
-  const fillLight = new THREE.DirectionalLight(0xffeedd, 0.5) // Warm fill
+  const fillLight = new THREE.DirectionalLight(0xffeedd, 0.5) // 暖色补光
   fillLight.position.set(-20, 20, 20)
   s.add(fillLight)
 
@@ -396,8 +378,8 @@ function animate() {
     const spherical = new THREE.Spherical().setFromVector3(currentOffset)
 
     // 默认方向（前视图）
-    // Relative to target (0,21,0), default pos was (0,20,70) -> offset (0, -1, 70)
-    // We want to reset rotation to this direction, but keep current RADIUS (zoom).
+    // 相对于目标 (0,21,0)，默认位置为 (0,20,70) -> 偏移 (0, -1, 70)
+    // 我们希望重置旋转到此方向，但保持当前半径（缩放）。
     const defaultOffset = new THREE.Vector3(0, -1, 70)
     const defaultSpherical = new THREE.Spherical().setFromVector3(defaultOffset)
 
@@ -411,7 +393,7 @@ function animate() {
     spherical.phi += (defaultSpherical.phi - spherical.phi) * 0.05
 
     // 设置回相机位置
-    // Note: radius in 'spherical' is already the current radius, untouched.
+    // 注意：'spherical' 中的半径已经是当前半径，保持不变。
     const newOffset = new THREE.Vector3().setFromSpherical(spherical)
     camera.value.position.copy(controls.value.target).add(newOffset)
 
@@ -489,7 +471,7 @@ function animate() {
   // 应用程序化动画覆盖 (更新后)
   if (scene.value) {
     // --- 拖拽/被拎起物理效果 ---
-    // Smoothly transition dragInfluence (0.0 to 1.0)
+    // 平滑过渡拖拽影响 (0.0 到 1.0)
     const targetInfluence = props.isDragging ? 1.0 : 0.0
     // 使用存储在外部作用域或 ref 中的 'dragInfluence' (定义在下面)
     dragInfluence += (targetInfluence - dragInfluence) * 0.1
@@ -502,7 +484,7 @@ function animate() {
       // 使用 main.json 中的正确骨骼名称
 
       const body = scene.value.getObjectByName('AllBody') || scene.value.getObjectByName('Body')
-      const upperBody = scene.value.getObjectByName('UpperBody') // Chest
+      const upperBody = scene.value.getObjectByName('UpperBody') // 胸部
 
       const armL = scene.value.getObjectByName('LeftArm') || scene.value.getObjectByName('ArmLeft')
       const armR =
@@ -634,9 +616,7 @@ function onMouseMove(event: MouseEvent) {
   const centerX = rect.left + rect.width / 2
   const centerY = rect.top + rect.height / 2
 
-  // Calculate mouse position relative to center (-1 to 1)
   // 计算相对于中心的鼠标位置 (-1 到 1)
-  // Clamp to avoid extreme values when mouse is outside window
   // 当鼠标在窗口外时，限制以避免极值
   const rawX = (event.clientX - centerX) / (rect.width / 2)
   const rawY = (event.clientY - centerY) / (rect.height / 2)
@@ -644,33 +624,26 @@ function onMouseMove(event: MouseEvent) {
   const x = Math.max(-1, Math.min(1, rawX))
   const y = Math.max(-1, Math.min(1, rawY))
 
-  // Update global mouse input for animate loop
   // 更新动画循环的全局鼠标输入
   mouseInputX = x
   mouseInputY = y
 
-  // Update Raycaster NDC (Y is inverted relative to screen coords for Raycaster)
   // 更新 Raycaster NDC (Y 相对于 Raycaster 的屏幕坐标是反转的)
-  // rawX is -1(Left) to 1(Right) -> Matches NDC X
   // rawX 是 -1(左) 到 1(右) -> 匹配 NDC X
-  // rawY is -1(Top) to 1(Bottom) -> NDC Y needs 1(Top) to -1(Bottom) => -rawY
   // rawY 是 -1(上) 到 1(下) -> NDC Y 需要 1(上) 到 -1(下) => -rawY
   mouseNDC.set(x, -y)
 }
 
-// Global mouse input storage
 // 全局鼠标输入存储
 let mouseInputX = 0
 let mouseInputY = 0
 
 function onMouseDown(event: MouseEvent) {
   if (event.button === 0) {
-    // Left button // 左键
+    // 左键
 
-    // Check click intersection immediately for rapid response
     // 立即检查点击相交以获得快速响应
     if (camera.value && characterModel && container.value) {
-      // Ensure raycaster is up-to-date with current mouse position from event
       // 确保 raycaster 使用来自事件的当前鼠标位置进行更新
       const rect = container.value.getBoundingClientRect()
       const x = ((event.clientX - rect.left) / rect.width) * 2 - 1
@@ -682,7 +655,6 @@ function onMouseDown(event: MouseEvent) {
 
       if (intersects.length > 0) {
         const hit = intersects[0]
-        // Traverse up to find the bone name
         // 向上遍历以查找骨骼名称
         let currentObj = hit.object
         let partName = ''
@@ -697,7 +669,7 @@ function onMouseDown(event: MouseEvent) {
               currentObj.name.includes('Leg') ||
               currentObj.name.includes('Chest') ||
               currentObj.name.includes('Waist') ||
-              // Accessories & Clothing
+              // 配饰与服装
               currentObj.name.includes('Hair') ||
               currentObj.name.includes('Hat') ||
               currentObj.name.includes('Ribbon') ||
@@ -726,7 +698,6 @@ function onMouseDown(event: MouseEvent) {
         }
 
         if (partName) {
-          // Discrete click event, no state holding required for triggering
           // 离散点击事件，触发不需要状态保持
           isPetting = true
           let type = 'body'
@@ -776,7 +747,7 @@ function onMouseDown(event: MouseEvent) {
 
 function onMouseUp(event: MouseEvent) {
   if (event.button === 0) {
-    isPetting = false // Reset petting state on release // 释放时重置抚摸状态
+    isPetting = false // 释放时重置抚摸状态
   }
 }
 </script>

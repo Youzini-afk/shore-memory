@@ -3,7 +3,7 @@ import os
 
 from utils.workspace_utils import get_workspace_root
 
-# Define the workspace root relative to this file
+# 定义相对于此文件的工作空间根目录
 # backend/nit_core/tools/work/WorkspaceOps/workspace_ops.py -> PeroCore/pero_workspace
 # [重构] 使用动态工作空间根目录
 # BASE_DIR = ...

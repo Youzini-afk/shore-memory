@@ -97,7 +97,7 @@ async def check_and_migrate_db():
 
                 if columns and "clustered_count" not in columns:
                     print(
-                        "[Database Migration] Adding 'clustered_count' column to 'maintenancerecord'..."
+                        "[Database Migration] 正在添加 'clustered_count' 列到 'maintenancerecord' 表..."
                     )
                     sync_conn.execute(
                         text(
@@ -111,7 +111,7 @@ async def check_and_migrate_db():
                 columns = [row[1] for row in result.fetchall()]
                 if columns and "role" not in columns:
                     print(
-                        "[Database Migration] Adding 'role' column to 'agentprofile'..."
+                        "[Database Migration] 正在添加 'role' 列到 'agentprofile' 表..."
                     )
                     # 添加 role 列，默认值为 'assistant'
                     sync_conn.execute(
@@ -121,7 +121,7 @@ async def check_and_migrate_db():
                     )
                     sync_conn.commit()
             except Exception as e:
-                print(f"[Database Migration] Error migrating maintenancerecord: {e}")
+                print(f"[Database Migration] 迁移 maintenancerecord 错误: {e}")
 
         await conn.run_sync(sync_check)
 

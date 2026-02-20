@@ -6,7 +6,7 @@ import tempfile
 
 import numpy as np
 
-# Optional imports
+# 可选导入
 try:
     import pyautogui
 except ImportError:

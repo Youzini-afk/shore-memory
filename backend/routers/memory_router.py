@@ -140,10 +140,10 @@ async def retry_log_analysis(
 ):
     log = await session.get(ConversationLog, log_id)
     if not log:
-        raise HTTPException(status_code=404, detail="Log not found")
+        raise HTTPException(status_code=404, detail="未找到日志")
 
     background_tasks.add_task(run_retry_background, log_id)
-    return {"status": "queued", "message": "Analysis retry started in background"}
+    return {"status": "queued", "message": "分析重试已在后台启动"}
 
 
 @history_router.delete("/{log_id}")
@@ -180,7 +180,7 @@ async def update_chat_log(
     try:
         log = await session.get(ConversationLog, log_id)
         if not log:
-            raise HTTPException(status_code=404, detail="Log not found")
+            raise HTTPException(status_code=404, detail="未找到日志")
         if "content" in payload:
             log.content = payload["content"]
         await session.commit()

@@ -239,7 +239,7 @@ async def lifespan(app: FastAPI):
     # 初始化实时会话管理器
     realtime_session_manager.initialize()
 
-    # Start AuraVision (if enabled)
+    # 启动 AuraVision (如果已启用)
     config_mgr = get_config_manager()
     if config_mgr.get("aura_vision_enabled", False):
         from services.perception.aura_vision_service import aura_vision_service
@@ -249,15 +249,15 @@ async def lifespan(app: FastAPI):
         else:
             print("[Main] 初始化 AuraVision 服务失败。")
 
-    # Cleanup task
+    # 清理任务
     async def periodic_cleanup():
         while True:
             try:
                 tts = get_tts_service()
                 tts.cleanup_old_files(max_age_seconds=3600)
 
-                # Cleanup temp_vision
-                # [Refactor] 统一指向 backend/data/temp_vision
+                # 清理临时视觉文件
+                # [重构] 统一指向 backend/data/temp_vision
                 default_data_dir = os.path.join(current_dir, "data")
                 data_dir = os.environ.get("PERO_DATA_DIR", default_data_dir)
                 temp_vision = os.path.join(data_dir, "temp_vision")
@@ -277,14 +277,14 @@ async def lifespan(app: FastAPI):
 
     cleanup_task = asyncio.create_task(periodic_cleanup())
 
-    # [Feature] Thinking Pipeline: Weekly Report Task
+    # [功能] 思考管道：周报任务
     async def periodic_weekly_report_check():
         from sqlalchemy.orm import sessionmaker
 
         from database import engine
         from services.agent.chain_service import chain_service
 
-        # Initial delay to let DB settle
+        # 初始延迟以让数据库就绪
         await asyncio.sleep(30)
 
         while True:
@@ -293,7 +293,7 @@ async def lifespan(app: FastAPI):
                     engine, class_=AsyncSession, expire_on_commit=False
                 )
                 async with async_session() as session:
-                    # Check last report time
+                    # 检查上次报告时间
                     config_key = "last_weekly_report_time"
                     config = await session.get(Config, config_key)
 
@@ -301,7 +301,7 @@ async def lifespan(app: FastAPI):
                     now = datetime.now()
 
                     if not config:
-                        # First run: Run immediately for demo purposes
+                        # 首次运行：立即运行以用于演示
                         should_run = True
                     else:
                         try:
@@ -316,11 +316,11 @@ async def lifespan(app: FastAPI):
                         report = await chain_service.generate_weekly_report(session)
 
                         if report:
-                            # [Modified] No longer saving to ConversationLog (Chat Window)
+                            # [修改] 不再保存到 ConversationLog (聊天窗口)
                             # log = ConversationLog(...)
                             # session.add(log)
 
-                            # [Feature] Persist Weekly Report to DB
+                            # [功能] 将周报持久化到数据库
                             # 周报直接存入数据库，不再保存到本地文件
                             try:
                                 from services.memory.memory_service import MemoryService
@@ -338,7 +338,7 @@ async def lifespan(app: FastAPI):
                             except Exception as e:
                                 print(f"[Main] 保存周报到数据库失败: {e}")
 
-                            # Update Config
+                            # 更新配置
                             if not config:
                                 config = Config(key=config_key, value=now.isoformat())
                                 session.add(config)
@@ -349,7 +349,7 @@ async def lifespan(app: FastAPI):
                             await session.commit()
                             print("[Main] 周报已生成并保存 (静默模式)。")
 
-                            # [Modified] No longer broadcasting to Frontend
+                            # [修改] 不再广播到前端
                             # try:
                             #     ...
                             # except ...
@@ -359,12 +359,12 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 print(f"[Main] 周报任务错误: {e}")
 
-            # Check every hour
+            # 每小时检查一次
             await asyncio.sleep(3600)
 
     weekly_report_task = asyncio.create_task(periodic_weekly_report_check())
 
-    # [Feature] Dream Mode: Daily trigger at 22:00
+    # [功能] 梦境模式：每日 22:00 触发
     async def periodic_dream_check():
         from datetime import timedelta
 
@@ -372,7 +372,7 @@ async def lifespan(app: FastAPI):
 
         from database import engine
 
-        await asyncio.sleep(60)  # Initial delay
+        await asyncio.sleep(60)  # 初始延迟
 
         while True:
             try:
@@ -382,7 +382,7 @@ async def lifespan(app: FastAPI):
                 async with async_session() as session:
                     now = datetime.now()
 
-                    # Calculate the latest scheduled trigger time (22:00)
+                    # 计算最近的计划触发时间 (22:00)
                     if now.hour < 22:
                         latest_scheduled = now.replace(
                             hour=22, minute=0, second=0, microsecond=0
@@ -392,7 +392,7 @@ async def lifespan(app: FastAPI):
                             hour=22, minute=0, second=0, microsecond=0
                         )
 
-                    # Check last trigger time
+                    # 检查上次触发时间
                     config_key = "last_dream_trigger_time"
                     config = await session.get(Config, config_key)
 
@@ -405,7 +405,7 @@ async def lifespan(app: FastAPI):
                         print(
                             f"[Main] 触发定时梦境模式 (上次: {last_trigger_time}, 计划: {latest_scheduled})"
                         )
-                        # Instantiate AgentService to use its _trigger_dream method
+                        # 实例化 AgentService 以使用其 _trigger_dream 方法
                         from services.agent.agent_service import AgentService
 
                         agent_service = AgentService(session)
@@ -413,10 +413,10 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 print(f"[Main] 梦境检查任务错误: {e}")
 
-            # Check every 15 minutes
+            # 每 15 分钟检查一次
             await asyncio.sleep(900)
 
-    # [Feature] Memory Maintenance & Dream: Daily trigger at 22:00 PM
+    # [功能] 记忆维护与梦境：每日 22:00 触发
     async def periodic_memory_maintenance_check():
         from datetime import timedelta
 
@@ -424,7 +424,7 @@ async def lifespan(app: FastAPI):
 
         from database import engine
 
-        await asyncio.sleep(120)  # Initial delay
+        await asyncio.sleep(120)  # 初始延迟
 
         while True:
             try:
@@ -434,7 +434,7 @@ async def lifespan(app: FastAPI):
                 async with async_session() as session:
                     now = datetime.now()
 
-                    # Calculate the latest scheduled trigger time (22:00 PM)
+                    # 计算最近的计划触发时间 (22:00)
                     if now.hour < 22:
                         latest_scheduled = now.replace(
                             hour=22, minute=0, second=0, microsecond=0
@@ -444,7 +444,7 @@ async def lifespan(app: FastAPI):
                             hour=22, minute=0, second=0, microsecond=0
                         )
 
-                    # Check last maintenance time
+                    # 检查上次维护时间
                     config_key = "last_memory_maintenance_time"
                     config = await session.get(Config, config_key)
 
@@ -458,19 +458,19 @@ async def lifespan(app: FastAPI):
                             f"[Main] 触发定时记忆维护与梦境 (上次: {last_time}, 计划: {latest_scheduled})"
                         )
 
-                        # 1. Trigger Reflection Service (Maintenance & Dream)
+                        # 1. 触发反思服务 (维护与梦境)
                         from services.memory.reflection_service import ReflectionService
 
                         reflection_service = ReflectionService(session)
 
-                        # 2. Trigger Agent Service (Dream trigger)
+                        # 2. 触发 Agent 服务 (梦境触发)
                         from services.agent.agent_service import AgentService
 
                         agent_service = AgentService(session)
 
-                        # Run tasks
+                        # 运行任务
                         try:
-                            # [Fix] Config is a single DB model instance, not a dictionary. Use ConfigManager to get global settings.
+                            # [修复] Config 是单个 DB 模型实例，而不是字典。使用 ConfigManager 获取全局设置。
                             config_mgr = get_config_manager()
                             active_agent_id = config_mgr.get("agent_id", "pero")
                             await asyncio.gather(
@@ -484,7 +484,7 @@ async def lifespan(app: FastAPI):
                         except Exception as inner_e:
                             print(f"[Main] 维护/梦境任务内部错误: {inner_e}")
 
-                        # Update config
+                        # 更新配置
                         if not config:
                             config = Config(key=config_key, value=now.isoformat())
                             session.add(config)
@@ -504,21 +504,21 @@ async def lifespan(app: FastAPI):
 
     maintenance_task = asyncio.create_task(periodic_memory_maintenance_check())
 
-    # [Feature] Lonely Memory Scanner: Hourly trigger
+    # [Feature] 孤独记忆扫描器：每小时触发
     async def periodic_lonely_scan_check():
         from sqlalchemy.orm import sessionmaker
 
         from database import engine
         from services.memory.reflection_service import ReflectionService
 
-        # Initial delay to stagger with other tasks
+        # 初始延迟以错开其他任务
         await asyncio.sleep(300)
 
         while True:
             try:
-                # [Optimization] Check if system is under heavy load or user is chatting?
-                # For now, rely on async concurrency.
-                # scan_lonely_memories yields frequently (DB, LLM).
+                # [Optimization] 检查系统是否负载过高或用户正在聊天？
+                # 目前依靠异步并发。
+                # scan_lonely_memories 会频繁让出控制权 (DB, LLM)。
 
                 # print("[Main] Starting hourly lonely memory scan...", flush=True)
                 async_session = sessionmaker(
@@ -530,27 +530,27 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 print(f"[Main] 孤独记忆扫描任务错误: {e}")
 
-            # Check every 1 hour
+            # 每小时检查一次
             await asyncio.sleep(3600)
 
     lonely_scan_task = asyncio.create_task(periodic_lonely_scan_check())
 
-    # [Feature] Periodic Trigger Check (Reminders & Topics)
-    # Replaces frontend polling with backend scheduling
+    # [Feature] 定期触发检查 (提醒事项 & 话题)
+    # 以后端调度替代前端轮询
     async def execute_and_broadcast_chat(instruction: str, session: AsyncSession):
-        """Execute a trigger chat and broadcast the result to all connected clients."""
+        """执行触发对话并将结果广播给所有连接的客户端。"""
         from services.agent.agent_service import AgentService
 
         agent_service = AgentService(session)
         full_response = ""
 
         try:
-            # 1. Notify clients that Pero is thinking
+            # 1. 通知客户端 Pero 正在思考
             await realtime_session_manager.broadcast(
                 {"type": "status", "content": "thinking"}
             )
 
-            # 2. Run the chat
+            # 2. 运行对话
             async for chunk in agent_service.chat(
                 messages=[],
                 source="system_trigger",
@@ -560,7 +560,7 @@ async def lifespan(app: FastAPI):
                     full_response += chunk
 
             if full_response:
-                # 3. Clean and parse response (using realtime_session_manager's logic)
+                # 3. 清理和解析响应 (使用 realtime_session_manager 的逻辑)
                 ui_response = realtime_session_manager._clean_text(
                     full_response, for_tts=False
                 )
@@ -568,7 +568,7 @@ async def lifespan(app: FastAPI):
                     full_response, for_tts=True
                 )
 
-                # 4. Broadcast the text response
+                # 4. 广播文本响应
                 await realtime_session_manager.broadcast(
                     {"type": "status", "content": "speaking"}
                 )
@@ -576,7 +576,7 @@ async def lifespan(app: FastAPI):
                     {"type": "text_response", "content": ui_response}
                 )
 
-                # 5. Handle TTS and broadcast audio (Optional but recommended for consistency)
+                # 5. 处理 TTS 并广播音频 (可选但推荐保持一致性)
                 target_voice, target_rate, target_pitch = (
                     realtime_session_manager._get_voice_params(full_response)
                 )
@@ -597,7 +597,7 @@ async def lifespan(app: FastAPI):
                             {"type": "audio_response", "data": audio_b64, "format": ext}
                         )
 
-                # 6. Reset to idle
+                # 6. 重置为空闲
                 await realtime_session_manager.broadcast(
                     {"type": "status", "content": "idle"}
                 )
@@ -612,7 +612,7 @@ async def lifespan(app: FastAPI):
 
         from database import engine
 
-        await asyncio.sleep(10)  # Initial delay
+        await asyncio.sleep(10)  # 初始延迟
 
         while True:
             try:
@@ -627,7 +627,7 @@ async def lifespan(app: FastAPI):
                         )
                     ).all()
 
-                    # 1. Reminders
+                    # 1. 提醒事项
                     due_reminders = [
                         t
                         for t in tasks
@@ -641,15 +641,15 @@ async def lifespan(app: FastAPI):
                         print(f"[Main] 触发提醒: {task.content}")
                         instruction = f"【管理系统提醒：Pero，你与主人的约定时间已到，请主动提醒主人。约定内容：{task.content}】"
 
-                        # Mark as triggered FIRST
+                        # 先标记为已触发
                         task.is_triggered = True
                         session.add(task)
                         await session.commit()
 
-                        # Trigger Chat and Broadcast
+                        # 触发对话并广播
                         await execute_and_broadcast_chat(instruction, session)
 
-                    # 2. Topics (Grouped)
+                    # 2. 话题 (分组)
                     due_topics = [
                         t
                         for t in tasks
@@ -673,10 +673,10 @@ async def lifespan(app: FastAPI):
                             session.add(t)
                         await session.commit()
 
-                        # Trigger Chat and Broadcast
+                        # 触发对话并广播
                         await execute_and_broadcast_chat(instruction, session)
 
-                    # 3. Reactions (Pre-actions)
+                    # 3. 反应 (预设动作)
                     due_reactions = [
                         t
                         for t in tasks
@@ -700,34 +700,34 @@ async def lifespan(app: FastAPI):
             except Exception as e:
                 print(f"[Main] 触发检查任务错误: {e}")
 
-            await asyncio.sleep(30)  # Check every 30 seconds
+            await asyncio.sleep(30)  # 每30秒检查一次
 
     trigger_task = asyncio.create_task(periodic_trigger_check())
 
-    # Start Gateway Client
+    # 启动网关客户端
     gateway_client.start_background()
     print("[Main] Gateway 客户端已启动。")
 
-    # Start Cloud Sync Service
+    # 启动云同步服务
     await sync_service.load_config()
     sync_service.start()
 
-    # [Feature] Auto Warmup Models
+    # [Feature] 自动预热模型
     async def run_warmup():
         print("[Main] 开始后台模型预热...", flush=True)
         loop = asyncio.get_event_loop()
 
-        # 1. Warm up Embedding Service (Embedding + Reranker)
+        # 1. 预热 Embedding 服务 (Embedding + Reranker)
         try:
-            # Run in thread because it is blocking
+            # 在线程中运行，因为它是阻塞的
             await loop.run_in_executor(None, embedding_service.warm_up)
         except Exception as e:
             print(f"[Main] Embedding Service 预热失败: {e}")
 
-        # 2. Warm up ASR Service (Whisper)
+        # 2. 预热 ASR 服务 (Whisper)
         try:
             asr = get_asr_service()
-            # Run in thread
+            # 在线程中运行
             await loop.run_in_executor(None, asr.warm_up)
         except Exception as e:
             print(f"[Main] ASR Service 预热失败: {e}")
@@ -736,18 +736,18 @@ async def lifespan(app: FastAPI):
 
     asyncio.create_task(run_warmup())
 
-    # [Feature] Stronghold Initialization
+    # [Feature] 据点初始化
     try:
         from services.chat.stronghold_service import StrongholdService
 
         async with AsyncSession(engine, expire_on_commit=False) as session:
             stronghold_service = StrongholdService(session)
             await stronghold_service.ensure_initial_data()
-            print("[Main] Stronghold initialized.")
+            print("[Main] Stronghold 初始化完成。")
     except Exception as e:
-        print(f"[Main] Stronghold initialization failed: {e}")
+        print(f"[Main] Stronghold 初始化失败: {e}")
 
-    # [Optimization] Pre-warm critical status caches for Dashboard
+    # [Optimization] 预热 Dashboard 的关键状态缓存
     try:
         from services.agent.agent_manager import get_agent_manager
 
@@ -781,22 +781,22 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # Shutdown
+    # 关闭服务
     await sync_service.stop()
     await gateway_client.stop()
     cleanup_task.cancel()
     weekly_report_task.cancel()
-    # dream_task is not defined here, it's inside maintenance_task
+    # dream_task 在 maintenance_task 内部定义
     maintenance_task.cancel()
     trigger_task.cancel()
-    lonely_scan_task.cancel()  # Added
+    lonely_scan_task.cancel()  # 新增
 
     try:
         await cleanup_task
         await weekly_report_task
         await maintenance_task
         await trigger_task
-        await lonely_scan_task  # Added
+        await lonely_scan_task  # 新增
     except asyncio.CancelledError:
         pass
     await companion_service.stop()
@@ -838,31 +838,31 @@ class TTSPreviewRequest(BaseModel):
 @app.post("/api/tts/preview")
 async def preview_tts(request: TTSPreviewRequest):
     """
-    Generate TTS audio for the given text, applying the same filtering and mood analysis as the voice mode.
+    为给定的文本生成 TTS 音频，应用与语音模式相同的过滤和情绪分析。
     """
     text = request.text
     if not text:
-        raise HTTPException(status_code=400, detail="Text is empty")
+        raise HTTPException(status_code=400, detail="文本为空")
 
-    # 1. Clean Text (Reuse logic from RealtimeSessionManager)
-    # _clean_text is protected but we access it here for consistency
+    # 1. 清理文本（复用 RealtimeSessionManager 的逻辑）
+    # _clean_text 是受保护的，但为了保持一致性，我们在这里访问它
     cleaned_text = realtime_session_manager._clean_text(text, for_tts=True)
 
     if not cleaned_text or not cleaned_text.strip():
-        # If nothing remains (e.g. only thinking process), return 204 No Content or 400
-        # Front-end should handle this gracefully
-        raise HTTPException(status_code=400, detail="No speakable text content")
+        # 如果没有剩余内容（例如只有思考过程），返回 204 No Content 或 400
+        # 前端应优雅地处理此情况
+        raise HTTPException(status_code=400, detail="无可朗读的文本内容")
 
-    # 2. Get Voice Params (Mood analysis based on FULL original text)
+    # 2. 获取语音参数（基于完整的原始文本进行情绪分析）
     voice, rate, pitch = realtime_session_manager._get_voice_params(text)
 
-    # 3. Synthesize
+    # 3. 合成
     tts = get_tts_service()
 
     filepath = await tts.synthesize(cleaned_text, voice=voice, rate=rate, pitch=pitch)
 
     if not filepath or not os.path.exists(filepath):
-        raise HTTPException(status_code=500, detail="TTS generation failed")
+        raise HTTPException(status_code=500, detail="TTS 生成失败")
 
     return FileResponse(filepath, media_type="audio/mpeg", filename="preview.mp3")
 
@@ -926,7 +926,7 @@ async def verify_token(
 
 async def seed_voice_configs():
     async for session in get_session():
-        # Seed Voice Configs
+        # 播种语音配置
         result = await session.exec(
             select(VoiceConfig).where(VoiceConfig.type == "stt")
         )
@@ -953,7 +953,7 @@ async def seed_voice_configs():
             )
             session.add(tts)
 
-        # Seed Frontend Access Token (Dynamic Handshake Security)
+        # 播种前端访问令牌（动态握手安全）
         # 尝试从 Gateway 生成的令牌文件中读取
         token_path = os.path.join(current_dir, "data", "gateway_token.json")
         new_dynamic_token = None
@@ -985,12 +985,12 @@ async def seed_voice_configs():
                     )
                 await asyncio.sleep(retry_delay)
 
-        # Fallback if file not found (e.g. Gateway not started)
+        # 如果未找到文件（例如 Gateway 未启动），则回退
         if not new_dynamic_token:
             new_dynamic_token = secrets.token_urlsafe(32)
             print("[Main] 警告: 未找到 Gateway 令牌文件。已生成本地回退令牌。")
 
-            # [Fix] Write fallback token to file so Frontend can read it via IPC
+            # [Fix] 将回退令牌写入文件，以便前端可以通过 IPC 读取
             try:
                 os.makedirs(os.path.dirname(token_path), exist_ok=True)
                 with open(token_path, "w", encoding="utf-8") as f:
@@ -1500,7 +1500,7 @@ async def get_nit_status():
     return {
         "nit_version": "1.0",
         "plugins_count": len(plugin_names),
-        "active_mcp_count": 0,  # [Optimized] 暂时返回 0 以提高响应速度，Dashboard 不需要精确计数
+        "active_mcp_count": 0,  # [优化] 暂时返回 0 以提高响应速度，Dashboard 不需要精确计数
         "plugins": plugins_data,
     }
 
@@ -1515,12 +1515,12 @@ async def list_memories(
     date_start: str = None,
     date_end: str = None,
     tags: str = None,
-    type: str = None,  # Allow filtering by memory type
-    agent_id: Optional[str] = None,  # Add agent_id param
+    type: str = None,  # 允许按记忆类型筛选
+    agent_id: Optional[str] = None,  # 添加 agent_id 参数
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     service = MemoryService()
-    # Pass agent_id to get_all_memories
+    # 将 agent_id 传递给 get_all_memories
     target_agent = agent_id if agent_id else "pero"
     return await service.get_all_memories(
         session,
@@ -1761,19 +1761,19 @@ async def chat(
                     }
                 )
 
-            # TTS Queue
+            # TTS 队列
             tts_queue = asyncio.Queue()
 
             async def generate_tts_chunk(text_chunk):
                 try:
-                    # Filter out XML/HTML tags
+                    # 过滤 XML/HTML 标签
                     clean_text = re.sub(
                         r"<([A-Z_]+)>.*?</\1>", "", text_chunk, flags=re.S
                     )
                     clean_text = re.sub(r"<[^>]+>", "", clean_text)
-                    # Filter out Thinking blocks (Safety net)
-                    # Use strict pattern but case insensitive
-                    # [Fix] Add support for square brackets [] and standard parentheses ()
+                    # 过滤思考块 (安全网)
+                    # 使用严格模式但不区分大小写
+                    # [修复] 增加对方括号 [] 和标准圆括号 () 的支持
                     clean_text = re.sub(
                         r"【(?:Thinking|Monologue).*?】",
                         "",
@@ -1793,7 +1793,7 @@ async def chat(
                         flags=re.S | re.IGNORECASE,
                     )
 
-                    # Filter out Emoji and special symbols that edge-tts might read
+                    # 过滤 Emoji 和 Edge-TTS 可能朗读的特殊符号
                     clean_text = re.sub(r"[\U00010000-\U0010ffff]", "", clean_text)
                     clean_text = re.sub(
                         r"[^\w\s\u4e00-\u9fa5，。！？；：“”（）\n\.,!\?\-]",
@@ -1801,8 +1801,8 @@ async def chat(
                         clean_text,
                     )
 
-                    # [Feature] Chatter Removal: Only read the last paragraph
-                    # Split by newline and take the last non-empty segment to avoid reading "Thinking" chatter
+                    # [功能] 移除闲聊：只朗读最后一段
+                    # 按换行符分割并取最后一个非空片段，以避免朗读 "Thinking" 等闲聊内容
                     segments = [s.strip() for s in clean_text.split("\n") if s.strip()]
                     if segments:
                         clean_text = segments[-1]
@@ -1817,7 +1817,7 @@ async def chat(
                                     "utf-8"
                                 )
 
-                            # Clean up file immediately
+                            # 立即清理文件
                             with suppress(Exception):
                                 os.remove(audio_path)
 
@@ -1864,9 +1864,7 @@ async def chat(
                                 raw_chunk = await tts_queue.get()
                         except asyncio.TimeoutError:
                             if not filler_played:
-                                logger.info(
-                                    "TTS Timeout detected, playing local filler for Pero..."
-                                )
+                                logger.info("检测到 TTS 超时，为 Pero 播放本地垫话...")
                                 audio_data = None
 
                                 # 优先尝试读取本地缓存
@@ -1891,7 +1889,7 @@ async def chat(
                                             # audio_data 是 base64 字符串，保存为二进制音频文件
                                             f.write(base64.b64decode(audio_data))
                                         logger.info(
-                                            f"Saved filler to cache: {filler_cache_path}"
+                                            f"已保存垫话到缓存: {filler_cache_path}"
                                         )
 
                                 if audio_data:
@@ -1998,10 +1996,10 @@ async def chat(
 
                     traceback.print_exc()
                     await queue.put({"type": "error", "payload": str(e)})
-                    # Ensure TTS worker also finishes if chat errors
+                    # 确保对话出错时 TTS 工作线程也能结束
                     await tts_queue.put(None)
                 finally:
-                    # Signal TTS to finish
+                    # 通知 TTS 结束
                     await tts_queue.put(None)
 
             # 启动任务
@@ -2019,8 +2017,8 @@ async def chat(
                         "choices": [{"delta": {"content": f"Error: {item['payload']}"}}]
                     }
                     yield f"data: {json.dumps(error_chunk)}\n\n"
-                    # If error occurs, we might want to stop or continue?
-                    # Usually error is fatal for the response.
+                    # 如果发生错误，我们应该停止还是继续？
+                    # 通常错误对响应是致命的。
                     break
 
                 if item["type"] == "audio":
@@ -2148,18 +2146,18 @@ async def open_path(payload: Dict[str, str] = Body(...)):  # noqa: B008
 
 
 # ============================================================================
-# RESTORED ENDPOINTS (Voice, Memory, etc.)
+# 恢复的端点 (语音, 记忆, 等)
 # ============================================================================
 
-# --- Voice API ---
+# --- 语音 API ---
 
 
 @app.post("/api/voice/asr")
 async def voice_asr(file: UploadFile = File(...)):  # noqa: B008
     """语音转文字接口"""
     try:
-        # Save temp file
-        # [Refactor] 统一指向 backend/data/temp_audio
+        # 保存临时文件
+        # [重构] 统一指向 backend/data/temp_audio
         default_data_dir = os.path.join(current_dir, "data")
         data_dir = os.environ.get("PERO_DATA_DIR", default_data_dir)
         temp_dir = os.path.join(data_dir, "temp_audio")
@@ -2220,8 +2218,8 @@ async def get_audio_file(filename: str):
 async def delete_audio(filename: str):
     """手动删除音频文件 (由前端播放完毕后触发)"""
     tts = get_tts_service()
-    # Check both temp_audio and tts output dir just in case
-    # [Refactor] 统一指向 backend/data/temp_audio
+    # 检查 temp_audio 和 tts 输出目录以防万一
+    # [重构] 统一指向 backend/data/temp_audio
     default_data_dir = os.path.join(current_dir, "data")
     data_dir = os.environ.get("PERO_DATA_DIR", default_data_dir)
 
@@ -2387,19 +2385,19 @@ async def get_overview_stats(
     获取概览页面的统计数据（总数），解耦渲染数量和显示数量。
     """
     try:
-        # Count memories
+        # 统计记忆
         mem_statement = select(func.count()).select_from(Memory)
         if agent_id:
             mem_statement = mem_statement.where(Memory.agent_id == agent_id)
         mem_count = (await session.exec(mem_statement)).one()
 
-        # Count logs
+        # 统计日志
         log_statement = select(func.count()).select_from(ConversationLog)
         if agent_id:
             log_statement = log_statement.where(ConversationLog.agent_id == agent_id)
         log_count = (await session.exec(log_statement)).one()
 
-        # Count tasks (ScheduledTask)
+        # 统计任务 (ScheduledTask)
         task_statement = select(func.count()).select_from(ScheduledTask)
         if agent_id:
             task_statement = task_statement.where(ScheduledTask.agent_id == agent_id)
@@ -2412,7 +2410,7 @@ async def get_overview_stats(
         }
     except Exception as e:
         logger.error(f"Failed to get overview stats: {e}")
-        # Fallback to 0 if error, frontend should handle or use length
+        # 出错时回退为 0，前端应处理或使用列表长度
         return {"total_memories": 0, "total_logs": 0, "total_tasks": 0}
 
 

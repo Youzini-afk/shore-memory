@@ -114,7 +114,7 @@ def open_application(app_name: str):
 def get_active_windows():
     """
     获取当前所有可见的顶层窗口及其对应的进程名。
-    返回格式：List[str] (e.g. ["chrome.exe - Google Chrome", ...])
+    返回格式：List[str] (例如 ["chrome.exe - Google Chrome", ...])
     """
     if _is_server_mode():
         return []  # Server 模式下没有窗口
@@ -144,7 +144,7 @@ def get_active_windows():
                 ):
                     proc_name = "Unknown"
 
-                # 过滤常见干扰项 (InputMethod, System, etc.)
+                # 过滤常见干扰项 (输入法、系统进程等)
                 if proc_name.lower() in [
                     "textinputhost.exe",
                     "systemsettings.exe",
@@ -255,7 +255,7 @@ def get_mouse_position():
         return f"获取鼠标位置失败: {str(e)}"
 
 
-# Use absolute import from backend
+# 使用来自 backend 的绝对导入
 try:
     from backend.nit_core.tools.core.ScreenVision.screen_ocr import (
         find_text_coordinates,
@@ -264,7 +264,11 @@ except ImportError:
     try:
         from nit_core.tools.core.ScreenVision.screen_ocr import find_text_coordinates
     except ImportError:
-        from tools.ScreenVision.screen_ocr import find_text_coordinates
+        try:
+            from tools.core.ScreenVision.screen_ocr import find_text_coordinates
+        except ImportError:
+            # 最后的相对导入手段
+            from ..ScreenVision.screen_ocr import find_text_coordinates
 
 
 def safe_int(val):

@@ -136,7 +136,7 @@ class ScorerService:
 
         try:
             # 构建更新语句
-            # 兼容性修复：SQLModel/SQLAlchemy update 语句在不同版本中的行为差异
+            # 兼容性修复：SQLModel/SQLAlchemy 更新语句在不同版本中的行为差异
             # 使用 session.execute + update() 对象是比较稳妥的方式
 
             stmt = update(ConversationLog).where(ConversationLog.pair_id == pair_id)
@@ -168,7 +168,7 @@ class ScorerService:
             else:
                 stmt = stmt.values(**update_values)
 
-            await self.session.execute(stmt)
+            await self.session.exec(stmt)
             await self.session.commit()
 
         except Exception as e:
@@ -662,7 +662,7 @@ class ScorerService:
         # 获取当前 Agent 名称 (用于 Prompt 注入)
         config_manager = get_config_manager()
 
-        # Get Agent Profile for dynamic persona injection
+        # 获取 Agent Profile 以注入动态人设
         from services.agent.agent_manager import AgentManager
 
         agent_manager = AgentManager()
@@ -678,10 +678,10 @@ class ScorerService:
             else config_manager.get("bot_name", "Pero")
         )
 
-        # Determine the role label and process user content if it's a system trigger
+        # 确定角色标签，如果是系统触发则处理用户内容
         owner_name = "用户"
         try:
-            # Query Config table for owner_name
+            # 查询 Config 表获取主人名称
             result = await self.session.exec(
                 select(Config).where(Config.key == "owner_name")
             )
@@ -704,12 +704,12 @@ class ScorerService:
 
         user_label = f"{owner_name} (主人)"
 
-        # Check for System Reminders (e.g. from Companion Service or Scheduled Tasks)
+        # 检查系统提醒 (例如来自陪伴服务或计划任务)
         if user_content.strip().startswith("【管理系统提醒"):
             user_label = "系统事件 (非用户本人发言)"
-            # Optional: You might want to strip the wrapper to help the LLM,
-            # but keeping it might be better so LLM knows context.
-            # Let's keep it but emphasize the label.
+            # 可选：为了帮助 LLM 理解，可以去除包装器，
+            # 但保留它可能更好，以便 LLM 了解上下文。
+            # 让我们保留它，但强调标签。
 
         # 使用 MDPManager 渲染 User Prompt
         user_prompt = self.mdp.render(
@@ -736,7 +736,7 @@ class ScorerService:
             )
             content = response["choices"][0]["message"]["content"]
 
-            # Parse JSON
+            # 解析 JSON
             data = None
             try:
                 data = json.loads(content)

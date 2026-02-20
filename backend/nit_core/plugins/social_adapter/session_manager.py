@@ -111,11 +111,11 @@ class SocialSessionManager:
         self.sessions: Dict[str, SocialSession] = {}
         self.flush_callback = flush_callback
 
-        # [Refactor] Store bot_id map for multiple agents if needed
-        # But actually SocialService handles the connection map.
-        # SessionManager needs to know which connection to use for sending.
-        # We can store bot_id in the Session object.
-        self.bot_id: Optional[str] = None  # Legacy global fallback
+        # [重构] 如果需要，为多 Agent 存储 bot_id 映射
+        # 但实际上 SocialService 处理连接映射。
+        # SessionManager 需要知道使用哪个连接进行发送。
+        # 我们可以将 bot_id 存储在 Session 对象中。
+        self.bot_id: Optional[str] = None  # 旧版全局回退
 
         # 配置
         self.BUFFER_TIMEOUT = 20  # 秒
@@ -126,7 +126,7 @@ class SocialSessionManager:
         self.image_manager = ImageCacheManager()
 
     def set_bot_id(self, bot_id: str):
-        """设置全局 Bot ID (Legacy support)"""
+        """设置全局 Bot ID (旧版支持)"""
         self.bot_id = str(bot_id)
         logger.info(f"[SessionManager] Bot ID set to: {self.bot_id}")
 
@@ -137,21 +137,20 @@ class SocialSessionManager:
         session_name: str = "",
         agent_id: str = "pero",
     ) -> SocialSession:
-        # [Multi-Agent] Composite key to isolate sessions between agents
-        # Key format: "{agent_id}:{session_id}"
-        # This ensures Nana's memory of Group 123 is separate from Pero's memory of Group 123
-
+        # [多代理支持] 使用复合键隔离不同代理之间的会话
+        # 键格式: "{agent_id}:{session_id}"
+        # 这确保 Nana 对群 123 的记忆与 Pero 对群 123 的记忆是分开的
         composite_key = f"{agent_id}:{session_id}"
 
         if composite_key not in self.sessions:
             session = SocialSession(
-                session_id=session_id,  # Keep original ID for API calls
+                session_id=session_id,  # 保留原始 ID 用于 API 调用
                 session_type=session_type,
                 session_name=session_name,
             )
-            # Inject agent_id into session for context
+            # 将 agent_id 注入会话上下文
             session.agent_id = agent_id
-            # Also store the composite key if needed, or just use it for lookup map
+            # 如果需要，也可以存储复合键，或者仅用于查找映射
             self.sessions[composite_key] = session
 
         return self.sessions[composite_key]
@@ -169,7 +168,7 @@ class SocialSessionManager:
             from .database import get_social_db_session
             from .models_db import QQMessage
 
-            # [Optimization] Use a separate task or quick commit to avoid holding lock
+            # [优化] 使用单独的任务或快速提交以避免持有锁
             async for db_session in get_social_db_session():
                 try:
                     new_msg = QQMessage(
@@ -212,7 +211,7 @@ class SocialSessionManager:
             msg_id = str(uuid.uuid4())
             timestamp = datetime.now()
 
-            # 1. 更新内存 Buffer (Critical for Context Consistency)
+            # 1. 更新内存 Buffer (上下文一致性的关键)
             # 确保 Bot 下一次思考时能看到自己刚刚说的话
             session = self.get_or_create_session(
                 session_id, session_type, agent_id=agent_id
@@ -295,24 +294,24 @@ class SocialSessionManager:
             messages = []
             logger.debug(f"[{session_id}] 正在请求数据库会话...")
 
-            # [Critical Fix] Use run_in_executor to avoid blocking the event loop with synchronous DB calls
-            # Even though db_session.exec is awaitable, the underlying aiosqlite/sqlite driver might be blocking the GIL or thread
+            # [关键修复] 使用 run_in_executor 以避免同步 DB 调用阻塞事件循环
+            # 即使 db_session.exec 是可等待的，底层的 aiosqlite/sqlite 驱动程序可能会阻塞 GIL 或线程
             asyncio.get_running_loop()
 
             def run_sync_query():
-                # This function will run in a separate thread
-                # We need a NEW synchronous engine and session here because we are crossing thread boundaries
-                # and async engines are not thread-safe in this manner for sync execution.
-                # BUT, we are inside an async function.
+                # 此函数将在单独的线程中运行
+                # 我们需要一个新的同步引擎和会话，因为我们正在跨越线程边界
+                # 且异步引擎在这种情况下对于同步执行不是线程安全的。
+                # 但是，我们是在异步函数内部。
 
-                # Let's try a different approach: forcing a yield to the event loop before execution
+                # 让我们尝试另一种方法：在执行前强制让出事件循环
                 pass
 
             async for db_session in get_social_db_session():
                 logger.debug(f"[{session_id}] 已获取数据库会话。正在执行查询...")
 
                 try:
-                    # [Critical Debug] Add a sleep to ensure loop is yielding
+                    # [关键调试] 添加 sleep 以确保循环正在让出
                     await asyncio.sleep(0.01)
 
                     statement = (
@@ -325,7 +324,7 @@ class SocialSessionManager:
                         .limit(limit)
                     )
 
-                    # [Fix] Wrap execution in a shield or check if it's truly awaited
+                    # [修复] 将执行包装在 shield 中或检查它是否真正被等待
                     logger.debug(f"[{session_id}] 正在等待 db_session.exec...")
                     result = await asyncio.wait_for(
                         db_session.exec(statement), timeout=3.0
@@ -350,8 +349,8 @@ class SocialSessionManager:
                         messages.append(msg)
                 except asyncio.TimeoutError:
                     logger.error(f"[{session_id}] 数据库查询超时 (3s)！")
-                    # Don't raise, just return empty list to let the flow continue
-                    # [Fallback] If DB fails, return buffer content? No, caller handles fallback.
+                    # 不要抛出异常，只需返回空列表让流程继续
+                    # [回退] 如果 DB 失败，返回缓冲区内容？不，调用者处理回退。
                     return []
                 except Exception as query_e:
                     logger.error(f"[{session_id}] 查询执行错误: {query_e}")
@@ -363,7 +362,7 @@ class SocialSessionManager:
             return messages
 
         except Exception as e:
-            logger.error(f"Failed to get recent messages from DB: {e}", exc_info=True)
+            logger.error(f"从数据库获取最近消息失败: {e}", exc_info=True)
             return []
 
     async def get_latest_active_group(self, user_id: str) -> str | None:
@@ -393,7 +392,7 @@ class SocialSessionManager:
 
             return None
         except Exception as e:
-            logger.error(f"Failed to get latest active group for user {user_id}: {e}")
+            logger.error(f"获取用户 {user_id} 最近活跃群组失败: {e}")
             return None
 
     async def handle_message(self, event: dict, agent_id: str = "pero"):
@@ -405,9 +404,9 @@ class SocialSessionManager:
             msg_type = event.get("message_type")  # group 或 private
             self_id = str(event.get("self_id", ""))
 
-            # [Fix] Robust Self-Message Filtering
-            # OneBot implementations might miss self_id or handle loopback messages differently.
-            # We use both event['self_id'] and our globally stored bot_id.
+            # [修复] 健壮的自身消息过滤
+            # OneBot 实现可能会丢失 self_id 或以不同方式处理回环消息。
+            # 我们同时使用 event['self_id'] 和我们全局存储的 bot_id。
             raw_user_id = event.get("user_id")
             sender_id = str(raw_user_id)
 
@@ -417,13 +416,13 @@ class SocialSessionManager:
 
             if is_self:
                 logger.debug(
-                    f"[SessionManager] Ignored self message. Sender: {sender_id}, BotID: {self.bot_id}"
+                    f"[SessionManager] 忽略自身消息。发送者: {sender_id}, BotID: {self.bot_id}"
                 )
                 return
 
             if msg_type == "group":
                 session_id = str(event.get("group_id"))
-                # sender_id is already parsed above
+                # sender_id 已在上方解析
 
                 # 理想情况下从事件或 API 获取群名/发送者名称
                 sender_name = event.get("sender", {}).get("nickname", "Unknown")
@@ -431,7 +430,7 @@ class SocialSessionManager:
                 session_name = f"Group {session_id}"
             elif msg_type == "private":
                 session_id = str(event.get("user_id"))
-                # sender_id is already parsed above
+                # sender_id 已在上方解析
 
                 sender_name = event.get("sender", {}).get("nickname", "Unknown")
                 if sender_name == "Unknown":
@@ -452,21 +451,21 @@ class SocialSessionManager:
                 if segment["type"] == "image":
                     url = segment["data"].get("url")
                     if url:
-                        # [Multimodal] Start async download
-                        # We don't await here to avoid blocking WS loop.
-                        # The flush logic will wait for these tasks.
+                        # [多模态] 开始异步下载
+                        # 我们不在这里等待，以避免阻塞 WS 循环。
+                        # 刷新逻辑将等待这些任务。
                         task = asyncio.create_task(
                             self.image_manager.download_image(url)
                         )
                         image_tasks.append(task)
 
-                        # We can store the URL in images temporarily,
-                        # but it will be replaced by local path when task completes and is processed.
-                        # However, SocialMessage.images expects a list of strings.
-                        # Let's append the URL for now as a fallback/placeholder.
+                        # 我们可以暂时将 URL 存储在 images 中，
+                        # 但当任务完成并处理后，它将被本地路径替换。
+                        # 然而，SocialMessage.images 期望一个字符串列表。
+                        # 让我们暂时追加 URL 作为回退/占位符。
                         images.append(url)
 
-            # Create Message Object
+            # 创建消息对象
             msg = SocialMessage(
                 msg_id=msg_id,
                 sender_id=sender_id,
@@ -478,7 +477,7 @@ class SocialSessionManager:
                 image_tasks=image_tasks,
             )
 
-            # Get Session (Multi-Agent: Pass agent_id)
+            # 获取会话 (多代理: 传递 agent_id)
             session = self.get_or_create_session(
                 session_id, msg_type, session_name, agent_id=agent_id
             )
@@ -491,7 +490,7 @@ class SocialSessionManager:
                 session.active_response_task.cancel()
                 session.active_response_task = None
 
-            # [Dynamic Scan Cycle] 如果是私聊且有新消息，重置下一次扫描周期为短周期 (2-4分钟)
+            # [动态扫描周期] 如果是私聊且有新消息，重置下一次扫描周期为短周期 (2-4分钟)
             if msg_type == "private":
                 import random
                 from datetime import timedelta
@@ -503,113 +502,111 @@ class SocialSessionManager:
                     f"[{session_id}] 私聊活跃，下次主动审视时间重置为: {next_scan.strftime('%H:%M:%S')}"
                 )
 
-            # [Persistence] Save user message immediately
+            # [持久化] 立即保存用户消息
             await self._persist_message(session, msg, "user")
 
-            # 2. Check Triggers (Mention / State)
+            # 2. 检查触发器 (提及 / 状态)
             is_mentioned = self._check_is_mentioned(content, event)
 
-            # [Fix] In Private Chat, always consider as mentioned
+            # [修复] 在私聊中，始终视为被提及
             if msg_type == "private":
                 is_mentioned = True
 
-            # [State Logic] Renew Active State or Enter Active State
+            # [状态逻辑] 续订活跃状态或进入活跃状态
             if is_mentioned:
-                # Enter or Renew Active
+                # 进入或续订活跃状态
                 session.last_active_time = datetime.now()
-                logger.info(
-                    f"[{session_id}] Mention detected! Updating last_active_time."
-                )
+                logger.info(f"[{session_id}] 检测到提及！更新 last_active_time。")
             elif session.state == "active":
-                # [Renew] Normal message in Active state renews the session
-                # Check if it's within the window (e.g. 2 mins)
-                # But since we are IN active state (which is determined by last_active_time in scan loop),
-                # we should just update it.
-                # Double check: Is state property updated in real-time?
-                # Currently state is updated in flush_callback or scan_loop?
-                # Actually state is property of session.
-                # Let's ensure we keep it alive.
+                # [续订] 活跃状态下的普通消息续订会话
+                # 检查是否在窗口内 (例如 2 分钟)
+                # 但由于我们处于活跃状态 (这由扫描循环中的 last_active_time 决定)，
+                # 我们应该只更新它。
+                # 双重检查：状态属性是否实时更新？
+                # 目前状态在 flush_callback 或 scan_loop 中更新？
+                # 实际上状态是会话的属性。
+                # 让我们确保它保持活跃。
                 session.last_active_time = datetime.now()
-                logger.info(f"[{session_id}] Active session renewed by normal message.")
+                logger.info(f"[{session_id}] 活跃会话被普通消息续订。")
 
-            # 3. Add to Buffer
+            # 3. 添加到缓冲区
             session.add_message(msg)
 
-            # 4. Determine Action
-            # If already summoned/active, or strictly mentioned -> Immediate Flush?
-            # Design says: "Summoned -> Immediate response".
-            # "Active" -> "More sensitive", maybe shorter buffer or immediate?
-            # For MVP Phase 1: Mention = Immediate Flush.
+            # 4. 确定动作
+            # 如果已经被召唤/活跃，或被严格提及 -> 立即刷新？
+            # 设计上说：“被召唤 -> 立即回复”。
+            # “活跃” -> “更敏感”，可能是更短的缓冲区或立即？
+            # 对于 MVP 第一阶段：提及 = 立即刷新。
 
-            # [Refactor] Implement accumulation buffer for Summoned state
-            # Private chat: 7s, Group chat: 15s
+            # [重构] 实现被召唤状态的累积缓冲区
+            # 私聊: 7s, 群聊: 15s
             if is_mentioned:
                 if session.state != "summoned":
-                    # First mention: Switch state and start FIXED timer
+                    # 首次提及：切换状态并启动固定计时器
                     session.state = "summoned"
 
-                    # Determine buffer duration based on session type
+                    # 根据会话类型确定缓冲区持续时间
                     buffer_duration = 7 if msg_type == "private" else 15
 
                     logger.info(
                         f"[{session_id}] 被提及唤醒 ({msg_type})！启动 {buffer_duration}秒 累积计时器。"
                     )
 
-                    # Cancel any existing inactivity timer
+                    # 取消任何现有的非活跃计时器
                     if session.flush_timer_task:
                         session.flush_timer_task.cancel()
 
-                    # Start fixed timer
-                    # This timer will NOT be reset by subsequent messages because of the state check below
+                    # 启动固定计时器
+                    # 此计时器不会被后续消息重置，因为下面的状态检查
                     session.flush_timer_task = asyncio.create_task(
                         self._timer_callback(session, buffer_duration)
                     )
                 else:
-                    # Already summoned: Do nothing (Accumulate)
+                    # 已经被召唤：什么都不做（累积）
                     logger.info(f"[{session_id}] 在累积期间再次被提及。继续等待。")
 
             elif len(session.buffer) >= self.BUFFER_MAX_SIZE:
                 logger.info(f"[{session_id}] 缓冲区已满！")
                 await self._trigger_flush(session, reason="buffer_full")
             else:
-                # Normal message
+                # 普通消息
                 if session.state == "summoned":
-                    # We are in summoned state (waiting for 15s timer).
-                    # Do NOT reset the timer. Just let it accumulate.
+                    # 我们处于被召唤状态（等待 15s 计时器）。
+                    # 不要重置计时器。让它累积。
                     pass
                 else:
-                    # Standard observing mode -> Reset inactivity timer (20s)
+                    # 标准观察模式 -> 重置非活跃计时器 (20s)
                     self._reset_flush_timer(session)
 
         except Exception as e:
-            logger.error(f"Error handling message: {e}", exc_info=True)
+            logger.error(f"处理消息时发生错误: {e}", exc_info=True)
 
     def _check_is_mentioned(self, content: str, event: dict) -> bool:
-        # Check OneBot "at" segment
-        # raw_message usually contains CQ codes like [CQ:at,qq=123]
-        # But simpler is checking 'message' array in OneBot v11
+        # 检查 OneBot "at" 片段
+        # raw_message 通常包含 CQ 码，如 [CQ:at,qq=123]
+        # 但更简单的方法是检查 OneBot v11 中的 'message' 数组
         message_chain = event.get("message", [])
         for segment in message_chain:
             if segment["type"] == "at":
-                # Check if it is at ME
-                # We need self_id. Usually in event['self_id']
+                # 检查是否 at 我
+                # 我们需要 self_id。通常在 event['self_id'] 中
                 self_id = str(event.get("self_id"))
                 target_id = str(segment["data"].get("qq"))
                 if target_id == self_id:
                     return True
 
-        # Fallback: Check keywords (nickname)
+        # 回退：检查关键词 (昵称)
         # if "pero" in content.lower() or "Pero" in content:
         #    return True
 
         return False
 
     def _reset_flush_timer(self, session: SocialSession, timeout: int = 20):
-        # Cancel existing timer
+        # 取消现有计时器
         if session.flush_timer_task:
             session.flush_timer_task.cancel()
 
-        # Create new timer
+        # 创建新计时器
         session.flush_timer_task = asyncio.create_task(
             self._timer_callback(session, timeout)
         )
@@ -617,17 +614,17 @@ class SocialSessionManager:
     async def _timer_callback(self, session: SocialSession, timeout: int):
         try:
             await asyncio.sleep(timeout)
-            # Timer expired
-            # Check reason based on state
+            # 计时器过期
+            # 根据状态检查原因
             reason = (
                 "summon_timeout" if session.state == "summoned" else "buffer_timeout"
             )
             await self._trigger_flush(session, reason=reason)
         except asyncio.CancelledError:
-            pass  # Timer reset or flushed
+            pass  # 计时器被重置或刷新
 
     async def _trigger_flush(self, session: SocialSession, reason: str):
-        # Cancel timer if running
+        # 如果正在运行，取消计时器
         if session.flush_timer_task:
             session.flush_timer_task.cancel()
             session.flush_timer_task = None
@@ -639,13 +636,13 @@ class SocialSessionManager:
             f"[{session.session_id}] 正在刷新缓冲区。原因: {reason}。消息数: {len(session.buffer)}"
         )
 
-        # Call the callback (SocialService logic)
+        # 调用回调 (SocialService 逻辑)
         try:
             await self.flush_callback(session)
         except Exception as e:
             logger.error(f"刷新回调错误: {e}", exc_info=True)
         finally:
-            # Always clear buffer after flush to avoid duplicates
+            # 刷新后始终清除缓冲区以避免重复
             session.clear_buffer()
 
     def get_active_sessions(

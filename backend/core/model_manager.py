@@ -49,7 +49,7 @@ class ModelManager:
         # 确保目录存在
         os.makedirs(self.models_cache_dir, exist_ok=True)
 
-        logger.info(f"Models cache directory initialized at: {self.models_cache_dir}")
+        logger.info(f"模型缓存目录已初始化: {self.models_cache_dir}")
 
         # 设置环境变量
         if "HF_ENDPOINT" not in os.environ:

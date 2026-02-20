@@ -6,6 +6,7 @@ import asyncio
 from typing import List
 
 # Add paths for both backend and local imports
+# 添加后端和本地导入路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.abspath(
     os.path.join(os.path.dirname(__file__), "..", "..", "backend")
@@ -13,16 +14,18 @@ BACKEND_DIR = os.path.abspath(
 sys.path.insert(0, BACKEND_DIR)
 
 # --- Imports and Mocking ---
+# --- 导入与模拟 ---
 try:
     from pero_memory_core import CognitiveGraphEngine
 
     RUST_AVAILABLE = True
 except ImportError:
     RUST_AVAILABLE = False
-    print("⚠️ PeroCore Rust engine not found. Using fallback mock.")
+    print("⚠️ 未找到 PeroCore Rust 引擎。使用回退模拟。")
 
 
 # Mocking parts of the backend for standalone logic testing
+# 模拟后端部分用于独立逻辑测试
 class MockEmbeddingService:
     def __init__(self, dim=384):
         self.dim = dim
@@ -54,6 +57,7 @@ class LifeSimulator:
 
 
 # --- 2. Memory System Internal Test Suite ---
+# --- 2. 记忆系统内部测试套件 ---
 class MemorySystemTest:
     def __init__(self):
         self.engine = CognitiveGraphEngine() if RUST_AVAILABLE else None
@@ -61,16 +65,20 @@ class MemorySystemTest:
 
     async def run_logic_validation(self):
         """Validates the scoring and association logic (from service_logic test)"""
-        print("\n[Phase 1] Logic Validation (Scoring & Multi-hop)")
+        """验证评分和关联逻辑 (来自 service_logic 测试)"""
+        print("\n[阶段 1] 逻辑验证 (评分 & 多跳)")
         print("-" * 60)
 
         if not RUST_AVAILABLE:
-            print("Skipping logic validation (Rust engine missing)")
+            print("跳过逻辑验证 (Rust 引擎缺失)")
             return
 
         # Setup a specific logic chain
         # A (Old, Important) -> B (New, Low Importance)
         # We want to see if B can activate A even if A is old.
+        # 设置特定逻辑链
+        # A (旧, 重要) -> B (新, 低重要性)
+        # 我们想看看 B 是否能激活 A，即使 A 是旧的。
         nodes = [
             (1, 2, 0.9),  # Strong link
             (2, 3, 0.8),  # Chain
@@ -78,19 +86,21 @@ class MemorySystemTest:
         self.engine.batch_add_connections(nodes)
 
         # Test propagation
+        # 测试传播
         results = self.engine.propagate_activation({1: 1.0}, steps=3, decay=0.8)
 
-        print(f"   Node 1 (Source) score: {results.get(1, 0):.4f}")
-        print(f"   Node 3 (2-hop target) score: {results.get(3, 0):.4f}")
+        print(f"   节点 1 (源) 分数: {results.get(1, 0):.4f}")
+        print(f"   节点 3 (2跳目标) 分数: {results.get(3, 0):.4f}")
 
         if results.get(3, 0) > 0:
-            print("   ✅ Logic Chain Discovery: SUCCESS")
+            print("   ✅ 逻辑链发现: 成功")
         else:
-            print("   ❌ Logic Chain Discovery: FAILED")
+            print("   ❌ 逻辑链发现: 失败")
 
     async def run_stress_simulation(self, scale=1000):
         """Runs a large scale life simulation (from ultimate test)"""
-        print(f"\n[Phase 2] Stress Simulation ({scale} memories)")
+        """运行大规模生活模拟 (来自终极测试)"""
+        print(f"\n[阶段 2] 压力模拟 ({scale} 条记忆)")
         print("-" * 60)
 
         if not RUST_AVAILABLE:

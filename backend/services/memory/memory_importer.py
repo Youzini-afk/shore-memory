@@ -120,7 +120,7 @@ class MemoryImporter:
 
                 # 如果我们要将其存储在元数据中或记录日志，请使用 timestamp_hint
                 # 目前 MemoryService 不容易支持自定义时间戳覆盖
-                # (它使用 realTime=now, timestamp=now)。
+                # (它使用当前时间作为 realTime 和 timestamp)。
                 # 但顺序保存保留了逻辑链（prev_id/next_id）。
                 # 如果需要，我们可以将提示附加到标签或内容中。
                 timestamp_hint = event.get("timestamp_hint")

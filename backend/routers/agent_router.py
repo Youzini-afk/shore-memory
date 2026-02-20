@@ -61,7 +61,7 @@ async def get_active_agent():
     manager = get_agent_manager()
     profile = manager.get_active_agent()
     if not profile:
-        raise HTTPException(status_code=404, detail="No active agent")
+        raise HTTPException(status_code=404, detail="没有活跃的 Agent")
 
     return {"id": profile.id, "name": profile.name, "description": profile.description}
 
@@ -74,7 +74,7 @@ async def set_active_agent(request: ActiveAgentRequest):
     if not success:
         raise HTTPException(
             status_code=400,
-            detail=f"Agent '{request.agent_id}' not found or cannot be activated",
+            detail=f"未找到 Agent '{request.agent_id}' 或无法激活",
         )
 
     return {"status": "ok", "active_agent": request.agent_id}

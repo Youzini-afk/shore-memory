@@ -103,7 +103,7 @@ export async function startNapCat(window: WindowLike) {
       if (!window.isDestroyed())
         window.webContents.send('napcat-log', `[系统] 在以下位置找到 QQ: ${qqPath}`)
     } catch {
-      // ignore
+      // 忽略
     }
     console.log(`[NapCat] 在以下位置找到 QQ: ${qqPath}`)
   } else {
@@ -132,7 +132,7 @@ export async function startNapCat(window: WindowLike) {
   let args: string[] = []
   const env = { ...process.env }
 
-  // [Fix] Disable OpenTelemetry to prevent libprotobuf UTF-8 errors
+  // [修复] 禁用 OpenTelemetry 以防止 libprotobuf UTF-8 错误
   env.OTEL_SDK_DISABLED = 'true'
   env.OTEL_TRACES_EXPORTER = 'none'
   env.OTEL_METRICS_EXPORTER = 'none'

@@ -150,8 +150,8 @@ class AgentService:
                 f"[Agent] 正在使用辅助模型 ({aux_model_config.model_id}) 分析搜索结果..."
             )
 
-            # 2. 准备 Prompt
-            # 限制文件数防Context Window爆炸
+            # 2. 准备提示词 (Prompt)
+            # 限制文件数防上下文窗口 (Context Window) 爆炸
             preview_files = file_results[:50]
             files_text = "\n".join(preview_files)
 
@@ -292,7 +292,7 @@ class AgentService:
             provider=config.get("provider", "openai"),
         )
 
-        # 根据视觉能力调整Prompt
+        # 根据视觉能力调整提示词 (Prompt)
         vision_prompt_name = "vision_enabled" if not is_blind else "vision_disabled"
         vision_instruction_block = "{{" + vision_prompt_name + "}}"
 
@@ -1022,12 +1022,12 @@ class AgentService:
             else:
                 policy = {"strategy": "all"}
 
-        # 4. Build Tool Tags Map for Filtering
+        # 4. 构建工具标签映射以进行过滤
         tool_tags_map = {}
         all_manifests = plugin_manager.get_all_manifests()
         for m in all_manifests:
             tags = m.get("tags", [])
-            # Add implicit tag based on category if needed
+            # 如果需要，基于类别添加隐式标签
             if "_category" in m:
                 tags.append(m["_category"])
 
@@ -1053,7 +1053,7 @@ class AgentService:
             new_def = json.loads(json.dumps(tool_def))
             candidate_tools.append(new_def)
 
-        # 5.2 MCP Tools
+        # 5.2 MCP 工具
         mcp_clients = []
         try:
             mcp_clients = await self._get_mcp_clients()
@@ -1078,13 +1078,13 @@ class AgentService:
                         }
                     )
                     mcp_tool_map[tool_name] = client
-                    # MCP tools don't have tags in our system yet, but we can treat 'mcp' as a tag if needed
+                    # 系统中的 MCP 工具暂无标签，如有需要可将 'mcp' 视为标签
                     tool_tags_map[tool_name] = ["mcp"]
             except Exception as e:
                 print(f"[AgentService] 警告: 列出客户端 {client.name} 的工具失败: {e}")
 
-        # 5.3 Plugin Tools (NIT Plugins)
-        # Ensure plugins are also candidates so they can be whitelisted and exposed
+        # 5.3 插件工具 (NIT 插件)
+        # 确保插件也作为候选项，以便加入白名单并暴露
         existing_tool_names = {t["function"]["name"] for t in candidate_tools}
         for m in all_manifests:
             cmds = []
@@ -1096,10 +1096,10 @@ class AgentService:
             for cmd in cmds:
                 c_id = cmd.get("commandIdentifier")
                 if c_id and c_id not in existing_tool_names:
-                    # Construct a basic function definition
-                    # Note: Plugin args might not be perfect JSON Schema, so we default to empty dict if unsure
-                    # or wrap them if they look like simple key-values.
-                    # For now, we trust the plugin author or provide a permissive schema.
+                    # 构建基础函数定义。
+                    # 注意：插件参数可能不是完美的 JSON Schema，如果不确定则默认为空字典，
+                    # 或者如果是简单的键值对则进行包装。
+                    # 目前我们信任插件作者或提供宽松的 Schema。
                     candidate_tools.append(
                         {
                             "type": "function",
@@ -1116,7 +1116,7 @@ class AgentService:
                     )
                     existing_tool_names.add(c_id)
 
-        # 6. Filter Tools based on Policy
+        # 6. 基于策略过滤工具
         final_tools = []
         strategy = policy.get("strategy", "all")
 
@@ -1127,7 +1127,7 @@ class AgentService:
             t_name = tool["function"]["name"]
             t_tags = set(tool_tags_map.get(t_name, []))
 
-            # Mobile Check (Global Safety)
+            # 移动端检查 (全局安全)
             sensitive_tool_keywords = [
                 "screenshot",
                 "screen",
@@ -1146,11 +1146,11 @@ class AgentService:
                 print(f"[安全] 为移动端过滤敏感工具: {t_name}")
                 continue
 
-            # Vision Check
+            # 视觉检查
             if enable_vision and t_name == "screen_ocr":
                 continue
             if t_name in ["take_screenshot", "see_screen"] and not enable_vision:
-                # Modify description for non-vision mode
+                # 修改非视觉模式的描述
                 tool["function"]["description"] = (
                     "获取当前屏幕的视觉分析报告。系统将调用视觉 MCP 服务器分析屏幕内容并返回详细的文字描述。当你需要了解屏幕上的视觉信息、或出于好奇想看看主人在做什么但无法直接看到图片时，请使用此工具。"
                 )
@@ -1163,35 +1163,33 @@ class AgentService:
             if strategy == "all":
                 is_allowed = True
             elif strategy == "whitelist":
-                # Only 2 ways to allow: by exact name or by tag
+                # 仅两种允许方式：精确名称匹配或标签匹配
                 if t_name in allowed_tools:
                     is_allowed = True
                 elif not t_tags.isdisjoint(allowed_tags):
-                    is_allowed = True  # Overlap exists
+                    is_allowed = True  # 存在重叠
 
             if is_allowed:
                 final_tools.append(tool)
 
-        # [Lightweight Mode] Filter tools if lightweight mode is enabled
-        # Only allow TaskLifecycle and ScreenVision related tools
+        # [轻量模式] 如果启用轻量模式，则过滤工具
+        # 仅允许 TaskLifecycle 和 ScreenVision 相关工具
         is_lightweight = config.get("lightweight_mode", False)
         if is_lightweight and source not in ["social"]:
             lightweight_allowed_categories = {"TaskLifecycle", "ScreenVision"}
-            # Also allow core tools that might not have explicit categories but are essential
-            # Or rely on tags.
-            # Here we assume tool_tags_map contains category-like tags.
-            # If tags are not sufficient, we might need a hardcoded whitelist of tool names.
-            # Let's try to filter by tags first, assuming tags include category names.
+            # 同时也允许那些可能没有明确分类但必不可少的核心工具，或者依赖标签。
+            # 这里假设 tool_tags_map 包含类似类别的标签。
+            # 如果标签不足，可能需要硬编码的工具名白名单。
+            # 让我们先尝试按标签过滤，假设标签包含分类名称。
 
-            # Since we don't have category metadata in 'tool' dict directly (it's in tool_tags_map),
-            # we iterate and check.
+            # 由于 'tool' 字典中没有直接的分类元数据（它在 tool_tags_map 中），我们需要遍历检查。
             lightweight_tools = []
             for tool in final_tools:
                 t_name = tool["function"]["name"]
                 t_tags = set(tool_tags_map.get(t_name, []))
 
-                # Check intersection with allowed categories
-                # Note: Tags might be lowercase, so we handle case sensitivity
+                # 检查与允许类别的交集
+                # 注意：标签可能是小写的，所以我们处理大小写敏感性
                 if (
                     not t_tags.isdisjoint(
                         {c.lower() for c in lightweight_allowed_categories}
@@ -1211,10 +1209,10 @@ class AgentService:
             f"[Agent] 最终工具列表 ({len(dynamic_tools)}): {[t['function']['name'] for t in dynamic_tools]}"
         )
 
-        # --- Create Whitelist for NIT Security ---
+        # --- 创建 NIT 安全白名单 ---
         allowed_tool_names = [t["function"]["name"] for t in dynamic_tools]
 
-        # [Refactor] Save calculated tools to context to avoid duplication
+        # [重构] 将计算出的工具保存到上下文以避免重复
         context["dynamic_tools"] = dynamic_tools
         context["mcp_clients"] = mcp_clients
         context["mcp_tool_map"] = mcp_tool_map
@@ -1307,7 +1305,7 @@ class AgentService:
         )
         temperature = config.get("temperature", 0.7)
 
-        # [Refactor] Retrieve pre-calculated tools from context
+        # [重构] 从上下文检索预计算的工具
         dynamic_tools = context.get("dynamic_tools", [])
         mcp_clients = context.get("mcp_clients", [])
         mcp_tool_map = context.get("mcp_tool_map", {})
@@ -1317,7 +1315,7 @@ class AgentService:
             f"[Agent] 使用预计算工具列表 ({len(dynamic_tools)}): {[t['function']['name'] for t in dynamic_tools]}"
         )
 
-        # --- Native Tools Config ---
+        # --- 原生工具配置 ---
         disable_native_tools_config = (
             await self.session.exec(
                 select(Config).where(Config.key == "disable_native_tools")
@@ -1345,9 +1343,9 @@ class AgentService:
         )
         pair_id = str(uuid.uuid4())  # 生成原子性绑定ID
 
-        # --- ReAct Loop Configuration ---
+        # --- ReAct 循环配置 ---
         turn_count = 0
-        MAX_TURNS = 30  # [Safety] Limit max turns to prevent infinite loops (was 9999)
+        MAX_TURNS = 30  # [安全] 限制最大轮次以防止无限循环 (原为 9999)
 
         # [Config] 社交模式/轻量模式/陪伴模式强制单轮 ReAct (1次工具调用 + 1次回复 = 2轮)
         if source in ["social", "lightweight"] or session_id == "companion_mode":
@@ -1387,7 +1385,7 @@ class AgentService:
                     await on_status("thinking", f"正在思考 (第 {turn_count} 轮)...")
                 print(f"[Agent] 开始 LLM 流 (第 {turn_count} 轮)...")
 
-                # Define Raw Stream Generator
+                # 定义原始流生成器
                 async def raw_stream_source(
                     tools_to_pass=tools_to_pass,
                     collected_tool_calls=collected_tool_calls,
@@ -1400,7 +1398,7 @@ class AgentService:
                     async for delta in llm.chat_stream_deltas(
                         final_messages, temperature=temperature, tools=tools_to_pass
                     ):
-                        # Debug Log: Print delta content
+                        # 调试日志：打印增量内容
                         # print(f"[Agent] Stream Delta: {delta}")
 
                         # 1. 处理文本内容 (Content)
@@ -1436,7 +1434,7 @@ class AgentService:
                                             "arguments"
                                         ]
 
-                # Debug Log: After stream
+                # 调试日志：流结束后
                 if has_tool_calls_in_this_turn:
                     print(
                         f"[Agent] 收集到工具调用: {json.dumps(collected_tool_calls, ensure_ascii=False)}"
@@ -1444,7 +1442,7 @@ class AgentService:
                 else:
                     print(f"[Agent] 第 {turn_count} 轮未检测到工具调用")
 
-                # Apply Postprocessor Pipeline
+                # 应用后处理器管道
                 # 如果 source 是 'ide' 或 'desktop'，则跳过 NIT 过滤，以便前端显示工具调用
                 processed_stream = self.postprocessor_manager.process_stream(
                     raw_stream_source(),
@@ -1457,11 +1455,11 @@ class AgentService:
                 async for content in processed_stream:
                     yield content
 
-                # Check if turn is finished
+                # 检查轮次是否结束
                 if not has_tool_calls_in_this_turn:
-                    # No tools called, this is the final answer
+                    # 未调用工具，这是最终答案
 
-                    # === NIT Dispatcher Integration (Unified Flow) ===
+                    # === NIT 调度器集成 (统一流程) ===
                     # 检查是否有 NIT 调用指令，如果有则执行并进入下一轮
                     if full_response_text and full_response_text.strip():
                         # 注意：这里我们尝试执行 NIT，如果有结果，说明模型试图调用工具
@@ -1480,7 +1478,7 @@ class AgentService:
                             )
 
                             # 1. 将当前回复（包含 NIT 指令）追加到历史
-                            # [Safety] Truncate extremely long responses to prevent context window explosion
+                            # [安全] 截断过长的响应以防止上下文窗口爆炸
                             safe_response_text = full_response_text
                             if len(safe_response_text) > 50000:
                                 safe_response_text = (
@@ -1503,42 +1501,42 @@ class AgentService:
                             for res in nit_results:
                                 out_str = str(res["output"])
 
-                                # [Feature] Real-time Status Sync for NIT
-                                # Check if the result contains state triggers (JSON)
+                                # [特性] NIT 实时状态同步
+                                # 检查结果是否包含状态触发器 (JSON)
                                 try:
                                     if "triggers" in out_str or '"mood"' in out_str:
                                         import json
 
-                                        # Try to parse the output as JSON
-                                        # It might be wrapped in text, but if it's a direct return from tool it's usually JSON string
-                                        # We look for a JSON object structure
+                                        # 尝试将输出解析为 JSON
+                                        # 它可能被包裹在文本中，但如果是工具直接返回通常是 JSON 字符串
+                                        # 我们寻找 JSON 对象结构
                                         start_idx = out_str.find("{")
                                         end_idx = out_str.rfind("}")
                                         if start_idx != -1 and end_idx != -1:
                                             json_str = out_str[start_idx : end_idx + 1]
                                             data = json.loads(json_str)
 
-                                            # If it has 'state' or 'triggers', broadcast it
+                                            # 如果包含 'state' 或 'triggers'，则广播它
                                             triggers = None
                                             if "triggers" in data:
                                                 triggers = data["triggers"]
                                             elif "state" in data:
                                                 triggers = data["state"]
-                                            elif "mood" in data:  # Direct state object
+                                            elif "mood" in data:  # 直接状态对象
                                                 triggers = data
 
                                             if triggers:
                                                 print(
                                                     f"[Agent] Detected state update in NIT result: {triggers}"
                                                 )
-                                                # 1. Push SSE
+                                                # 1. 推送 SSE
                                                 sse_payload = json.dumps(
                                                     {"triggers": triggers},
                                                     ensure_ascii=False,
                                                 )
                                                 yield f"data: {sse_payload}\n\n"
 
-                                                # 2. Broadcast via RealtimeSessionManager
+                                                # 2. 通过 RealtimeSessionManager 广播
                                                 try:
                                                     from services.core.realtime_session_manager import (
                                                         realtime_session_manager,
@@ -1606,17 +1604,17 @@ class AgentService:
                                 ):
                                     should_terminate_nit_loop = True
 
-                                    # [Fix] Extract summary from output if available and yield it
-                                    # finish_task output format: "[System] Task finished... Summary: {summary}"
+                                    # [修复] 如果可用，从输出中提取摘要并生成
+                                    # finish_task 输出格式: "[System] Task finished... Summary: {summary}"
                                     output_str = str(res.get("output", ""))
                                     if "Summary: " in output_str:
                                         try:
                                             summary_part = output_str.split(
                                                 "Summary: ", 1
                                             )[1]
-                                            # Append to full_response_text so it gets saved
+                                            # 追加到 full_response_text 以便保存
                                             full_response_text += summary_part
-                                            # Yield to frontend
+                                            # 生成到前端
                                             yield summary_part
                                         except Exception as e:
                                             print(
@@ -1786,9 +1784,9 @@ class AgentService:
                         yield err_msg
                     break
 
-                # --- Tool Execution Phase ---
-                # 1. Append Assistant Message (Thought + Tool Calls) to history
-                # [Safety] Truncate extremely long thought process
+                # --- 工具执行阶段 ---
+                # 1. 将助手消息 (思考 + 工具调用) 追加到历史记录
+                # [安全] 截断过长的思考过程
                 safe_turn_text = current_turn_text if current_turn_text else None
                 if safe_turn_text and len(safe_turn_text) > 50000:
                     safe_turn_text = (
@@ -1802,7 +1800,7 @@ class AgentService:
                 }
                 final_messages.append(assistant_msg)
 
-                # 2. Execute Tools
+                # 2. 执行工具
                 intercepted_ui_data = {}  # 存储 tool_name -> raw_data
                 should_terminate_loop = False
 
@@ -1840,8 +1838,8 @@ class AgentService:
                         )
                         continue
 
-                    # --- Tool Execution Strategy ---
-                    # 1. Security Gate: 硬拦截机制 (Hard Isolation)
+                    # --- 工具执行策略 ---
+                    # 1. 安全门控: 硬拦截机制 (硬隔离)
                     # 即使模型“猜”到了工具名，或者通过恶意脚本注入，只要来源是手机，就禁止执行敏感工具
                     sensitive_tool_keywords = [
                         "screenshot",
@@ -1871,8 +1869,8 @@ class AgentService:
                         )
                         continue
 
-                    # 2. Interceptors: Handle tools with special UI/Context requirements first
-                    # 3. NIT Dispatcher: Unified execution for all other plugins
+                    # 2. 拦截器：优先处理具有特殊 UI/上下文要求的工具
+                    # 3. NIT 调度器：统一执行所有其他插件
 
                     if function_name == "finish_task":
                         print(
@@ -1900,8 +1898,8 @@ class AgentService:
                             await on_status("thinking", "正在处理大数据量任务...")
 
                         try:
-                            # Use legacy mapping or NIT dispatcher to get raw data
-                            # Here we use legacy mapping for safety as it returns raw list/dict
+                            # 使用旧映射或 NIT 调度器获取原始数据
+                            # 出于安全考虑，这里使用旧映射，因为它返回原始列表/字典
                             func = TOOLS_MAPPING[function_name]
                             if asyncio.iscoroutinefunction(func):
                                 raw_data = await func(**function_args)
@@ -2061,7 +2059,7 @@ class AgentService:
                         )
                         continue
 
-                    # --- NIT Dispatcher Integration ---
+                    # --- NIT 调度器集成 ---
                     from nit_core.dispatcher import get_dispatcher
 
                     nit_dispatcher = get_dispatcher()
@@ -2167,7 +2165,7 @@ class AgentService:
                         )
                         continue
 
-                    # --- MCP Tool Handling ---
+                    # --- MCP 工具处理 ---
                     if function_name.startswith("mcp_") and mcp_tool_map:
                         real_tool_name = function_name[4:]
                         client = mcp_tool_map.get(function_name)
@@ -2284,7 +2282,7 @@ class AgentService:
                             }
                         )
 
-                # 4. Yield UI Tags Immediately
+                # 4. 立即生成 UI 标签
                 if intercepted_ui_data:
                     for tag_name, raw_json in intercepted_ui_data.items():
                         tag = f"\n<{tag_name}>{raw_json}</{tag_name}>"
@@ -2302,11 +2300,11 @@ class AgentService:
                 # 5. 最终合并所有轮次的内容用于持久化
                 full_response_text = accumulated_full_response + full_response_text
 
-                # Capture raw text before post-processing
+                # 在后处理之前捕获原始文本
                 raw_full_text = full_response_text
 
-                # Post-process full response text (Batch mode) before saving
-                # This ensures memory and downstream services get clean text without protocol markers
+                # 在保存之前对完整响应文本进行后处理 (批处理模式)
+                # 这确保记忆和下游服务获得干净的文本，没有协议标记
                 if full_response_text:
                     try:
                         full_response_text = await self.postprocessor_manager.process(
@@ -2316,15 +2314,15 @@ class AgentService:
                     except Exception as pp_e:
                         print(f"[Agent] 后处理器失败: {pp_e}。使用原始文本。")
 
-                # Broadcast LLM response to frontend via Gateway
-                # [Modified] Allow 'ide' source to also broadcast to Pet (Desktop Pet should react to IDE chat)
+                # 通过网关向前端广播 LLM 响应
+                # [修改] 允许 'ide' 来源也广播给 Pet (桌面宠物应对 IDE 聊天做出反应)
                 if not is_voice_mode and source in ["desktop", "ide"]:
                     from services.core.gateway_client import gateway_client
 
                     await gateway_client.broadcast_text_response(full_response_text)
 
-                    # Trigger TTS (Text Mode)
-                    # [Fix] Explicitly check source again to be safe (though source=="desktop" covers it)
+                    # 触发 TTS (文本模式)
+                    # [修复] 再次显式检查来源以确保安全 (虽然 source=="desktop" 已经覆盖)
                     asyncio.create_task(
                         self._generate_and_stream_tts(full_response_text)
                     )
@@ -2332,16 +2330,16 @@ class AgentService:
                 # 仅在正常生成回复（且不是报错）时才保存对话记录
                 # 用户消息与 Pero 回复进行原子性绑定保存
 
-                # [Robustness] Fallback extraction for user_message if missing
+                # [健壮性] 如果缺失 user_message，进行回退提取
                 if not user_message:
-                    # Priority 1: Check override (Voice Mode)
+                    # 优先级 1: 检查覆盖 (语音模式)
                     if user_text_override:
                         user_message = user_text_override
                         print(
                             f"[Agent] 用户消息已从覆盖中恢复: '{user_message[:20]}...'"
                         )
                     else:
-                        # Priority 2: Search in messages
+                        # 优先级 2: 在消息中搜索
                         print(
                             f"[Agent] 用户消息缺失。正在 {len(messages)} 条输入消息中搜索..."
                         )
@@ -2367,7 +2365,7 @@ class AgentService:
                                 "[Agent] 严重: 无法从输入中提取用户消息。日志将不会被保存。"
                             )
 
-                # [Feature] User Image Persistence (Fire and Forget)
+                # [特性] 用户图片持久化 (即发即弃)
                 user_metadata = {}
                 try:
                     target_msg = None
@@ -2471,7 +2469,7 @@ class AgentService:
                     )
 
                 # 触发 Scorer 服务进行记忆提取 (职责分离 - 后台异步执行)
-                # [Optimization] Do not run scorer if the response is an error
+                # [优化] 如果响应是错误，则不运行评分器
                 is_error_response = (
                     full_response_text.startswith("Error:")
                     or full_response_text.startswith("Network Error")
@@ -2484,7 +2482,7 @@ class AgentService:
                     and full_response_text
                     and not is_error_response
                 ):
-                    # [Fix] Skip background scorer for social/mobile mode as they have their own logic
+                    # [修复] 跳过社交/移动模式的后台评分器，因为它们有自己的逻辑
                     # 社交模式/移动端有自己独立的总结机制，不需要触发“对话分析师”
                     if source in ["social", "mobile"]:
                         print(f"[Agent] 跳过 {source} 模式的后台分析。")
@@ -2507,8 +2505,8 @@ class AgentService:
                 # 显式提交，确保在流式响应的上下文中数据已持久化
                 await self.session.commit()
 
-                # [Trigger Dream] 3% probability to trigger background memory consolidation
-                # [Fix] Disable Dream for social/mobile modes
+                # [触发梦境] 3% 的概率触发后台记忆整理
+                # [修复] 禁用社交/移动模式的梦境
                 import random
 
                 if source not in ["social", "mobile"] and random.random() < 0.03:
@@ -2523,8 +2521,8 @@ class AgentService:
             error_msg = f"Error: {str(e)}"
             print(f"Agent 聊天错误 (内部): {traceback.format_exc()}")
 
-            # [Optimization] Check for "invalid content" errors and handle gracefully
-            # If error is about API returning no content, broadcast a toast and DO NOT save to DB
+            # [优化] 检查“无效内容”错误并优雅处理
+            # 如果错误是关于 API 未返回内容，广播 toast 且不保存到数据库
             err_str_lower = str(e).lower()
             is_empty_content_error = (
                 "no valid content" in err_str_lower
@@ -2542,17 +2540,17 @@ class AgentService:
                         error_type="error",
                     )
                 )
-                # Return early, skip saving log
+                # 提前返回，跳过保存日志
                 return
 
-            # [Troubleshooting] Attempt to save log even on error (User request: logs missing)
+            # [故障排除] 即使出错也尝试保存日志 (用户反馈：日志丢失)
             try:
-                # Ensure user_message is available
+                # 确保 user_message 可用
                 final_u_msg = user_message
                 if not final_u_msg and user_text_override:
                     final_u_msg = user_text_override
 
-                # Append error to response so it's recorded
+                # 将错误追加到响应以便记录
                 final_response = full_response_text + f"\n\n[System Error]: {error_msg}"
 
                 if final_u_msg:
@@ -2584,15 +2582,15 @@ class AgentService:
             pass
 
     async def _generate_and_stream_tts(self, text: str):
-        """Generate TTS audio and stream it to frontend (Text Mode)"""
+        """生成 TTS 音频并流式传输到前端 (文本模式)"""
         try:
-            # Clean text (remove emojis, think tags, etc.)
+            # 清理文本 (移除表情符号、思考标签等)
             import re
 
-            cleaned_text = re.sub(r"[\U00010000-\U0010ffff]", "", text)  # Remove emojis
-            cleaned_text = re.sub(r"【.*?】", "", cleaned_text)  # Remove think tags
-            cleaned_text = re.sub(r"<.*?>", "", cleaned_text)  # Remove html tags
-            cleaned_text = re.sub(r"\*.*?\*", "", cleaned_text)  # Remove actions
+            cleaned_text = re.sub(r"[\U00010000-\U0010ffff]", "", text)  # 移除表情符号
+            cleaned_text = re.sub(r"【.*?】", "", cleaned_text)  # 移除思考标签
+            cleaned_text = re.sub(r"<.*?>", "", cleaned_text)  # 移除 html 标签
+            cleaned_text = re.sub(r"\*.*?\*", "", cleaned_text)  # 移除动作
             cleaned_text = cleaned_text.strip()
 
             if not cleaned_text:
@@ -2607,17 +2605,17 @@ class AgentService:
 
             tts_service = get_tts_service()
 
-            # Check if TTS is enabled
+            # 检查 TTS 是否启用
             from core.config_manager import get_config_manager
 
             if not get_config_manager().get("tts_enabled", True):
                 return
 
-            # Use default voice params
+            # 使用默认语音参数
             audio_path = await tts_service.synthesize(cleaned_text)
 
             if audio_path:
-                # Stream via Gateway
+                # 通过网关流式传输
                 with open(audio_path, "rb") as f:
                     audio_data = f.read()
 
@@ -2634,7 +2632,7 @@ class AgentService:
 
                 await gateway_client.send(envelope)
 
-                # Cleanup
+                # 清理
                 try:
                     import os
 

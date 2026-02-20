@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from typing import List, Optional
 
-# Document handling imports
+# 文档处理导入
 try:
     import docx
 except ImportError:
@@ -34,8 +34,8 @@ def find_es_executable() -> Optional[str]:
 
     # 2. 检查常用安装目录和本地工具
     current_dir = os.path.dirname(os.path.abspath(__file__))
-    # Assuming file_search.py is in backend/tools/, we look in backend/tools/ and backend/bin/
-    # And also check standard program files
+    # 假设 file_search.py 位于 backend/tools/，我们在 backend/tools/ 和 backend/bin/ 中查找
+    # 同时检查标准程序文件
     possible_paths = [
         os.path.join(current_dir, "es.exe"),
         os.path.join(
@@ -85,7 +85,7 @@ def fast_search_fallback(
         local_res = []
         try:
             for root, dirs, files in os.walk(path):
-                # Check if we should stop
+                # 检查是否应该停止
                 if stop_event.is_set():
                     return local_res
 
@@ -116,13 +116,13 @@ def fast_search_fallback(
                     data = future.result()
                     results.extend(data)
                     if len(results) >= limit:
-                        stop_event.set()  # Signal other threads to stop
+                        stop_event.set()  # 通知其他线程停止
                         break
                 except Exception:
                     pass
         except concurrent.futures.TimeoutError:
             print(f"[FileSearch] Parallel search timed out after {timeout}s")
-            stop_event.set()  # Stop any ongoing work
+            stop_event.set()  # 停止任何正在进行的工作
 
     return results[:limit]
 
@@ -156,7 +156,7 @@ def search_files(query: str, limit: int = 50) -> str:
             if os.name == "nt":
                 startupinfo = subprocess.STARTUPINFO()
                 startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-                startupinfo.wShowWindow = subprocess.SW_HIDE  # Explicitly hide
+                startupinfo.wShowWindow = subprocess.SW_HIDE  # 显式隐藏
 
             raw_output = subprocess.check_output(
                 cmd,
@@ -188,11 +188,11 @@ def search_files(query: str, limit: int = 50) -> str:
                 print(
                     f"[FileSearch] Subprocess output: {e.output.decode('utf-8', errors='ignore')}"
                 )
-            pass  # Fallback
+            pass  # 回退
 
     # 2. 回退：在用户主目录中使用并行搜索
     user_home = os.path.expanduser("~")
-    # Using 10s timeout for fallback to keep Pero responsive
+    # 使用 10s 超时进行回退，以保持 Pero 的响应性
     print(
         f"[FileSearch] 'es' not found. Falling back to parallel search in {user_home} (10s timeout)"
     )
@@ -217,16 +217,16 @@ def read_file_content(file_path: str, max_length: int = 10000) -> str:
     try:
         # 检查文件是否存在
         if not os.path.exists(file_path):
-            return f"Error: File not found: {file_path}"
+            return f"错误: 未找到文件: {file_path}"
 
         # 检查是否为文件
         if not os.path.isfile(file_path):
-            return f"Error: Path is not a file: {file_path}"
+            return f"错误: 路径不是文件: {file_path}"
 
         # 检查大小以避免读取超大文件
         file_size = os.path.getsize(file_path)
         if file_size > 10 * 1024 * 1024:  # 为了安全起见，硬限制 10MB
-            return f"Error: File is too large ({file_size} bytes). Max allowed size is 10MB."
+            return f"错误: 文件过大 ({file_size} bytes)。最大允许大小为 10MB。"
 
         ext = os.path.splitext(file_path)[1].lower()
 
@@ -356,7 +356,7 @@ def get_file_info(file_path: str) -> str:
     """
     try:
         if not os.path.exists(file_path):
-            return json.dumps({"error": f"File not found: {file_path}"})
+            return json.dumps({"error": f"未找到文件: {file_path}"})
 
         stat = os.stat(file_path)
         mime_type, _ = mimetypes.guess_type(file_path)
@@ -389,7 +389,7 @@ def show_file_results(files: List[str]) -> str:
     return f"UI Data prepared. To display the file list UI to the user, you MUST include this exact tag in your final response:\n<FILE_RESULTS>{json.dumps(files, ensure_ascii=False)}</FILE_RESULTS>"
 
 
-# Tool Definitions
+# 工具定义
 search_files_definition = {
     "type": "function",
     "function": {

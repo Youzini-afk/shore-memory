@@ -190,7 +190,7 @@ async def exit_work_mode() -> str:
         if not summary_content:
             summary_content = f"工作模式总结失败。任务: {task_name}。"
 
-        # 4. Save to Memory (DB)
+        # 4. 保存到记忆 (DB)
         # 退出工作模式时，将总结存入数据库作为 work_log 类型的记忆
         await MemoryService.save_memory(
             session=session,
@@ -251,7 +251,7 @@ async def abort_work_mode() -> str:
         ).first()
 
         if config_id and config_id.value.startswith("work_"):
-            # Revert to default
+            # 恢复默认值
             config_id.value = "default"
             if config_task:
                 config_task.value = ""

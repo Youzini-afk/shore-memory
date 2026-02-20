@@ -77,19 +77,19 @@ class EmbeddingService:
                 ]
 
                 for base_path in candidate_base_paths:
-                    # print(f"[Embedding] Debug: Checking base path: {base_path}", flush=True)
+                    # print(f"[Embedding] 调试: 正在检查基础路径: {base_path}", flush=True)
                     if not os.path.exists(base_path):
                         continue
 
-                    # 策略 1: 检查 snapshots 目录并找到最新的 snapshot
+                    # 策略 1: 检查 snapshots 目录并找到最新的快照
                     snapshots_dir = os.path.join(base_path, "snapshots")
                     if os.path.exists(snapshots_dir):
                         snapshots = os.listdir(snapshots_dir)
-                        # print(f"[Embedding] Debug: Found snapshots in {base_path}: {snapshots}", flush=True)
+                        # print(f"[Embedding] 调试: 在 {base_path} 中发现快照: {snapshots}", flush=True)
                         if snapshots:
-                            # 简单地取第一个找到的 snapshot
+                            # 简单地取第一个找到的快照
                             snapshot_path = os.path.join(snapshots_dir, snapshots[0])
-                            # 验证 snapshot 是否包含 config.json
+                            # 验证快照是否包含 config.json
                             config_path = os.path.join(snapshot_path, "config.json")
                             if os.path.isdir(snapshot_path) and os.path.exists(
                                 config_path
@@ -97,7 +97,7 @@ class EmbeddingService:
                                 # print(f"[Embedding] 调试: 发现有效配置于 {config_path}", flush=True)
                                 return snapshot_path
                             # else:
-                            # print(f"[Embedding] Debug: Config not found at {config_path}", flush=True)
+                            # print(f"[Embedding] 调试: 在 {config_path} 未找到配置", flush=True)
 
                     # 策略 2 (旧版): 检查 refs/main
                     ref_path = os.path.join(base_path, "refs", "main")
@@ -127,7 +127,7 @@ class EmbeddingService:
             from sentence_transformers import SentenceTransformer
 
             # model_name = "BAAI/bge-small-zh-v1.5"
-            # 使用 ModelManager 中定义的 embedding 模型
+            # 使用 ModelManager 中定义的嵌入模型
             model_key = "embedding"
 
             try:
@@ -137,7 +137,7 @@ class EmbeddingService:
                     self._model = SentenceTransformer(local_path, device="cpu")
                 else:
                     # 如果不存在，尝试下载（使用 ModelManager）
-                    print("[Embedding] Embedding 模型未找到，尝试下载...", flush=True)
+                    print("[Embedding] 嵌入模型未找到，尝试下载...", flush=True)
                     local_path = model_manager.download_model(model_key)
                     self._model = SentenceTransformer(local_path, device="cpu")
             except Exception as e:
@@ -271,7 +271,7 @@ class EmbeddingService:
             if not docs or self._cross_encoder is None:
                 return []
 
-            # [Performance] BGE-Reranker-v2-M3 性能开销较大
+            # [性能] BGE-Reranker-v2-M3 性能开销较大
             # 限制输入文档数量，确保精排在 1 秒内完成
             max_rerank_docs = 15
             if len(docs) > max_rerank_docs:

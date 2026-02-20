@@ -4,7 +4,7 @@ from collections import Counter
 
 
 def normalize_answer(s):
-    """Lowercases the text, and removes punctuation, articles and extra whitespace."""
+    """将文本转换为小写，并移除标点符号、冠词和多余的空格。"""
 
     def remove_articles(text):
         return re.sub(r"\b(a|an|the)\b", " ", text)
@@ -41,8 +41,8 @@ def exact_match_score(prediction, ground_truth):
 
 def calculate_sf_metrics(predicted_sf, ground_truth_sf):
     """
-    predicted_sf: set of (title, sent_idx)
-    ground_truth_sf: set of (title, sent_idx)
+    predicted_sf: (title, sent_idx) 集合
+    ground_truth_sf: (title, sent_idx) 集合
     """
     if not predicted_sf:
         return 0, 0, 0

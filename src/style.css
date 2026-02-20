@@ -22,11 +22,11 @@ body {
   margin: 0;
   overflow: hidden;
   user-select: none;
-  background-color: transparent !important; /* Force transparent */
+  background-color: transparent !important; /* 强制透明 */
 }
 
 html {
-  background-color: transparent !important; /* Force transparent */
+  background-color: transparent !important; /* 强制透明 */
 }
 
 #app {

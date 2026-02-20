@@ -19,7 +19,7 @@ async def set_nit_category(
     get_nit_manager().set_category_status(category, enabled)
     return {
         "status": "success",
-        "message": f"Category {category} set to {enabled}. Restart required for some changes.",
+        "message": f"分类 {category} 已设为 {enabled}。部分更改需要重启生效。",
     }
 
 
@@ -31,5 +31,5 @@ async def set_nit_plugin(
     get_nit_manager().set_plugin_status(plugin_name, enabled)
     return {
         "status": "success",
-        "message": f"Plugin {plugin_name} set to {enabled}. Restart required for some changes.",
+        "message": f"插件 {plugin_name} 已设为 {enabled}。部分更改需要重启生效。",
     }

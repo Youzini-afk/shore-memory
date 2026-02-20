@@ -116,7 +116,7 @@ async def set_aura_vision_mode(enabled: bool = Body(..., embed=True)):
             else:
                 return {
                     "status": "error",
-                    "message": "Failed to initialize AuraVision Service",
+                    "message": "初始化主动视觉服务失败",
                 }
     else:
         aura_vision_service.stop()
@@ -190,7 +190,7 @@ async def set_companion_mode(
             status_code=400, detail="请先开启“轻量模式”后再启动陪伴模式。"
         )
 
-    # [New Requirement] Companion mode requires vision capability in current model
+    # [新需求] 陪伴模式需要当前模型具备视觉能力
     if enabled:
         config_entry = await session.get(Config, "current_model_id")
         if not config_entry:

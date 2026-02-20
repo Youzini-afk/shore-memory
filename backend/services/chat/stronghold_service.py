@@ -24,7 +24,7 @@ class StrongholdService:
     # --- Initialization ---
     async def ensure_initial_data(self):
         """确保据点系统有默认数据（默认设施和客厅），并归位无家可归的 Agent"""
-        print("[Stronghold] Checking initialization...")
+        print("[Stronghold] 正在检查初始化...")
 
         # 1. 确保默认设施存在
         default_facility_name = "我的据点"
@@ -76,7 +76,7 @@ class StrongholdService:
             is_active = agent_id in am.enabled_agents
 
             if not db_agent:
-                print(f"[Stronghold] Initializing new agent in DB: {agent_id}")
+                print(f"[Stronghold] 正在初始化数据库中的新 Agent: {agent_id}")
                 new_agent = AgentProfile(
                     name=agent_id,
                     avatar="pero.png",  # 默认头像
@@ -113,16 +113,16 @@ class StrongholdService:
                     is_homeless = False
                 else:
                     print(
-                        f"[Stronghold] Agent '{agent.name}' in invalid room {location.room_id}, resetting."
+                        f"[Stronghold] Agent '{agent.name}' 在无效房间 {location.room_id} 中，正在重置。"
                     )
 
             if is_homeless:
                 print(
-                    f"[Stronghold] Moving homeless agent '{agent.name}' to {default_room_name}"
+                    f"[Stronghold] 正在将无家可归的 Agent '{agent.name}' 移动到 {default_room_name}"
                 )
                 await self.move_agent(agent.name, living_room.id)
 
-    # --- Facility Management ---
+    # --- 设施管理 ---
     async def create_facility(
         self, name: str, description: str, icon: str = None
     ) -> StrongholdFacility:
@@ -132,12 +132,12 @@ class StrongholdService:
         await self.session.refresh(facility)
         return facility
 
-    # --- Butler Config ---
+    # --- 管家配置 ---
     async def get_butler_config(self) -> ButlerConfig:
         statement = select(ButlerConfig)
         config = (await self.session.exec(statement)).first()
         if not config:
-            # Create default if not exists
+            # 如果不存在则创建默认值
             config = ButlerConfig(
                 name="Butler",
                 persona="[提示] 请使用 group/butler/persona.md 进行人设配置",
@@ -154,7 +154,7 @@ class StrongholdService:
         statement = select(StrongholdFacility).where(StrongholdFacility.name == name)
         return (await self.session.exec(statement)).first()
 
-    # --- Room Management ---
+    # --- 房间管理 ---
     async def create_room(
         self,
         facility_id: int,
@@ -171,17 +171,17 @@ class StrongholdService:
             allowed_agents_json=json.dumps(allowed_agents or []),
         )
         self.session.add(room)
-        # Create linked GroupChatRoom for chatting
+        # 创建关联的群聊房间
         chat_room = GroupChatRoom(
             id=room_id, name=name, description=description, creator_id="system"
         )
         self.session.add(chat_room)
 
-        # Add allowed agents as members (default: system)
+        # 添加允许的 Agent 作为成员（默认：系统）
         self.session.add(
             GroupChatMember(room_id=room_id, agent_id="system", role="admin")
         )
-        # Also add user by default
+        # 默认也添加用户
         self.session.add(
             GroupChatMember(room_id=room_id, agent_id="user", role="member")
         )
@@ -247,23 +247,23 @@ class StrongholdService:
                 for agent_id in agents:
                     await self.move_agent(agent_id, living_room.id)
 
-        # 2. 删除关联的 GroupChatRoom (Cascade delete might handle members/messages but let's be safe)
-        # Actually SQLModel doesn't auto cascade unless configured. We might need to manually clean up.
-        # For now, let's just delete the StrongholdRoom.
-        # Ideally we should also delete GroupChatRoom to clean up history or archive it.
-        # Let's keep it simple: Delete StrongholdRoom logic.
+        # 2. 删除关联的 GroupChatRoom (级联删除可能会处理成员/消息，但为了安全起见，我们手动处理)
+        # 实际上 SQLModel 除非配置否则不会自动级联。我们可能需要手动清理。
+        # 目前，我们只删除 StrongholdRoom。
+        # 理想情况下，我们也应该删除 GroupChatRoom 以清理历史记录或将其归档。
+        # 保持简单：删除 StrongholdRoom 逻辑。
 
         self.session.delete(room)
         await self.session.commit()
 
-    # --- Agent Location ---
+    # --- Agent 位置 ---
     async def move_agent(self, agent_id: str, room_id: str) -> AgentLocation:
-        # Check if room exists
+        # 检查房间是否存在
         room = await self.get_room(room_id)
         if not room:
             raise ValueError(f"Room {room_id} not found")
 
-        # Update or create location
+        # 更新或创建位置
         location = await self.session.get(AgentLocation, agent_id)
         if location:
             location.room_id = room_id
@@ -302,11 +302,11 @@ class StrongholdService:
         await self.session.commit()
         await self.session.refresh(room)
 
-    # --- Butler Logic ---
+    # --- 管家逻辑 ---
     async def process_butler_instruction(self, instruction: Dict[str, Any]) -> str:
         """
-        Process JSON instruction from Butler.
-        Returns a result string.
+        处理来自 Butler 的 JSON 指令。
+        返回结果字符串。
         """
         action = instruction.get("action")
         params = instruction.get("params", {})
@@ -325,7 +325,7 @@ class StrongholdService:
                 description=params.get("description"),
                 allowed_agents=params.get("allowed_agents"),
             )
-            return f"Room '{room.name}' created in facility '{facility.name}'."
+            return f"已在设施 '{facility.name}' 中创建房间 '{room.name}'。"
 
         elif action == "update_room_env":
             room_name = params.get("room_name")
@@ -334,8 +334,8 @@ class StrongholdService:
                 await self.update_environment_variable(
                     room.id, params.get("key"), params.get("value")
                 )
-                return f"Updated environment variable '{params.get('key')}' in room '{room_name}'."
-            return f"Room '{room_name}' not found."
+                return f"已更新房间 '{room_name}' 的环境变量 '{params.get('key')}'。"
+            return f"未找到房间 '{room_name}'。"
 
         elif action == "move_agent":
             agent_id = params.get("agent_id")
@@ -343,14 +343,14 @@ class StrongholdService:
             room = await self.get_room_by_name(room_name)
             if room:
                 await self.move_agent(agent_id, room.id)
-                return f"Moved agent '{agent_id}' to room '{room_name}'."
-            return f"Room '{room_name}' not found."
+                return f"已将 Agent '{agent_id}' 移动到房间 '{room_name}'。"
+            return f"未找到房间 '{room_name}'。"
 
         elif action == "create_facility":
             name = params.get("name")
             description = params.get("description")
             await self.create_facility(name, description)
-            return f"Facility '{name}' created."
+            return f"设施 '{name}' 已创建。"
 
         elif action == "delete_room":
             room_name = params.get("room_name")
@@ -358,12 +358,12 @@ class StrongholdService:
             if room:
                 try:
                     await self.delete_room(room.id)
-                    return f"Room '{room_name}' deleted."
+                    return f"房间 '{room_name}' 已删除。"
                 except ValueError as e:
-                    return f"Failed to delete room: {str(e)}"
-            return f"Room '{room_name}' not found."
+                    return f"删除房间失败: {str(e)}"
+            return f"未找到房间 '{room_name}'。"
 
-        return f"Unknown action: {action}"
+        return f"未知操作: {action}"
 
     async def process_butler_call(self, agent_id: str, query: str):
         """
@@ -411,7 +411,7 @@ class StrongholdService:
             loc = await self.get_agent_location(agent.name)
             loc_name = loc.name if loc else "Unknown"
             agents_status.append(
-                f"- {agent.name}: currently in {loc_name} (Active: {agent.is_active})"
+                f"- {agent.name}: 当前位于 {loc_name} (活跃: {agent.is_active})"
             )
         context["all_agents_status"] = "\n".join(agents_status)
 

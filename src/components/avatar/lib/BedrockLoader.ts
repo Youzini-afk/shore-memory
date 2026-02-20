@@ -1,7 +1,7 @@
 import * as THREE from 'three'
 import { AnimationManager } from './AnimationManager'
 
-// Global texture cache to prevent reloading across model resets
+// 全局纹理缓存，防止模型重置时重新加载
 const textureCache = new Map<string, THREE.Texture>()
 
 export class BedrockLoader {
@@ -14,10 +14,10 @@ export class BedrockLoader {
   }
 
   async load(config: any, animManager: AnimationManager): Promise<THREE.Group> {
-    this.boneMap = {} // Reset
+    this.boneMap = {} // 重置
     const rootGroup = new THREE.Group()
 
-    // Helper: Fetch with timeout
+    // 辅助函数：带超时的 Fetch
     const fetchWithTimeout = async (url: string, timeout = 30000) => {
       const controller = new AbortController()
       const id = setTimeout(() => controller.abort(), timeout)
@@ -32,7 +32,7 @@ export class BedrockLoader {
       }
     }
 
-    // Helper: Retryable Texture Load with Cache
+    // 辅助函数：带重试和缓存的纹理加载
     const loadTextureWithRetry = async (url: string, retries = 3): Promise<THREE.Texture> => {
       if (textureCache.has(url)) {
         return textureCache.get(url)!
@@ -43,7 +43,7 @@ export class BedrockLoader {
         try {
           return await new Promise<THREE.Texture>((resolve, reject) => {
             const loader = new THREE.TextureLoader()
-            // 30s timeout per attempt
+            // 每次尝试 30 秒超时
             const timer = setTimeout(
               () => reject(new Error(`纹理加载超时 (Timeout): ${url}`)),
               30000
@@ -68,20 +68,14 @@ export class BedrockLoader {
           })
         } catch (e: any) {
           lastError = e
-          console.warn(
-            `[BedrockLoader] Texture load failed (attempt ${i + 1}/${retries}): ${url}`,
-            e
-          )
-          if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 + i * 500)) // Backoff
+          console.warn(`[BedrockLoader] 纹理加载失败 (尝试 ${i + 1}/${retries}): ${url}`, e)
+          if (i < retries - 1) await new Promise((r) => setTimeout(r, 1000 + i * 500)) // 退避
         }
       }
-      throw new Error(
-        `Failed to load texture after ${retries} attempts: ${lastError?.message || 'Unknown error'}`
-      )
+      throw new Error(`在 ${retries} 次尝试后加载纹理失败: ${lastError?.message || '未知错误'}`)
     }
 
     try {
-      // Serial Loading: Texture -> Model -> Arm
       // 串行加载：纹理 -> 模型 -> 手臂
       const texture = await loadTextureWithRetry(config.texture)
       const modelResponse = await fetchWithTimeout(config.model)
@@ -93,14 +87,14 @@ export class BedrockLoader {
         armJson = await armResponse.json()
       }
 
-      // Create Material
+      // 创建材质
       // 使用 MeshStandardMaterial 进行更逼真的 PBR 光照
       const material = new THREE.MeshStandardMaterial({
         map: texture,
         alphaTest: 0.5,
         side: THREE.DoubleSide,
-        roughness: 0.4, // Lower roughness for more specular highlights (smoother surface) // 较低的粗糙度以获得更多的高光（更光滑的表面）
-        metalness: 0.1, // Slight metalness for better light response // 轻微的金属感以获得更好的光照响应
+        roughness: 0.4, // 较低的粗糙度以获得更多的高光（更光滑的表面）
+        metalness: 0.1, // 轻微的金属感以获得更好的光照响应
         emissive: 0x000000,
         emissiveIntensity: 0
       })
@@ -112,28 +106,26 @@ export class BedrockLoader {
         }
       })
 
-      // Parse Models using fetched data
+      // 使用获取的数据解析模型
       this.parseJsonModel(modelJson, config.model, material, rootGroup, true)
       if (armJson) {
         this.parseJsonModel(armJson, config.arm, material, rootGroup, false)
       }
 
-      // Pass boneMap to AnimationManager
       // 将 boneMap 传递给 AnimationManager
       animManager.setBoneMap(this.boneMap)
 
-      // Load Animation
       // 加载动画
       await animManager.load(config)
 
       return rootGroup
     } catch (error) {
-      console.error('[BedrockLoader] Critical loading error:', error)
+      console.error('[BedrockLoader] 严重加载错误:', error)
       throw error
     }
   }
 
-  // Legacy wrapper for compatibility
+  // 兼容性遗留包装器
   async loadJsonModel(
     path: string,
     material: THREE.Material,
@@ -162,7 +154,6 @@ export class BedrockLoader {
     isMain: boolean
   ) {
     try {
-      // Parse Bedrock Model
       // 解析 Bedrock 模型
       const geometryData = json['minecraft:geometry'][0]
       const description = geometryData.description
@@ -175,7 +166,6 @@ export class BedrockLoader {
       let bones = geometryData.bones
       const localBoneMap: any = {}
 
-      // Filter GUI bones (Rossi specific)
       // 过滤 GUI 骨骼 (Rossi 专用)
       if (path.includes('Rossi')) {
         const guiBones = [
@@ -197,7 +187,6 @@ export class BedrockLoader {
         })
       }
 
-      // Pass 1: Create Groups
       // 第一遍: 创建组
       bones.forEach((boneData: any) => {
         let boneGroup
@@ -219,7 +208,6 @@ export class BedrockLoader {
         }
       })
 
-      // Pass 2: Build Hierarchy & Geometry
       // 第二遍: 构建层级和几何体
       bones.forEach((boneData: any) => {
         const boneGroup = localBoneMap[boneData.name]
@@ -233,7 +221,6 @@ export class BedrockLoader {
               parentGroup = this.boneMap[boneData.parent][0]
             }
           } else if (!isMain) {
-            // Attach arm/hand to body automatically
             // 自动将手臂/手附加到身体
             const bodyBoneNames = ['UpperBody', 'UpBody', 'Body', 'AllBody', 'Torso']
             if (boneData.name.includes('Arm') || boneData.name.includes('Hand')) {
@@ -377,12 +364,12 @@ export class BedrockLoader {
       const h = snap(size[1])
       const d = snap(size[2])
 
-      setFaceUV(2, u + d, v, w, d) // Up
-      setFaceUV(3, u + d + w, v, w, d) // Down
-      setFaceUV(1, u, v + d, d, h) // West
-      setFaceUV(5, u + d, v + d, w, h) // North
-      setFaceUV(0, u + d + w, v + d, d, h) // East
-      setFaceUV(4, u + d + w + d, v + d, w, h) // South
+      setFaceUV(2, u + d, v, w, d) // 上
+      setFaceUV(3, u + d + w, v, w, d) // 下
+      setFaceUV(1, u, v + d, d, h) // 西
+      setFaceUV(5, u + d, v + d, w, h) // 北
+      setFaceUV(0, u + d + w, v + d, d, h) // 东
+      setFaceUV(4, u + d + w + d, v + d, w, h) // 南
     } else {
       const map: any = { east: 0, west: 1, up: 2, down: 3, south: 4, north: 5 }
       for (const [faceName, faceData] of Object.entries(uvData) as [string, any][]) {

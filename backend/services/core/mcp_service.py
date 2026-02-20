@@ -231,7 +231,7 @@ class McpClient:
                 else:
                     result = resp.json()
                     if "error" in result:
-                        logger.error(f"[MCP] Error: {result['error']}")
+                        logger.error(f"[MCP] 错误: {result['error']}")
                         return None
                     return result.get("result")
 

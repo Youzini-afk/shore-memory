@@ -20,20 +20,19 @@ var (
 )
 
 func generateAndSaveToken() {
-	// Check for fixed token from env (useful for Cloud/Docker deployments)
+	// 检查环境变量中的固定令牌 (适用于云/Docker部署)
 	envToken := os.Getenv("GATEWAY_TOKEN")
 	if envToken != "" {
 		authToken = envToken
 		log.Printf("🔑 使用环境变量中的固定 Gateway 令牌: %s", authToken)
 	} else {
-		// Define path to save token: defaults to data/gateway_token.json (Docker/Local relative)
-		// Can be overridden by env var for legacy dev support
+		// 定义保存令牌的路径: 默认为 data/gateway_token.json (Docker/本地相对路径)
+		// 可以通过环境变量覆盖以支持旧版开发环境
 		path := os.Getenv("GATEWAY_TOKEN_PATH")
 		if path == "" {
 			path = filepath.Join("data", "gateway_token.json")
 		}
 
-		// Generate random token
 		// 生成随机令牌
 		b := make([]byte, 32)
 		_, err := rand.Read(b)
@@ -43,7 +42,7 @@ func generateAndSaveToken() {
 		authToken = base64.URLEncoding.EncodeToString(b)
 		log.Printf("🔑 已生成新的 Gateway 访问令牌: %s", authToken)
 
-		// Ensure directory exists
+		// 确保目录存在
 		dir := filepath.Dir(path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			log.Printf("警告: 无法创建数据目录: %v", err)
@@ -65,19 +64,19 @@ func generateAndSaveToken() {
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		return true // Allow all origins for now
+		return true // 暂时允许所有跨域来源
 	},
 }
 
-// Node represents a connected client
+// Node 代表一个已连接的客户端
 type Node struct {
 	ID   string
 	Conn *websocket.Conn
 	mu   sync.Mutex
-	// Capabilities, etc.
+	// 能力集等
 }
 
-// Hub maintains the set of active nodes
+// Hub 维护活跃节点集合
 type Hub struct {
 	nodes map[string]*Node
 	mu    sync.RWMutex
@@ -93,7 +92,7 @@ func (h *Hub) removeNodeByConn(conn *websocket.Conn) {
 	for id, node := range h.nodes {
 		if node.Conn == conn {
 			delete(h.nodes, id)
-			// log.Printf("Node %s disconnected", id)
+			// log.Printf("节点 %s 已断开连接", id)
 			break
 		}
 	}
@@ -117,7 +116,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	defer conn.Close()
 	defer hub.removeNodeByConn(conn)
 
-	// log.Println("New connection from", r.RemoteAddr)
+	// log.Println("新连接来自", r.RemoteAddr)
 
 	for {
 		messageType, p, err := conn.ReadMessage()
@@ -135,7 +134,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Decode Envelope
+		// 解码信封 (Envelope)
 		var envelope perolink.Envelope
 		if err := goproto.Unmarshal(p, &envelope); err != nil {
 			log.Println("反序列化失败 (unmarshal):", err)
@@ -147,21 +146,21 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 }
 
 func handleEnvelope(conn *websocket.Conn, envelope *perolink.Envelope) {
-	// Only log errors or warnings by default, or use debug flag
-	// fmt.Printf("Received Envelope: ID=%s Source=%s Target=%s\n", envelope.Id, envelope.SourceId, envelope.TargetId)
+	// 默认只记录错误或警告，或使用调试标志
+	// fmt.Printf("收到信封: ID=%s Source=%s Target=%s\n", envelope.Id, envelope.SourceId, envelope.TargetId)
 
-	// Handle Hello (Handshake)
+	// 处理 Hello 握手消息
 	if hello := envelope.GetHello(); hello != nil {
 		handleHello(conn, envelope.SourceId, hello)
 	}
 
-	// Handle Heartbeat
+	// 处理心跳消息
 	if hb := envelope.GetHeartbeat(); hb != nil {
-		// fmt.Printf("Heartbeat from %s: seq=%d (ts=%d)\n", envelope.SourceId, hb.Seq, envelope.Timestamp)
-		return // Heartbeats are not forwarded
+		// fmt.Printf("来自 %s 的心跳: seq=%d (ts=%d)\n", envelope.SourceId, hb.Seq, envelope.Timestamp)
+		return // 心跳消息不转发
 	}
 
-	// Routing logic
+	// 路由逻辑
 	if envelope.TargetId == "broadcast" {
 		broadcastMessage(envelope)
 	} else if envelope.TargetId != "master" {
@@ -181,7 +180,7 @@ func broadcastMessage(envelope *perolink.Envelope) {
 
 	for id, node := range hub.nodes {
 		if id == envelope.SourceId {
-			continue // Don't echo back to sender
+			continue // 不回显给发送者
 		}
 
 		node.mu.Lock()
@@ -189,7 +188,7 @@ func broadcastMessage(envelope *perolink.Envelope) {
 		node.mu.Unlock()
 		if err != nil {
 			log.Printf("发送至 %s 错误: %v\n", id, err)
-			// TODO: Handle disconnection
+			// TODO: 处理断开连接
 		}
 	}
 }
@@ -219,14 +218,14 @@ func unicastMessage(envelope *perolink.Envelope) {
 }
 
 func handleHello(conn *websocket.Conn, sourceID string, hello *perolink.Hello) {
-	// log.Printf("Hello from %s (Device: %s, Platform: %s)\n", sourceID, hello.DeviceName, hello.Platform)
+	// log.Printf("收到来自 %s 的 Hello (设备: %s, 平台: %s)\n", sourceID, hello.DeviceName, hello.Platform)
 
-	// Verify Token
+	// 验证令牌
 	if hello.Token != authToken {
 		log.Printf("⚠️  来自 %s 的令牌无效: %s (预期: %s)", sourceID, hello.Token, authToken)
-		// log.Println("⚠️  Authentication failed (Continuing for migration...)")
+		// log.Println("⚠️  鉴权失败 (为了迁移兼容继续执行...)")
 	} else {
-		// log.Println("✅ Authentication successful")
+		// log.Println("✅ 鉴权成功")
 	}
 
 	hub.mu.Lock()
@@ -236,5 +235,5 @@ func handleHello(conn *websocket.Conn, sourceID string, hello *perolink.Hello) {
 	}
 	hub.mu.Unlock()
 
-	// log.Printf("Node %s registered", sourceID)
+	// log.Printf("节点 %s 已注册", sourceID)
 }

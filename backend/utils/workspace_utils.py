@@ -2,20 +2,20 @@ import os
 
 from services.agent.agent_manager import get_agent_manager
 
-# Base workspace directory (PeroCore/pero_workspace)
-# Assuming this file is in backend/utils/workspace_utils.py
+# 基础工作区目录 (PeroCore/pero_workspace)
+# 假设此文件位于 backend/utils/workspace_utils.py
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GLOBAL_WORKSPACE_ROOT = os.path.join(BASE_DIR, "pero_workspace")
 
 
 def get_workspace_root(agent_id: str = None) -> str:
     """
-    Get the workspace root for a specific agent.
-    If agent_id is not provided, it uses the currently active agent.
+    获取特定 Agent 的工作区根目录。
+    如果未提供 agent_id，则使用当前活跃的 Agent。
 
-    Structure:
+    结构:
     - pero_workspace/
-      - {agent_id}/  <-- Returned path
+      - {agent_id}/  <-- 返回的路径
     """
     if not agent_id:
         try:
@@ -23,12 +23,12 @@ def get_workspace_root(agent_id: str = None) -> str:
             agent = manager.get_active_agent()
             agent_id = agent.id if agent else "pero"
         except Exception:
-            agent_id = "pero"  # Fallback if manager fails (e.g. during init)
+            agent_id = "pero"  # 如果管理器失败（例如初始化期间），则回退
 
-    # Normalize agent_id to lowercase
+    # 将 agent_id 规范化为小写
     agent_id = str(agent_id).lower()
 
-    # Target directory
+    # 目标目录
     target_path = os.path.join(GLOBAL_WORKSPACE_ROOT, agent_id)
 
     if not os.path.exists(target_path):

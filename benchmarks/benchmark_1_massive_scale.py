@@ -7,9 +7,7 @@ import sys
 try:
     from pero_memory_core import CognitiveGraphEngine
 except ImportError:
-    print(
-        "Error: PeroCore Rust module (pero_memory_core) not found. Please install it first."
-    )
+    print("错误: 未找到 PeroCore Rust 模块 (pero_memory_core)。请先安装它。")
     sys.exit(1)
 
 
@@ -20,21 +18,19 @@ def get_mem_mb():
 
 def run_massive_scale_test(scale=1000000):
     print("=" * 80)
-    print(f"      BENCHMARK 1: MASSIVE SCALE PERFORMANCE ({scale:,} EDGES)")
+    print(f"      基准测试 1: 大规模性能测试 ({scale:,} 条边)")
     print("=" * 80)
-    print(
-        "Objective: Measure raw ingestion speed, memory overhead, and propagation latency."
-    )
+    print("目标：测量原始摄入速度、内存开销和传播延迟。")
     print("-" * 80)
 
     engine = CognitiveGraphEngine()
 
-    # 1. Ingestion Test
+    # 1. 摄入测试
     batch_size = scale // 2
     if batch_size < 1:
         batch_size = scale
 
-    print(f"[*] Ingesting {scale:,} edges in batches of {batch_size:,}...")
+    print(f"[*] 正在分批摄入 {scale:,} 条边，每批 {batch_size:,} 条...")
     initial_mem = get_mem_mb()
     start_ingest = time.perf_counter()
 
@@ -49,22 +45,20 @@ def run_massive_scale_test(scale=1000000):
         b_start = time.perf_counter()
         engine.batch_add_connections(batch)
         b_end = time.perf_counter()
-        print(f"  - Batch {i // batch_size + 1}: {(b_end - b_start) * 1000:.2f} ms")
+        print(f"  - 批次 {i // batch_size + 1}: {(b_end - b_start) * 1000:.2f} ms")
 
     total_ingest_time = time.perf_counter() - start_ingest
     final_mem = get_mem_mb()
     mem_used = final_mem - initial_mem
 
-    print("\n[Ingestion Metrics]:")
-    print(f"  - Total Time: {total_ingest_time:.4f} s")
-    print(
-        f"  - Throughput: {scale / total_ingest_time / 1000000:.2f} Million edges/sec"
-    )
-    print(f"  - Memory Overhead: {mem_used:.2f} MB")
-    print(f"  - Efficiency: {mem_used * 1024 / scale:.2f} Bytes per edge")
+    print("\n[摄入指标]:")
+    print(f"  - 总耗时: {total_ingest_time:.4f} s")
+    print(f"  - 吞吐量: {scale / total_ingest_time / 1000000:.2f} Million edges/sec")
+    print(f"  - 内存开销: {mem_used:.2f} MB")
+    print(f"  - 效率: {mem_used * 1024 / scale:.2f} Bytes per edge")
 
-    # 2. Propagation Latency Test
-    print("\n[*] Testing 5-step propagation latency (100 iterations)...")
+    # 2. 传播延迟测试
+    print("\n[*] 正在测试 5 步传播延迟 (100 次迭代)...")
     latencies = []
     for _ in range(100):
         start_node = random.randint(1, scale)
@@ -77,17 +71,17 @@ def run_massive_scale_test(scale=1000000):
     p95_lat = sorted_lat[int(len(latencies) * 0.95)]
     p99_lat = sorted_lat[int(len(latencies) * 0.99)]
 
-    print(f"  - Average Latency: {avg_lat:.4f} ms")
-    print(f"  - P95 Latency:     {p95_lat:.4f} ms")
-    print(f"  - P99 Latency:     {p99_lat:.4f} ms")
+    print(f"  - 平均延迟: {avg_lat:.4f} ms")
+    print(f"  - P95 延迟:     {p95_lat:.4f} ms")
+    print(f"  - P99 延迟:     {p99_lat:.4f} ms")
 
     print("-" * 80)
-    print("Conclusion: High-speed CSR variant architecture validated.")
+    print("结论：已验证高速 CSR 变体架构。")
     print("=" * 80 + "\n")
 
 
 if __name__ == "__main__":
-    # Default to 1M for quick test, but project claims 100M support
+    # 默认为 1M 用于快速测试，但项目声称支持 100M
     test_scale = 1000000
     if len(sys.argv) > 1:
         test_scale = int(sys.argv[1])

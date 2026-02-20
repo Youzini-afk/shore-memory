@@ -61,7 +61,7 @@ async def send_message(
     service = GroupChatService(session)
     # 验证房间是否存在
     if not await service.get_room(room_id):
-        raise HTTPException(status_code=404, detail="Room not found")
+        raise HTTPException(status_code=404, detail="未找到房间")
 
     msg = await service.add_message(
         room_id, request.sender_id, request.content, request.role, request.mentions

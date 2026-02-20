@@ -68,7 +68,7 @@ export async function startGateway(window: WindowLike) {
       try {
         if (!window.isDestroyed()) window.webContents.send('system-error', error)
       } catch {
-        // ignore
+        // 忽略
       }
       throw new Error(error)
     }
@@ -92,7 +92,7 @@ export async function startGateway(window: WindowLike) {
   } catch (e) {
     logger.warn('Gateway', `删除旧令牌文件失败: ${e}`)
   }
-  logger.info('Gateway', `Gateway Token Path: ${tokenPath}`)
+  logger.info('Gateway', `Gateway 令牌路径: ${tokenPath}`)
 
   // 启动 Gateway
   gatewayProcess = spawn(gatewayPath, [], {
@@ -136,7 +136,7 @@ export async function startGateway(window: WindowLike) {
     logger.error('Gateway', error)
     // 检查进程是否已退出
     if (gatewayProcess.exitCode !== null) {
-      logger.error('Gateway', `Gateway process exited with code ${gatewayProcess.exitCode}`)
+      logger.error('Gateway', `Gateway 进程已退出，代码 ${gatewayProcess.exitCode}`)
     }
     throw new Error(error)
   }

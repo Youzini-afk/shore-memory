@@ -4,17 +4,14 @@
     :class="transparent ? 'bg-transparent' : 'bg-slate-900/50 backdrop-blur-sm'"
     style="-webkit-app-region: drag"
   >
-    <!-- Left: App Title / Icon -->
     <!-- 左侧：应用标题 / 图标 -->
     <div class="flex items-center gap-3 px-4 pointer-events-none text-slate-400">
       <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
       <span class="text-xs font-medium tracking-wide font-mono opacity-80">{{ title }}</span>
     </div>
 
-    <!-- Right: Window Controls -->
     <!-- 右侧：窗口控制 -->
     <div class="flex items-center h-full" style="-webkit-app-region: no-drag">
-      <!-- Mode Toggle -->
       <!-- 模式切换 -->
       <button
         v-if="showModeToggle"
@@ -28,7 +25,6 @@
         }}</span>
       </button>
 
-      <!-- Minimize -->
       <!-- 最小化 -->
       <button
         class="h-full w-12 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 group"
@@ -37,7 +33,6 @@
         <Minus class="w-4 h-4 group-hover:scale-110 transition-transform" />
       </button>
 
-      <!-- Maximize / Restore -->
       <!-- 最大化 / 还原 -->
       <button
         class="h-full w-12 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 group"
@@ -49,7 +44,6 @@
         />
       </button>
 
-      <!-- Close -->
       <!-- 关闭 -->
       <button
         class="h-full w-12 flex items-center justify-center hover:bg-red-500 text-slate-400 hover:text-white transition-all duration-200 group"
@@ -100,13 +94,11 @@ onMounted(async () => {
   try {
     isMaximized.value = await invoke('window-is-maximized')
   } catch {
-    // Fallback or ignore
     // 回退或忽略
   }
 })
 </script>
 
 <style scoped>
-/* No additional styles needed with Tailwind */
 /* 使用 Tailwind 不需要额外的样式 */
 </style>

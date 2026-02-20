@@ -33,9 +33,7 @@ class NITBridge:
                     tool_plugins = self._create_tool_adapters(client, tool)
                     plugins.update(tool_plugins)
             except Exception as e:
-                logger.error(
-                    f"[NIT-Bridge] Failed to fetch tools for client {client.name}: {e}"
-                )
+                logger.error(f"[NIT-Bridge] 获取客户端 {client.name} 的工具失败: {e}")
 
         return plugins
 
@@ -51,9 +49,7 @@ class NITBridge:
 
         # 闭包捕获 client 和 tool_name
         async def mcp_adapter(params: Dict[str, Any]) -> str:
-            logger.info(
-                f"[NIT-Bridge] Invoking MCP tool: {tool_name} via {client.name}"
-            )
+            logger.info(f"[NIT-Bridge] 调用 MCP 工具: {tool_name} (via {client.name})")
             try:
                 # 类型转换
                 converted_params = self._convert_params(
@@ -99,7 +95,7 @@ class NITBridge:
                 self.registered_tools.add(name)
 
     def _register_func(self, name: str, func: Callable):
-        pass  # Deprecated helper
+        pass  # 已废弃的辅助函数
 
     def _convert_params(
         self, params: Dict[str, str], schema: Dict[str, Any]
@@ -246,7 +242,7 @@ class NITBridge:
 
             except Exception as e:
                 # 万一发生未捕获异常，为防止崩溃，保留原值
-                logger.warning(f"[NIT-Bridge] Param conversion error for key {k}: {e}")
+                logger.warning(f"[NIT-Bridge] 键 {k} 的参数转换错误: {e}")
                 converted[target_key] = v
 
         return converted

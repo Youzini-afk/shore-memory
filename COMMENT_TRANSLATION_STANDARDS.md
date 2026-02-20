@@ -94,17 +94,3 @@ if (!checkEnv()) {
 <!-- 仪表盘主布局 -->
 <div class="dashboard-container">
 ```
-
-## 4. 待办事项 (To-Do)
-
-- [x] 后端核心服务 (Backend Services)
-- [x] 插件适配层 (Plugin Adapters)
-- [x] Electron 主进程 (Electron Main)
-- [x] 前端视图组件 (Frontend Views)
-- [ ] 逐步应用到剩余的辅助工具类 (Utils) 和次要组件
-
-## 下一步计划 (Next Steps)
-
-- 随着开发进行，对新增代码保持此注释规范。
-- 定期检查 `src/components` 下的其他次要组件。
-- 检查 `backend/utils` 目录下的工具类文件。

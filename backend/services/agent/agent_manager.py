@@ -46,7 +46,7 @@ class AgentManager:
             return
 
         # 代理的基础目录 (内置)
-        # Assuming services/agent/agent_manager.py -> services/mdp/agents
+        # 假设路径: services/agent/agent_manager.py -> services/mdp/agents
         self.agents_dir = os.path.abspath(
             os.path.join(os.path.dirname(os.path.dirname(__file__)), "mdp", "agents")
         )
@@ -193,7 +193,7 @@ class AgentManager:
             social_custom_persona=social_persona,
             social_traits=social_traits,
             model_config=config.get("model_config", {}),
-            social_binding=config.get("social", {}),  # Updated to read 'social' block
+            social_binding=config.get("social", {}),  # 更新为读取 'social' 块
             config_path=config_path,
             prompt_path=prompt_path,
             tool_policies=config.get("tool_policies", {}),
@@ -213,7 +213,7 @@ class AgentManager:
 
             # 广播变更
             self._broadcast_agent_change(self.active_agent_id)
-            # [修复] 立即广播状态以更新 UI (状态栏)
+            # 立即广播状态以更新 UI (状态栏)
             self._broadcast_current_state(self.active_agent_id)
 
             return True
@@ -266,9 +266,9 @@ class AgentManager:
 
                         await gateway_client.broadcast_pet_state(state_dict)
                 except Exception as e:
-                    logger.error(f"Failed to fetch/broadcast agent state: {e}")
+                    logger.error(f"获取/广播代理状态失败: {e}")
 
-            # Schedule the task
+            # 调度任务
             try:
                 loop = asyncio.get_running_loop()
                 loop.create_task(_do_broadcast())
@@ -281,7 +281,7 @@ class AgentManager:
             logger.error(f"广播代理状态失败: {e}")
 
     def _broadcast_agent_change(self, agent_id: str):
-        """Broadcast agent change event"""
+        """广播代理变更事件"""
         try:
             import asyncio
             import time

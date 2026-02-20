@@ -1,6 +1,6 @@
 import os
 
-# Get absolute path to project root
+# 获取项目根目录的绝对路径
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.dirname(current_dir)
 
@@ -8,7 +8,7 @@ req_path = os.path.join(project_root, 'backend', 'requirements.txt')
 out_path = os.path.join(project_root, 'backend', 'requirements-server.txt')
 
 if not os.path.exists(req_path):
-    print(f"Error: {req_path} not found.")
+    print(f"错误: 未找到 {req_path}。")
     exit(1)
 
 lines = open(req_path, encoding='utf-8').readlines()
@@ -20,9 +20,9 @@ with open(out_path, 'w', encoding='utf-8') as f:
             f.write(line)
             continue
             
-        # Check if it's a new package definition (start of line, not comment)
+        # 检查是否为新包定义（行首，非注释）
         if not line.startswith(' ') and not line.startswith('#'):
-            # Check if it is one of the excluded packages
+            # 检查是否为排除的包之一
             if stripped.startswith(('pywin32==', 'pyautogui==', 'mouseinfo==', 'pyscreeze==', 'pygetwindow==', 'pymsgbox==', 'pyrect==', 'pytweening==')):
                 skip = True
             else:
@@ -31,4 +31,4 @@ with open(out_path, 'w', encoding='utf-8') as f:
         if not skip:
             f.write(line)
 
-print(f"Generated {out_path}")
+print(f"已生成 {out_path}")

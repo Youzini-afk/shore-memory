@@ -5,7 +5,7 @@ import os
 
 def run_script(path):
     print(f"\n>>> Executing {os.path.basename(path)}...")
-    # Pass 1M scale to benchmark 1 by default
+    # 默认向基准测试 1 传递 1M 规模
     cmd = [sys.executable, path]
     if "benchmark_1" in path:
         cmd.append("1000000")
@@ -15,7 +15,7 @@ def run_script(path):
 
 
 def main():
-    # Only the three core benchmarks
+    # 仅包含三个核心基准测试
     scripts = [
         "benchmarks/benchmark_1_massive_scale.py",
         "benchmarks/benchmark_2_multi_hop_reasoning.py",
@@ -23,7 +23,7 @@ def main():
     ]
 
     print("\n" + "=" * 80)
-    print("      PEROCORE CORE BENCHMARK SUITE (UNBIASED & CONSOLIDATED)")
+    print("      PeroCore 核心基准测试套件 (无偏见 & 综合)")
     print("=" * 80)
     print("Version: 3.0 (Consolidated)")
     current_time = (
@@ -38,7 +38,7 @@ def main():
 
     success_count = 0
     for script in scripts:
-        # Get just the filename and check in current directory or benchmarks/ subfolder
+        # 仅获取文件名并检查当前目录或 benchmarks/ 子文件夹
         script_filename = os.path.basename(script)
         if os.path.exists(script_filename):
             script_path = script_filename
@@ -52,7 +52,7 @@ def main():
             success_count += 1
 
     print("\n" + "=" * 80)
-    print(f"      BENCHMARK SUMMARY: {success_count}/{len(scripts)} COMPLETED")
+    print(f"      基准测试总结: {success_count}/{len(scripts)} 已完成")
     print("=" * 80 + "\n")
 
 

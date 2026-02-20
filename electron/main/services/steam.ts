@@ -4,10 +4,13 @@ import { getConfig, saveConfig } from './system.js'
 
 let client: any = null
 
-// 成就常量定义
-// 使用 Spacewar (AppID 480) 进行测试，将我们的成就映射到现有的成就上
+// 成就常量
+// 使用 Spacewar (AppID 480) 进行测试，将我们的成就映射到现有成就上
 export const ACHIEVEMENTS = {
-  FIRST_ENCOUNTER: 'ACH_WIN_ONE_GAME' // 将 "初次见面" 映射到 "Win One Game"
+  FIRST_ENCOUNTER: 'ACH_WIN_ONE_GAME', // 将 "初次见面" 映射到 "Win One Game"
+  WEEKLY_COMPANION: 'ACH_TRAVEL_FAR_ACCUM', // 将 "每周伴侣" 映射到 "Travel Far Accum"
+  MONTHLY_BESTIE: 'ACH_TRAVEL_FAR_SINGLE', // 将 "月度闺蜜" 映射到 "Travel Far Single"
+  INTERACTION_MASTER: 'ACH_WIN_100_GAMES' // 将 "互动大师" 映射到 "Win 100 Games"
 }
 
 // 返回值说明:
@@ -88,7 +91,7 @@ export function getSteamUser() {
       name: client.localplayer.getName(),
       steamId: client.localplayer.getSteamId().steamId64
     }
-  } catch (e) {
+  } catch {
     return null
   }
 }

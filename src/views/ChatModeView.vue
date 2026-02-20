@@ -197,7 +197,7 @@ const switchAgent = async (agent) => {
       body: JSON.stringify({ agent_id: agent.id })
     })
   } catch (e) {
-    console.error('Failed to switch agent', e)
+    console.error('切换助手失败', e)
   }
 }
 
