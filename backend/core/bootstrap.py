@@ -7,7 +7,7 @@ from interfaces.core import (
     IPreprocessorManager,
     IPromptManager,
 )
-from interfaces.memory import IMemoryService
+# from interfaces.memory import IMemoryService
 
 # 导入默认实现类
 from services.core.prompt_service import PromptManager
@@ -25,7 +25,7 @@ def bootstrap():
 
     # 1. 注册默认的核心组件
     # 注意：MemoryService 目前使用静态方法，其实例也支持调用这些静态方法
-    ComponentContainer.register(IMemoryService, lambda: MemoryService())
+    # ComponentContainer.register(IMemoryService, lambda: MemoryService())
 
     # 注册 PromptManager
     ComponentContainer.register(IPromptManager, lambda: PromptManager())

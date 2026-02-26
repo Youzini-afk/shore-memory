@@ -1,7 +1,7 @@
 <template>
   <div ref="container" class="bedrock-avatar-container">
     <div ref="canvasContainer" class="canvas-container"></div>
-    <div v-if="loading" class="loading-overlay">Loading 3D Model...</div>
+    <div v-if="loading" class="loading-overlay">正在加载 3D 模型...</div>
     <div v-if="errorMsg" class="error-overlay">
       {{ errorMsg }}
     </div>
@@ -12,12 +12,25 @@
 import { onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
-import { BedrockLoader } from './lib/BedrockLoader'
-import { AnimationManager } from './lib/AnimationManager'
+import { AvatarRenderer } from './lib/AvatarRenderer'
+import { StandardBedrockProvider } from './lib/adapter/StandardBedrockProvider'
+import { PeroSecureProvider } from './lib/adapter/PeroSecureProvider'
+import { AnimationEngine } from './lib/animation/AnimationEngine'
+import { AnimationLibrary } from './lib/animation/AnimationLibrary'
+import { AnimationControllerSystem } from './lib/animation/AnimationController'
 import { molangContext } from './lib/Molang'
+import { IModelAdapter } from './lib/adapter/IModelAdapter'
+import { IModelProvider } from './lib/adapter/IModelProvider'
+import { RetargetingManager } from './lib/retargeting/RetargetingManager'
+import { StandardBones } from './lib/retargeting/RetargetingConfig'
+import { FeatureButton, IAvatarManifest } from './lib/adapter/IAvatarManifest'
+import { ManifestBasedAdapter } from './lib/adapter/ManifestBasedAdapter'
+import { ManifestLoader } from './lib/adapter/ManifestLoader'
 
 const props = defineProps<{
   isDragging?: boolean
+  manifestPath?: string
+  manifest?: IAvatarManifest
 }>()
 
 const emit = defineEmits(['pet', 'hover-start', 'hover-end'])
@@ -31,16 +44,25 @@ const selectedAnim = ref('')
 
 let dragInfluence = 0 // 0 = 正常, 1 = 完全拖拽效果
 
-const clothingState = ref({
-  dress: true,
-  armour: true,
-  hat: true,
-  underwear: true,
-  censored: false // 默认强制隐藏红色方块
-})
-
+// 动态部件状态（基于适配器的功能按钮生成）
+const clothingState = ref<Record<string, boolean>>({})
+// 动态功能按钮列表（供 UI 使用）
+const featureButtons = ref<FeatureButton[]>([])
 // 表情的派生状态
 const isShy = ref(false)
+let currentAdapter: IModelAdapter | null = null
+
+/**
+ * 根据适配器的功能按钮初始化部件状态
+ */
+const initFeatureState = (buttons: FeatureButton[]) => {
+  const state: Record<string, boolean> = {}
+  buttons.forEach((btn) => {
+    state[btn.id] = btn.defaultValue ?? true
+  })
+  clothingState.value = state
+  featureButtons.value = buttons
+}
 
 const updateClothing = () => {
   if (!characterModel) return
@@ -48,33 +70,10 @@ const updateClothing = () => {
   // 计算害羞状态：如果裙子被脱掉，她会变害羞
   isShy.value = !clothingState.value.dress || !clothingState.value.underwear
 
-  characterModel.traverse((child: any) => {
-    // 检查它是否是可能代表部件的网格或组
-    // BedrockLoader 使用 main.json 中的名称
-    const name = child.name
-    if (!name) return
-
-    if (name.includes('Dress') || name.includes('BreastDress')) {
-      child.visible = clothingState.value.dress
-    } else if (name.includes('Armour')) {
-      child.visible = clothingState.value.armour
-    } else if (name.includes('Hat')) {
-      child.visible = clothingState.value.hat
-    } else if (name.toLowerCase().includes('underwear')) {
-      child.visible = clothingState.value.underwear
-    } else if (name.includes('Censored')) {
-      child.visible = clothingState.value.censored
-    } else if (name.includes('embarrassed')) {
-      // 根据害羞状态切换腮红可见性
-      child.visible = isShy.value
-
-      // 修复：将腮红稍微向前移动，以防止 z-fighting
-      // 头部面部约为 Z = -3.5。害羞默认 Z 为 -2.5 (内部)。
-      if (child.position.z > -3.0) {
-        child.position.z -= 1.2
-      }
-    }
-  })
+  // 委托给适配器处理所有部件可见性逻辑
+  if (currentAdapter) {
+    currentAdapter.applyClothingState(characterModel, clothingState.value)
+  }
 }
 
 watch(
@@ -88,16 +87,20 @@ watch(
 // 暴露给父组件的方法
 defineExpose({
   playAnimation: (name: string) => {
-    animManager.playDebug(name)
+    const anim = animationLibrary.get(name)
+    if (anim) {
+      animationEngine.play(anim, 0.2, true)
+    }
   },
   resetAnimation: () => {
     // 重置为空闲或控制器的逻辑
-    if (animList.value.includes('idle')) {
-      animManager.playDebug('idle')
+    if (lastLoadedConfig) {
+      loadControllers(lastLoadedConfig)
     }
   },
   // 暴露状态给父 UI
   clothingState,
+  featureButtons,
   updateClothing,
   animList,
   setAnimation: (name: string) => {
@@ -149,15 +152,67 @@ const scene = shallowRef<THREE.Scene | null>(null)
 const camera = shallowRef<THREE.PerspectiveCamera | null>(null)
 const renderer = shallowRef<THREE.WebGLRenderer | null>(null)
 const controls = shallowRef<OrbitControls | null>(null)
-const animManager = new AnimationManager()
-const loader = new BedrockLoader()
+// const loader = new BedrockLoader() // 移除旧的 Loader
+const retargetingManager = new RetargetingManager()
+const animationLibrary = new AnimationLibrary()
+const animationEngine = new AnimationEngine(retargetingManager)
+const controllerSystem = new AnimationControllerSystem(animationEngine, animationLibrary)
+
+let lastLoadedConfig: any = null
+
+async function loadControllers(config: any) {
+  controllerSystem.reset()
+  if (config.animation_controllers) {
+    const paths = Array.isArray(config.animation_controllers)
+      ? config.animation_controllers
+      : [config.animation_controllers]
+    for (const path of paths) {
+      await controllerSystem.load(path)
+    }
+  }
+}
 
 watch(selectedAnim, (newVal) => {
-  if (newVal) {
-    animManager.playDebug(newVal)
+  if (newVal === '__NONE__') {
+    // 停止所有动画且不恢复控制器
+    controllerSystem.reset()
+    animationEngine.stop(undefined, 0) // 立即停止，不进行淡出
+    // 确保重置骨骼到初始姿态
+    retargetingManager.reset()
+    // 重置程序化动画变量
+    currentHeadX = 0
+    currentHeadY = 0
+    targetHeadX = 0
+    targetHeadY = 0
+    molangContext.query.head_x_rotation = 0
+    molangContext.query.head_y_rotation = 0
+    currentSquint = 1.0
+    currentEyebrowOffset = 0
+    currentLipSync.value = 0
+  } else if (newVal) {
+    // 调试模式：播放选中的动画，权重设为 1，淡入 0.2s
+    // 为了清晰查看，可能希望停止控制器？暂时保持混合
+    const anim = animationLibrary.get(newVal)
+    if (anim) {
+      // 停止所有其他动画以获得纯净的预览
+      animationEngine.stop(undefined, 0.2)
+      animationEngine.play(anim, 0.2, true)
+    }
   } else {
-    // 停止调试或重置？
-    // 理想情况下，我们可能希望恢复控制器逻辑，但 playDebug 会覆盖它。
+    // 恢复控制器逻辑
+    // 由于我们没有暂停控制器，它们可能还在运行，但被 stop() 影响了权重的动画需要恢复
+    // 这是一个复杂点。简单的做法是重置控制器系统
+    // 或者我们假设控制器会在 update 中自动恢复状态动画？
+    // BedrockAnimationController.update 只处理转换和混合表达式。
+    // 如果动画被外部停止了，Controller 并不知道。
+    // 这是一个待优化点。目前暂且重置。
+    controllerSystem.reset()
+    // 重新加载控制器？不，reset 会清空控制器。我们需要 reload。
+    // 实际上，我们应该只是重新加载模型时的逻辑。
+    // 简单起见，如果取消选择，我们什么都不做，或者需要一种“恢复默认”的方法。
+    if (lastLoadedConfig) {
+      loadControllers(lastLoadedConfig)
+    }
   }
 })
 
@@ -165,7 +220,7 @@ let animationFrameId: number
 
 onMounted(async () => {
   initThree()
-  await loadRossi()
+  await loadDefaultManifest()
   animate()
 
   window.addEventListener('resize', onResize)
@@ -185,7 +240,7 @@ onUnmounted(() => {
   if (renderer.value) {
     renderer.value.dispose()
   }
-  animManager.stop()
+  animationEngine.stop()
 })
 
 function initThree() {
@@ -294,82 +349,119 @@ function initThree() {
   s.add(ground)
 }
 
-async function loadRossi() {
+async function loadAvatar(manifest: IAvatarManifest) {
   if (!scene.value) return
 
   try {
-    // 检测环境以设置正确的路径前缀
-    const isElectron = (window as any).electron !== undefined
-    const prefix = isElectron ? 'assets/' : '/assets/'
-
+    const resources = manifest.resources
     const config = {
-      name: 'Rossi',
-      model: `${prefix}3d/Rossi/models/main.json`,
-      texture: `${prefix}3d/Rossi/textures/texture.png`,
-      animation: [
-        `${prefix}3d/Rossi/animations/main.animation.json`,
-        `${prefix}3d/Rossi/animations/tac.animation.json`,
-        `${prefix}3d/Rossi/animations/carryon.animation.json`,
-        `${prefix}3d/Rossi/animations/extra.animation.json`,
-        `${prefix}3d/Rossi/animations/tlm.animation.json`
-      ],
-      animation_controllers: `${prefix}3d/Rossi/controller/controller.json`
+      name: manifest.metadata.name,
+      model: resources.model,
+      texture: resources.texture,
+      animation: resources.animations || [],
+      animation_controllers: (manifest as any).animation_controllers
     }
 
-    // 注意：路径必须相对于 'public' 是正确的
+    let provider: IModelProvider
+    const boneFilterPatterns = manifest.boneFilterPatterns
+    if (config.model.endsWith('.pero')) {
+      console.log(`使用安全模型加载器: ${manifest.metadata.name}`)
+      provider = new PeroSecureProvider(config, boneFilterPatterns)
+    } else {
+      provider = new StandardBedrockProvider(config, boneFilterPatterns)
+    }
 
-    // 清除现有的场景对象以防止重复
+    const avatarRenderer = new AvatarRenderer()
+    const rootGroup = await avatarRenderer.build(provider)
+
     if (characterModel && scene.value) {
       scene.value.remove(characterModel)
       characterModel = null
     }
 
-    const rootGroup = await loader.load(config, animManager)
     characterModel = rootGroup
 
-    // 缓存骨骼用于程序化动画
-    mouthBone = rootGroup.getObjectByName('Mouth') || null
-    const eyeBrow = rootGroup.getObjectByName('EyeBrow')
+    currentAdapter = new ManifestBasedAdapter(manifest)
+
+    const retargetConfig = currentAdapter.getRetargetingConfig()
+    retargetingManager.init(rootGroup, retargetConfig)
+
+    if (currentAdapter.getFeatureButtons) {
+      initFeatureState(currentAdapter.getFeatureButtons())
+    }
+
+    mouthBone = retargetingManager.getBone(StandardBones.Mouth) || null
+    const eyeBrow = retargetingManager.getBone(StandardBones.EyeBrow)
     if (eyeBrow) {
       initialEyebrowY = eyeBrow.position.y
     }
 
     scene.value.add(rootGroup)
 
-    // 填充调试用的动画列表
-    animList.value = Object.keys(animManager.animations).sort()
+    animationLibrary.clear()
+    const animations = await provider.getAnimations()
+    animations.forEach((clip, name) => {
+      animationLibrary.add(name, clip)
+    })
 
-    // 仅当未加载控制器时才自动选择 idle (传统模式)
-    if (animManager.controllers.length === 0) {
-      // 如果可用，自动选择 'idle' 或 'tac:idle'
+    lastLoadedConfig = config
+    await loadControllers(config)
+
+    animList.value = animationLibrary.getNames().sort()
+
+    if (controllerSystem.controllers.length === 0) {
       const idleAnim =
-        animList.value.find((n) => n === 'idle') || animList.value.find((n) => n === 'tac:idle')
+        animList.value.find((n) => n === 'idle') || animList.value.find((n) => n.includes('idle'))
       if (idleAnim) {
-        selectedAnim.value = idleAnim
+        const anim = animationLibrary.get(idleAnim)
+        if (anim) animationEngine.play(anim, 0.2, true)
       }
-    } else {
-      // 如果控制器存在，清除 selectedAnim 以避免强制调试模式
-      selectedAnim.value = ''
     }
 
-    // 初始服装更新（隐藏审查部分）
     setTimeout(() => {
       updateClothing()
     }, 100)
 
     loading.value = false
-    console.log('Rossi 加载成功')
+    console.log(`模型 ${manifest.metadata.name} 加载成功`)
   } catch (e: any) {
-    console.error('加载 Rossi 失败', e)
-    errorMsg.value = 'Failed to load Rossi: ' + (e.message || e)
+    console.error(`加载模型失败`, e)
+    errorMsg.value = `加载模型失败: ${e.message || e}`
     loading.value = false
   }
 }
 
+async function loadDefaultManifest() {
+  const isElectron = (window as any).electron !== undefined
+  const prefix = isElectron ? 'assets/' : '/assets/'
+
+  if (props.manifest) {
+    await loadAvatar(props.manifest)
+    return
+  }
+
+  if (props.manifestPath) {
+    const manifest = await ManifestLoader.fromJson(props.manifestPath)
+    await loadAvatar(manifest)
+    return
+  }
+
+  console.log('未指定 Manifest，使用默认配置')
+  const defaultManifest = await ManifestLoader.fromJson(`${prefix}3d/Rossi/manifest.json`)
+  await loadAvatar(defaultManifest)
+}
+
 let isInteracting = false
+
+let lastFrameTime = 0
 
 function animate() {
   animationFrameId = requestAnimationFrame(animate)
+
+  const now = performance.now() / 1000
+  const dt = now - (lastFrameTime || now)
+  lastFrameTime = now
+  const safeDt = Math.min(dt, 0.1)
 
   // 如果没有交互，自动重置相机
   if (!isInteracting && controls.value && camera.value) {
@@ -403,7 +495,7 @@ function animate() {
   }
 
   // 根据相机位置 + 鼠标输入计算目标头部旋转
-  if (camera.value && scene.value) {
+  if (camera.value && scene.value && selectedAnim.value !== '__NONE__') {
     // 检查射线检测以进行悬停
     if (characterModel) {
       raycaster.setFromCamera(mouseNDC, camera.value)
@@ -420,7 +512,7 @@ function animate() {
     }
 
     // --- 头部追踪逻辑 ---
-    const headBone = scene.value.getObjectByName('Head')
+    const headBone = retargetingManager.getBone(StandardBones.Head)
     // 如果未找到骨骼，则使用默认头部位置（近似高度）
     const headPos = headBone
       ? headBone.getWorldPosition(new THREE.Vector3())
@@ -437,7 +529,8 @@ function animate() {
 
     // 计算俯仰角 (X 轴旋转)
     const hDist = Math.sqrt(dx * dx + dz * dz)
-    let camPitch = -Math.atan2(dy, hDist) * (180 / Math.PI)
+    // 修复：用户反馈垂直方向反了，去除负号修正
+    let camPitch = Math.atan2(dy, hDist) * (180 / Math.PI)
 
     // 添加鼠标偏移
     const maxMouseAngle = 15
@@ -448,8 +541,24 @@ function animate() {
     const effectiveMouseY = isHovering ? 0 : mouseInputY
 
     // 结合相机角度和鼠标偏移
-    let totalYaw = -camYaw + effectiveMouseX * maxMouseAngle * -1
-    let totalPitch = camPitch + effectiveMouseY * maxMouseAngle
+    // 修复：方向修正
+    // Yaw (左右):
+    // camYaw 计算出的是正向角度 (例如相机在右边，得到 +90 度)
+    // 模型向右看需要 +Y 旋转 (Three.js 左手/右手系? 实际上 +Y 是左转，-Y 是右转)
+    // 等等，如果相机在右边 (+X)，模型面朝 +Z。
+    // 模型需要向左转 (Turn Left) 才能看到 +X 吗？
+    // 面朝 +Z。左手边是 +X。
+    // 所以 Turn Left (+Y Rotation) 是对的。
+    // 所以 camYaw (正值) 直接用即可。
+    // 之前是 -camYaw，所以反了。
+
+    let totalYaw = camYaw + effectiveMouseX * maxMouseAngle
+
+    // Pitch (上下):
+    // camPitch 计算出的是负向角度 (相机在上方 -> 负值 -> 抬头)
+    // Mouse Up -> effectiveMouseY > 0 -> 我们也需要负值 (抬头)
+    // 所以 camPitch 保持原样，Mouse 需要反转
+    let totalPitch = camPitch + effectiveMouseY * maxMouseAngle * -1
 
     // 限制到最大限制
     targetHeadY = Math.max(-maxHeadAngle, Math.min(maxHeadAngle, totalYaw))
@@ -458,18 +567,37 @@ function animate() {
 
   // 更新头部追踪 (插值)
   // 平滑地将当前值插值向目标值
-  const lerpFactor = 0.1
-  currentHeadX += (targetHeadX - currentHeadX) * lerpFactor
-  currentHeadY += (targetHeadY - currentHeadY) * lerpFactor
+  if (selectedAnim.value !== '__NONE__') {
+    const lerpFactor = 0.1
+    currentHeadX += (targetHeadX - currentHeadX) * lerpFactor
+    currentHeadY += (targetHeadY - currentHeadY) * lerpFactor
 
-  molangContext.query.head_x_rotation = currentHeadX
-  molangContext.query.head_y_rotation = currentHeadY
+    // 修复：确保 Molang 变量被正确传递
+    // query.head_x_rotation 通常对应头部上下 (Pitch)，单位是角度
+    // query.head_y_rotation 通常对应头部左右 (Yaw)，单位是角度
+    molangContext.query.head_x_rotation = currentHeadX
+    molangContext.query.head_y_rotation = currentHeadY
+  }
+
+  // 确保 AnimationEngine 知道 Molang 环境已更新
+  // (AnimationEngine 每一帧都会读取 molangContext.query)
 
   if (controls.value) controls.value.update()
-  animManager.update()
+
+  controllerSystem.update(safeDt)
+  animationEngine.update(safeDt)
+
+  // 更新 Molang 状态变量
+  // 简化的移动检测逻辑
+  // 实际上 Bedrock 模型应该在 controller 中检测 query.is_moving
+  // 我们只需要确保 query.is_moving 被正确设置
+  // 这里我们假设没有外部输入，所以默认不动。
+  // 如果有键盘输入，应该在这里更新。
+  // 暂时保留旧的硬编码逻辑是不太对的，因为 AnimationStateMachine 已经没了。
+  // 我们直接设置 Molang 变量即可。
 
   // 应用程序化动画覆盖 (更新后)
-  if (scene.value) {
+  if (scene.value && selectedAnim.value !== '__NONE__') {
     // --- 拖拽/被拎起物理效果 ---
     // 平滑过渡拖拽影响 (0.0 到 1.0)
     const targetInfluence = props.isDragging ? 1.0 : 0.0
@@ -481,20 +609,18 @@ function animate() {
       const swingX = Math.sin(time) * 0.1 // 轻微摆动
       const swingZ = Math.cos(time * 0.8) * 0.05
 
-      // 使用 main.json 中的正确骨骼名称
+      // 使用 RetargetingManager 获取骨骼，支持任何兼容的模型
+      const body =
+        retargetingManager.getBone(StandardBones.Body) || retargetingManager.getBone('AllBody')
+      const upperBody = retargetingManager.getBone('UpperBody')
 
-      const body = scene.value.getObjectByName('AllBody') || scene.value.getObjectByName('Body')
-      const upperBody = scene.value.getObjectByName('UpperBody') // 胸部
+      const armL = retargetingManager.getBone(StandardBones.LeftArm)
+      const armR = retargetingManager.getBone(StandardBones.RightArm)
 
-      const armL = scene.value.getObjectByName('LeftArm') || scene.value.getObjectByName('ArmLeft')
-      const armR =
-        scene.value.getObjectByName('RightArm') || scene.value.getObjectByName('ArmRight')
+      const legL = retargetingManager.getBone(StandardBones.LeftLeg)
+      const legR = retargetingManager.getBone(StandardBones.RightLeg)
 
-      const legL = scene.value.getObjectByName('LeftLeg') || scene.value.getObjectByName('LegLeft')
-      const legR =
-        scene.value.getObjectByName('RightLeg') || scene.value.getObjectByName('LegRight')
-
-      const head = scene.value.getObjectByName('Head')
+      const head = retargetingManager.getBone(StandardBones.Head)
 
       // 辅助函数：将当前旋转插值到目标旋转
       // 我们加上乘以 dragInfluence 的目标偏移量
@@ -557,9 +683,35 @@ function animate() {
       }
     }
 
-    const leftEyelid = scene.value.getObjectByName('LeftEyelid')
-    const rightEyelid = scene.value.getObjectByName('RightEyelid')
-    const eyeBrow = scene.value.getObjectByName('EyeBrow')
+    // --- 通用 LookAt (头部追踪) ---
+    // 即使在非拖拽状态下，也要应用 LookAt
+    // 只有当拖拽影响较小时才生效
+    if (dragInfluence < 0.9) {
+      const head = retargetingManager.getBone(StandardBones.Head)
+      if (head) {
+        // currentHeadX/Y 是角度 (Degree)
+        // Bedrock 坐标系通常是 ZYX 顺序
+        // Pitch (上下) -> X轴
+        // Yaw (左右) -> Y轴
+        // 叠加旋转
+        const lookAtX = THREE.MathUtils.degToRad(currentHeadX)
+        const lookAtY = THREE.MathUtils.degToRad(currentHeadY)
+
+        // 我们创建一个只包含 LookAt 旋转的欧拉角
+        const lookAtEuler = new THREE.Euler(lookAtX, lookAtY, 0, 'ZYX')
+        const lookAtQuat = new THREE.Quaternion().setFromEuler(lookAtEuler)
+
+        // 叠加到当前旋转
+        // head.quaternion = head.quaternion * lookAtQuat (局部旋转)
+        head.quaternion.multiply(lookAtQuat)
+      }
+    }
+
+    const leftEyelid =
+      retargetingManager.getBone('LeftEyelid') || retargetingManager.getBone('LeftEyelidBase')
+    const rightEyelid =
+      retargetingManager.getBone('RightEyelid') || retargetingManager.getBone('RightEyelidBase')
+    const eyeBrow = retargetingManager.getBone('EyeBrow')
 
     // 目标缩放：抚摸时 0.1 (眯眼)，否则 1.0 (睁眼)
     // 如果害羞，使用部分眯眼 (例如 0.8) 表现“害羞/尴尬”的样子

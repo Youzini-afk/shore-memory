@@ -5,6 +5,7 @@ import { getDiagnostics } from './diagnostics'
 import { WindowLike } from '../types'
 import { logger } from '../utils/logger'
 import { getGatewayToken } from './system'
+import { appEvents } from '../events'
 
 let backendProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -212,6 +213,13 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
 
   child.on('close', (code) => {
     logger.info('Backend', `后端已退出，退出码: ${code}`)
+
+    // 如果 backendProcess 仍然引用当前进程，说明是意外退出（不是通过 stopBackend 停止的）
+    if (backendProcess && backendProcess.pid === child.pid) {
+      logger.error('Backend', '后端意外崩溃，触发联动停止')
+      appEvents.emit('backend-crashed', code)
+    }
+
     backendProcess = null
   })
 

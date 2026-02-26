@@ -12,7 +12,7 @@
     <!-- UI 覆盖层 -->
     <div class="ui-overlay" @mouseenter="onUIEnter" @mouseleave="onUILeave">
       <!-- Notification Manager -->
-      <PetNotificationManager />
+      <PetNotificationManager ref="notificationManager" />
 
       <!-- 状态标签 (左上角) -->
       <transition name="fade">
@@ -107,7 +107,7 @@
               title="按住 Alt+Shift+V 说话"
             >
               <span class="ptt-icon">🎙️</span>
-              <span v-if="isPTTRecording" class="ptt-text">LISTENING...</span>
+              <span v-if="isPTTRecording" class="ptt-text">正在聆听...</span>
             </div>
           </div>
         </transition>
@@ -124,52 +124,16 @@
               <button class="close-mini-btn" @click="showAppearanceMenu = false">×</button>
             </div>
 
-            <div v-if="avatarRef && avatarRef.clothingState" class="menu-section">
+            <div v-if="avatarRef && avatarRef.clothingState && avatarRef.featureButtons" class="menu-section">
               <div class="menu-label">服装部件</div>
-              <label class="voxel-checkbox">
+              <label v-for="btn in avatarRef.featureButtons" :key="btn.id" class="voxel-checkbox">
                 <input
-                  v-model="avatarRef.clothingState.dress"
+                  v-model="avatarRef.clothingState[btn.id]"
                   type="checkbox"
                   @change="avatarRef.updateClothing()"
                 />
                 <span class="checkmark"></span>
-                Dress
-              </label>
-              <label class="voxel-checkbox">
-                <input
-                  v-model="avatarRef.clothingState.armour"
-                  type="checkbox"
-                  @change="avatarRef.updateClothing()"
-                />
-                <span class="checkmark"></span>
-                盔甲
-              </label>
-              <label class="voxel-checkbox">
-                <input
-                  v-model="avatarRef.clothingState.hat"
-                  type="checkbox"
-                  @change="avatarRef.updateClothing()"
-                />
-                <span class="checkmark"></span>
-                帽子
-              </label>
-              <label class="voxel-checkbox">
-                <input
-                  v-model="avatarRef.clothingState.underwear"
-                  type="checkbox"
-                  @change="avatarRef.updateClothing()"
-                />
-                <span class="checkmark"></span>
-                Underwear
-              </label>
-              <label class="voxel-checkbox">
-                <input
-                  v-model="avatarRef.clothingState.censored"
-                  type="checkbox"
-                  @change="avatarRef.updateClothing()"
-                />
-                <span class="checkmark"></span>
-                打码
+                {{ btn.label }}
               </label>
             </div>
 
@@ -180,6 +144,7 @@
               <div class="menu-label">动作调试</div>
               <select class="voxel-select" @change="(e) => avatarRef.setAnimation(e.target.value)">
                 <option value="">-- 选择动作 --</option>
+                <option value="__NONE__">-- 无动画 --</option>
                 <option v-for="anim in avatarRef.animList" :key="anim" :value="anim">
                   {{ anim }}
                 </option>
@@ -306,6 +271,7 @@ const showFileModal = ref(false)
 const foundFiles = ref([])
 const showAppearanceMenu = ref(false)
 const localTexts = ref({})
+const notificationManager = ref(null)
 
 const parsedBubbleContent = computed(() => {
   const text = currentText.value || ''
@@ -536,7 +502,7 @@ const startRecording = () => {
 
     // 调试日志：每秒输出一次当前音量
     if (Date.now() - lastRmsUpdate > 1000) {
-      // console.log('Current Mic Volume (RMS):', rms.toFixed(4), 'Threshold:', VAD_THRESHOLD)
+      // console.log('当前麦克风音量 (RMS):', rms.toFixed(4), '阈值:', VAD_THRESHOLD)
       lastRmsUpdate = Date.now()
     }
 
@@ -703,8 +669,9 @@ const handleVoiceUpdateRequest = (req) => {
     }
   } else if (type === 'error') {
     console.error('语音错误:', content)
-    currentText.value = `(错误: ${content})`
+    notificationManager.value?.add(content, 'error', '语音错误')
     isThinking.value = false
+    currentText.value = ''
   }
 }
 
@@ -1043,26 +1010,26 @@ onMounted(async () => {
         }
       }
     } catch (e) {
-      console.warn('[Pet3DView] Failed to fetch initial state:', e)
+      console.warn('[Pet3DView] 获取初始状态失败:', e)
     }
   }
 
-  // Fetch immediately and then poll occasionally as backup
+  // 立即获取，然后定期轮询作为备份
   fetchPetState()
   setInterval(fetchPetState, 30000) // 30s polling fallback
 
-  // 1. Initial Mouse Transparency
+  // 1. 初始鼠标穿透
   await invoke('set_ignore_mouse', true)
 
-  // Attach Drag Listener
+  // 绑定拖拽监听器
   window.addEventListener('mousedown', onMouseDown)
 
-  // Attach Key Listeners
+  // 绑定键盘监听器
   window.addEventListener('keydown', handleGlobalKeyDown)
   window.addEventListener('keyup', handleGlobalKeyUp)
 
   // ... rest of listeners ...
-  // Backend Log -> Thinking Bubble
+  // 后端日志 -> 思考气泡
   const unlistenLog = await listen('backend-log', (event) => {
     console.log('[Backend]', event.payload)
     // Simple logic: if log contains "Thinking", show it
@@ -1126,24 +1093,24 @@ onMounted(async () => {
 
   // Status Updates (from Gateway)
   gatewayClient.on('action:agent_changed', async () => {
-    console.log('[Pet3DView] Detected agent change, refreshing state...')
+    console.log('[Pet3DView] 检测到助手变更，正在刷新状态...')
 
-    // 1. Refresh Active Agent Name
+    // 1. 刷新当前助手名称
     await fetchActiveAgent()
 
-    // 2. Refresh Pet State (Mood, Vibe, Mind)
+    // 2. 刷新宠物状态 (心情, 氛围, 想法)
     await fetchPetState()
 
-    // 3. Reload Interaction Texts
+    // 3. 重新加载交互文本
     await loadLocalTexts()
 
-    // 4. Notify User
+    // 4. 通知用户
     currentText.value = `(已切换为 ${currentAgentName.value})`
     isThinking.value = false
     isBubbleExpanded.value = true
     bubbleKey.value++
 
-    // Auto hide bubble after short delay
+    // 短暂延迟后自动隐藏气泡
     setTimeout(() => {
       if (currentText.value.includes('(已切换为')) {
         currentText.value = ''
@@ -1153,7 +1120,7 @@ onMounted(async () => {
   })
 
   gatewayClient.on('action:state_update', (data) => {
-    // The gateway emits the full ActionRequest object, so the actual data is in 'params'
+    // Gateway 发出完整的 ActionRequest 对象，所以实际数据在 'params' 中
     // GatewayClient emits: this.emit(`action:${envelope.request.actionName}`, envelope.request);
     const params = data.params || data
 
@@ -1171,7 +1138,7 @@ onMounted(async () => {
       localStorage.setItem('ppc.mind', params.mind)
     }
 
-    // 2. Interaction Messages (Click/Idle/Back)
+    // 2. 交互消息 (点击/空闲/返回)
     let curTexts = {}
     const storageKey = `ppc.waifu.texts.${currentAgentName.value || 'Pero'}`
 
@@ -1184,7 +1151,7 @@ onMounted(async () => {
 
     let updated = false
 
-    // Handle Click Messages
+    // 处理点击消息
     if (params.click_messages) {
       let clickData = params.click_messages
       if (typeof clickData === 'string') {
@@ -1196,7 +1163,7 @@ onMounted(async () => {
       }
 
       if (typeof clickData === 'object') {
-        // Merge simple format { "body": ["msg1"] } into waifu-tips format
+        // 将简单格式 { "body": ["msg1"] } 合并为 waifu-tips 格式
         if (clickData.head) {
           curTexts['click_head_01'] = Array.isArray(clickData.head)
             ? clickData.head[0]
@@ -1216,7 +1183,7 @@ onMounted(async () => {
       }
     }
 
-    // Handle Idle Messages
+    // 处理空闲消息
     if (data.idle_messages) {
       let msgs = data.idle_messages
       if (typeof msgs === 'string') {
@@ -1238,11 +1205,11 @@ onMounted(async () => {
     if (updated) {
       localStorage.setItem(storageKey, JSON.stringify(curTexts))
       localTexts.value = curTexts
-      console.log('[Pet3DView] Interaction texts updated via Gateway:', curTexts)
+      console.log('[Pet3DView] 通过 Gateway 更新了交互文本:', curTexts)
     }
   })
 
-  // Reminder Trigger (from Gateway)
+  // 提醒触发 (来自 Gateway)
   gatewayClient.on('action:reminder_trigger', (params) => {
     const content = params.content || '提醒时间到！'
 
@@ -1253,10 +1220,10 @@ onMounted(async () => {
 
     // 2. Play Sound / TTS
     if (voiceMode.value !== 0) {
-      // Use browser native TTS for instant feedback
+      // 使用浏览器原生 TTS 进行即时反馈
       if ('speechSynthesis' in window) {
         const utterance = new SpeechSynthesisUtterance(content)
-        // Try to find a Chinese voice
+        // 尝试寻找中文语音
         const voices = window.speechSynthesis.getVoices()
         const zhVoice = voices.find((v) => v.lang.includes('zh'))
         if (zhVoice) utterance.voice = zhVoice
@@ -1270,19 +1237,19 @@ onMounted(async () => {
     }
   })
 
-  // Global Mouse Tracking (Fix for character not following mouse when outside window)
+  // 全局鼠标追踪 (修复角色在窗口外时不跟随鼠标的问题)
   if (window.electron && window.electron.on) {
     const cleanupMouse = window.electron.on('global-mouse-move', (_event, { x, y }) => {
       const winW = window.innerWidth
       const winH = window.innerHeight
 
-      // 1. Direct update to avatar (More reliable than event dispatch)
+      // 1. 直接更新 Avatar (比事件分发更可靠)
       if (avatarRef.value && avatarRef.value.setGlobalMouse) {
         avatarRef.value.setGlobalMouse(x, y)
       }
 
-      // 2. Dispatch event for other listeners (fallback)
-      // Only dispatch if outside window bounds to avoid double events
+      // 2. 分发事件给其他监听器 (回退)
+      // 仅在窗口边界外分发以避免重复事件
       if (x < 0 || x > winW || y < 0 || y > winH) {
         const mouseEvent = new MouseEvent('mousemove', {
           clientX: x,
@@ -1296,7 +1263,7 @@ onMounted(async () => {
     })
     unlistenFunctions.push(cleanupMouse)
   } else {
-    console.warn('window.electron not found, global mouse tracking disabled')
+    console.warn('未找到 window.electron，全局鼠标追踪已禁用')
   }
 })
 
@@ -1332,13 +1299,13 @@ const loadLocalTexts = async () => {
       const saved = localStorage.getItem(storageKey)
       if (saved) dynamicTexts = JSON.parse(saved)
     } catch (e) {
-      console.warn('Failed to parse dynamic texts from localStorage:', e)
+      console.warn('从 localStorage 解析动态文本失败:', e)
     }
     localTexts.value = { ...baseTexts, ...dynamicTexts }
-    console.log('Local texts loaded:', Object.keys(localTexts.value).length)
+    console.log('本地文本已加载:', Object.keys(localTexts.value).length)
   } catch (err) {
-    console.error('Failed to load local texts:', err)
-    // Fallback
+    console.error('加载本地文本失败:', err)
+    // 回退
     localTexts.value = {
       click_head_01: '嘿嘿，好痒呀~',
       click_head_02: '是在摸摸头吗？',
@@ -1386,7 +1353,7 @@ const onPet = (event) => {
       text = getRandomLocalText('click_messages')
   }
 
-  // console.log('Selected text:', text);
+  // console.log('选中文本:', text);
 
   // Fallback
   if (!text) {
@@ -1426,9 +1393,10 @@ const sendMessage = async () => {
   try {
     await invoke('chat-message', { message: text })
   } catch (e) {
-    console.error('Send message failed:', e)
+    console.error('发送消息失败:', e)
     isThinking.value = false
-    currentText.value = '发送失败...'
+    notificationManager.value?.add('发送消息失败', 'error', '通信错误')
+    currentText.value = ''
   }
 }
 
@@ -1481,13 +1449,13 @@ const toggleWindowSize = async () => {
   currentSizeIndex.value = (currentSizeIndex.value + 1) % windowSizes.length
   const size = windowSizes[currentSizeIndex.value]
   console.log(
-    `[Pet3DView] Toggling window size to: ${size.width}x${size.height} (Index: ${currentSizeIndex.value})`
+    `[Pet3DView] 切换窗口大小为: ${size.width}x${size.height} (索引: ${currentSizeIndex.value})`
   )
 
   try {
     await invoke('resize-pet-window', size)
   } catch (e) {
-    console.error('[Pet3DView] Resize failed:', e)
+    console.error('[Pet3DView] 调整大小失败:', e)
   }
 }
 

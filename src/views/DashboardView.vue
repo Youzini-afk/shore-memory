@@ -645,7 +645,7 @@
                             color: #409eff;
                           "
                         >
-                          {{ activeAgent?.name || 'Unknown' }}
+                          {{ activeAgent?.name || '未知' }}
                           <el-icon class="el-icon--right"><ArrowDown /></el-icon>
                         </span>
                         <template #dropdown>
@@ -884,154 +884,180 @@
               <!-- 3. 核心记忆 (重构版) -->
               <div v-else-if="currentTab === 'memories'" key="memories" class="view-container">
                 <div class="toolbar memory-toolbar">
-                  <h3 class="section-title">长期记忆库</h3>
-                  <div class="filters">
-                    <div style="display: flex; align-items: center; margin-right: 15px">
-                      <span style="font-size: 12px; margin-right: 8px; color: #606266">角色:</span>
-                      <el-dropdown
-                        trigger="click"
-                        :disabled="isSwitchingAgent"
-                        @command="switchAgent"
-                      >
-                        <span
-                          class="el-dropdown-link"
-                          style="
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 5px;
-                            color: #409eff;
+                  <div class="memory-header-enhanced">
+                    <div class="header-icon-wrapper">
+                      <el-icon><Collection /></el-icon>
+                    </div>
+                    <div class="header-text-content">
+                      <h3 class="section-title-enhanced">长期记忆库</h3>
+                      <span class="section-subtitle">Long-term Memory Storage</span>
+                    </div>
+                  </div>
+                  <div class="filters-glass-panel">
+                    <div class="filter-row-top">
+                      <div class="filter-group-left">
+                        <div class="agent-selector-wrapper">
+                          <span class="label">当前人格:</span>
+                          <el-dropdown
+                            trigger="click"
+                            :disabled="isSwitchingAgent"
+                            @command="switchAgent"
+                          >
+                            <span class="el-dropdown-link agent-name">
+                              {{ activeAgent?.name || 'Unknown' }}
+                              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
+                            </span>
+                            <template #dropdown>
+                              <el-dropdown-menu>
+                                <el-dropdown-item
+                                  v-for="agent in availableAgents"
+                                  :key="agent.id"
+                                  :command="agent.id"
+                                  :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
+                                >
+                                  <div style="display: flex; align-items: center; gap: 8px">
+                                    <span>{{ agent.name }}</span>
+                                    <span
+                                      v-if="!agent.is_enabled"
+                                      style="font-size: 10px; color: #999"
+                                      >(Disabled)</span
+                                    >
+                                  </div>
+                                </el-dropdown-item>
+                              </el-dropdown-menu>
+                            </template>
+                          </el-dropdown>
+                        </div>
+
+                        <div class="divider-vertical"></div>
+
+                        <el-select
+                          v-model="memoryFilterType"
+                          placeholder="类型筛选"
+                          size="small"
+                          style="width: 140px"
+                          clearable
+                          class="glass-input"
+                          @change="fetchMemories"
+                        >
+                          <el-option label="全部类型" value="" />
+                          <el-option label="🧩 记忆块 (Event)" value="event" />
+                          <el-option label="🧠 事实 (Fact)" value="fact" />
+                          <el-option label="🤝 誓言 (Promise)" value="promise" />
+                          <el-option label="💖 偏好 (Preference)" value="preference" />
+                          <el-option label="📝 工作日志 (Log)" value="work_log" />
+                          <el-option label="🗄️ 归档 (Archived)" value="archived_event" />
+                        </el-select>
+
+                        <el-date-picker
+                          v-model="memoryFilterDate"
+                          type="date"
+                          placeholder="按日期筛选"
+                          value-format="YYYY-MM-DD"
+                          size="small"
+                          style="width: 140px"
+                          class="glass-input"
+                          @change="fetchMemories"
+                        />
+                      </div>
+
+                      <div class="filter-group-right">
+                        <el-radio-group
+                          v-model="memoryViewMode"
+                          size="small"
+                          class="glass-radio-group"
+                          @change="
+                            (val) => {
+                              if (val === 'graph') fetchMemoryGraph()
+                            }
                           "
                         >
-                          {{ activeAgent?.name || 'Unknown' }}
-                          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                        </span>
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item
-                              v-for="agent in availableAgents"
-                              :key="agent.id"
-                              :command="agent.id"
-                              :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
-                            >
-                              <div style="display: flex; align-items: center; gap: 8px">
-                                <span>{{ agent.name }}</span>
-                                <span v-if="!agent.is_enabled" style="font-size: 10px; color: #999"
-                                  >(Disabled)</span
-                                >
-                              </div>
-                            </el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
+                          <el-radio-button value="list">列表</el-radio-button>
+                          <el-radio-button value="graph">图谱</el-radio-button>
+                        </el-radio-group>
+                      </div>
                     </div>
-                    <el-select
-                      v-model="memoryFilterType"
-                      placeholder="类型筛选"
-                      size="small"
-                      style="width: 120px"
-                      clearable
-                      @change="fetchMemories"
-                    >
-                      <el-option label="全部类型" value="" />
-                      <el-option label="🧩 记忆块 (Event)" value="event" />
-                      <el-option label="🧠 事实 (Fact)" value="fact" />
-                      <el-option label="🤝 誓言 (Promise)" value="promise" />
-                      <el-option label="💖 偏好 (Preference)" value="preference" />
-                      <el-option label="📝 工作日志 (Log)" value="work_log" />
-                      <el-option label="🗄️ 归档 (Archived)" value="archived_event" />
-                    </el-select>
-                    <el-date-picker
-                      v-model="memoryFilterDate"
-                      type="date"
-                      placeholder="按日期筛选"
-                      value-format="YYYY-MM-DD"
-                      size="small"
-                      @change="fetchMemories"
-                    />
-                    <el-button
-                      type="danger"
-                      plain
-                      size="small"
-                      :icon="Delete"
-                      :loading="isClearingEdges"
-                      title="清除无效的连线数据"
-                      style="margin-right: 10px"
-                      @click="clearOrphanedEdges"
-                    >
-                      清理孤立连线
-                    </el-button>
-                    <el-button
-                      type="primary"
-                      plain
-                      size="small"
-                      :icon="Search"
-                      :loading="isScanningLonely"
-                      title="扫描并处理孤立记忆"
-                      style="margin-right: 10px"
-                      @click="triggerScanLonely"
-                    >
-                      孤立扫描
-                    </el-button>
-                    <el-button
-                      type="warning"
-                      plain
-                      size="small"
-                      :icon="Tools"
-                      :loading="isRunningMaintenance"
-                      title="执行每日深度维护"
-                      style="margin-right: 10px"
-                      @click="triggerMaintenance"
-                    >
-                      深度维护
-                    </el-button>
-                    <el-button
-                      type="success"
-                      plain
-                      size="small"
-                      :icon="Connection"
-                      :loading="isDreaming"
-                      title="触发梦境联想机制"
-                      style="margin-right: 10px"
-                      @click="triggerDream"
-                    >
-                      梦境联想
-                    </el-button>
-                    <el-radio-group
-                      v-model="memoryViewMode"
-                      size="small"
-                      @change="
-                        (val) => {
-                          if (val === 'graph') fetchMemoryGraph()
-                        }
-                      "
-                    >
-                      <el-radio-button value="list">列表</el-radio-button>
-                      <el-radio-button value="graph">图谱</el-radio-button>
-                    </el-radio-group>
-                  </div>
-                </div>
 
-                <!-- Tag Cloud Area -->
-                <!-- 标签云区域 -->
-                <div v-if="topTags.length" class="tag-cloud-area">
-                  <span class="tag-cloud-label">热门标签:</span>
-                  <div class="tag-cloud-chips">
-                    <el-check-tag
-                      v-for="{ tag, count } in topTags"
-                      :key="tag"
-                      :checked="memoryFilterTags.includes(tag)"
-                      class="cloud-tag"
-                      @change="
-                        (checked) => {
-                          if (checked) memoryFilterTags.push(tag)
-                          else memoryFilterTags = memoryFilterTags.filter((t) => t !== tag)
-                          fetchMemories()
-                        }
-                      "
-                    >
-                      {{ tag }} ({{ count }})
-                    </el-check-tag>
+                    <div class="filter-row-bottom">
+                      <div v-if="topTags.length" class="tag-cloud-inline">
+                        <span class="tag-label">热门:</span>
+                        <div class="tag-scroll-area">
+                          <el-check-tag
+                            v-for="{ tag, count } in topTags"
+                            :key="tag"
+                            :checked="memoryFilterTags.includes(tag)"
+                            class="glass-check-tag"
+                            @change="
+                              (checked) => {
+                                if (checked) memoryFilterTags.push(tag)
+                                else memoryFilterTags = memoryFilterTags.filter((t) => t !== tag)
+                                fetchMemories()
+                              }
+                            "
+                          >
+                            {{ tag }}
+                          </el-check-tag>
+                        </div>
+                      </div>
+
+                      <div class="action-buttons">
+                        <el-tooltip content="清除无效的连线数据" placement="top">
+                          <el-button
+                            type="danger"
+                            plain
+                            size="small"
+                            :icon="Delete"
+                            :loading="isClearingEdges"
+                            class="glass-button"
+                            @click="clearOrphanedEdges"
+                          >
+                            清理
+                          </el-button>
+                        </el-tooltip>
+
+                        <el-tooltip content="扫描并处理孤立记忆" placement="top">
+                          <el-button
+                            type="primary"
+                            plain
+                            size="small"
+                            :icon="Search"
+                            :loading="isScanningLonely"
+                            class="glass-button"
+                            @click="triggerScanLonely"
+                          >
+                            扫描
+                          </el-button>
+                        </el-tooltip>
+
+                        <el-tooltip content="执行每日深度维护" placement="top">
+                          <el-button
+                            type="warning"
+                            plain
+                            size="small"
+                            :icon="Tools"
+                            :loading="isRunningMaintenance"
+                            class="glass-button"
+                            @click="triggerMaintenance"
+                          >
+                            维护
+                          </el-button>
+                        </el-tooltip>
+
+                        <el-tooltip content="触发梦境联想机制" placement="top">
+                          <el-button
+                            type="success"
+                            plain
+                            size="small"
+                            :icon="Connection"
+                            :loading="isDreaming"
+                            class="glass-button"
+                            @click="triggerDream"
+                          >
+                            梦境
+                          </el-button>
+                        </el-tooltip>
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -2023,7 +2049,8 @@ import {
   Tools,
   Picture,
   ArrowDown,
-  Upload
+  Upload,
+  Collection
 } from '@element-plus/icons-vue'
 import TerminalPanel from '../components/terminal/TerminalPanel.vue'
 import NapCatTerminal from '../components/terminal/NapCatTerminal.vue'
@@ -5389,6 +5416,52 @@ onUnmounted(() => {
   letter-spacing: 0.5px;
 }
 
+.memory-header-enhanced {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.header-icon-wrapper {
+  width: 42px;
+  height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 4px 10px rgba(161, 140, 209, 0.4);
+  color: white;
+  font-size: 20px;
+}
+
+.header-text-content {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.section-title-enhanced {
+  font-size: 20px;
+  font-weight: 800;
+  margin: 0;
+  background: linear-gradient(90deg, #5e60ce 0%, #6930c3 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  color: #5e60ce;
+  line-height: 1.2;
+}
+
+.section-subtitle {
+  font-size: 10px;
+  color: #909399;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  margin-top: 2px;
+}
+
 .memory-waterfall {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -5401,32 +5474,259 @@ onUnmounted(() => {
 }
 
 .memory-card {
-  border-radius: var(--radius-md) !important;
-  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  border-radius: 16px !important;
+  transition: all 0.4s cubic-bezier(0.25, 0.8, 0.25, 1);
   cursor: default;
-  border: none !important;
-  background: rgba(255, 255, 255, 0.6) !important;
-  backdrop-filter: blur(8px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.6) !important;
+  background: rgba(255, 255, 255, 0.75) !important;
+  backdrop-filter: blur(16px);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03) !important;
+  position: relative;
+  overflow: hidden;
+  padding-top: 5px; /* Make space for the top bar */
 }
 
 .memory-card:hover {
-  transform: translateY(-4px);
-  background: rgba(255, 255, 255, 0.8) !important;
-  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08) !important;
+  transform: translateY(-5px) scale(1.01);
+  background: rgba(255, 255, 255, 0.95) !important;
+  box-shadow:
+    0 15px 30px rgba(0, 0, 0, 0.08),
+    0 5px 15px rgba(0, 0, 0, 0.04) !important;
+  z-index: 10;
+  border-color: rgba(255, 255, 255, 0.9) !important;
 }
 
-.memory-card.preference {
-  border-top: 3px solid #f56c6c !important;
+/* Color Coding with Gradients */
+.memory-card::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: #e4e7ed;
+  z-index: 1;
 }
-.memory-card.event {
-  border-top: 3px solid #409eff !important;
+
+.memory-card.preference::after {
+  background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 100%);
 }
-.memory-card.fact {
-  border-top: 3px solid #67c23a !important;
-} /* Green */
+.memory-card.event::after {
+  background: linear-gradient(90deg, #a18cd1 0%, #fbc2eb 100%);
+}
+.memory-card.fact::after {
+  background: linear-gradient(90deg, #84fab0 0%, #8fd3f4 100%);
+}
+.memory-card.summary::after {
+  background: linear-gradient(90deg, #fccb90 0%, #d57eeb 100%);
+}
+.memory-card.promise::after {
+  background: linear-gradient(90deg, #ffecd2 0%, #fcb69f 100%);
+}
+.memory-card.work_log::after {
+  background: linear-gradient(90deg, #cfd9df 0%, #e2ebf0 100%);
+}
+
+/* Remove old specific borders */
+.memory-card.preference,
+.memory-card.event,
+.memory-card.fact,
 .memory-card.summary {
-  border-top: 3px solid #e6a23c !important;
+  border-top: none !important;
+}
+
+.memory-text {
+  font-size: 14.5px;
+  line-height: 1.65;
+  color: #4a5568;
+  margin: 12px 0 16px 0;
+  padding: 0 4px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+.memory-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-top: 8px; /* Extra padding since we have the top bar */
+}
+
+.memory-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px dashed rgba(0, 0, 0, 0.06);
+}
+
+.mini-tag {
+  border: none !important;
+  font-weight: 600;
+  letter-spacing: 0.3px;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+}
+
+/* Enhanced Memory Toolbar */
+.memory-toolbar {
+  flex-direction: column !important;
+  align-items: stretch !important;
+  gap: 15px;
+  height: auto !important;
+}
+
+.filters-glass-panel {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 16px;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+}
+
+.filter-row-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.filter-group-left {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.filter-group-right {
+  display: flex;
+  align-items: center;
+}
+
+.agent-selector-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(255, 255, 255, 0.5);
+  padding: 4px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.agent-selector-wrapper .label {
+  font-size: 12px;
+  color: #606266;
+  font-weight: 500;
+}
+
+.agent-name {
+  font-weight: 600;
+  color: #5e60ce;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.divider-vertical {
+  width: 1px;
+  height: 20px;
+  background: rgba(0, 0, 0, 0.06);
+  margin: 0 4px;
+}
+
+.filter-row-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-top: 1px dashed rgba(0, 0, 0, 0.05);
+  padding-top: 10px;
+}
+
+.tag-cloud-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+  margin-right: 15px;
+}
+
+.tag-label {
+  font-size: 11px;
+  color: #909399;
+  white-space: nowrap;
+}
+
+.tag-scroll-area {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.tag-scroll-area::-webkit-scrollbar {
+  display: none;
+}
+
+.glass-check-tag {
+  background: rgba(255, 255, 255, 0.4) !important;
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  font-size: 11px !important;
+  padding: 2px 8px !important;
+  border-radius: 6px !important;
+  color: #606266 !important;
+  transition: all 0.2s !important;
+  cursor: pointer;
+}
+
+.glass-check-tag:hover {
+  background: #fff !important;
+  color: #5e60ce !important;
+}
+
+.glass-check-tag.is-checked {
+  background: #5e60ce !important;
+  color: white !important;
+  border-color: #5e60ce !important;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.glass-button {
+  border: 1px solid rgba(0, 0, 0, 0.05) !important;
+  background: rgba(255, 255, 255, 0.6) !important;
+  transition: all 0.2s !important;
+}
+
+.glass-button:hover {
+  transform: translateY(-2px);
+  background: #fff !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+}
+
+.glass-radio-group :deep(.el-radio-button__inner) {
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: none !important;
+}
+
+.glass-radio-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+  background-color: #5e60ce !important;
+  border-color: #5e60ce !important;
+  color: white !important;
+  box-shadow: -1px 0 0 0 #5e60ce !important;
 }
 
 /* Tasks Waterfall */

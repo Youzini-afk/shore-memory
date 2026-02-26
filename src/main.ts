@@ -20,8 +20,8 @@ const app = createApp(App)
 
 // 全局错误处理
 app.config.errorHandler = (err, instance, info) => {
-  console.error('[Vue Error]', err)
-  console.error('[Vue Error Info]', info)
+  console.error('[Vue 错误]', err)
+  console.error('[Vue 错误信息]', info)
 }
 
 for (const [key, component] of Object.entries(ElementPlusIconsVue)) {

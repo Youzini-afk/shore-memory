@@ -320,14 +320,26 @@ class SocialMemoryService:
         if not date_str:
             date_str = datetime.now().strftime("%Y-%m-%d")
 
+        # [修改] 优先检查文件
+        from utils.workspace_utils import get_workspace_root
+        import os
+        agent_workspace = get_workspace_root(agent_id)
+        report_dir = os.path.join(agent_workspace, "social_reports")
+        os.makedirs(report_dir, exist_ok=True)
+        file_path = os.path.join(report_dir, f"{date_str}.md")
+        
+        if os.path.exists(file_path):
+            print(f"[SocialMemory] 日报已存在: {file_path}")
+            # 读取并返回模拟对象
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                     content = f.read()
+                return SocialDailyReport(date_str=date_str, content=content, agent_id=agent_id)
+            except Exception:
+                pass
+
         async for session in get_social_db_session():
-            # 1. 检查今日是否已生成
-            statement_check = select(SocialDailyReport).where(
-                SocialDailyReport.date_str == date_str
-            )
-            existing = (await session.exec(statement_check)).first()
-            if existing:
-                return existing
+            # 1. (已移除 DB 检查)
 
             # 2. 统计当日消息
             start_dt = datetime.strptime(f"{date_str} 00:00:00", "%Y-%m-%d %H:%M:%S")
@@ -404,6 +416,15 @@ class SocialMemoryService:
             )
 
             # 保存报告
+            # [修改] 只保存到文件
+            try:
+                with open(file_path, "w", encoding="utf-8") as f:
+                    f.write(report_text)
+                print(f"[SocialMemory] 日报文件已保存: {file_path}")
+            except Exception as e:
+                print(f"[SocialMemory] 保存日报文件失败: {e}")
+
+            # 构造返回对象但不入库
             report = SocialDailyReport(
                 date_str=date_str,
                 content=report_text,
@@ -412,11 +433,10 @@ class SocialMemoryService:
                 new_friends=new_friends,
                 agent_id=agent_id,
             )
-            session.add(report)
-            await session.commit()
-            await session.refresh(report)
-
-            print(f"[SocialMemory] 已生成 {date_str} 的日报")
+            # session.add(report)
+            # await session.commit()
+            
+            print(f"[SocialMemory] 已生成 {date_str} 的日报 (仅文件)")
             return report
 
 

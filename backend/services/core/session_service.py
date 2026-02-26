@@ -190,18 +190,31 @@ async def exit_work_mode() -> str:
         if not summary_content:
             summary_content = f"工作模式总结失败。任务: {task_name}。"
 
-        # 4. 保存到记忆 (DB)
-        # 退出工作模式时，将总结存入数据库作为 work_log 类型的记忆
-        await MemoryService.save_memory(
-            session=session,
-            content=summary_content,
-            tags=f"work_log,summary,coding,{task_name}",
-            clusters="[工作记录]",
-            importance=6,
-            memory_type="work_log",
-            source="system",
-            agent_id=agent_id,
-        )
+        # 4. 保存到文件 (不入库)
+        try:
+            import os
+            from utils.workspace_utils import get_workspace_root
+            
+            workspace = get_workspace_root(agent_id)
+            log_dir = os.path.join(workspace, "work_logs")
+            os.makedirs(log_dir, exist_ok=True)
+            
+            from datetime import datetime
+            now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+            # 清理 task_name 以防非法字符
+            safe_task_name = "".join([c if c.isalnum() else "_" for c in task_name])
+            file_name = f"{now_str}_{safe_task_name}.md"
+            file_path = os.path.join(log_dir, file_name)
+            
+            with open(file_path, "w", encoding="utf-8") as f:
+                f.write(summary_content)
+            print(f"[Session] 工作日志已保存: {file_path}")
+            
+        except Exception as e:
+            print(f"[Session] 保存工作日志失败: {e}")
+
+        # [已移除] 存入数据库
+        # await MemoryService.save_memory(...)
 
         # [NIT] 停用工作工具链
         try:

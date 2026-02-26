@@ -54,7 +54,9 @@ class AgentManager:
         # 用户自定义代理目录: 优先使用环境变量
         data_dir = os.environ.get(
             "PERO_DATA_DIR",
-            os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "data")),
+            os.path.abspath(
+                os.path.join(os.path.dirname(__file__), "..", "..", "data")
+            ),
         )
         self.user_agents_dir = os.path.join(data_dir, "agents")
 

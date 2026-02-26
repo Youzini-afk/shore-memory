@@ -226,6 +226,21 @@ async def lifespan(app: FastAPI):
     # asr_service = get_asr_service()
     # asyncio.create_task(asyncio.to_thread(asr_service.warm_up))
 
+    # [容错] 恢复未完成的记忆任务 (启动自愈)
+    try:
+        from sqlalchemy.orm import sessionmaker
+
+        from services.memory.scorer_service import ScorerService
+
+        async_session = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
+        async with async_session() as session:
+            scorer = ScorerService(session)
+            await scorer.recover_pending_tasks()
+    except Exception as e:
+        print(f"[Main] 记忆任务恢复失败: {e}")
+
     # 启动社交服务（如果已启用）
     social_service = get_social_service()
     await social_service.start()
@@ -316,27 +331,23 @@ async def lifespan(app: FastAPI):
                         report = await chain_service.generate_weekly_report(session)
 
                         if report:
-                            # [修改] 不再保存到 ConversationLog (聊天窗口)
-                            # log = ConversationLog(...)
-                            # session.add(log)
-
-                            # [功能] 将周报持久化到数据库
-                            # 周报直接存入数据库，不再保存到本地文件
+                            # [修改] 保存到文件 (不入库)
                             try:
-                                from services.memory.memory_service import MemoryService
-
-                                await MemoryService.save_memory(
-                                    session=session,
-                                    content=report,
-                                    tags="weekly_report,summary",
-                                    clusters="[周报归档]",
-                                    importance=5,
-                                    memory_type="summary",
-                                    source="system",
-                                )
-                                print("[Main] 周报已生成并存入数据库。")
+                                import os
+                                from utils.workspace_utils import get_workspace_root
+                                
+                                agent_id = "pero" # Default in chain_service
+                                workspace = get_workspace_root(agent_id)
+                                report_dir = os.path.join(workspace, "weekly_reports")
+                                os.makedirs(report_dir, exist_ok=True)
+                                date_str = now.strftime("%Y-%m-%d")
+                                file_path = os.path.join(report_dir, f"{date_str}.md")
+                                
+                                with open(file_path, "w", encoding="utf-8") as f:
+                                    f.write(report)
+                                print(f"[Main] 周报已保存到文件: {file_path}")
                             except Exception as e:
-                                print(f"[Main] 保存周报到数据库失败: {e}")
+                                print(f"[Main] 保存周报文件失败: {e}")
 
                             # 更新配置
                             if not config:

@@ -9,6 +9,7 @@ export type LogSource =
   | 'Plugin'
   | 'System'
   | 'ModelDownload'
+  | 'Native'
 
 class Logger {
   private static instance: Logger

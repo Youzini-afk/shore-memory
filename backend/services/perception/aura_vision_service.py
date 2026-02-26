@@ -43,7 +43,7 @@ except ImportError as e:
 
 # 尝试导入Rust核心模块
 try:
-    from pero_memory_core import VisionIntentMemoryManager, VisionProcessResult
+    from pero_vision_core import VisionIntentMemoryManager, VisionProcessResult
 
     RUST_VISION_AVAILABLE = True
     logger.info("[AuraVision] Rust 视觉模块加载成功")

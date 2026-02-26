@@ -144,7 +144,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onUnmounted } from 'vue'
 import { Search, Bell, Settings, Home } from 'lucide-vue-next'
 import { invoke } from '@/utils/ipcAdapter'
 import ChatInterface from '../components/chat/ChatInterface.vue'
@@ -211,6 +211,12 @@ const openStronghold = async () => {
 
 onMounted(() => {
   loadAgents()
+  console.log('聊天模式已挂载')
+  window.ipcRenderer.send('resize-window', { width: 400, height: 600 })
+})
+
+onUnmounted(() => {
+  console.log('聊天模式已卸载')
 })
 </script>
 

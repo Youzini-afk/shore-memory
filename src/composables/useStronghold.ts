@@ -125,10 +125,10 @@ export function useStronghold() {
   const fetchButler = async () => {
     try {
       const res = await fetch(`${API_BASE}/stronghold/butler`)
-      if (!res.ok) throw new Error('Failed to fetch butler config')
+      if (!res.ok) throw new Error('获取管家配置失败')
       butlerConfig.value = await res.json()
     } catch (err: any) {
-      console.error('Failed to fetch butler config:', err)
+      console.error('获取管家配置失败:', err)
       // 非关键错误，不设置全局错误状态
     }
   }
@@ -138,10 +138,10 @@ export function useStronghold() {
   const fetchAgentsStatus = async () => {
     try {
       const res = await fetch(`${API_BASE}/stronghold/agents/status`)
-      if (!res.ok) throw new Error('Failed to fetch agents status')
+      if (!res.ok) throw new Error('获取智能体状态失败')
       agentsStatus.value = await res.json()
     } catch (err: any) {
-      console.error('Failed to fetch agents status:', err)
+      console.error('获取智能体状态失败:', err)
     }
   }
 

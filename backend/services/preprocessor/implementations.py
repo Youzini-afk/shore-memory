@@ -625,43 +625,33 @@ class WeeklyReportPreprocessor(BasePreprocessor):
         weekly_report_context = ""
 
         try:
-            # 使用 get_relevant_memories 但限制类型为 weekly_report
-            # 如果 user_message 为空，则取最新的
+            # [修改] 改为从文件系统读取最新周报 (不再使用数据库检索)
+            import os
+            from utils.workspace_utils import get_workspace_root
 
-            reports = []
-
-            if user_message:
-                # 语义检索最相关的一条
-                reports = await memory_service.get_relevant_memories(
-                    session,
-                    user_message,
-                    limit=1,
-                    filter_tags=["weekly_report"],
-                    memory_type="weekly_report",  # 确保只检索此类型
-                    agent_id=agent_id,
-                )
-            else:
-                # 如果没有用户输入（可能是系统触发），则取最新的一条
-                from sqlmodel import desc
-
-                from models import Memory
-
-                stmt = (
-                    select(Memory)
-                    .where(Memory.memory_type == "weekly_report")
-                    .where(Memory.agent_id == agent_id)
-                    .order_by(desc(Memory.timestamp))
-                    .limit(1)
-                )
-                reports = (await session.exec(stmt)).all()
-
-            if reports:
-                report = reports[0]
-                weekly_report_context = (
-                    f"【相关周报】({report.realTime})\n{report.content}"
-                )
-                print(f"[WeeklyReport] 注入了来自 {report.realTime} 的周报")
-
+            workspace = get_workspace_root(agent_id)
+            report_dir = os.path.join(workspace, "weekly_reports")
+            
+            if os.path.exists(report_dir):
+                files = [f for f in os.listdir(report_dir) if f.endswith(".md")]
+                # 假设文件名格式为 YYYY-MM-DD.md，可以直接排序
+                files.sort(reverse=True)
+                
+                if files:
+                    latest_file = files[0]
+                    file_path = os.path.join(report_dir, latest_file)
+                    try:
+                        with open(file_path, "r", encoding="utf-8") as f:
+                            content = f.read()
+                        # 截断以防过长
+                        if len(content) > 2000:
+                            content = content[:2000] + "\n...(已截断)"
+                            
+                        weekly_report_context = f"【最新周报】({latest_file[:-3]})\n{content}"
+                        print(f"[WeeklyReport] 注入了来自 {latest_file} 的周报")
+                    except Exception as e:
+                        print(f"[WeeklyReport] 读取周报文件失败: {e}")
+            
         except Exception as e:
             print(f"[WeeklyReport] 检索周报失败: {e}")
 

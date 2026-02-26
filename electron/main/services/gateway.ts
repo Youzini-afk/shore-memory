@@ -4,6 +4,7 @@ import fs from 'fs-extra'
 import { isPackaged, paths } from '../utils/env'
 import { WindowLike } from '../types'
 import { logger } from '../utils/logger'
+import { appEvents } from '../events'
 
 let gatewayProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -186,6 +187,13 @@ export async function startGateway(window: WindowLike) {
 
   gatewayProcess.on('close', (code) => {
     logger.info('Gateway', `Gateway 已退出，退出码: ${code}`)
+
+    // 如果 gatewayProcess 仍然引用当前进程，说明是意外退出（不是通过 stopGateway 停止的）
+    if (gatewayProcess && gatewayProcess.pid === gatewayProcess.pid) {
+      logger.error('Gateway', 'Gateway 意外崩溃，触发联动停止')
+      appEvents.emit('gateway-crashed', code)
+    }
+
     gatewayProcess = null
   })
 

@@ -16,8 +16,9 @@
     "build:docker": "vite build --mode docker",
     "docker:up": "cd docker && docker-compose up --build",
     "docker:down": "cd docker && docker-compose down",
-    "build:electron": "npm run build:backend && node scripts/copy-gateway.js && vite build && tsc -p electron/tsconfig.json && electron-builder",
-    "build:steam": "npm run build:backend && node scripts/copy-gateway.js && vite build && tsc -p electron/tsconfig.json && electron-builder --win --dir",
+    "build:electron": "npm run build:backend && npm run build:native && node scripts/copy-gateway.js && vite build && tsc -p electron/tsconfig.json && electron-builder",
+    "build:steam": "npm run build:backend && npm run build:native && node scripts/copy-gateway.js && vite build && tsc -p electron/tsconfig.json && electron-builder --win --dir",
+    "build:native": "cd src/components/avatar/native && npm install && npm run build",
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
@@ -127,7 +128,14 @@
     },
     "files": [
       "dist/**/*",
-      "dist-electron/**/*"
+      "dist-electron/**/*",
+      "src/components/avatar/native/index.js",
+      "src/components/avatar/native/index.d.ts",
+      "src/components/avatar/native/package.json",
+      "src/components/avatar/native/*.node"
+    ],
+    "asarUnpack": [
+      "**/*.node"
     ],
     "extraResources": [
       {

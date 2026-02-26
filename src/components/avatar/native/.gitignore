@@ -1,0 +1,7 @@
+# Target
+target/
+index.js
+index.d.ts
+*.node
+npm-debug.log
+yarn-error.log

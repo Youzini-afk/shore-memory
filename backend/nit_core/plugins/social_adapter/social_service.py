@@ -204,30 +204,15 @@ class SocialService:
             from .database import get_social_db_session
             from .models_db import SocialDailyReport
 
-            # A. 检查数据库
-            report_exists = False
-            async for session in get_social_db_session():
-                stmt = select(SocialDailyReport).where(
-                    SocialDailyReport.date_str == date_str,
-                    SocialDailyReport.agent_id == agent_id,
-                )
-                result = await session.exec(stmt)
-                if result.first():
-                    report_exists = True
-                break
-
-            if report_exists:
-                return
-
-            # B. 检查文件 (作为双重确认，或者如果数据库没存但文件有了)
+            # A. 检查文件 (只检查文件，不查数据库)
             # 定位 workspace
             agent_workspace = get_workspace_root(agent_id)
             report_dir = os.path.join(agent_workspace, "social_reports")
             os.makedirs(report_dir, exist_ok=True)
-
             file_path = os.path.join(report_dir, f"{date_str}.md")
+
             if os.path.exists(file_path):
-                # 补录到数据库? 暂时跳过
+                # 文件已存在，跳过
                 return
 
             logger.info(f"[Social] 正在为 {agent_id} 生成 {date_str} 的社交日报...")
@@ -310,21 +295,11 @@ class SocialService:
             except Exception as e:
                 logger.error(f"[Social] 保存日报文件失败: {e}")
 
-            # B. 保存到数据库
-            try:
-                async for session in get_social_db_session():
-                    report = SocialDailyReport(
-                        date_str=date_str,
-                        content=report_content,
-                        total_messages=len(messages),
-                        agent_id=agent_id,
-                    )
-                    session.add(report)
-                    await session.commit()
-                    break
-                logger.info("[Social] 日报已归档到数据库。")
-            except Exception as e:
-                logger.error(f"[Social] 保存日报到数据库失败: {e}")
+            # [修改] 不再保存到数据库
+            # try:
+            #    ...
+            # except: ...
+            logger.info("[Social] 日报生成完成 (仅文件)。")
 
         except Exception as e:
             logger.error(f"[Social] 处理 {agent_id} 的日报失败: {e}", exc_info=True)

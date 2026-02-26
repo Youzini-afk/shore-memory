@@ -40,7 +40,9 @@ class VectorStoreService:
         if env_data_dir:
             self.data_dir = os.path.join(env_data_dir, "rust_db")
         else:
-            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
             data_dir = os.path.join(base_dir, "data")
             self.data_dir = os.path.join(data_dir, "rust_db")
 

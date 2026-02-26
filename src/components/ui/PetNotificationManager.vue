@@ -47,6 +47,10 @@ const add = (message, type = 'info', title = '', duration = 8000) => {
   }
 }
 
+defineExpose({
+  add
+})
+
 const remove = (id) => {
   const index = notifications.value.findIndex((n) => n.id === id)
   if (index !== -1) {

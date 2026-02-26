@@ -76,10 +76,26 @@ function requestPageInfo() {
   chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
     if (tabs.length > 0) {
       const tabId = tabs[0].id
+      const url = tabs[0].url
+
+      // 跳过受保护的 URL
+      if (
+        url &&
+        (url.startsWith('chrome://') ||
+          url.startsWith('edge://') ||
+          url.startsWith('about:') ||
+          url.startsWith('chrome-extension://'))
+      ) {
+        console.log('跳过受保护的页面:', url)
+        return
+      }
+
       // 发送获取页面信息的消息，如果失败则尝试重新注入脚本
       chrome.tabs.sendMessage(tabId, { type: 'getPageInfo' }, () => {
         if (chrome.runtime.lastError) {
-          console.log('Content script 未就绪或发生错误:', chrome.runtime.lastError)
+          const errorMsg =
+            chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError)
+          console.log('Content script 未就绪或发生错误:', errorMsg)
           // 如果无法建立连接，尝试重新注入脚本
           injectContentScript(tabId, () => {
             // 重试请求
@@ -92,21 +108,45 @@ function requestPageInfo() {
 }
 
 function injectContentScript(tabId, callback, errorCallback) {
-  chrome.scripting.executeScript(
-    {
-      target: { tabId: tabId },
-      files: ['content_script.js']
-    },
-    () => {
-      if (chrome.runtime.lastError) {
-        console.error('注入脚本失败:', chrome.runtime.lastError)
-        if (errorCallback) errorCallback(chrome.runtime.lastError)
-      } else {
-        console.log('脚本注入成功')
-        if (callback) callback()
-      }
+  // 先检查标签页 URL，避免在受保护页面尝试注入导致报错
+  chrome.tabs.get(tabId, (tab) => {
+    if (chrome.runtime.lastError) {
+      if (errorCallback) errorCallback(chrome.runtime.lastError)
+      return
     }
-  )
+
+    const url = tab.url
+    if (
+      url &&
+      (url.startsWith('chrome://') ||
+        url.startsWith('edge://') ||
+        url.startsWith('about:') ||
+        url.startsWith('chrome-extension://'))
+    ) {
+      const msg = `无法在受保护的页面上注入脚本: ${url}`
+      console.warn(msg)
+      if (errorCallback) errorCallback({ message: msg })
+      return
+    }
+
+    chrome.scripting.executeScript(
+      {
+        target: { tabId: tabId },
+        files: ['content_script.js']
+      },
+      () => {
+        if (chrome.runtime.lastError) {
+          const errorMsg =
+            chrome.runtime.lastError.message || JSON.stringify(chrome.runtime.lastError)
+          console.error('注入脚本失败:', errorMsg)
+          if (errorCallback) errorCallback(chrome.runtime.lastError)
+        } else {
+          console.log('脚本注入成功')
+          if (callback) callback()
+        }
+      }
+    )
+  })
 }
 
 // 闹钟监听器：处理重连和连接状态检查

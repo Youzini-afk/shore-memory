@@ -43,7 +43,7 @@ window.addEventListener('unhandledrejection', (event) => {
 // 监听后端系统错误
 if (window.electron && window.electron.on) {
   window.electron.on('system-error', (errorMsg) => {
-    console.error('[System Error]', errorMsg)
+    console.error('[系统错误]', errorMsg)
     if (window.$notify) {
       // 格式化错误信息，使其更易读
       let displayMsg = errorMsg

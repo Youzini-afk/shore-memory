@@ -1,61 +1,61 @@
 {
-  "hash": "fe309840",
-  "configHash": "2edaf0a6",
-  "lockfileHash": "4d5d5a9e",
-  "browserHash": "ccaf91c6",
+  "hash": "519372cb",
+  "configHash": "2881c230",
+  "lockfileHash": "1a1c3d4c",
+  "browserHash": "2cc7e11d",
   "optimized": {
     "vue": {
-      "src": "../../../../node_modules/vue/dist/vue.runtime.esm-bundler.js",
+      "src": "../../../../node_modules/.pnpm/vue@3.5.28_typescript@5.9.3/node_modules/vue/dist/vue.runtime.esm-bundler.js",
       "file": "vue.js",
-      "fileHash": "66f629b6",
+      "fileHash": "bc8ebf41",
       "needsInterop": false
     },
     "vitepress > @vue/devtools-api": {
-      "src": "../../../../node_modules/vitepress/node_modules/@vue/devtools-api/dist/index.js",
+      "src": "../../../../node_modules/.pnpm/@vue+devtools-api@7.7.9/node_modules/@vue/devtools-api/dist/index.js",
       "file": "vitepress___@vue_devtools-api.js",
-      "fileHash": "6932060a",
+      "fileHash": "ec7e35d4",
       "needsInterop": false
     },
     "vitepress > @vueuse/core": {
-      "src": "../../../../node_modules/vitepress/node_modules/@vueuse/core/index.mjs",
+      "src": "../../../../node_modules/.pnpm/@vueuse+core@12.8.2_typescript@5.9.3/node_modules/@vueuse/core/index.mjs",
       "file": "vitepress___@vueuse_core.js",
-      "fileHash": "86059b8a",
-      "needsInterop": false
-    },
-    "three": {
-      "src": "../../../../node_modules/three/build/three.module.js",
-      "file": "three.js",
-      "fileHash": "68f08735",
-      "needsInterop": false
-    },
-    "three/examples/jsm/controls/OrbitControls.js": {
-      "src": "../../../../node_modules/three/examples/jsm/controls/OrbitControls.js",
-      "file": "three_examples_jsm_controls_OrbitControls__js.js",
-      "fileHash": "09716eb7",
+      "fileHash": "be257cfc",
       "needsInterop": false
     },
     "element-plus": {
-      "src": "../../../../node_modules/element-plus/es/index.mjs",
+      "src": "../../../../node_modules/.pnpm/element-plus@2.13.2_vue@3.5.28_typescript@5.9.3_/node_modules/element-plus/es/index.mjs",
       "file": "element-plus.js",
-      "fileHash": "f40c83e6",
+      "fileHash": "9078daab",
       "needsInterop": false
     },
     "@element-plus/icons-vue": {
-      "src": "../../../../node_modules/@element-plus/icons-vue/dist/index.js",
+      "src": "../../../../node_modules/.pnpm/@element-plus+icons-vue@2.3.2_vue@3.5.28_typescript@5.9.3_/node_modules/@element-plus/icons-vue/dist/index.js",
       "file": "@element-plus_icons-vue.js",
-      "fileHash": "25588574",
+      "fileHash": "4576af5c",
+      "needsInterop": false
+    },
+    "three": {
+      "src": "../../../../node_modules/.pnpm/three@0.182.0/node_modules/three/build/three.module.js",
+      "file": "three.js",
+      "fileHash": "d2cf46ae",
+      "needsInterop": false
+    },
+    "three/examples/jsm/controls/OrbitControls.js": {
+      "src": "../../../../node_modules/.pnpm/three@0.182.0/node_modules/three/examples/jsm/controls/OrbitControls.js",
+      "file": "three_examples_jsm_controls_OrbitControls__js.js",
+      "fileHash": "ced97ddd",
       "needsInterop": false
     }
   },
   "chunks": {
-    "chunk-DGTOYCXY": {
-      "file": "chunk-DGTOYCXY.js"
+    "chunk-DAHGV3GE": {
+      "file": "chunk-DAHGV3GE.js"
     },
-    "chunk-AYDLU7NO": {
-      "file": "chunk-AYDLU7NO.js"
+    "chunk-6XXLIVGJ": {
+      "file": "chunk-6XXLIVGJ.js"
     },
-    "chunk-OE76NJSB": {
-      "file": "chunk-OE76NJSB.js"
+    "chunk-4KZIUUJD": {
+      "file": "chunk-4KZIUUJD.js"
     },
     "chunk-5WRI5ZAA": {
       "file": "chunk-5WRI5ZAA.js"

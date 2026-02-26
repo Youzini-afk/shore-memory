@@ -44,6 +44,7 @@ class ConfigManager:
             # [Memory] 默认记忆配置 (JSON 结构)
             "memory_config": json.dumps(
                 {
+                    "summary_batch_size": 10,  # 默认 10 轮对话总结一次
                     "modes": {
                         "desktop": {"context_limit": 20, "rag_limit": 10},
                         "work": {"context_limit": 50, "rag_limit": 15},
@@ -56,7 +57,7 @@ class ConfigManager:
                                 "cross_context_history": 10,
                             },
                         },
-                    }
+                    },
                 }
             ),
         }

@@ -274,16 +274,24 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
   if (pythonExists) {
     try {
       // 构造 model_cli.py 的路径
-      // 在开发环境中：backend/scripts/model_cli.py
-      // 在生产环境中：resources/backend/scripts/model_cli.py (或者与 main.py 同级)
+      // 在开发环境中：backend/utils/model_cli.py
+      // 在生产环境中：resources/backend/utils/model_cli.py (或者与 main.py 同级)
 
-      let cliScript = path.join(workspaceRoot, 'backend/scripts/model_cli.py')
+      let cliScript = path.join(workspaceRoot, 'backend/utils/model_cli.py')
       if (!(await fs.pathExists(cliScript))) {
-        cliScript = path.join(resourceDir, 'backend/scripts/model_cli.py')
+        cliScript = path.join(resourceDir, 'backend/utils/model_cli.py')
       }
       if (!(await fs.pathExists(cliScript))) {
         // 尝试相对于 main.py 寻找
-        cliScript = path.join(path.dirname(scriptPath), 'scripts/model_cli.py')
+        cliScript = path.join(path.dirname(scriptPath), 'utils/model_cli.py')
+      }
+
+      // [修复] 增加对 CWD 的回退检查
+      if (!(await fs.pathExists(cliScript))) {
+        const cwdPath = path.join(process.cwd(), 'backend/utils/model_cli.py')
+        if (await fs.pathExists(cwdPath)) {
+          cliScript = cwdPath
+        }
       }
 
       if (await fs.pathExists(cliScript)) {

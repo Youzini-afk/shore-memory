@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 from typing import Any, AsyncIterable, Dict, List, Optional
 
-from sqlmodel import desc, select
+from sqlmodel import desc, func, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from core.component_container import ComponentContainer
@@ -15,7 +15,8 @@ from interfaces.core import (
     IPreprocessorManager,
     IPromptManager,
 )
-from interfaces.memory import IMemoryService
+
+# from interfaces.memory import IMemoryService
 from models import (
     AIModelConfig,
     Config,
@@ -31,6 +32,7 @@ from services.agent.task_manager import task_manager
 from services.core.llm_service import LLMService
 from services.core.mcp_service import McpClient
 from services.core.session_service import set_current_session_context
+from services.memory.memory_service import MemoryService
 from services.memory.scorer_service import ScorerService
 
 
@@ -48,12 +50,12 @@ class AgentService:
             agent_id = get_agent_manager().active_agent_id
 
         set_current_session_context(session, agent_id)
-        self.memory_service = ComponentContainer.get(IMemoryService)
+        # self.memory_service = ComponentContainer.get(IMemoryService)
+        # 移除依赖注入，直接实例化 MemoryService
+        self.memory_service = MemoryService()
+
         # 暂时 ScorerService 还需要 session 初始化，这里演示混合模式
         # 如果 ScorerService 也被完全 DI，需要工厂支持参数或上下文
-        # 简单起见，这里假设 IScorerService 的实现不需要 session 或能自我获取
-        # 但现有实现需要 session。我们先保持原样，或修改接口。
-        # 鉴于时间，我们先只替换无状态或单例组件。
 
         self.scorer_service = ScorerService(
             session
@@ -752,6 +754,59 @@ class AgentService:
                 )
         except Exception as e:
             print(f"[Agent] 后台秘书服务失败: {e}")
+
+    async def _schedule_scorer_batch(
+        self,
+        agent_id: str = "pero",
+    ):
+        """后台调度 Scorer 批量处理"""
+        from sqlalchemy.orm import sessionmaker
+        from sqlmodel.ext.asyncio.session import AsyncSession
+
+        from core.config_manager import get_config_manager
+        from database import engine
+        from models import ConversationLog
+
+        try:
+            async_session = sessionmaker(
+                engine, class_=AsyncSession, expire_on_commit=False
+            )
+            async with async_session() as session:
+                # 1. 获取批量大小配置
+                config_manager = get_config_manager()
+                memory_config = config_manager.get_json("memory_config")
+                batch_size = memory_config.get("summary_batch_size", 10)
+
+                # 2. 查询待处理日志数量
+                # 状态为 pending 且 agent_id 匹配
+                stmt = (
+                    select(func.count(ConversationLog.id))
+                    .where(ConversationLog.analysis_status == "pending")
+                    .where(ConversationLog.agent_id == agent_id)
+                )
+                count = (await session.exec(stmt)).one()
+
+                print(
+                    f"[Agent] 当前待处理日志数: {count} / {batch_size} (Agent: {agent_id})"
+                )
+
+                if count >= batch_size:
+                    # 3. 触发批量处理
+                    # 获取最早的 N 条
+                    logs_stmt = (
+                        select(ConversationLog)
+                        .where(ConversationLog.analysis_status == "pending")
+                        .where(ConversationLog.agent_id == agent_id)
+                        .order_by(ConversationLog.created_at)
+                        .limit(batch_size)
+                    )
+                    logs = (await session.exec(logs_stmt)).all()
+
+                    if logs:
+                        scorer = ScorerService(session)
+                        await scorer.process_batch(logs, agent_id=agent_id)
+        except Exception as e:
+            print(f"[Agent] 后台批量调度失败: {e}")
 
     async def _trigger_dream(self, agent_id: str = "pero"):
         """后台触发梦境机制"""
@@ -2492,12 +2547,9 @@ class AgentService:
                         )
                         if len(full_response_text) > 5:
                             # 使用 background_task 包装以确保独立 Session
+                            # 改为批量调度模式
                             asyncio.create_task(
-                                self._run_scorer_background(
-                                    final_user_msg,
-                                    full_response_text,
-                                    source,
-                                    pair_id=pair_id,
+                                self._schedule_scorer_batch(
                                     agent_id=current_agent_id,
                                 )
                             )

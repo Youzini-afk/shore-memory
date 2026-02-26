@@ -11,8 +11,10 @@
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["../src/*"]
-    }
+      "@/*": ["../src/*"],
+      "@main/*": ["main/*"]
+    },
+    "types": ["vitest/globals", "node"]
   },
-  "include": ["main/**/*.ts", "preload/**/*.ts"]
+  "include": ["main/**/*.ts", "preload/**/*.ts", "__tests__/**/*.ts"]
 }

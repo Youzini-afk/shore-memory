@@ -5,6 +5,7 @@ import { getSteamUser } from './services/steam.js'
 
 import { startBackend, stopBackend, getBackendLogs } from './services/python.js'
 import { startGateway, stopGateway } from './services/gateway.js'
+import { appEvents } from './events'
 import { getDiagnostics } from './services/diagnostics.js'
 import { getSystemStats, getConfig, saveConfig, getGatewayToken } from './services/system.js'
 import {
@@ -31,6 +32,9 @@ import { spawn } from 'child_process'
 import path from 'path'
 import { isDev, paths } from './utils/env'
 import fs from 'fs-extra'
+
+// @ts-ignore
+const native = require('../../src/components/avatar/native')
 
 // GUI 模式（原始逻辑）
 
@@ -89,9 +93,30 @@ const createWindow = async () => {
       // 忽略
     }
   })
+
+  // 注册 Native 模块处理程序
+  ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, key: Buffer) => {
+    try {
+      return native.loadPeroModel(buffer, key)
+    } catch (e) {
+      logger.error('Native', `Failed to load pero model: ${e}`)
+      throw e
+    }
+  })
 }
 
 app.whenReady().then(createWindow)
+
+// 监听服务崩溃事件并进行联动停止
+appEvents.on('gateway-crashed', () => {
+  logger.error('Main', 'Gateway 崩溃，正在停止 Backend...')
+  stopBackend()
+})
+
+appEvents.on('backend-crashed', () => {
+  logger.error('Main', 'Backend 崩溃，正在停止 Gateway...')
+  stopGateway()
+})
 
 app.on('window-all-closed', () => {
   // 什么都不做，保持应用在托盘中运行
@@ -133,7 +158,7 @@ ipcMain.on('show-notification', (_, { title, body }) => {
 ipcMain.handle('resize-pet-window', (event, { width, height }) => {
   const win = BrowserWindow.fromWebContents(event.sender)
   if (win) {
-    logger.info('Main', `IPC: Resizing window to ${width}x${height}`)
+    logger.info('Main', `IPC: 调整大小至 ${width}x${height}`)
     try {
       // 临时允许调整大小以确保操作系统接受更改 (特别是在具有透明窗口的 Windows 上)
       win.setResizable(true)
@@ -152,7 +177,7 @@ ipcMain.handle('resize-pet-window', (event, { width, height }) => {
       win.setResizable(false)
       return true
     } catch (e) {
-      logger.error('Main', `IPC: Resize failed: ${e}`)
+      logger.error('Main', `IPC: 调整大小失败: ${e}`)
       return false
     }
   }
@@ -326,18 +351,29 @@ ipcMain.handle('download_models', async (event) => {
 
     const workspaceRoot = isDev ? path.resolve(__dirname, '../../..') : paths.app
 
-    let cliScript = path.join(workspaceRoot, 'backend/scripts/model_cli.py')
+    let cliScript = path.join(workspaceRoot, 'backend/utils/model_cli.py')
     // 生产环境资源目录逻辑
     const resourceDir = isDev ? workspaceRoot : paths.resources
     if (!(await fs.pathExists(cliScript))) {
-      cliScript = path.join(resourceDir, 'backend/scripts/model_cli.py')
+      cliScript = path.join(resourceDir, 'backend/utils/model_cli.py')
     }
     if (!(await fs.pathExists(cliScript))) {
-      cliScript = path.join(path.dirname(diag.script_path), 'scripts/model_cli.py')
+      cliScript = path.join(path.dirname(diag.script_path), 'utils/model_cli.py')
+    }
+
+    // [修复] 增加对 CWD 的回退检查，解决开发环境下路径解析错误的问题
+    if (!(await fs.pathExists(cliScript))) {
+      const cwdPath = path.join(process.cwd(), 'backend/utils/model_cli.py')
+      if (await fs.pathExists(cwdPath)) {
+        cliScript = cwdPath
+        logger.info('Main', `Found model_cli.py in CWD: ${cliScript}`)
+      }
     }
 
     if (!(await fs.pathExists(cliScript))) {
-      throw new Error('model_cli.py not found')
+      throw new Error(
+        `model_cli.py not found. Searched in workspaceRoot, resourceDir, script_path, and CWD.`
+      )
     }
 
     logger.info('Main', `Starting model download with ${pythonPath} ${cliScript}`)

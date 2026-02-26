@@ -20,7 +20,7 @@ const initWs = () => {
   // 使用当前 Host (Docker/CLI 兼容)
   const wsUrl = `${protocol}//${window.location.host}`
 
-  console.log('[IPC Adapter] Connecting to Web Bridge:', wsUrl)
+  console.log('[IPC Adapter] 正在连接到 Web Bridge:', wsUrl)
   ws = new WebSocket(wsUrl)
 
   ws.onmessage = (event) => {
@@ -35,18 +35,18 @@ const initWs = () => {
         }
       }
     } catch (e) {
-      console.error('[IPC Adapter] WS Message Parse Error:', e)
+      console.error('[IPC Adapter] WS 消息解析错误:', e)
     }
   }
 
   ws.onclose = () => {
-    console.log('[IPC Adapter] Web Bridge Disconnected. Reconnecting in 3s...')
+    console.log('[IPC Adapter] Web Bridge 已断开连接。3秒后重连...')
     ws = null
     setTimeout(initWs, 3000)
   }
 
   ws.onerror = (err) => {
-    console.error('[IPC Adapter] Web Bridge Connection Error:', err)
+    console.error('[IPC Adapter] Web Bridge 连接错误:', err)
   }
 }
 
@@ -91,7 +91,7 @@ export const invoke = async (cmd: string, args?: any) => {
     })
 
     if (!response.ok) {
-      throw new Error(`HTTP Error: ${response.status} ${response.statusText}`)
+      throw new Error(`HTTP 错误: ${response.status} ${response.statusText}`)
     }
 
     const data = await response.json()
@@ -100,7 +100,7 @@ export const invoke = async (cmd: string, args?: any) => {
     }
     return data.result
   } catch (e) {
-    console.error(`[IPC Adapter] Failed to invoke '${cmd}':`, e)
+    console.error(`[IPC Adapter] 调用 '${cmd}' 失败:`, e)
 
     // UI 指令安全回退
     if (cmd.startsWith('window-')) return null

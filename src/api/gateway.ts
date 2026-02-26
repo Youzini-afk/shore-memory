@@ -188,9 +188,6 @@ export class GatewayClient {
       this.ws.onmessage = (event) => {
         try {
           if (typeof event.data === 'string') {
-            // 尝试处理文本消息 (可能是旧版 JSON?)
-            // console.warn('Gateway WS 收到文本帧:', event.data);
-            // 目前忽略，或者如果是 Base64 则尝试解码?
             // 通常 Gateway 发送二进制数据。
             logToMain(`收到意外的文本帧: ${event.data.substring(0, 50)}...`)
             return
@@ -228,7 +225,7 @@ export class GatewayClient {
 
       this.ws.onerror = () => {
         // 仅在不在重连循环中时记录错误，以避免刷屏
-        // logToMain('WebSocket Error', error);
+        // logToMain('WebSocket 错误', error);
         this.ws?.close()
       }
     } catch (e) {

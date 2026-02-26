@@ -181,7 +181,7 @@
         </button>
       </div>
 
-      <div v-for="msg in messages" :key="msg.id || msg.timestamp" class="flex flex-col">
+      <div v-for="(msg, idx) in messages" :key="msg.id || msg.timestamp" class="flex flex-col">
         <!-- 用户消息 -->
         <div v-if="msg.role === 'user'" class="flex justify-end mb-4 animate-fade-in-up group">
           <div class="max-w-[85%] animate-float flex flex-col items-end">
@@ -356,7 +356,7 @@
                   <button
                     class="p-1 hover:bg-black/10 rounded"
                     :class="workMode ? 'text-slate-300' : 'text-slate-600'"
-                    title="Save"
+                    title="保存"
                     @click="saveEdit(msg)"
                   >
                     <Check class="w-4 h-4" />
@@ -364,7 +364,7 @@
                   <button
                     class="p-1 hover:bg-black/10 rounded"
                     :class="workMode ? 'text-slate-300' : 'text-slate-600'"
-                    title="Cancel"
+                    title="取消"
                     @click="cancelEdit"
                   >
                     <X class="w-4 h-4" />
@@ -415,7 +415,7 @@
                     >
                       <div class="flex items-center gap-2 text-xs font-bold">
                         <Brain class="w-3.5 h-3.5" />
-                        <span>思考过程 (Thinking Process)</span>
+                        <span>思考过程</span>
                       </div>
                       <span
                         class="text-[10px] transition-transform duration-200"
@@ -952,7 +952,7 @@ onMounted(async () => {
     const payload = data.params || data
     // 如果新消息属于当前会话或相关，则追加
     // 暂时假设默认会话或检查 payload.session_id
-    console.log('[ChatInterface] Received new message via Gateway:', payload)
+    console.log('[ChatInterface] 通过 Gateway 收到新消息:', payload)
 
     // 检查重复
     // 1. 检查精确 ID 匹配
@@ -1116,7 +1116,7 @@ const playMessage = async (msg) => {
     })
 
     if (!response.ok) {
-      throw new Error('TTS request failed')
+      throw new Error('TTS 请求失败')
     }
 
     const blob = await response.blob()
@@ -1133,7 +1133,7 @@ const playMessage = async (msg) => {
     }
 
     audio.onerror = (e) => {
-      console.error('Audio playback error:', e)
+      console.error('音频播放错误:', e)
       playingMsgId.value = null
       currentAudio.value = null
       isLoadingAudio.value = false
@@ -1143,7 +1143,7 @@ const playMessage = async (msg) => {
     await audio.play()
     isLoadingAudio.value = false // 开始播放，停止加载动画
   } catch (error) {
-    console.error('TTS Error:', error)
+    console.error('TTS 错误:', error)
     playingMsgId.value = null
     isLoadingAudio.value = false
     currentAudio.value = null
@@ -1179,7 +1179,7 @@ const checkVisionCapability = async () => {
       }
     }
   } catch (e) {
-    console.error('Failed to check vision capability', e)
+    console.error('检查视觉能力失败', e)
   }
 }
 
@@ -1392,7 +1392,7 @@ const handleConfirmDelete = async () => {
       }
     }
   } catch (e) {
-    console.error('Failed to delete message', e)
+    console.error('删除消息失败', e)
   } finally {
     deleteDialogVisible.value = false
     pendingDeleteId.value = null
@@ -1569,7 +1569,7 @@ const injectInstruction = async (action) => {
       })
     }
   } catch (e) {
-    console.error('Task control failed', e)
+    console.error('任务控制失败', e)
   }
 }
 
@@ -1691,10 +1691,10 @@ const fetchHistory = async (append = false) => {
         scrollToBottom()
       }
     } else {
-      console.error('Fetch history failed with status:', res.status)
+      console.error('获取历史记录失败，状态码:', res.status)
     }
   } catch (e) {
-    console.error('Failed to fetch history', e)
+    console.error('获取历史记录失败', e)
   }
 }
 
@@ -1811,7 +1811,7 @@ onMounted(async () => {
       scrollToBottom()
     })
   } catch (e) {
-    console.warn('Failed to setup Tauri listener:', e)
+    console.warn('设置 Tauri 监听器失败:', e)
   }
 })
 
@@ -1914,7 +1914,7 @@ const sendMessage = async () => {
         assistantMsg.content = '' // 清除占位符
         messages.value.pop() // 移除占位符助手消息
       } else {
-        assistantMsg.content = 'Failed to send message.'
+        assistantMsg.content = '发送消息失败。'
       }
       return
     }
@@ -1955,7 +1955,7 @@ const sendMessage = async () => {
       scrollToBottom()
     }
   } catch (e) {
-    assistantMsg.content = `Error: ${e.message}`
+    assistantMsg.content = `错误: ${e.message}`
     // 出错时强制重置思维链
     if (activeThoughtChain.value) {
       activeThoughtChain.value.isThinking = false

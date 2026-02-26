@@ -286,7 +286,7 @@ const handleDialogCancel = () => {
 // 错误处理
 const error = ref(null)
 onErrorCaptured((err) => {
-  console.error('WorkModeView Error:', err)
+  console.error('工作模式视图错误:', err)
   error.value = err.message
   return true
 })

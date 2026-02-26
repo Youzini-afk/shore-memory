@@ -77,6 +77,8 @@ class SocialMemoryRelation(SQLModel, table=True):
 class SocialDailyReport(SQLModel, table=True):
     """
     社交日报归档
+    [Deprecated] 此表不再使用。所有日报现已存储为 Markdown 文件。
+    保留此定义以防旧代码引用，但不要向其中写入新数据。
     """
 
     id: Optional[int] = Field(default=None, primary_key=True)

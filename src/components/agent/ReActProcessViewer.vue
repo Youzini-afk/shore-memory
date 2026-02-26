@@ -156,7 +156,7 @@ const sendInjection = async () => {
       injectionInput.value = ''
     }
   } catch (e) {
-    console.error('Injection failed', e)
+    console.error('指令注入失败', e)
   } finally {
     isSendingInjection.value = false
   }

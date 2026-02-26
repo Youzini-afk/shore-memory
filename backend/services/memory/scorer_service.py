@@ -1,6 +1,7 @@
+import contextlib
 import json
 import re
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from sqlalchemy import update
 from sqlmodel import desc, select
@@ -14,6 +15,12 @@ from services.memory.memory_service import MemoryService
 
 
 class ScorerService:
+    MAX_RETRIES = 3
+    BATCH_SIZE = 50
+    # 估算 Token: 1 中文字符 ≈ 1.5 token, 1 英文单词 ≈ 1.3 token
+    # 简单按字符数/2 来估算，设定阈值 (例如 10k token ≈ 20k chars)
+    MAX_BATCH_CHARS = 20000
+
     def __init__(self, session: AsyncSession):
         self.session = session
         self.memory_service = MemoryService()
@@ -21,7 +28,284 @@ class ScorerService:
         # 初始化 MDPManager
         self.mdp = mdp
 
-    def _smart_clean_text(self, text: str) -> str:
+    async def process_batch(
+        self,
+        logs: List[ConversationLog],
+        agent_id: str = "pero",
+    ):
+        """
+        批量处理对话日志：将多轮对话总结为一条记忆
+        [容错] 包含 Token 长度检查和自动分批
+        """
+        if not logs:
+            return
+
+        # 0. Token 长度预检与自动分批
+        # 简单估算：直接计算 full_context 的长度
+        total_chars = sum(len(log.content or "") for log in logs)
+        if total_chars > self.MAX_BATCH_CHARS and len(logs) > 1:
+            print(f"[秘书] 批次过大 ({total_chars} chars)，自动拆分为 2 个子批次...")
+            mid = len(logs) // 2
+            # 递归调用
+            await self.process_batch(logs[:mid], agent_id)
+            await self.process_batch(logs[mid:], agent_id)
+            return
+
+        pair_ids = [log.pair_id for log in logs if log.pair_id]
+        print(
+            f"[秘书] 开始批量分析 {len(logs)} 条日志... (Agent: {agent_id})",
+            flush=True,
+        )
+
+        # 1. 标记为处理中
+        if pair_ids:
+            try:
+                await self.session.execute(
+                    update(ConversationLog)
+                    .where(ConversationLog.pair_id.in_(pair_ids))
+                    .values(analysis_status="processing")
+                )
+                await self.session.commit()
+            except Exception as e:
+                print(f"[秘书] 更新批次状态失败: {e}")
+
+        # 2. 准备上下文
+        # 按时间排序
+        sorted_logs = sorted(logs, key=lambda x: x.created_at or "")
+
+        context_lines = []
+        for log in sorted_logs:
+            role_label = "主人" if log.role == "user" else "AI"
+            content = self._smart_clean_text(log.content)
+            context_lines.append(f"{role_label}: {content}")
+
+        full_context = "\n".join(context_lines)
+
+        # 3. 获取配置
+        config = await self._get_scorer_config()
+        if not config.get("api_key"):
+            print("[秘书] 未配置 API Key，跳过批量分析。")
+            if pair_ids:
+                await self.session.execute(
+                    update(ConversationLog)
+                    .where(ConversationLog.pair_id.in_(pair_ids))
+                    .values(
+                        analysis_status="failed",
+                        last_error="未配置 API Key",
+                        retry_count=ConversationLog.retry_count + 1,
+                    )
+                )
+                await self.session.commit()
+            return
+
+        llm = LLMService(
+            api_key=config["api_key"],
+            api_base=config["api_base"],
+            model=config["model"],
+        )
+
+        # 4. 渲染 Prompt
+        # 获取 Bot Name 和 Owner Name
+        from services.agent.agent_manager import AgentManager
+
+        agent_manager = AgentManager()
+        agent_profile = agent_manager.agents.get(agent_id)
+        bot_name = agent_profile.name if agent_profile else "Pero"
+
+        owner_name = "用户"
+        try:
+            config_entry = (
+                await self.session.exec(
+                    select(Config).where(Config.key == "owner_name")
+                )
+            ).first()
+            if config_entry and config_entry.value:
+                owner_name = config_entry.value
+        except Exception:
+            pass
+
+        system_prompt = self.mdp.render(
+            "tasks/memory/scorer/summary", {"agent_name": bot_name, "user": owner_name}
+        )
+
+        # 使用批量分析的 User Prompt
+        # 如果没有专门的 batch prompt，可以使用 summary_batch 或者复用 user_input 但传入长文本
+        # 这里假设我们创建一个临时的 prompt 结构，或者直接复用
+        user_prompt = f"请分析以下 {len(logs)} 条对话记录，提取核心记忆：\n\n{full_context}\n\n请提取：\n1. 用户的核心意图和状态\n2. 发生的重要事件\n3. 情感变化\n\n输出JSON格式。"
+
+        # 尝试使用 MDP 渲染如果存在
+        with contextlib.suppress(Exception):
+            user_prompt = self.mdp.render(
+                "tasks/memory/scorer/batch_summary",
+                {
+                    "agent_name": bot_name,
+                    "user_label": owner_name,
+                    "context_text": full_context,
+                    "message_count": len(logs),
+                },
+            )
+
+        messages = [
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
+        ]
+
+        try:
+            response = await llm.chat(
+                messages,
+                temperature=config["temperature"],
+                response_format={"type": "json_object"},
+            )
+            content = response["choices"][0]["message"]["content"]
+
+            # 解析 JSON (复用 process_interaction 的逻辑)
+            data = None
+            try:
+                data = json.loads(content)
+            except json.JSONDecodeError:
+                if "```json" in content:
+                    content = content.split("```json")[1].split("```")[0].strip()
+                    with contextlib.suppress(Exception):
+                        data = json.loads(content)
+
+            if not data or not data.get("content"):
+                print("[秘书] 批量分析未提取到有效内容。")
+                # 标记为已完成但无记忆
+                if pair_ids:
+                    await self.session.execute(
+                        update(ConversationLog)
+                        .where(ConversationLog.pair_id.in_(pair_ids))
+                        .values(analysis_status="completed", last_error=None)
+                    )
+                    await self.session.commit()
+                return
+
+            # 保存记忆
+            tags_str = (
+                ",".join(data.get("tags", []))
+                if isinstance(data.get("tags"), list)
+                else str(data.get("tags", ""))
+            )
+            clusters_str = (
+                ",".join(data.get("clusters", []))
+                if isinstance(data.get("clusters"), list)
+                else str(data.get("clusters", ""))
+            )
+
+            memory = await MemoryService.save_memory(
+                session=self.session,
+                content=data["content"],
+                tags=tags_str,
+                clusters=clusters_str,
+                importance=data.get("importance", 5),
+                base_importance=data.get("importance", 5),
+                sentiment=data.get("sentiment", "neutral"),
+                source=logs[0].source if logs else "desktop",  # 使用第一条日志的来源
+                memory_type=data.get("type", "event"),
+                agent_id=agent_id,
+            )
+
+            # 更新所有日志
+            if pair_ids:
+                await self.session.execute(
+                    update(ConversationLog)
+                    .where(ConversationLog.pair_id.in_(pair_ids))
+                    .values(
+                        sentiment=data.get("sentiment"),
+                        importance=data.get("importance"),
+                        memory_id=memory.id,
+                        analysis_status="completed",
+                        last_error=None,
+                    )
+                )
+                await self.session.commit()
+
+            print(f"[秘书] 批量记忆保存成功: {data['content']}")
+
+        except Exception as e:
+            print(f"[秘书] 批量处理失败: {e}")
+            if pair_ids:
+                await self.session.execute(
+                    update(ConversationLog)
+                    .where(ConversationLog.pair_id.in_(pair_ids))
+                    .values(
+                        analysis_status="failed",
+                        last_error=str(e)[:500],
+                        retry_count=ConversationLog.retry_count + 1,
+                    )
+                )
+                await self.session.commit()
+
+    async def recover_pending_tasks(self):
+        """
+        [容错] 启动时恢复未完成的任务：
+        1. 重置长时间处于 processing 状态的任务为 pending
+        2. 重置 retry_count < MAX 的 failed 任务为 pending
+        3. 分页处理 pending 任务 (避免一次性拉取过多导致 OOM)
+        """
+        print("[秘书] 正在检查未完成的记忆任务...", flush=True)
+        try:
+            # 1. 重置僵尸任务 (processing -> pending)
+            result = await self.session.execute(
+                update(ConversationLog)
+                .where(ConversationLog.analysis_status == "processing")
+                .values(analysis_status="pending", last_error="System Restart Recovery")
+            )
+            if result.rowcount > 0:
+                print(f"[秘书] 已重置 {result.rowcount} 个僵尸任务状态为 pending")
+                await self.session.commit()
+
+            # 2. 重置可重试的失败任务 (failed -> pending)
+            result = await self.session.execute(
+                update(ConversationLog)
+                .where(ConversationLog.analysis_status == "failed")
+                .where(ConversationLog.retry_count < self.MAX_RETRIES)
+                .values(analysis_status="pending", last_error="Auto Retry Recovery")
+            )
+            if result.rowcount > 0:
+                print(f"[秘书] 已重置 {result.rowcount} 个可重试失败任务状态为 pending")
+                await self.session.commit()
+
+            # 3. 分页处理 pending 任务
+            # 获取所有有 pending 日志的 agent_id
+            stmt = (
+                select(ConversationLog.agent_id)
+                .where(ConversationLog.analysis_status == "pending")
+                .distinct()
+            )
+            agent_ids = (await self.session.exec(stmt)).all()
+
+            for agent_id in agent_ids:
+                agent_id = agent_id or "pero"
+
+                while True:
+                    # 每次拉取 BATCH_SIZE 条
+                    logs = (
+                        await self.session.exec(
+                            select(ConversationLog)
+                            .where(ConversationLog.analysis_status == "pending")
+                            .where(ConversationLog.agent_id == agent_id)
+                            .order_by(ConversationLog.id)  # 使用 ID 排序更稳定
+                            .limit(self.BATCH_SIZE)
+                        )
+                    ).all()
+
+                    if not logs:
+                        break
+
+                    print(
+                        f"[秘书] 正在恢复处理 {len(logs)} 条日志 (Agent: {agent_id})..."
+                    )
+                    # 处理这一批
+                    await self.process_batch(logs, agent_id)
+
+                    # process_batch 会更新状态，所以下一轮循环会取到新的 pending 任务
+                    # 如果 process_batch 失败，也会更新为 failed，不会死循环
+
+        except Exception as e:
+            print(f"[秘书] 任务恢复失败: {e}")
+
+    async def _smart_clean_text(self, text: str) -> str:
         """
         智能清洗文本：
         - 移除大数据量的系统注入标签 (如 FILE_RESULTS)
@@ -638,7 +922,7 @@ class ScorerService:
         )
 
         # 智能清理助手内容以删除数据转储
-        assistant_content = self._smart_clean_text(assistant_content)
+        assistant_content = await self._smart_clean_text(assistant_content)
 
         if pair_id:
             await self._update_log_status(pair_id, "processing")

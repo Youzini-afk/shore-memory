@@ -115,17 +115,15 @@ export class Molang {
     // 1. 隐式返回
     // 2. 允许 Snake_case 变量
 
+    // 处理 'return' - 移除所有 return 关键字，因为我们将整个表达式作为返回值
+    jsExpr = jsExpr.replace(/\breturn\s+/g, '')
+
     // 处理多语句
     if (jsExpr.includes(';')) {
       jsExpr = jsExpr
         .split(';')
         .filter((p: string) => p.trim() !== '')
         .join(',')
-    }
-
-    // 处理 'return'
-    if (jsExpr.startsWith('return ')) {
-      jsExpr = jsExpr.substring(7)
     }
 
     try {

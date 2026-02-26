@@ -112,7 +112,7 @@
                 <span class="text-xs font-bold text-[#66c0f4] leading-none">{{
                   steamUser.name
                 }}</span>
-                <span class="text-[9px] text-slate-500 font-mono leading-none mt-0.5">ONLINE</span>
+                <span class="text-[9px] text-slate-500 font-mono leading-none mt-0.5">在线</span>
               </div>
             </div>
 
@@ -1359,7 +1359,7 @@ const addLog = (msg) => {
 
 const stopServices = async () => {
   try {
-    addLog('[SYSTEM] Stopping services...')
+    addLog('[系统] 正在停止服务...')
     await invoke('stop_backend')
     await invoke('stop_napcat_wrapper')
     isRunning.value = false
@@ -1527,9 +1527,9 @@ const installES = async () => {
   if (isInstallingES.value || esStatus.value === 'INSTALLED') return
   isInstallingES.value = true
   try {
-    addLog('[SYSTEM] Installing Everything Search...')
+    addLog('[系统] 正在安装 Everything Search...')
     await invoke('install_es')
-    addLog('[SYSTEM] Everything Search installed.')
+    addLog('[系统] Everything Search 安装完成。')
     esStatus.value = 'INSTALLED'
   } catch (e) {
     addLog(`[ERROR] ES Install failed: ${e}`)
@@ -1622,8 +1622,8 @@ const saveAgentConfig = async () => {
       activeAgent: activeId
     })
   } catch (e) {
-    console.error('Failed to save agent config', e)
-    addLog(`[ERROR] Failed to save agent config: ${e}`)
+    console.error('保存助手配置失败', e)
+    addLog(`[错误] 保存助手配置失败: ${e}`)
   }
 }
 
