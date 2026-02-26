@@ -189,6 +189,10 @@ export class AvatarRenderer {
         geometry.setAttribute('uv', new THREE.BufferAttribute(boneData.uvs, 2))
         geometry.setIndex(new THREE.BufferAttribute(boneData.indices, 1))
 
+        // 自动计算法线 (因为 Rust 侧未生成法线)
+        // 确保光照计算正确
+        geometry.computeVertexNormals()
+
         const mesh = new THREE.Mesh(geometry, material)
         mesh.castShadow = true
         mesh.receiveShadow = true
