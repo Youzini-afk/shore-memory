@@ -32,6 +32,52 @@ pub fn load_pero_model(
     Ok(parsed_data)
 }
 
+/// 容器内的文件
+#[napi(object)]
+pub struct PeroContainerFile {
+    /// 相对路径
+    pub path: String,
+    /// 文件数据
+    #[napi(js_name = "data")]
+    pub data: Buffer,
+}
+
+/// 解密后的容器数据
+#[napi(object)]
+pub struct PeroContainer {
+    /// 容器内所有文件
+    pub files: Vec<PeroContainerFile>,
+}
+
+/// 加载 .pero 容器（tar 格式打包的文件夹）
+/// 返回容器内的所有文件，供前端从内存加载
+#[napi]
+pub fn load_pero_container(encrypted_data: Buffer) -> napi::Result<PeroContainer> {
+    // 0. 安全检查
+    if security::is_debugged() {
+        return Err(napi::Error::new(
+            napi::Status::GenericFailure,
+            obfstr::obfstr!("系统完整性检查失败 (Error 0x80004005)").to_string(),
+        ));
+    }
+
+    // 1. 解密并解包 tar 容器
+    let files = crypto::decrypt_pero_container(encrypted_data.as_ref())?;
+
+    // 2. 转换为 N-API 兼容结构
+    let container_files: Vec<PeroContainerFile> = files
+        .into_iter()
+        .map(|f| PeroContainerFile {
+            path: f.path,
+            data: Buffer::from(f.data),
+        })
+        .collect();
+
+    Ok(PeroContainer {
+        files: container_files,
+    })
+}
+
 /// 解析标准模型数据 ( .json 格式 )
 /// 直接返回解析后的对象
 #[napi]

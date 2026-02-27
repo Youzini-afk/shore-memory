@@ -235,14 +235,21 @@ export class AnimationControllerSystem {
       if (!response.ok) throw new Error(`无法加载控制器: ${url}`)
 
       const json = (await response.json()) as IBedrockControllerJson
-      if (json.animation_controllers) {
-        for (const [name, def] of Object.entries(json.animation_controllers)) {
-          const ctrl = new BedrockAnimationController(name, def, this.engine, this.library)
-          this.controllers.push(ctrl)
-        }
-      }
+      this.loadFromJson(json)
     } catch (e) {
       console.error(`从 ${url} 加载动画控制器出错:`, e)
+    }
+  }
+
+  /**
+   * 直接从 JSON 对象加载控制器
+   */
+  loadFromJson(json: IBedrockControllerJson) {
+    if (json.animation_controllers) {
+      for (const [name, def] of Object.entries(json.animation_controllers)) {
+        const ctrl = new BedrockAnimationController(name, def, this.engine, this.library)
+        this.controllers.push(ctrl)
+      }
     }
   }
 

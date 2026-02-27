@@ -10,5 +10,7 @@ contextBridge.exposeInMainWorld('electron', {
   loadPeroModel: (buffer: Uint8Array, filterPatterns?: string[]) =>
     ipcRenderer.invoke('native-load-pero-model', buffer, filterPatterns),
   loadStandardModel: (buffer: Uint8Array, filterPatterns?: string[]) =>
-    ipcRenderer.invoke('native-load-standard-model', buffer, filterPatterns)
+    ipcRenderer.invoke('native-load-standard-model', buffer, filterPatterns),
+  loadPeroContainer: (buffer: Uint8Array) =>
+    ipcRenderer.invoke('native-load-pero-container', buffer)
 })

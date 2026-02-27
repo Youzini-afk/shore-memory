@@ -15,6 +15,7 @@ import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
 import { AvatarRenderer } from './lib/AvatarRenderer'
 import { StandardBedrockProvider } from './lib/adapter/StandardBedrockProvider'
 import { PeroSecureProvider } from './lib/adapter/PeroSecureProvider'
+import { PeroContainerProvider } from './lib/adapter/PeroContainerProvider'
 import { AnimationEngine } from './lib/animation/AnimationEngine'
 import { AnimationLibrary } from './lib/animation/AnimationLibrary'
 import { AnimationControllerSystem } from './lib/animation/AnimationController'
@@ -160,8 +161,26 @@ const controllerSystem = new AnimationControllerSystem(animationEngine, animatio
 
 let lastLoadedConfig: any = null
 
-async function loadControllers(config: any) {
+async function loadControllers(config: any, provider?: IModelProvider) {
   controllerSystem.reset()
+
+  // 1. 优先尝试从 Provider 加载所有控制器
+  if (provider?.getAnimationControllers) {
+    try {
+      const controllers = await provider.getAnimationControllers()
+      if (controllers.size > 0) {
+        console.log(`[BedrockAvatar] 从 Provider 加载了 ${controllers.size} 个动画控制器`)
+        controllerSystem.loadFromJson({
+          format_version: '1.10.0',
+          animation_controllers: Object.fromEntries(controllers)
+        } as any)
+      }
+    } catch (e) {
+      console.warn('[BedrockAvatar] 从 Provider 加载控制器失败:', e)
+    }
+  }
+
+  // 2. 传统路径加载
   if (config.animation_controllers) {
     const paths = Array.isArray(config.animation_controllers)
       ? config.animation_controllers
@@ -211,12 +230,13 @@ watch(selectedAnim, (newVal) => {
     // 实际上，我们应该只是重新加载模型时的逻辑。
     // 简单起见，如果取消选择，我们什么都不做，或者需要一种“恢复默认”的方法。
     if (lastLoadedConfig) {
-      loadControllers(lastLoadedConfig)
+      loadControllers(lastLoadedConfig, currentProvider)
     }
   }
 })
 
 let animationFrameId: number
+let currentProvider: IModelProvider | undefined
 
 onMounted(async () => {
   initThree()
@@ -364,11 +384,56 @@ async function loadAvatar(manifest: IAvatarManifest) {
 
     let provider: IModelProvider
     const boneFilterPatterns = manifest.boneFilterPatterns
-    if (config.model.endsWith('.pero')) {
+
+    // 检测是否为 .pero 容器格式（tar 打包的文件夹）
+    // 容器格式：model 和 texture 都指向同一个 .pero 文件
+    const isContainerFormat =
+      config.model.endsWith('.pero') &&
+      (config.texture?.endsWith('.pero') || config.texture === config.model)
+
+    if (isContainerFormat) {
+      console.log(`使用容器加载器: ${manifest.metadata.name}`)
+      provider = new PeroContainerProvider(config.model, boneFilterPatterns)
+    } else if (config.model.endsWith('.pero')) {
       console.log(`使用安全模型加载器: ${manifest.metadata.name}`)
       provider = new PeroSecureProvider(config, boneFilterPatterns)
     } else {
       provider = new StandardBedrockProvider(config, boneFilterPatterns)
+    }
+
+    currentProvider = provider
+
+    // 容器格式：从容器内读取 manifest 并合并配置
+    let effectiveManifest = manifest
+    if (isContainerFormat) {
+      try {
+        const containerManifest = await provider.getManifest()
+        if (containerManifest && containerManifest.featureButtons) {
+          // 合并容器内的 manifest 与传入的 manifest
+          // 容器内的配置优先（featureButtons, parts, boneFilterPatterns 等）
+          effectiveManifest = {
+            ...manifest,
+            ...containerManifest,
+            metadata: {
+              ...manifest.metadata,
+              ...(containerManifest.metadata || {})
+            },
+            resources: {
+              ...manifest.resources,
+              ...(containerManifest.resources || {})
+            },
+            retargetingMap: containerManifest.retargetingMap || manifest.retargetingMap,
+            featureButtons: containerManifest.featureButtons || [],
+            parts: containerManifest.parts || [],
+            boneFilterPatterns: containerManifest.boneFilterPatterns || manifest.boneFilterPatterns
+          }
+          console.log(
+            `[容器] 从容器内加载 manifest 成功，包含 ${effectiveManifest.featureButtons?.length || 0} 个功能按钮`
+          )
+        }
+      } catch (e) {
+        console.warn('[容器] 从容器内加载 manifest 失败，使用默认配置:', e)
+      }
     }
 
     const avatarRenderer = new AvatarRenderer()
@@ -381,7 +446,7 @@ async function loadAvatar(manifest: IAvatarManifest) {
 
     characterModel = rootGroup
 
-    currentAdapter = new ManifestBasedAdapter(manifest)
+    currentAdapter = new ManifestBasedAdapter(effectiveManifest)
 
     const retargetConfig = currentAdapter.getRetargetingConfig()
     retargetingManager.init(rootGroup, retargetConfig)
@@ -446,8 +511,28 @@ async function loadDefaultManifest() {
     return
   }
 
-  console.log('未指定 Manifest，使用默认配置')
-  const defaultManifest = await ManifestLoader.fromJson(`${prefix}3d/Rossi/manifest.json`)
+  console.log('未指定 Manifest，使用默认配置（.pero 容器）')
+
+  // 使用 .pero 容器格式
+  // 容器内包含所有资源（模型、纹理、动画、控制器等）
+  const containerPath = `${prefix}3d/Rossi.pero`
+  const defaultManifest: IAvatarManifest = {
+    metadata: {
+      name: 'Rossi',
+      version: '3.0.0'
+    },
+    resources: {
+      // 容器格式：model 和 texture 都指向同一个 .pero 文件
+      // loadAvatar 会检测到这是容器格式，使用 PeroContainerProvider
+      model: containerPath,
+      texture: containerPath,
+      animations: []
+    },
+    featureButtons: [],
+    parts: [],
+    retargetingMap: { mapping: {} }
+  }
+
   await loadAvatar(defaultManifest)
 }
 

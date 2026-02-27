@@ -1,3 +1,5 @@
+use std::io::Read;
+
 use chacha20poly1305::{
     aead::{Aead, KeyInit},
     XChaCha20Poly1305, XNonce,
@@ -24,7 +26,7 @@ use sha2::Sha256;
 // 当前: HKDF-SHA256 + XChaCha20-Poly1305 + 魔改XOR
 
 const PERO_MAGIC: &[u8; 4] = b"PERO";
-const PERO_VERSION: u16 = 2;
+const PERO_VERSION: u16 = 3; // v3: 支持 tar 文件夹打包格式
 const HEADER_SIZE: usize = 10; // Magic(4) + Version(2) + MetaLen(4)
 const SALT_SIZE: usize = 32;
 const NONCE_SIZE: usize = 24;
@@ -366,4 +368,57 @@ pub fn decrypt_pero_data_secure(data: &[u8]) -> Result<Vec<u8>> {
     apply_wbc_inverse(&mut decrypted);
 
     Ok(decrypted)
+}
+
+/// 解包后的容器文件
+#[derive(Debug, Clone)]
+pub struct PeroContainerFile {
+    pub path: String,
+    pub data: Vec<u8>,
+}
+
+/// 解密并解包 .pero 容器（tar 格式）
+/// 返回容器内的所有文件
+pub fn decrypt_pero_container(data: &[u8]) -> Result<Vec<PeroContainerFile>> {
+    // 1. 解密数据
+    let mut decrypted = decrypt_pero_data(data)
+        .map_err(|e| Error::new(Status::GenericFailure, format!("解密失败: {}", e)))?;
+
+    // 2. WBC 后处理
+    apply_wbc_inverse(&mut decrypted);
+
+    // 3. 解包 tar 归档
+    let mut files = Vec::new();
+    let cursor = std::io::Cursor::new(&decrypted);
+    let mut archive = tar::Archive::new(cursor);
+
+    for entry in archive
+        .entries()
+        .map_err(|e| Error::new(Status::GenericFailure, format!("读取 tar 归档失败: {}", e)))?
+    {
+        let mut entry = entry
+            .map_err(|e| Error::new(Status::GenericFailure, format!("读取 tar 条目失败: {}", e)))?;
+
+        let path = entry
+            .path()
+            .map_err(|e| Error::new(Status::GenericFailure, format!("获取条目路径失败: {}", e)))?;
+
+        // 跳过目录
+        if entry.header().entry_type().is_dir() {
+            continue;
+        }
+
+        let path_str = path.to_string_lossy().replace('\\', "/");
+        let mut file_data = Vec::new();
+        entry
+            .read_to_end(&mut file_data)
+            .map_err(|e| Error::new(Status::GenericFailure, format!("读取文件内容失败: {}", e)))?;
+
+        files.push(PeroContainerFile {
+            path: path_str,
+            data: file_data,
+        });
+    }
+
+    Ok(files)
 }

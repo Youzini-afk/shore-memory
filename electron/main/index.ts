@@ -77,13 +77,6 @@ const createWindow = async () => {
   // 注册全局快捷键
   registerShortcuts()
 
-  // [Steam] 注册 Steam IPC
-  // 注意：不再在启动时全局初始化 Steam，而是推迟到 Dashboard 窗口创建时
-  // 这样可以确保 Overlay 优先依附于 Dashboard
-  ipcMain.handle('steam-get-user', () => {
-    return getSteamUser()
-  })
-
   // 测试主动向渲染进程推送消息
   win.webContents.on('did-finish-load', () => {
     try {
@@ -93,29 +86,44 @@ const createWindow = async () => {
       // 忽略
     }
   })
+}
 
-  // 注册 Native 模块处理程序
-  ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, filterPatterns?: string[]) => {
+// 注册全局 IPC 处理程序
+ipcMain.handle('steam-get-user', () => {
+  return getSteamUser()
+})
+
+// 注册 Native 模块处理程序
+ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, filterPatterns?: string[]) => {
+  try {
+    return native.loadPeroModel(buffer, filterPatterns)
+  } catch (e) {
+    logger.error('Native', `Failed to load pero model: ${e}`)
+    throw e
+  }
+})
+
+ipcMain.handle(
+  'native-load-standard-model',
+  async (_, buffer: Buffer, filterPatterns?: string[]) => {
     try {
-      return native.loadPeroModel(buffer, filterPatterns)
+      return native.loadStandardModel(buffer, filterPatterns)
     } catch (e) {
-      logger.error('Native', `Failed to load pero model: ${e}`)
+      logger.error('Native', `Failed to load standard model: ${e}`)
       throw e
     }
-  })
+  }
+)
 
-  ipcMain.handle(
-    'native-load-standard-model',
-    async (_, buffer: Buffer, filterPatterns?: string[]) => {
-      try {
-        return native.loadStandardModel(buffer, filterPatterns)
-      } catch (e) {
-        logger.error('Native', `Failed to load standard model: ${e}`)
-        throw e
-      }
-    }
-  )
-}
+// 加载 .pero 容器（tar 格式打包的文件夹）
+ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
+  try {
+    return native.loadPeroContainer(buffer)
+  } catch (e) {
+    logger.error('Native', `Failed to load pero container: ${e}`)
+    throw e
+  }
+})
 
 app.whenReady().then(createWindow)
 

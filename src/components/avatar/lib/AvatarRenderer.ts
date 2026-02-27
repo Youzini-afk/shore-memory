@@ -198,11 +198,14 @@ export class AvatarRenderer {
         mesh.receiveShadow = true
         mesh.name = `${boneData.name}_Mesh`
 
+        console.log(`[AvatarRenderer] 为骨骼 ${boneData.name} 添加了 Native Mesh, 顶点数: ${boneData.vertices.length / 3}`)
+
         // Native geometry 已经在 Bone Local Space 中 (相对于 Pivot)
         // 所以直接添加到 Bone Group，位置为 (0,0,0)
         boneGroup.add(mesh)
       } else if (boneData.cubes && boneData.cubes.length > 0) {
         // 回退：使用 JS 侧 Cube 解析 (低性能路径)
+        console.log(`[AvatarRenderer] 为骨骼 ${boneData.name} 添加了 ${boneData.cubes.length} 个 Cubes`)
         boneData.cubes.forEach((cubeData: any) => {
           this.addCubeToBone(boneGroup, cubeData, boneData.pivot, material)
         })

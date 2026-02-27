@@ -50,4 +50,9 @@ export interface IModelProvider {
    * 获取动画数据
    */
   getAnimations(): Promise<Map<string, any>>
+
+  /**
+   * 获取动画控制器
+   */
+  getAnimationControllers?(): Promise<Map<string, any>>
 }
