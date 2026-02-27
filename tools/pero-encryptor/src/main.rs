@@ -3,11 +3,14 @@ use chacha20poly1305::{
     aead::{Aead, AeadCore, KeyInit, OsRng},
     XChaCha20Poly1305,
 };
+use chrono::Local;
 use clap::{Parser, Subcommand};
 use hkdf::Hkdf;
 use rand::RngCore;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::Sha256;
+use std::collections::HashMap;
 use std::fs;
 use std::path::PathBuf;
 
@@ -57,6 +60,13 @@ enum Commands {
         #[arg(short, long)]
         key: Option<String>,
     },
+    /// 从 ysm.json 转换并生成 manifest.json
+    Manifest {
+        #[arg(short, long)]
+        input: PathBuf,
+        #[arg(short, long)]
+        output: PathBuf,
+    },
 }
 
 fn main() -> Result<()> {
@@ -67,7 +77,256 @@ fn main() -> Result<()> {
             encrypt_file(&input, &output, key.as_deref())?;
             println!("✅ 加密成功：{:?} -> {:?}", input, output);
         }
+        Commands::Manifest { input, output } => {
+            generate_manifest(&input, &output)?;
+            println!("✅ Manifest 生成成功：{:?} -> {:?}", input, output);
+        }
     }
+
+    Ok(())
+}
+
+// ========== YSM 数据结构定义 ==========
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct YsmMetadata {
+    name: String,
+    tips: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmModel {
+    main: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmAnimation {
+    #[serde(flatten)]
+    all: HashMap<String, String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmPlayerFiles {
+    model: YsmModel,
+    animation: YsmAnimation,
+    texture: Vec<String>,
+    animation_controllers: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmFiles {
+    player: YsmPlayerFiles,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmConfigForm {
+    title: String,
+    value: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmButton {
+    id: String,
+    config_forms: Option<Vec<YsmConfigForm>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct YsmProperties {
+    extra_animation_buttons: Option<Vec<YsmButton>>,
+}
+
+#[allow(dead_code)]
+#[derive(Debug, Deserialize)]
+struct YsmJson {
+    metadata: YsmMetadata,
+    files: YsmFiles,
+    properties: YsmProperties,
+}
+
+// ========== Manifest 输出结构定义 ==========
+#[derive(Debug, Serialize)]
+struct FeatureButton {
+    id: String,
+    label: String,
+    group: String,
+    #[serde(rename = "defaultValue")]
+    default_value: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ModelPart {
+    id: String,
+    meshes: Vec<String>,
+    #[serde(rename = "defaultVisible")]
+    default_visible: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct ManifestResources {
+    model: String,
+    texture: String,
+    animations: Vec<String>,
+    animation_controllers: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ManifestJson {
+    metadata: PeroMetadata,
+    #[serde(rename = "featureButtons")]
+    feature_buttons: Vec<FeatureButton>,
+    parts: Vec<ModelPart>,
+    #[serde(rename = "retargetingMap")]
+    retargeting_map: Value,
+    resources: ManifestResources,
+    #[serde(rename = "boneFilterPatterns")]
+    bone_filter_patterns: Vec<String>,
+    #[serde(rename = "shyParts")]
+    shy_parts: Vec<Value>,
+    #[serde(rename = "shyTriggerParts")]
+    shy_trigger_parts: Vec<String>,
+}
+
+fn generate_manifest(input: &PathBuf, output: &PathBuf) -> Result<()> {
+    let ysm_content = fs::read_to_string(input).context("无法读取 ysm.json")?;
+    let ysm: YsmJson = serde_json::from_str(&ysm_content).context("解析 ysm.json 失败")?;
+
+    // 1. 处理元数据
+    let pero_meta = PeroMetadata {
+        original_type: "ysm_converted".to_string(),
+        created_at: Local::now().to_rfc3339(),
+        original_size: 0, // 初始为 0，后面如果需要可以填 ysm 大小
+    };
+
+    // 2. 处理按钮和部件 (从 extra_animation_buttons 提取)
+    let mut feature_buttons = Vec::new();
+    let mut parts = Vec::new();
+
+    if let Some(buttons) = ysm.properties.extra_animation_buttons {
+        for btn in buttons {
+            if let Some(forms) = btn.config_forms {
+                for form in forms {
+                    // 提取 id
+                    let id = form
+                        .value
+                        .replace("v.player_armor_", "")
+                        .replace("v.", "")
+                        .trim()
+                        .to_string();
+
+                    if id.is_empty() {
+                        continue;
+                    }
+
+                    let mut label = form.title.trim().to_string();
+                    if label.ends_with(':') || label.ends_with('：') {
+                        label.pop();
+                    }
+
+                    feature_buttons.push(FeatureButton {
+                        id: id.clone(),
+                        label: label.trim().to_string(),
+                        group: btn.id.clone(),
+                        default_value: true,
+                    });
+
+                    // 只有非变量类的 id 才添加为 part (启发式判断)
+                    if !id.contains('.') && !id.contains('_') || id.len() < 10 {
+                        parts.push(ModelPart {
+                            id: id.clone(),
+                            meshes: vec![id.clone(), {
+                                let mut c = id.chars();
+                                match c.next() {
+                                    None => String::new(),
+                                    Some(f) => f.to_uppercase().collect::<String>() + c.as_str(),
+                                }
+                            }],
+                            default_visible: true,
+                        });
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. 处理资源路径 (自动转换 .pero 后缀)
+    let base_path = input.parent().unwrap_or(std::path::Path::new(""));
+    let relative_prefix = format!(
+        "assets/3d/{}/",
+        base_path
+            .file_name()
+            .and_then(|f| f.to_str())
+            .unwrap_or("Model")
+    );
+
+    let model_path = format!(
+        "{}{}",
+        relative_prefix,
+        ysm.files.player.model.main.replace(".json", ".pero")
+    );
+    let texture_path = format!(
+        "{}{}",
+        relative_prefix,
+        ysm.files.player.texture.get(0).cloned().unwrap_or_default()
+    );
+
+    let mut animations = Vec::new();
+    for (_, anim_path) in ysm.files.player.animation.all {
+        animations.push(format!("{}{}", relative_prefix, anim_path));
+    }
+
+    let controller_path = format!(
+        "{}{}",
+        relative_prefix,
+        ysm.files
+            .player
+            .animation_controllers
+            .get(0)
+            .cloned()
+            .unwrap_or_default()
+    );
+
+    let resources = ManifestResources {
+        model: model_path,
+        texture: texture_path,
+        animations,
+        animation_controllers: controller_path,
+    };
+
+    // 4. 组装最终 Manifest (包含默认 Pero 配置)
+    let manifest = ManifestJson {
+        metadata: pero_meta,
+        feature_buttons,
+        parts,
+        retargeting_map: serde_json::json!({
+            "mapping": {
+                "Root": "Root",
+                "Body": "UpBody",
+                "Head": "Head",
+                "LeftArm": "LeftArm",
+                "RightArm": "RightArm",
+                "LeftLeg": "LeftLeg",
+                "RightLeg": "RightLeg"
+            },
+            "restPoseCorrection": {}
+        }),
+        resources,
+        bone_filter_patterns: vec![
+            "GUI".to_string(),
+            "Hud".to_string(),
+            "Panel".to_string(),
+            "Button".to_string(),
+            "Text".to_string(),
+            "Start".to_string(),
+            "End".to_string(),
+            "background".to_string(),
+            "molang".to_string(),
+        ],
+        shy_parts: vec![],
+        shy_trigger_parts: vec![],
+    };
+
+    let manifest_json = serde_json::to_string_pretty(&manifest).context("序列化 manifest 失败")?;
+    fs::write(output, manifest_json).context("写入 manifest.json 失败")?;
 
     Ok(())
 }
