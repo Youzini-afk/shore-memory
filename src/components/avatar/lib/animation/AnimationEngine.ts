@@ -97,6 +97,10 @@ export class AnimationEngine {
   }
 
   update(dt: number) {
+    // 无论是否有动画，每一帧都必须重置骨骼到初始姿态，
+    // 否则程序化动画（如头部追踪）会累加旋转导致“旋转爆炸”
+    this.retargetingManager.reset()
+
     if (this.activeStates.length === 0) return
 
     for (let i = this.activeStates.length - 1; i >= 0; i--) {
@@ -109,8 +113,6 @@ export class AnimationEngine {
     }
 
     if (this.activeStates.length === 0) return
-
-    this.retargetingManager.reset()
 
     molangContext.query.life_time += dt
 

@@ -147,7 +147,7 @@ fn encrypt_file(input: &PathBuf, output: &PathBuf, key: Option<&str>) -> Result<
         hex::decode(k).context("无效的 hex 密钥")?
     } else {
         println!("⚠️  使用默认测试密钥（不推荐用于生产环境）");
-        b"12345678901234567890123456789012".to_vec()
+        b"\xdb\x05\x5e\x7f\x6c\xc0\xfd\xf9\x3a\x1a\x34\x20\x99\x5b\x1e\x41\xa2\x04\xe6\x0e\x81\xed\x7f\x5f\xb5\x8f\x88\x02\x3b\x13\xce\xa2".to_vec()
     };
 
     if master_key.len() != 32 {

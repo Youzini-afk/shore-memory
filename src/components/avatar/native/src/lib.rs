@@ -6,27 +6,41 @@ mod security;
 
 use napi::bindgen_prelude::*;
 
-/// 解析加密的模型数据
+/// 解析加密的模型数据 ( .pero 格式 )
+/// 不再接收外部密钥，安全性下放到 Rust 内部
 #[napi]
 pub fn load_pero_model(
     encrypted_data: Buffer,
-    key: Buffer,
+    filter_patterns: Option<Vec<String>>,
 ) -> napi::Result<parser::ParsedModelData> {
     // 0. 安全检查 (Security Check)
-    // 如果检测到调试器，拒绝服务
     if security::is_debugged() {
-        // 返回一个模糊的错误，不直接提示 "Debugger Detected"
         return Err(napi::Error::new(
             napi::Status::GenericFailure,
-            obfstr::obfstr!("System Integrity Check Failed (Error 0x80004005)").to_string(),
+            obfstr::obfstr!("系统完整性检查失败 (Error 0x80004005)").to_string(),
         ));
     }
 
-    // 1. Decrypt
-    let decrypted = crypto::decrypt_pero_data(encrypted_data.as_ref(), key.as_ref())?;
+    // 1. 解密 (使用内部密钥)
+    let decrypted = crypto::decrypt_pero_data_secure(encrypted_data.as_ref())?;
 
-    // 2. Parse & Generate Geometry
-    parser::parse_model(&decrypted)
+    // 2. 解析几何体
+    let parsed_data = parser::parse_model_internal(&decrypted, filter_patterns)?;
+
+    // 3. 直接返回解析后的对象，不再进行二进制打包
+    // 数据安全性由 Rust 内部处理，TS 侧只负责渲染
+    Ok(parsed_data)
+}
+
+/// 解析标准模型数据 ( .json 格式 )
+/// 直接返回解析后的对象
+#[napi]
+pub fn load_standard_model(
+    json_data: Buffer,
+    filter_patterns: Option<Vec<String>>,
+) -> napi::Result<parser::ParsedModelData> {
+    let parsed_data = parser::parse_model_internal(json_data.as_ref(), filter_patterns)?;
+    Ok(parsed_data)
 }
 
 /// 获取当前的安全状态

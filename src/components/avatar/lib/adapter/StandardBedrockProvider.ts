@@ -1,17 +1,5 @@
 import * as THREE from 'three'
-import { IModelProvider, ParsedModelData, ParsedBone } from './IModelProvider'
-
-const DEFAULT_BONE_FILTER_PATTERNS = [
-  'GUI',
-  'Hud',
-  'Panel',
-  'Button',
-  'Text',
-  'Start',
-  'End',
-  'background',
-  'molang'
-]
+import { IModelProvider, ParsedModelData } from './IModelProvider'
 
 /**
  * 标准 Bedrock JSON 提供者
@@ -20,11 +8,11 @@ const DEFAULT_BONE_FILTER_PATTERNS = [
 export class StandardBedrockProvider implements IModelProvider {
   private config: any
   private textureCache = new Map<string, THREE.Texture>()
-  private boneFilterPatterns: string[]
+  private boneFilterPatterns: string[] | undefined
 
   constructor(config: any, boneFilterPatterns?: string[]) {
     this.config = config
-    this.boneFilterPatterns = boneFilterPatterns || DEFAULT_BONE_FILTER_PATTERNS
+    this.boneFilterPatterns = boneFilterPatterns
   }
 
   async getManifest(): Promise<any> {
@@ -37,39 +25,17 @@ export class StandardBedrockProvider implements IModelProvider {
   async getModelData(): Promise<ParsedModelData> {
     const response = await fetch(this.config.model)
     if (!response.ok) throw new Error(`Failed to load model: ${this.config.model}`)
-    const json = await response.json()
+    const arrayBuffer = await response.arrayBuffer()
 
-    // 适配器过滤逻辑 (Legacy Support)
-    const geometries = json['minecraft:geometry'] || []
-    let allBones: any[] = []
-    let firstDesc: any = null
+    // 调用 Native 模块解析并生成几何体 (通过 IPC)
+    // 直接返回解析后的对象，不再需要前端解包
+    // @ts-ignore
+    const parsedData = await window.electron.loadStandardModel(
+      new Uint8Array(arrayBuffer),
+      this.boneFilterPatterns
+    )
 
-    geometries.forEach((geo: any) => {
-      if (geo.bones) {
-        allBones = allBones.concat(geo.bones)
-      }
-      if (!firstDesc && geo.description) {
-        firstDesc = geo.description
-      }
-    })
-
-    allBones = this.filterBones(allBones)
-
-    // 转换为统一格式
-    const parsedBones: ParsedBone[] = allBones.map((b: any) => ({
-      name: b.name,
-      parent: b.parent,
-      pivot: b.pivot || [0, 0, 0],
-      rotation: b.rotation,
-      cubes: b.cubes
-    }))
-
-    const desc = firstDesc || { texture_width: 64, texture_height: 64 }
-    return {
-      textureWidth: desc.texture_width,
-      textureHeight: desc.texture_height,
-      bones: parsedBones
-    }
+    return parsedData
   }
 
   async getTexture(): Promise<THREE.Texture> {
@@ -109,20 +75,11 @@ export class StandardBedrockProvider implements IModelProvider {
             })
           }
         } catch (e) {
-          console.warn(`Failed to load animation: ${path}`, e)
+          console.warn(`加载动画失败: ${path}`, e)
         }
       }
     }
 
     return animations
-  }
-
-  private filterBones(bones: any[]): any[] {
-    return bones.filter((b: any) => {
-      const name = b.name
-      if (name === 'Start' || name === 'End') return false
-      if (this.boneFilterPatterns.some((pattern: string) => name.includes(pattern))) return false
-      return true
-    })
   }
 }

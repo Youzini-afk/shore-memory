@@ -1,27 +1,9 @@
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::Value;
 
 // --- Internal Data Structures for Serde Parsing ---
-
-#[derive(Deserialize)]
-struct BedrockModel {
-    #[serde(rename = "minecraft:geometry")]
-    geometry: Vec<BedrockGeometry>,
-}
-
-#[derive(Deserialize)]
-struct BedrockGeometry {
-    description: Description,
-    bones: Option<Vec<Bone>>,
-}
-
-#[derive(Deserialize)]
-struct Description {
-    texture_width: f64,
-    texture_height: f64,
-}
 
 #[derive(Deserialize)]
 struct Bone {
@@ -43,6 +25,20 @@ struct Cube {
     uv: Option<Value>, // Can be Array([u, v]) or Object({north: ..., south: ...})
 }
 
+// --- Constants ---
+
+const DEFAULT_BONE_FILTER_PATTERNS: &[&str] = &[
+    "GUI",
+    "Hud",
+    "Panel",
+    "Button",
+    "Text",
+    "Start",
+    "End",
+    "background",
+    "molang",
+];
+
 // --- Public Data Structures for NAPI ---
 
 #[napi(object)]
@@ -60,7 +56,7 @@ pub struct ParsedBone {
     pub parent: Option<String>,
     pub pivot: Vec<f64>,
     pub rotation: Option<Vec<f64>>,
-    // Generated Geometry Data
+    // 生成的几何体数据
     #[napi(ts_type = "Float32Array")]
     pub vertices: Option<Float32Array>,
     #[napi(ts_type = "Float32Array")]
@@ -71,69 +67,125 @@ pub struct ParsedBone {
 
 // --- Geometry Generation Implementation ---
 
-pub fn parse_model(data: &[u8]) -> Result<ParsedModelData> {
-    // 1. Parse JSON
-    let model: BedrockModel = serde_json::from_slice(data)
-        .map_err(|e| Error::new(Status::InvalidArg, format!("Failed to parse JSON: {}", e)))?;
+/// 解析模型数据并生成几何体（内部通用逻辑）
+pub fn parse_model_internal(
+    data: &[u8],
+    filter_patterns: Option<Vec<String>>,
+) -> Result<ParsedModelData> {
+    // 1. 解析 JSON
+    let json: Value = serde_json::from_slice(data)
+        .map_err(|e| Error::new(Status::InvalidArg, format!("解析 JSON 失败: {}", e)))?;
 
-    // 2. Extract Geometry and Bones
-    let mut parsed_bones = Vec::new();
+    // 2. 提取 Geometry 列表 (适配 minecraft:geometry 数组或单对象)
+    let geometries = if let Some(geos) = json.get("minecraft:geometry") {
+        if geos.is_array() {
+            geos.as_array().unwrap().clone()
+        } else {
+            vec![geos.clone()]
+        }
+    } else {
+        return Err(Error::new(
+            Status::InvalidArg,
+            "未找到 minecraft:geometry 节点",
+        ));
+    };
+
+    // 3. 提取所有骨骼并合并，同时提取描述信息
+    let mut all_bones: Vec<Value> = Vec::new();
     let mut texture_width = 64.0;
     let mut texture_height = 64.0;
     let mut description_found = false;
 
-    for geometry in model.geometry {
+    for geo in geometries {
         if !description_found {
-            texture_width = geometry.description.texture_width;
-            texture_height = geometry.description.texture_height;
-            description_found = true;
-        }
-
-        if let Some(bones) = geometry.bones {
-            for bone in bones {
-                let mut vertices: Vec<f32> = Vec::new();
-                let mut uvs: Vec<f32> = Vec::new();
-                let mut indices: Vec<u16> = Vec::new();
-                let mut vertex_offset = 0;
-
-                let bone_pivot = bone.pivot.clone().unwrap_or_else(|| vec![0.0, 0.0, 0.0]);
-
-                if let Some(cubes) = &bone.cubes {
-                    for cube in cubes {
-                        add_cube_to_bone(
-                            cube,
-                            &bone_pivot,
-                            texture_width,
-                            texture_height,
-                            &mut vertices,
-                            &mut uvs,
-                            &mut indices,
-                            &mut vertex_offset,
-                        );
-                    }
-                }
-
-                let (final_vertices, final_uvs, final_indices) = if !vertices.is_empty() {
-                    (
-                        Some(Float32Array::new(vertices)),
-                        Some(Float32Array::new(uvs)),
-                        Some(Uint16Array::new(indices)),
-                    )
-                } else {
-                    (None, None, None)
-                };
-
-                parsed_bones.push(ParsedBone {
-                    name: bone.name,
-                    parent: bone.parent,
-                    pivot: bone_pivot,
-                    rotation: bone.rotation,
-                    vertices: final_vertices,
-                    uvs: final_uvs,
-                    indices: final_indices,
-                });
+            if let Some(desc) = geo.get("description") {
+                texture_width = desc
+                    .get("texture_width")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(64.0);
+                texture_height = desc
+                    .get("texture_height")
+                    .and_then(|v| v.as_f64())
+                    .unwrap_or(64.0);
+                description_found = true;
             }
         }
+
+        if let Some(bones) = geo.get("bones").and_then(|v| v.as_array()) {
+            all_bones.extend(bones.iter().cloned());
+        }
+    }
+
+    // 4. 骨骼过滤
+    let patterns = filter_patterns.unwrap_or_else(|| {
+        DEFAULT_BONE_FILTER_PATTERNS
+            .iter()
+            .map(|&s| s.to_string())
+            .collect()
+    });
+
+    let filtered_bones: Vec<Value> = all_bones
+        .into_iter()
+        .filter(|b| {
+            if let Some(name) = b.get("name").and_then(|v| v.as_str()) {
+                if name == "Start" || name == "End" {
+                    return false;
+                }
+                !patterns.iter().any(|p| name.contains(p))
+            } else {
+                false
+            }
+        })
+        .collect();
+
+    // 5. 为每个骨骼生成几何体
+    let mut parsed_bones = Vec::new();
+
+    for b_val in filtered_bones {
+        let bone: Bone = serde_json::from_value(b_val.clone())
+            .map_err(|e| Error::new(Status::InvalidArg, format!("解析骨骼数据失败: {}", e)))?;
+
+        let mut vertices: Vec<f32> = Vec::new();
+        let mut uvs: Vec<f32> = Vec::new();
+        let mut indices: Vec<u16> = Vec::new();
+        let mut vertex_offset = 0;
+
+        let bone_pivot = bone.pivot.clone().unwrap_or_else(|| vec![0.0, 0.0, 0.0]);
+
+        if let Some(cubes) = &bone.cubes {
+            for cube in cubes {
+                add_cube_to_bone(
+                    cube,
+                    &bone_pivot,
+                    texture_width,
+                    texture_height,
+                    &mut vertices,
+                    &mut uvs,
+                    &mut indices,
+                    &mut vertex_offset,
+                );
+            }
+        }
+
+        let (final_vertices, final_uvs, final_indices) = if !vertices.is_empty() {
+            (
+                Some(Float32Array::new(vertices)),
+                Some(Float32Array::new(uvs)),
+                Some(Uint16Array::new(indices)),
+            )
+        } else {
+            (None, None, None)
+        };
+
+        parsed_bones.push(ParsedBone {
+            name: bone.name,
+            parent: bone.parent,
+            pivot: bone_pivot,
+            rotation: bone.rotation,
+            vertices: final_vertices,
+            uvs: final_uvs,
+            indices: final_indices,
+        });
     }
 
     Ok(ParsedModelData {
@@ -507,8 +559,8 @@ fn calculate_face_uv(
     }
 
     // Normalize
-    let mut u0 = u / tex_w;
-    let mut u1 = (u + w) / tex_w;
+    let u0 = u / tex_w;
+    let u1 = (u + w) / tex_w;
 
     // Invert V (Texture coordinates origin is top-left in Bedrock, bottom-left in GL)
     // TS: v0 = (H - v - h) / H, v1 = (H - v) / H

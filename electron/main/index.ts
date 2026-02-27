@@ -95,14 +95,26 @@ const createWindow = async () => {
   })
 
   // 注册 Native 模块处理程序
-  ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, key: Buffer) => {
+  ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, filterPatterns?: string[]) => {
     try {
-      return native.loadPeroModel(buffer, key)
+      return native.loadPeroModel(buffer, filterPatterns)
     } catch (e) {
       logger.error('Native', `Failed to load pero model: ${e}`)
       throw e
     }
   })
+
+  ipcMain.handle(
+    'native-load-standard-model',
+    async (_, buffer: Buffer, filterPatterns?: string[]) => {
+      try {
+        return native.loadStandardModel(buffer, filterPatterns)
+      } catch (e) {
+        logger.error('Native', `Failed to load standard model: ${e}`)
+        throw e
+      }
+    }
+  )
 }
 
 app.whenReady().then(createWindow)

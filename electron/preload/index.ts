@@ -7,6 +7,8 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.on(channel, listener)
     return () => ipcRenderer.removeListener(channel, listener)
   },
-  loadPeroModel: (buffer: Uint8Array, key: Uint8Array) =>
-    ipcRenderer.invoke('native-load-pero-model', buffer, key)
+  loadPeroModel: (buffer: Uint8Array, filterPatterns?: string[]) =>
+    ipcRenderer.invoke('native-load-pero-model', buffer, filterPatterns),
+  loadStandardModel: (buffer: Uint8Array, filterPatterns?: string[]) =>
+    ipcRenderer.invoke('native-load-standard-model', buffer, filterPatterns)
 })
