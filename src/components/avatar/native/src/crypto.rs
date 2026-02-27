@@ -7,24 +7,25 @@ use napi::{Error, Result, Status};
 use obfstr::obfstr;
 use sha2::Sha256;
 
-// ========== .pero v2 文件格式定义 ==========
-// | 偏移量 | 长度 | 字段      | 描述                        |
-// |--------|------|-----------|----------------------------|
-// | 0      | 4    | Magic     | "PERO" 魔数                |
-// | 4      | 2    | Version   | 文件格式版本 (u16 LE)      |
-// | 6      | 4    | MetaLen   | 元数据长度 (u32 LE)        |
-// | 10     | N    | Metadata  | JSON 格式的元数据          |
-// | 10+N   | 32   | Salt      | HKDF salt                  |
-// | 42+N   | 24   | Nonce     | XChaCha20 Nonce            |
-// | 66+N   | M    | Ciphertext| 加密数据 (含 Poly1305 Tag) |
+// ========== .pero 文件格式定义 ==========
+//
+// | 偏移 (字节) | 长度 (字节) | 字段      | 说明                       |
+// |------------|------------|-----------|----------------------------|
+// | 0          | 4          | Magic     | "PERO"                     |
+// | 4          | 2          | Version   | 格式版本 (目前为 2)        |
+// | 6          | 4          | MetaLen   | 元数据长度 (N)             |
+// | 10         | N          | Metadata  | JSON 格式的元数据          |
+// | 10+N        | 32         | Salt      | 用于 HKDF 的盐             |
+// | 42+N        | 24         | Nonce     | XChaCha20 Nonce            |
+// | 66+N        | M          | Ciphertext| 加密数据 (含 Poly1305 Tag) |
 //
 // 版本号 → 算法映射（内部逻辑，不对外暴露）:
-// v1: XChaCha20-Poly1305 (旧格式，已废弃)
-// v2: HKDF-SHA256 + XChaCha20-Poly1305 + 魔改XOR
+// 基础: XChaCha20-Poly1305 (已废弃)
+// 当前: HKDF-SHA256 + XChaCha20-Poly1305 + 魔改XOR
 
 const PERO_MAGIC: &[u8; 4] = b"PERO";
-const PERO_VERSION_V2: u16 = 2;
-const HEADER_SIZE_V2: usize = 10; // Magic(4) + Version(2) + MetaLen(4)
+const PERO_VERSION: u16 = 2;
+const HEADER_SIZE: usize = 10; // Magic(4) + Version(2) + MetaLen(4)
 const SALT_SIZE: usize = 32;
 const NONCE_SIZE: usize = 24;
 
@@ -82,28 +83,64 @@ fn assemble_decoy_key() -> [u8; 32] {
     key
 }
 
-/// 密钥碎片化与动态异或组装
+/// 诱导函数 1：模拟复杂的熵提取过程
+#[inline(never)]
+fn extract_entropy_fake(input: &[u8]) -> u32 {
+    let mut hash = 0x811c9dc5u32;
+    for &b in input {
+        hash ^= b as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    // 故意增加一些位操作，看起来像是在进行关键计算
+    hash = (hash ^ (hash >> 16)).wrapping_mul(0x85ebca6b);
+    hash = (hash ^ (hash >> 13)).wrapping_mul(0xc2b2ae35);
+    hash ^ (hash >> 16)
+}
+
+/// 诱导函数 2：虚假的校验逻辑
+#[inline(never)]
+fn verify_integrity_fake(data: &[u8]) -> bool {
+    if data.len() < 4 {
+        return false;
+    }
+    let check = extract_entropy_fake(&data[..data.len() / 2]);
+    let expected = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+    // 总是返回 true，但让逆向者以为这里有真正的校验
+    std::hint::black_box(check == expected || true)
+}
+
+/// 密钥碎片化：不再以连续字节数组存储 Master Key
 fn assemble_master_key() -> [u8; 32] {
     let mut key = [0u8; 32];
 
-    // 密钥碎片 (XOR 掩码后的密文)
+    // 诱导分支：看起来在做关键决策
+    let dummy_data = obfstr::obfbytes!(b"SYSTEM_ENTROPY_CHECK_V3");
+    if extract_entropy_fake(dummy_data) == 0x12345678 {
+        // 这是一个永远不会进入的分支，但能迷惑静态扫描
+        key.copy_from_slice(&assemble_decoy_key());
+        return key;
+    }
+
+    // 碎片 1 (混淆后的)
     let p1 = obfstr::obfbytes!(b"\xdb\x05\x5e\x7f\x6c\xc0\xfd\xf9");
     let p2 = obfstr::obfbytes!(b"\x3a\x1a\x34\x20\x99\x5b\x1e\x41");
     let p3 = obfstr::obfbytes!(b"\xa2\x04\xe6\x0e\x81\xed\x7f\x5f");
     let p4 = obfstr::obfbytes!(b"\xb5\x8f\x88\x02\x3b\x13\xce\xa2");
 
-    // 动态掩码 (为了不让真实的 p1-p4 在静态分析中显得太突兀，我们增加一个运行时层)
+    // 动态掩码
     let mask = obfstr::obfbytes!(b"PERO_DYNAMIC_XOR_MASK_2026");
 
+    // 动态组装过程
     for i in 0..8 {
-        // 这里的异或逻辑是透明的（目前掩码实际上并不改变数据，只是为了增加指令复杂度）
-        // 真正的加固在于：破解者在静态分析时，看到的逻辑是：
-        // key[i] = (p1[i] ^ mask[i]) ^ mask[i]
-        // 这会多出数十条汇编指令，极大地增加了分析成本喵！
         key[i] = (p1[i] ^ mask[i % mask.len()]) ^ mask[i % mask.len()];
         key[i + 8] = (p2[i] ^ mask[(i + 8) % mask.len()]) ^ mask[(i + 8) % mask.len()];
         key[i + 16] = (p3[i] ^ mask[(i + 16) % mask.len()]) ^ mask[(i + 16) % mask.len()];
         key[i + 24] = (p4[i] ^ mask[(i + 24) % mask.len()]) ^ mask[(i + 24) % mask.len()];
+    }
+
+    // 再次混淆：虚假的二次处理
+    if !verify_integrity_fake(&key) {
+        key[0] ^= 0xFF; // 永远不会执行
     }
 
     key
@@ -113,69 +150,71 @@ fn assemble_master_key() -> [u8; 32] {
 fn derive_key(salt: &[u8]) -> Result<[u8; 32]> {
     // 1. 动态检测调试环境
     if is_debugger_detected() {
-        // 如果检测到调试器，不直接退出，而是返回一个虚假的派生密钥
-        // 攻击者会拿到错误的解密结果，但无法直接定位到反调试逻辑喵！
+        // 如果检测到调试器，不直接退出，而是返回一个诱导密钥
+        // 攻击者会发现解密后的数据是垃圾，从而浪费大量时间分析为什么解密逻辑“坏了”喵
         return Ok(assemble_decoy_key());
     }
 
-    // 迷惑路径：调用虚假组装，但不使用其结果
-    let _decoy = assemble_decoy_key();
+    // 虚假校验 3：检查 Salt 是否符合某些伪造的特征
+    if salt.len() == 32 && salt[0] == 0xCC {
+        // 看起来像是个特例处理
+        let mut decoy = assemble_decoy_key();
+        decoy[0] = salt[1];
+        return Ok(decoy);
+    }
 
-    // 真正的密钥下放
+    let _decoy = assemble_decoy_key();
     let mut master_key = assemble_master_key();
+
+    // 虚假校验 4：对 Master Key 进行一些毫无意义的检查
+    let mut check_sum = 0u8;
+    for &b in &master_key {
+        check_sum = check_sum.wrapping_add(b);
+    }
+    if check_sum == 0 {
+        // 概率极低，但存在的分支
+        return Err(Error::new(
+            Status::GenericFailure,
+            obfstr!("KEY_CHECKSUM_ERR").to_string(),
+        ));
+    }
 
     let hkdf = Hkdf::<Sha256>::new(Some(salt), &master_key);
     let mut derived_key = [0u8; 32];
-    let res = hkdf.expand(b"PERO_MODEL_ENCRYPTION_KEY_V2", &mut derived_key);
-
-    // 关键点：使用完主密钥后，立即从栈上“擦除”它
-    // 这样内存中完整密钥的存在时间只有微秒级喵！
+    let res = hkdf.expand(b"PERO_MODEL_ENCRYPTION_KEY", &mut derived_key);
     for b in master_key.iter_mut() {
         *b = 0x00;
     }
-
     res.map_err(|_| Error::new(Status::GenericFailure, "HKDF 密钥派生失败".to_string()))?;
     Ok(derived_key)
 }
 
-/// 解密 .pero v2 格式的数据
-/// 内部版本：使用硬编码的内部密钥
-fn decrypt_pero_v2(encrypted_data: &[u8]) -> Result<Vec<u8>> {
-    // 最小文件大小: Header(10) + Salt(32) + Nonce(24) + Poly1305Tag(16) = 82
-    if encrypted_data.len() < HEADER_SIZE_V2 + SALT_SIZE + NONCE_SIZE + 16 {
-        return Err(Error::new(
-            Status::InvalidArg,
-            obfstr!("数据太小").to_string(),
-        ));
+/// 解密 .pero 格式的数据
+fn decrypt_pero_data(encrypted_data: &[u8]) -> Result<Vec<u8>> {
+    // 基础长度校验
+    if encrypted_data.len() < HEADER_SIZE + SALT_SIZE + NONCE_SIZE + 16 {
+        return Err(Error::new(Status::InvalidArg, "数据长度不足".to_string()));
     }
 
-    // 1. 验证 Magic Number
+    // 1. 验证 Magic
     if &encrypted_data[0..4] != PERO_MAGIC {
+        return Err(Error::new(Status::InvalidArg, "非法文件格式".to_string()));
+    }
+
+    // 2. 读取元数据长度
+    let version = u16::from_le_bytes(encrypted_data[4..6].try_into().unwrap());
+    let meta_len = u32::from_le_bytes(encrypted_data[6..10].try_into().unwrap()) as usize;
+
+    // 3. 验证版本
+    if version != PERO_VERSION {
         return Err(Error::new(
             Status::InvalidArg,
-            obfstr!("无效的文件格式").to_string(),
+            format!("不支持的文件版本: {}", version),
         ));
     }
 
-    // 2. 解析头部
-    let version = u16::from_le_bytes([encrypted_data[4], encrypted_data[5]]);
-    let meta_len = u32::from_le_bytes([
-        encrypted_data[6],
-        encrypted_data[7],
-        encrypted_data[8],
-        encrypted_data[9],
-    ]) as usize;
-
-    // 3. 验证版本（仅支持 v2）
-    if version != PERO_VERSION_V2 {
-        return Err(Error::new(
-            Status::InvalidArg,
-            obfstr!("不支持的文件版本").to_string(),
-        ));
-    }
-
-    // 4. 定位加密数据起始位置
-    let crypto_start = HEADER_SIZE_V2 + meta_len;
+    // 4. 定位加密载荷起始点
+    let crypto_start = HEADER_SIZE + meta_len;
     if encrypted_data.len() < crypto_start + SALT_SIZE + NONCE_SIZE {
         return Err(Error::new(
             Status::InvalidArg,
@@ -320,11 +359,10 @@ fn apply_wbc_inverse(data: &mut [u8]) {
 /// 解密 .pero 模型数据，并应用白盒逆转换
 pub fn decrypt_pero_data_secure(data: &[u8]) -> Result<Vec<u8>> {
     // 1. 基础解密 (XChaCha20-Poly1305)
-    let mut decrypted = decrypt_pero_v2(data)
+    let mut decrypted = decrypt_pero_data(data)
         .map_err(|e| Error::new(Status::GenericFailure, format!("解密失败: {}", e)))?;
 
-    // 2. 白盒逆转换 (White-Box SPN Inverse)
-    // 即使攻击者拿到了上面的 decrypted 数据，它依然是被白盒混淆过的
+    // 2. WBC 后处理 (逆向还原 SPN 层)
     apply_wbc_inverse(&mut decrypted);
 
     Ok(decrypted)

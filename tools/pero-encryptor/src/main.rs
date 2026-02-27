@@ -11,7 +11,7 @@ use sha2::Sha256;
 use std::fs;
 use std::path::PathBuf;
 
-// ========== .pero v2 文件格式定义 ==========
+// ========== .pero 文件格式定义 ==========
 // | 偏移量 | 长度 | 字段      | 描述                        |
 // |--------|------|-----------|----------------------------|
 // | 0      | 4    | Magic     | "PERO" 魔数                |
@@ -23,8 +23,8 @@ use std::path::PathBuf;
 // | 66+N   | M    | Ciphertext| 加密数据 (含 Poly1305 Tag) |
 //
 // 版本号 → 算法映射（内部逻辑，不对外暴露）:
-// v1: XChaCha20-Poly1305 (旧格式，已废弃)
-// v2: HKDF-SHA256 + XChaCha20-Poly1305 + 魔改XOR
+// 基础: XChaCha20-Poly1305 (已废弃)
+// 当前: HKDF-SHA256 + XChaCha20-Poly1305 + 魔改XOR
 
 const PERO_MAGIC: &[u8; 4] = b"PERO";
 const PERO_VERSION: u16 = 2;
@@ -48,6 +48,7 @@ struct Args {
 
 #[derive(Subcommand, Debug)]
 enum Commands {
+    /// 加密模型文件
     Encrypt {
         #[arg(short, long)]
         input: PathBuf,
@@ -56,74 +57,17 @@ enum Commands {
         #[arg(short, long)]
         key: Option<String>,
     },
-    Decrypt {
-        #[arg(short, long)]
-        input: PathBuf,
-        #[arg(short, long)]
-        output: PathBuf,
-        #[arg(short, long)]
-        key: Option<String>,
-    },
-    Info {
-        #[arg(short, long)]
-        input: PathBuf,
-    },
-    GenKey,
 }
 
 fn main() -> Result<()> {
     let args = Args::parse();
 
     match args.command {
-        Commands::Encrypt { input, output, key } => encrypt_file(&input, &output, key.as_deref())?,
-        Commands::Decrypt { input, output, key } => decrypt_file(&input, &output, key.as_deref())?,
-        Commands::Info { input } => show_info(&input)?,
-        Commands::GenKey => generate_key()?,
+        Commands::Encrypt { input, output, key } => {
+            encrypt_file(&input, &output, key.as_deref())?;
+            println!("✅ 加密成功：{:?} -> {:?}", input, output);
+        }
     }
-
-    Ok(())
-}
-
-fn generate_key() -> Result<()> {
-    let mut key = [0u8; 32];
-    OsRng.fill_bytes(&mut key);
-    println!("生成的 32 字节主密钥 (hex):");
-    println!("{}", hex::encode(key));
-    println!("\n请妥善保管此密钥！");
-    Ok(())
-}
-
-fn show_info(input: &PathBuf) -> Result<()> {
-    let data = fs::read(input).context("无法读取输入文件")?;
-
-    if data.len() < HEADER_SIZE {
-        anyhow::bail!("文件太小，不是有效的 .pero 文件");
-    }
-
-    let magic = &data[0..4];
-    if magic != PERO_MAGIC {
-        anyhow::bail!("无效的 .pero 文件：魔数不匹配");
-    }
-
-    let version = u16::from_le_bytes([data[4], data[5]]);
-    let meta_len = u32::from_le_bytes([data[6], data[7], data[8], data[9]]) as usize;
-
-    if data.len() < HEADER_SIZE + meta_len {
-        anyhow::bail!("文件损坏：元数据长度超出文件大小");
-    }
-
-    let meta_json = &data[HEADER_SIZE..HEADER_SIZE + meta_len];
-    let metadata: PeroMetadata = serde_json::from_slice(meta_json).context("无法解析元数据")?;
-
-    println!("📁 .pero 文件信息");
-    println!("────────────────────────────────");
-    println!("版本号: {}", version);
-    println!("原始文件类型: {}", metadata.original_type);
-    println!("创建时间: {}", metadata.created_at);
-    println!("原始大小: {} bytes", metadata.original_size);
-
-    let encrypted_size = data.len() - HEADER_SIZE - meta_len - SALT_SIZE - NONCE_SIZE;
-    println!("加密数据大小: {} bytes", encrypted_size);
 
     Ok(())
 }
@@ -134,34 +78,42 @@ use windows::Win32::System::Diagnostics::Debug::{CheckRemoteDebuggerPresent, IsD
 #[cfg(target_os = "windows")]
 use windows::Win32::System::Threading::GetCurrentProcess;
 
-/// 多重反调试检查 (同步自解密端)
+/// 多重反调试检查
+/// 返回 true 如果检测到调试器
 fn is_debugger_detected() -> bool {
     #[cfg(target_os = "windows")]
     unsafe {
+        // 1. 基础检查: IsDebuggerPresent
         if IsDebuggerPresent().as_bool() {
             return true;
         }
 
+        // 2. 远程调试检查: CheckRemoteDebuggerPresent
         let mut is_remote_present = false.into();
         let _ = CheckRemoteDebuggerPresent(GetCurrentProcess(), &mut is_remote_present);
         if is_remote_present.as_bool() {
             return true;
         }
 
+        // 3. 时间差检查: 检测单步执行 (rdtsc 类似逻辑)
+        // 在解密这种关键操作中，如果耗时异常巨大，极可能是被单步跟踪
         let start = Instant::now();
+        // 执行一段极短但无法被完全优化的逻辑
         let mut sink = 0u64;
         for i in 0..100 {
             sink = sink.wrapping_add(i);
         }
         std::hint::black_box(sink);
+
         if start.elapsed().as_micros() > 500 {
+            // 100次加法不可能超过500微秒，除非在调试
             return true;
         }
     }
     false
 }
 
-/// 虚假密钥组装：用于迷惑分析
+/// 虚假密钥组装：用于迷惑分析喵
 #[inline(never)]
 fn assemble_decoy_key() -> [u8; 32] {
     let mut key = [0u8; 32];
@@ -174,9 +126,41 @@ fn assemble_decoy_key() -> [u8; 32] {
     key
 }
 
+/// 诱导函数 1：模拟复杂的熵提取过程
+#[inline(never)]
+fn extract_entropy_fake(input: &[u8]) -> u32 {
+    let mut hash = 0x811c9dc5u32;
+    for &b in input {
+        hash ^= b as u32;
+        hash = hash.wrapping_mul(0x01000193);
+    }
+    hash = (hash ^ (hash >> 16)).wrapping_mul(0x85ebca6b);
+    hash = (hash ^ (hash >> 13)).wrapping_mul(0xc2b2ae35);
+    hash ^ (hash >> 16)
+}
+
+/// 诱导函数 2：虚假的校验逻辑
+#[inline(never)]
+fn verify_integrity_fake(data: &[u8]) -> bool {
+    if data.len() < 4 {
+        return false;
+    }
+    let check = extract_entropy_fake(&data[..data.len() / 2]);
+    let expected = u32::from_le_bytes([data[0], data[1], data[2], data[3]]);
+    std::hint::black_box(check == expected || true)
+}
+
 /// 密钥碎片化：不再以连续字节数组存储 Master Key
 fn assemble_master_key() -> [u8; 32] {
     let mut key = [0u8; 32];
+
+    // 诱导分支：看起来在做关键决策
+    let dummy_data = obfstr::obfbytes!(b"SYSTEM_ENTROPY_CHECK_V3");
+    if extract_entropy_fake(dummy_data) == 0x12345678 {
+        // 这是一个永远不会进入的分支，但能迷惑静态扫描
+        key.copy_from_slice(&assemble_decoy_key());
+        return key;
+    }
 
     // 碎片 1 (混淆后的)
     let p1 = obfstr::obfbytes!(b"\xdb\x05\x5e\x7f\x6c\xc0\xfd\xf9");
@@ -195,6 +179,11 @@ fn assemble_master_key() -> [u8; 32] {
         key[i + 24] = (p4[i] ^ mask[(i + 24) % mask.len()]) ^ mask[(i + 24) % mask.len()];
     }
 
+    // 再次混淆：虚假的二次处理
+    if !verify_integrity_fake(&key) {
+        key[0] ^= 0xFF; // 永远不会执行
+    }
+
     key
 }
 
@@ -207,9 +196,29 @@ fn derive_key(master_key_input: &[u8], salt: &[u8]) -> Result<[u8; 32]> {
         return Ok(assemble_decoy_key());
     }
 
+    // 虚假校验 3：检查 Salt 是否符合某些伪造的特征 (同步自解密端)
+    if salt.len() == 32 && salt[0] == 0xCC {
+        let mut decoy = assemble_decoy_key();
+        decoy[0] = salt[1];
+        return Ok(decoy);
+    }
+
+    // 虚假校验 4：对 Master Key 进行一些毫无意义的检查 (同步自解密端)
+    let mut check_sum = 0u8;
+    for &b in master_key_input {
+        check_sum = check_sum.wrapping_add(b);
+    }
+    if check_sum == 0 {
+        // 概率极低，但存在的分支
+        return Err(anyhow::anyhow!(
+            obfstr::obfstr!("KEY_CHECKSUM_ERR").to_string()
+        ));
+    }
+
+    let _decoy = assemble_decoy_key();
     let hkdf = Hkdf::<Sha256>::new(Some(salt), master_key_input);
     let mut derived_key = [0u8; 32];
-    hkdf.expand(b"PERO_MODEL_ENCRYPTION_KEY_V2", &mut derived_key)
+    hkdf.expand(b"PERO_MODEL_ENCRYPTION_KEY", &mut derived_key)
         .map_err(|_| anyhow::anyhow!(obfstr::obfstr!("HKDF 密钥派生失败").to_string()))?;
     Ok(derived_key)
 }
@@ -244,6 +253,7 @@ const SBOX2: [u8; 256] = [
     58, 115, 96, 126, 52, 37, 151, 83, 229, 212, 165, 95, 44, 35, 138, 76, 170, 64, 254, 113, 158,
     136, 77, 74, 141, 12, 82, 53, 246, 6,
 ];
+
 /// 轮密钥碎片化获取函数
 #[inline(always)]
 fn get_wbc_key_byte(i: usize) -> u8 {
@@ -319,8 +329,9 @@ fn apply_wbc_forward(data: &mut [u8]) {
     }
 }
 
+/// 加密文件核心逻辑
 fn encrypt_file(input: &PathBuf, output: &PathBuf, key: Option<&str>) -> Result<()> {
-    println!("🔒 Pero Encryptor v0.3.0");
+    println!("🔒 Pero 加密工具 v0.3.0");
     println!("输入文件: {:?}", input);
     println!("输出文件: {:?}", output);
 
@@ -404,82 +415,7 @@ fn encrypt_file(input: &PathBuf, output: &PathBuf, key: Option<&str>) -> Result<
 
     fs::write(output, final_data).context("无法写入输出文件")?;
 
-    println!("✅ 加密成功！输出大小: {} bytes", output.metadata()?.len());
-
-    Ok(())
-}
-
-fn decrypt_file(input: &PathBuf, output: &PathBuf, key: Option<&str>) -> Result<()> {
-    println!("🔓 解密模式");
-    println!("输入文件: {:?}", input);
-    println!("输出文件: {:?}", output);
-
-    let data = fs::read(input).context("无法读取输入文件")?;
-
-    if data.len() < HEADER_SIZE + SALT_SIZE + NONCE_SIZE + 16 {
-        anyhow::bail!("文件太小");
-    }
-
-    // 1. 解析头部
-    let magic = &data[0..4];
-    if magic != PERO_MAGIC {
-        anyhow::bail!("无效的 .pero 文件：魔数不匹配");
-    }
-
-    let version = u16::from_le_bytes([data[4], data[5]]);
-    let meta_len = u32::from_le_bytes([data[6], data[7], data[8], data[9]]) as usize;
-
-    if version != PERO_VERSION {
-        anyhow::bail!(
-            "不支持的文件版本: {} (当前仅支持 v{})",
-            version,
-            PERO_VERSION
-        );
-    }
-
-    let _meta_json = &data[HEADER_SIZE..HEADER_SIZE + meta_len];
-    let crypto_start = HEADER_SIZE + meta_len;
-
-    // 2. 提取 Salt, Nonce, Ciphertext
-    let salt = &data[crypto_start..crypto_start + SALT_SIZE];
-    let nonce_bytes = &data[crypto_start + SALT_SIZE..crypto_start + SALT_SIZE + NONCE_SIZE];
-    let ciphertext = &data[crypto_start + SALT_SIZE + NONCE_SIZE..];
-
-    let master_key = if let Some(k) = key {
-        hex::decode(k).context("无效的 hex 密钥")?
-    } else {
-        println!("⚠️  使用默认测试密钥");
-        b"12345678901234567890123456789012".to_vec()
-    };
-
-    if master_key.len() != 32 {
-        anyhow::bail!("主密钥必须是 32 字节");
-    }
-
-    // 3. 使用 HKDF 派生会话密钥
-    let derived_key = derive_key(&master_key, salt)?;
-
-    // 4. 逆魔改变换
-    let mut ciphertext = ciphertext.to_vec();
-    let magic_pattern = obfstr::obfbytes!(b"PERO_CORE_MAGIC_PATTERN_2026");
-    for (i, byte) in ciphertext.iter_mut().take(magic_pattern.len()).enumerate() {
-        *byte ^= magic_pattern[i];
-    }
-
-    // 5. XChaCha20-Poly1305 解密
-    use chacha20poly1305::XNonce;
-    let nonce = XNonce::from_slice(nonce_bytes);
-
-    let cipher = XChaCha20Poly1305::new_from_slice(&derived_key)
-        .map_err(|_| anyhow::anyhow!("无效的密钥长度"))?;
-
-    let plaintext = cipher
-        .decrypt(nonce, ciphertext.as_ref())
-        .map_err(|_| anyhow::anyhow!("解密失败：密钥错误或数据损坏"))?;
-
-    fs::write(output, plaintext).context("无法写入输出文件")?;
-
-    println!("✅ 解密成功！");
+    println!("✅ 加密成功！输出大小: {} 字节", output.metadata()?.len());
 
     Ok(())
 }
