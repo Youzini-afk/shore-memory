@@ -11,9 +11,11 @@ import {
 export class WikiModelProvider implements IModelProvider {
   private config: any
   private textureCache = new Map<string, THREE.Texture>()
+  private boneFilterPatterns: string[] | undefined
 
-  constructor(config: any) {
+  constructor(config: any, boneFilterPatterns?: string[]) {
     this.config = config
+    this.boneFilterPatterns = boneFilterPatterns
   }
 
   async getManifest(): Promise<any> {
@@ -47,16 +49,28 @@ export class WikiModelProvider implements IModelProvider {
     const description = geo.description || {}
 
     // 转换为 ParsedModelData 结构
+    let bones = geo.bones.map((bone: any) => ({
+      name: bone.name,
+      parent: bone.parent,
+      pivot: bone.pivot || [0, 0, 0],
+      rotation: bone.rotation,
+      cubes: bone.cubes
+    }))
+
+    // 骨骼过滤逻辑
+    if (this.boneFilterPatterns && this.boneFilterPatterns.length > 0) {
+      bones = bones.filter((bone: any) => {
+        const boneNameLower = bone.name.toLowerCase()
+        return !this.boneFilterPatterns!.some((pattern) =>
+          boneNameLower.includes(pattern.toLowerCase())
+        )
+      })
+    }
+
     return {
       textureWidth: description.texture_width || geo.texturewidth || 64,
       textureHeight: description.texture_height || geo.textureheight || 64,
-      bones: geo.bones.map((bone: any) => ({
-        name: bone.name,
-        parent: bone.parent,
-        pivot: bone.pivot || [0, 0, 0],
-        rotation: bone.rotation,
-        cubes: bone.cubes
-      }))
+      bones: bones
     }
   }
 

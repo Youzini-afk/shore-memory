@@ -8,6 +8,7 @@
   "platforms": ["windows", "linux", "darwin"],
   "pluginType": "python-module",
   "entryPoint": "screen_ocr.py",
+  "tags": ["core"],
   "capabilities": {
     "invocationCommands": [
       {

@@ -8,7 +8,7 @@ PeroCore 的核心记忆引擎基于 **PEDSA (Parallel Energy-Decay Spreading Ac
 
 ## 1. 核心原理：PEDSA 算法
 
-PEDSA 全称为 **并行权重衰减传播** 算法，由 PeroCore 团队研发。它是一个模拟权重在图中传播、衰减和汇聚的动力学系统。
+PEDSA 全称为 **并行权重衰减传播** 算法，由 PeroCore Team 研发。它是一个模拟权重在图中传播、衰减和汇聚的动力学系统。
 
 ### 1.1 传播公式
 

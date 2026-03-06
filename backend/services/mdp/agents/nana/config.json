@@ -1,7 +1,7 @@
 {
   "agent_id": "nana",
   "name": "Nana",
-  "description": "测试角色Nana，性格是雌小鬼",
+  "description": "雌小鬼Nana！",
   "personas": {
     "work": "personas/work.md",
     "social": "personas/social.md"

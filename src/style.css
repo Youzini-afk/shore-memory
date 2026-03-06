@@ -5,18 +5,23 @@
 /* Cleaned style.css */
 
 :root {
-  /* 像素风全局配置 */
-  font-family: 'Zpix', 'DotGothic16', 'Courier New', Courier, monospace;
-  line-height: 1.5;
+  /* 字体配置：优先使用系统高质量无衬线字体，保留像素字体作为特色 */
+  font-family:
+    'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', system-ui, 'Zpix',
+    'DotGothic16', 'Helvetica Neue', Helvetica, Arial, sans-serif, 'Courier New', Courier, monospace;
+  line-height: 1.6;
   font-weight: 400;
+  letter-spacing: 0.02em;
 
   color-scheme: light dark;
   background-color: transparent;
 
   font-synthesis: none;
-  text-rendering: pixelated;
-  -webkit-font-smoothing: none;
-  -moz-osx-font-smoothing: unset;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* 增加一个极其微小的文字阴影，用来柔化文字边缘，减少过度锐利的感觉 */
+  text-shadow: 0 0 0.2px rgba(0, 0, 0, 0.05);
 }
 
 /* 像素风通用边框 - 经典 3 层结构 (高光/主色/阴影) */

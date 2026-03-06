@@ -1649,6 +1649,17 @@ class AgentService:
                                     "执行完成" if is_actually_success else "执行失败"
                                 )
 
+                                # [Fix] 实时打印终端日志，避免“憋大招”式统一输出
+                                log_preview = (
+                                    out_str[:200] + "..."
+                                    if len(out_str) > 200
+                                    else out_str
+                                )
+                                print(
+                                    f"[Agent] {icon} 步骤执行: [{display_name}] -> {status_text}\n    结果预览: {log_preview.replace(chr(10), ' ')[:100]}",
+                                    flush=True,
+                                )
+
                                 obs_text += f"{icon} 工具 [{display_name}] {status_text}。\n结果:\n{out_str}\n\n"
                                 # ----------------------------
 

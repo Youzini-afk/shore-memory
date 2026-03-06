@@ -7,6 +7,7 @@
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "browser_ops.py",
+  "tags": ["core"],
   "capabilities": {
     "invocationCommands": [
       {

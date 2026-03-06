@@ -2,18 +2,6 @@
 
 控制面板提供了一个可视化的界面来监控系统的运行状态，允许用户深入查看后台信息，以及进行各项配置。
 
-## 界面概览
-
-Dashboard 采用响应式的现代化 UI 设计，左侧为功能导航栏，右侧为主要内容区域。
-
-<ClientOnly>
-  <div class="dashboard-demo-wrapper" style="margin: 20px 0;">
-    <DashboardDemo />
-  </div>
-</ClientOnly>
-
-> **提示**：上方的演示组件是交互式的！你可以点击左侧菜单切换不同页面。由于是演示模式，仅展示界面布局。
-
 ## 核心功能详解
 
 ### 1. 总览 (Overview)
@@ -26,7 +14,7 @@ Dashboard 采用响应式的现代化 UI 设计，左侧为功能导航栏，右
   - **Pet State**：实时可视化的展示 AI 的心理状态，包括 **心情 (Mood)**、**氛围 (Vibe)** 和 **想法 (Mind)**。
   - **NIT 协议状态**：显示 Next-gen Interaction Tools (NIT) 的激活状态，包括已加载的插件数量和已连接的 MCP 服务器数量。
 - **快捷功能开关**：
-  - **轻量聊天模式 (Lightweight Mode)**：禁用复杂工具，仅保留基础对话和记忆功能。
+  - **轻量聊天模式 (Lightweight Mode)**：禁用复杂工具，仅保留基础对话 and 记忆功能。
   - **主动视觉感应 (AuraVision)**：开启后，AI 将主动感知屏幕内容，预激活记忆（测试功能）。
   - **智能陪伴模式 (Companion Mode)**：允许 AI 实时分析屏幕内容，并在合适的时机主动发起互动（需先开启轻量模式）。
 

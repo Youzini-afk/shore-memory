@@ -2,9 +2,9 @@
 layout: home
 
 hero:
-  name: 'PeroperoChat'
-  text: '萌动链接'
-  tagline: '高性能记忆框架驱动'
+  name: '萌动链接'
+  text: 'PEROPEROCHAT'
+  tagline: '官方Wiki文档'
   image:
     src: /hero.png
     alt: PeroCore

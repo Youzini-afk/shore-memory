@@ -2,6 +2,7 @@
   "name": "Scheduler",
   "description": "任务调度与提醒管理工具",
   "category": "system",
+  "tags": ["core"],
   "version": "1.0.0",
   "entryPoint": "scheduler_ops.py",
   "capabilities": {

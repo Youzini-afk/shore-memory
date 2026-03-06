@@ -90,7 +90,7 @@ onUnmounted(() => {
               <div
                 class="w-1.5 h-6 bg-gradient-to-b from-sky-400 to-sky-500 rounded-full shadow-[0_0_10px_rgba(14,165,233,0.3)]"
               ></div>
-              <h3 class="text-xl font-bold text-slate-800 tracking-tight flex items-center gap-2">
+              <h3 class="text-xl font-bold text-slate-700/90 tracking-normal flex items-center gap-2">
                 {{ title }}
                 <span
                   class="text-xs text-sky-400/60 opacity-0 group-hover/pmodal:opacity-100 transition-opacity duration-500"

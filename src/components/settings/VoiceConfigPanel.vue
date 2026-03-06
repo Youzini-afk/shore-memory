@@ -353,7 +353,7 @@
     >
       <div class="space-y-6">
         <!-- 类型选择 -->
-        <div class="space-y-3">
+        <div class="space-y-3 relative z-40">
           <label
             class="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2"
           >
@@ -389,30 +389,35 @@
         </div>
 
         <!-- 名称 -->
-        <PInput
-          v-model="editingConfig.name"
-          label="配置名称 NAME"
-          placeholder="给这个配置起个名字喵~ (例如: 我的本地模型)"
-          icon="pencil"
-        />
+        <div class="relative z-30">
+          <PInput
+            v-model="editingConfig.name"
+            label="配置名称 NAME"
+            placeholder="给这个配置起个名字喵~ (例如: 我的本地模型)"
+            icon="pencil"
+          />
+        </div>
 
         <!-- 服务商 -->
-        <PSelect
-          v-model="editingConfig.provider"
-          label="服务提供商 PROVIDER"
-          icon="server"
-          :options="
-            editingConfig.type === 'stt'
-              ? [
-                  { label: 'Local Whisper (本地)', value: 'local_whisper' },
-                  { label: 'OpenAI Compatible (云端)', value: 'openai_compatible' }
-                ]
-              : [
-                  { label: 'Edge TTS (免费云端)', value: 'edge_tts' },
-                  { label: 'OpenAI Compatible (云端)', value: 'openai_compatible' }
-                ]
-          "
-        />
+        <div class="relative z-20">
+          <PSelect
+            v-model="editingConfig.provider"
+            label="服务提供商 PROVIDER"
+            icon="server"
+            class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
+            :options="
+              editingConfig.type === 'stt'
+                ? [
+                    { label: 'Local Whisper (本地)', value: 'local_whisper' },
+                    { label: 'OpenAI Compatible (云端)', value: 'openai_compatible' }
+                  ]
+                : [
+                    { label: 'Edge TTS (免费云端)', value: 'edge_tts' },
+                    { label: 'OpenAI Compatible (云端)', value: 'openai_compatible' }
+                  ]
+            "
+          />
+        </div>
 
         <!-- OpenAI 兼容配置 -->
         <Transition
@@ -422,7 +427,7 @@
         >
           <div
             v-if="editingConfig.provider === 'openai_compatible'"
-            class="bg-sky-50/50 rounded-3xl p-6 border border-sky-100/50 space-y-5 relative overflow-hidden group/api"
+            class="bg-sky-50/50 rounded-3xl p-6 border border-sky-100/50 space-y-5 relative z-10 overflow-hidden group/api"
           >
             <div
               class="absolute -right-10 -top-10 w-32 h-32 bg-sky-400/5 blur-3xl rounded-full pointer-events-none group-hover/api:bg-sky-400/10 transition-all duration-700"
@@ -490,6 +495,7 @@
                   v-model="editingConfig.model"
                   icon="list"
                   variant="white"
+                  class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
                   :options="remoteModels.map((m) => ({ label: m, value: m }))"
                   placeholder="选择检测到的模型"
                 />

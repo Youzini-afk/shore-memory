@@ -36,9 +36,12 @@ class AssetRegistry:
     def __init__(self):
         self.assets: Dict[str, AssetMetadata] = {}  # asset_id -> AssetMetadata
         self.asset_type_index: Dict[str, List[str]] = {}  # type -> [asset_id]
+        self._scanned = False
 
-    def scan_all(self):
+    def scan_all(self, force=False):
         """扫描所有已知的资产目录"""
+        if self._scanned and not force:
+            return
         logger.info("开始全量资产扫描...")
         self.assets.clear()
         self.asset_type_index.clear()
@@ -53,14 +56,19 @@ class AssetRegistry:
         # 3. Local (用户自定义)
         self._scan_local()
 
+        self._scanned = True
         logger.info(f"资产扫描完成，共索引 {len(self.assets)} 个资产")
 
     def get_asset(self, asset_id: str) -> Optional[AssetMetadata]:
         """通过 ID 获取资产元数据"""
+        if not self._scanned:
+            self.scan_all()
         return self.assets.get(asset_id)
 
     def get_assets_by_type(self, asset_type: str) -> List[AssetMetadata]:
         """获取特定类型的所有资产"""
+        if not self._scanned:
+            self.scan_all()
         ids = self.asset_type_index.get(asset_type, [])
         return [self.assets[aid] for aid in ids if aid in self.assets]
 

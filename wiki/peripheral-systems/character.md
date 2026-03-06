@@ -1,4 +1,4 @@
-# 角色管理系统 (Character Management)
+# 多角色管理系统 (Character Management)
 
 _本文档待补充..._
 

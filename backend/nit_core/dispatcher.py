@@ -702,6 +702,12 @@ class NITDispatcher:
                 result_str[:100] + "..." if len(result_str) > 100 else result_str
             )
 
+            # [Fix] 显式打印到终端以确保实时反馈
+            print(
+                f"[NIT] ✔ 完成: {plugin_name} | {duration:.2f}ms\n    结果: {result_preview.replace(chr(10), ' ')}",
+                flush=True,
+            )
+
             logger.info(
                 f"✔ 完成: {plugin_name} | {duration:.2f}ms | 结果: {result_preview}"
             )

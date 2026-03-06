@@ -7,6 +7,7 @@
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "windows_ops.py",
+  "tags": ["core"],
   "capabilities": {
     "invocationCommands": [
       {

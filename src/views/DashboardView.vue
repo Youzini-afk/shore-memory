@@ -1183,7 +1183,7 @@
                     </div>
 
                     <!-- Source -->
-                    <div class="flex flex-col gap-2 w-[140px]">
+                    <div class="flex flex-col gap-2 w-[140px] relative z-40">
                       <label
                         class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
                       >
@@ -1216,7 +1216,7 @@
                     </div>
 
                     <!-- Session -->
-                    <div class="flex flex-col gap-2 w-[160px]">
+                    <div class="flex flex-col gap-2 w-[160px] relative z-30">
                       <label
                         class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
                       >
@@ -1249,7 +1249,7 @@
                     </div>
 
                     <!-- Date -->
-                    <div class="flex flex-col gap-2 w-[160px]">
+                    <div class="flex flex-col gap-2 w-[160px] relative z-20">
                       <label
                         class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
                       >
@@ -1272,7 +1272,7 @@
                     </div>
 
                     <!-- Sort -->
-                    <div class="flex flex-col gap-2 w-[120px]">
+                    <div class="flex flex-col gap-2 w-[120px] relative z-10">
                       <label
                         class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
                       >
@@ -1612,7 +1612,7 @@
                       </label>
                       <div class="relative group/magent">
                         <button
-                          class="w-full flex items-center justify-between px-4 py-2.5 bg-purple-50/50 hover:bg-purple-100/50 border border-purple-100/50 hover:border-purple-300 rounded-2xl text-sm transition-all active:scale-95 shadow-sm backdrop-blur-md group/mbtn hover-pixel-bounce"
+                          class="w-full flex items-center justify-between px-4 py-2.5 bg-purple-50/50 hover:bg-purple-100/50 border border-purple-100/50 hover:border-purple-300 rounded-2xl text-sm transition-all active:scale-95 shadow-lg shadow-black/30 backdrop-blur-md group/mbtn hover-pixel-bounce"
                           :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
                         >
                           <span class="text-purple-600 font-bold flex items-center gap-2">
@@ -1686,7 +1686,7 @@
                           { label: '归档 (Archived)', value: 'archived_event', icon: 'archive' }
                         ]"
                         size="md"
-                        class="!rounded-2xl shadow-sm backdrop-blur-md"
+                        class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
                         @change="fetchMemories"
                       >
                         <template #option="{ option }">
@@ -1715,7 +1715,7 @@
                         <PDatePicker
                           v-model="memoryFilterDate"
                           placeholder="选择日期"
-                          class="!rounded-2xl shadow-sm backdrop-blur-md"
+                          class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
                           @update:model-value="fetchMemories"
                         />
                         <div
@@ -1728,7 +1728,7 @@
 
                     <!-- View Mode -->
                     <div
-                      class="flex bg-purple-50/50 p-1 rounded-2xl border border-purple-100 self-end h-[42px] items-center relative group/vmode shadow-sm backdrop-blur-md"
+                      class="flex bg-purple-50/50 p-1 rounded-2xl border border-purple-100 self-end h-[42px] items-center relative group/vmode shadow-lg shadow-black/30 backdrop-blur-md"
                     >
                       <!-- 🐾 Floating decoration -->
                       <div
@@ -2135,7 +2135,7 @@
                       </label>
                       <div class="relative group/tagent">
                         <button
-                          class="w-full flex items-center justify-between px-4 py-2 bg-white/60 hover:bg-white/90 border border-orange-100/50 hover:border-orange-300 rounded-xl text-sm transition-all active:scale-95 shadow-sm soft-3d-shadow group/btn hover-pixel-bounce"
+                          class="w-full flex items-center justify-between px-4 py-2 bg-white/60 hover:bg-white/90 border border-orange-100/50 hover:border-orange-300 rounded-xl text-sm transition-all active:scale-95 shadow-lg shadow-black/30 backdrop-blur-md group/btn hover-pixel-bounce"
                           :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
                         >
                           <span class="text-orange-600 font-bold flex items-center gap-2">
@@ -3101,17 +3101,17 @@
       class="backdrop-blur-2xl bg-white/80 border-sky-100 shadow-2xl shadow-sky-100/40"
     >
       <div class="space-y-5">
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-20">
           <label class="text-sm font-medium text-slate-600">服务商 (Provider)</label>
           <PSelect
             v-model="globalConfig.provider"
             :options="providerOptions"
             placeholder="选择服务商"
-            class="bg-white/80 border-sky-100"
+            class="bg-white/80 border-sky-100 !rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
             @change="handleGlobalProviderChange"
           />
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-10">
           <label class="text-sm font-medium text-slate-600">API Key</label>
           <PInput
             v-model="globalConfig.global_llm_api_key"
@@ -3152,7 +3152,7 @@
     >
       <div class="space-y-5">
         <!-- Display Name -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-30">
           <label class="text-sm font-medium text-slate-600">显示名称</label>
           <PInput
             v-model="currentEditingModel.name"
@@ -3162,19 +3162,19 @@
         </div>
 
         <!-- Provider -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-20">
           <label class="text-sm font-medium text-slate-600">服务商 (Provider)</label>
           <PSelect
             v-model="currentEditingModel.provider"
             :options="providerOptions"
             placeholder="选择服务商"
-            class="bg-white/80 border-sky-100"
+            class="bg-white/80 border-sky-100 !rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
             @change="handleProviderChange"
           />
         </div>
 
         <!-- Model ID -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-10">
           <label class="text-sm font-medium text-slate-600">Model ID</label>
           <div class="flex gap-2">
             <PInput
@@ -3194,12 +3194,12 @@
             v-model="currentEditingModel.model_id"
             :options="remoteModels.map((m) => ({ label: m, value: m }))"
             placeholder="选择获取到的模型"
-            class="mt-1 bg-white/80 border-sky-100"
+            class="mt-1 bg-white/80 border-sky-100 !rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
           />
         </div>
 
         <!-- Configuration Source -->
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-5">
           <label class="text-sm font-medium text-slate-600">配置来源</label>
           <div class="flex items-center gap-6">
             <label class="flex items-center gap-2 cursor-pointer group">
@@ -3349,16 +3349,16 @@
       class="backdrop-blur-2xl bg-white/70 border-sky-100 shadow-2xl shadow-sky-200/40"
     >
       <div class="space-y-5">
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-20">
           <label class="text-sm font-medium text-slate-600">名称</label>
           <PInput v-model="currentEditingMcp.name" class="bg-sky-50/50 border-sky-100" />
         </div>
-        <div class="space-y-2">
+        <div class="space-y-2 relative z-10">
           <label class="text-sm font-medium text-slate-600">类型</label>
           <PSelect
             v-model="currentEditingMcp.type"
             :options="mcpTypeOptions"
-            class="bg-sky-50/50 border-sky-100"
+            class="bg-sky-50/50 border-sky-100 !rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
           />
         </div>
 
@@ -4806,72 +4806,100 @@ const initGraph = () => {
   if (!graphRef.value) return
   if (chartInstance) chartInstance.dispose()
 
-  chartInstance = echarts.init(graphRef.value, 'dark') // Use dark theme base if available, or just manual colors // 如果可用则使用暗色主题基底，或者仅使用手动颜色
+  chartInstance = echarts.init(graphRef.value, null, { renderer: 'canvas' })
 
   const nodes = memoryGraphData.value.nodes.map((node) => ({
     ...node,
-    // Ensure name is string
-    // 确保名称为字符串
     name: String(node.id),
     category: getMemoryTypeLabel(node.category),
-    // Visual style based on sentiment/type
-    // 基于情感/类型的视觉样式
+    symbolSize: Math.min(Math.max(node.value * 5, 15), 40), // 动态大小
     itemStyle: {
       color: getSentimentColor(node.sentiment),
-      shadowBlur: 10,
+      borderColor: '#fff',
+      borderWidth: 2,
+      shadowBlur: 15,
       shadowColor: getSentimentColor(node.sentiment)
+    },
+    label: {
+      show: node.value > 5, // 仅重要节点显示标签
+      fontSize: 10,
+      color: '#64748b'
     }
   }))
 
-  const links = memoryGraphData.value.edges
+  const links = memoryGraphData.value.edges.map((edge) => ({
+    ...edge,
+    lineStyle: {
+      width: Math.max(edge.value * 0.5, 1),
+      curveness: 0.2,
+      color: '#e2e8f0' // slate-200
+    }
+  }))
 
-  // Generate categories from data
-  // 从数据生成类别
   const categories = [...new Set(nodes.map((n) => n.category))].map((c) => ({ name: c }))
 
   const option = {
-    backgroundColor: '#1a1a2e', // Deep space blue/black
-    // 深空蓝/黑
+    backgroundColor: 'transparent', // 透明背景，透出应用底色
     title: {
-      text: '神经网络记忆图谱',
-      subtext: '交互式知识图谱',
-      top: 'bottom',
-      left: 'right',
-      textStyle: { color: '#fff' }
+      text: '✨ 核心记忆星云 ✨',
+      subtext: 'Core Memory Nebula',
+      top: '5%',
+      left: 'center',
+      textStyle: {
+        color: '#8b5cf6', // violet-500
+        fontSize: 20,
+        fontWeight: 'bolder',
+        fontFamily: "'Segoe UI Emoji', sans-serif"
+      },
+      subtextStyle: {
+        color: '#cbd5e1'
+      }
     },
     tooltip: {
       trigger: 'item',
-      confine: true,
-      enterable: true,
+      backgroundColor: 'rgba(255, 255, 255, 0.9)',
+      borderColor: '#e2e8f0',
+      borderWidth: 1,
+      textStyle: { color: '#334155' },
+      extraCssText: 'box-shadow: 0 8px 24px rgba(149, 157, 165, 0.2); border-radius: 16px;',
       formatter: (params) => {
         if (params.dataType === 'node') {
           const d = params.data
+          const emoji = getSentimentEmoji(d.sentiment)
           return `
-                        <div style="font-weight:bold; margin-bottom:5px;">${d.full_content.substring(0, 50)}...</div>
-                        <div>类型: <span style="color:#ff88aa">${d.category}</span></div>
-                        <div>情感: ${d.sentiment} ${getSentimentEmoji(d.sentiment)}</div>
-                        <div>重要度: ${d.value}/10</div>
-                        <div>活跃度: ${d.access_count}</div>
-                        <div style="font-size:10px; color:#94a3b8; margin-top:5px;">${d.realTime}</div>
-                    `
+            <div style="padding: 4px;">
+              <div style="font-weight:900; margin-bottom:6px; font-size:14px; color:#475569;">
+                 ${emoji} 记忆片段 #${d.id}
+              </div>
+              <div style="font-size:13px; color:#64748b; margin-bottom:8px; line-height:1.5;">
+                ${d.full_content.substring(0, 60)}${d.full_content.length > 60 ? '...' : ''}
+              </div>
+              <div style="display:flex; gap:8px; font-size:10px;">
+                <span style="background:#f1f5f9; color:#64748b; padding:2px 6px; border-radius:4px;">${d.category}</span>
+                <span style="background:#fff1f2; color:#e11d48; padding:2px 6px; border-radius:4px;">❤️ ${d.value}</span>
+                <span style="background:#ecfeff; color:#0891b2; padding:2px 6px; border-radius:4px;">🔥 ${d.access_count}</span>
+              </div>
+            </div>
+          `
         } else {
-          return `<div style="max-width: 240px; white-space: normal; word-break: break-word; line-height: 1.5;">
-                        <div style="font-weight:bold; margin-bottom:4px; color:#a0c4ff;">🔗 关联</div>
-                        <div>${params.data.relation_type}</div>
-                        <div style="margin-top:4px; opacity: 0.7; font-size: 12px;">强度: ${params.data.value}</div>
-                    </div>`
+          return `
+            <div style="padding: 4px;">
+              <div style="font-weight:bold; color:#64748b; font-size:12px;">🔗 关联强度: ${params.data.value}</div>
+              <div style="font-size:11px; color:#94a3b8;">${params.data.relation_type}</div>
+            </div>
+          `
         }
       }
     },
-    legend: [
-      {
-        data: categories.map((a) => a.name),
-        textStyle: { color: '#94a3b8' }, // slate-400
-        orient: 'vertical',
-        left: 'left',
-        top: 'center'
-      }
-    ],
+    legend: {
+      data: categories.map((a) => a.name),
+      bottom: '5%',
+      left: 'center',
+      icon: 'circle',
+      itemWidth: 8,
+      itemHeight: 8,
+      textStyle: { color: '#64748b', fontSize: 11 }
+    },
     series: [
       {
         type: 'graph',
@@ -4883,50 +4911,33 @@ const initGraph = () => {
         draggable: true,
         label: {
           show: true,
-          position: 'right',
-          formatter: (p) => (p.data.label && p.data.label.show ? p.data.label.formatter : ''),
-          color: '#fff'
+          position: 'bottom',
+          formatter: '{b}',
+          color: '#64748b',
+          fontSize: 10
         },
-        lineStyle: {
-          color: 'source',
-          curveness: 0.3
+        force: {
+          repulsion: 250,
+          gravity: 0.08,
+          edgeLength: [60, 150],
+          layoutAnimation: true,
+          friction: 0.6
         },
         emphasis: {
           focus: 'adjacency',
-          lineStyle: {
-            width: 5
+          scale: true,
+          itemStyle: {
+            shadowBlur: 20,
+            shadowColor: 'rgba(0,0,0,0.2)'
           }
-        },
-        force: {
-          repulsion: 150,
-          gravity: 0.1,
-          edgeLength: [50, 200],
-          layoutAnimation: nodes.length < 100, // 节点过多时禁用初始动画以提升性能
-          friction: 0.6, // 增加摩擦力，让图形更快稳定
-          initLayout: 'circular' // 初始布局改为环形，减少力导向计算初期的剧烈抖动
         }
       }
-    ],
-    // 性能优化：渐进式渲染
-    progressive: 500,
-    progressiveThreshold: 1000
+    ]
   }
 
   chartInstance.setOption(option)
 
-  // 性能优化：在力导向布局稳定后停止计算
-  if (nodes.length > 50) {
-    setTimeout(() => {
-      if (chartInstance) {
-        chartInstance.setOption({
-          series: [{ force: { layoutAnimation: false } }]
-        })
-      }
-    }, 3000)
-  }
-
   // Resize handler
-  // 调整大小处理程序
   if (resizeHandler) window.removeEventListener('resize', resizeHandler)
   resizeHandler = () => chartInstance && chartInstance.resize()
   window.addEventListener('resize', resizeHandler)
@@ -4936,15 +4947,15 @@ const initGraph = () => {
 // 颜色助手
 const getSentimentColor = (sentiment) => {
   const map = {
-    positive: '#0ea5e9', // sky-500 // 天蓝色
-    negative: '#f43f5e', // rose-500 // 玫瑰红
-    neutral: '#94a3b8', // slate-400 // 石板灰
-    happy: '#fbbf24', // amber-400 // 琥珀黄
-    sad: '#cbd5e1', // slate-300 // 浅灰蓝
-    angry: '#ef4444', // red-500 // 鲜红色
-    excited: '#f472b6' // pink-400 // 粉色
+    positive: '#38bdf8', // sky-400
+    negative: '#fb7185', // rose-400
+    neutral: '#94a3b8', // slate-400
+    happy: '#fbbf24', // amber-400
+    sad: '#818cf8', // indigo-400
+    angry: '#f87171', // red-400
+    excited: '#e879f9' // fuchsia-400
   }
-  return map[sentiment] || '#0ea5e9'
+  return map[sentiment] || '#38bdf8'
 }
 
 const fetchCompanionStatus = async () => {

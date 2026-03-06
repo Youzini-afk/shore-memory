@@ -7,7 +7,6 @@ import ArchitectureGraph from '../components/ArchitectureGraph.vue'
 import MemoryNetworkGraph from '../components/MemoryNetworkGraph.vue'
 import BedrockDemo from '../components/BedrockDemo.vue'
 import MDPGraph from '../components/MDPGraph.vue'
-import DashboardDemo from '../components/DashboardDemo.vue'
 import './style.css'
 
 export default {
@@ -18,7 +17,6 @@ export default {
     app.component('MemoryNetworkGraph', MemoryNetworkGraph)
     app.component('BedrockDemo', BedrockDemo)
     app.component('MDPGraph', MDPGraph)
-    app.component('DashboardDemo', DashboardDemo)
 
     if (inBrowser) {
       // @ts-ignore

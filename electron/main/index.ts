@@ -43,8 +43,38 @@ import path from 'path'
 import { isDev, paths } from './utils/env'
 import fs from 'fs-extra'
 
-// @ts-ignore
-const native = require('../../src/components/avatar/native')
+// 加载 Native 渲染核心
+let native: any
+try {
+  if (isDev) {
+    // 开发环境：直接 require 源码目录
+    // @ts-ignore
+    native = require('../../src/components/avatar/native')
+    logger.info('Main', 'Native 核心加载成功 (开发环境)')
+  } else {
+    // 生产环境：尝试从 resources/native 加载
+    // 在 Electron 中，resources 路径为 process.resourcesPath
+    const nativePath = path.join(process.resourcesPath, 'native')
+    if (fs.existsSync(nativePath)) {
+      native = require(nativePath)
+      logger.info('Main', `Native 核心加载成功 (生产环境): ${nativePath}`)
+    } else {
+      // 回退方案：尝试相对于 appRoot
+      const fallbackPath = path.join(app.getAppPath(), '..', 'native')
+      if (fs.existsSync(fallbackPath)) {
+        native = require(fallbackPath)
+        logger.info('Main', `Native 核心加载成功 (生产环境回退): ${fallbackPath}`)
+      } else {
+        logger.error('Main', 'Native 核心在生产环境路径中未找到')
+        // 关键失败：如果不在这里报错，后面调用 native 会崩溃
+        throw new Error('渲染核心组件缺失')
+      }
+    }
+  }
+} catch (e: any) {
+  logger.error('Main', `Native 核心加载失败: ${e.message}`)
+  // 如果加载失败，应用仍会启动，但在渲染 .pero 模型时会报错
+}
 
 import { registerAssetProtocol } from './services/assets.js'
 

@@ -125,6 +125,8 @@ onUnmounted(() => {
   overflow: hidden;
   font-family: 'JetBrains Mono', 'Consolas', monospace;
   font-size: 12px;
+  /* 增加轻微文字阴影以柔化边缘，使其看起来不那么刺眼 */
+  text-shadow: 0 0 0.2px rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
   transform-origin: bottom right;
 }

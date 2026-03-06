@@ -216,12 +216,11 @@ jobs:
           cd PeroCore-Electron
           pnpm install
 
-      - name: Build Native Module
-        shell: powershell
+      - name: Build Native Module (pero-render-core)
         run: |
-          cd PeroCore-Electron/src/components/avatar/native
-          npm install
-          npm run build
+          cd PeroCore-Electron
+          npm run build:native
+          node scripts/copy-native.js
 
       - name: Build Electron App
         run: |
