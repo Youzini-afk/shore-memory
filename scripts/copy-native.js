@@ -12,17 +12,12 @@ async function copyNative() {
     // 确保目标目录存在
     await fs.ensureDir(DEST_DIR)
 
-    // 定义要复制的文件列表 (napi-rs 输出标准)
-    // 我们复制 index.js, package.json 以及所有的 .node 文件
+    // 我们只复制 .node 核心文件，因为源码已被移除
     const files = await fs.readdir(SRC_DIR)
-    const toCopy = files.filter(f => 
-      f === 'index.js' || 
-      f === 'package.json' || 
-      f.endsWith('.node')
-    )
+    const toCopy = files.filter((f) => f.endsWith('.node'))
 
     if (toCopy.length === 0) {
-      console.warn('警告: 在 native 目录中未找到构建产物。请先运行 npm run build:native。')
+      console.warn('警告: 在 native 目录中未找到 .node 二进制模块。')
       // 如果是在 GitHub Actions 中，这可能是一个错误
       if (process.env.GITHUB_ACTIONS) {
         process.exit(1)

@@ -6,7 +6,7 @@ members = [
     "backend/nit_core/tools/work/CodeSearcher/src",
     "backend/social_core",
     "backend/vision_core",
-    "src/components/avatar/native", "tools/pero-encryptor",
+    "tools/pero-encryptor",
 ]
 resolver = "2"
 
