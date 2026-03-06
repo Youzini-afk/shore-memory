@@ -1,7 +1,8 @@
-# Target
-target/
-index.js
-index.d.ts
-*.node
-npm-debug.log
-yarn-error.log
+# 忽略该目录下所有文件
+*
+
+# 但排除（追踪）这个核心二进制模块
+!pero-render-core.win32-x64-msvc.node
+
+# 也要排除 .gitignore 自身，否则 Git 会完全不理会这个目录
+!.gitignore
