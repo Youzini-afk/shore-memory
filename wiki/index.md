@@ -2,8 +2,8 @@
 layout: home
 
 hero:
-  name: 'PeroCore'
-  text: '智能 AI 伙伴'
+  name: 'PeroperoChat'
+  text: '萌动链接'
   tagline: '高性能记忆框架驱动'
   image:
     src: /hero.png

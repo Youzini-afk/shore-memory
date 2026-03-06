@@ -3,13 +3,6 @@ import os
 
 from utils.workspace_utils import get_workspace_root
 
-# 定义相对于此文件的工作区根目录
-# 此文件位于 backend/utils/memory_file_manager.py
-# 工作区位于 PeroCore/pero_workspace
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-WORKSPACE_ROOT = os.path.join(BASE_DIR, "pero_workspace")
-# LOG_ROOT = os.path.join(WORKSPACE_ROOT, "log") # 已弃用的全局日志根目录
-
 
 class MemoryFileManager:
     @staticmethod

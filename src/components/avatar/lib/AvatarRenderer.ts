@@ -26,6 +26,11 @@ export class AvatarRenderer {
     this.textureHeight = modelData.textureHeight
 
     // 2. 创建材质
+    // 设置纹理过滤为最近邻（NearestFilter）以保持像素风格清晰度
+    texture.magFilter = THREE.NearestFilter
+    texture.minFilter = THREE.NearestFilter
+    texture.colorSpace = THREE.SRGBColorSpace
+
     const material = new THREE.MeshStandardMaterial({
       map: texture,
       alphaTest: 0.5,
@@ -198,19 +203,172 @@ export class AvatarRenderer {
         mesh.receiveShadow = true
         mesh.name = `${boneData.name}_Mesh`
 
-        console.log(`[AvatarRenderer] 为骨骼 ${boneData.name} 添加了 Native Mesh, 顶点数: ${boneData.vertices.length / 3}`)
+        console.log(
+          `[AvatarRenderer] 为骨骼 ${boneData.name} 添加了 Native Mesh, 顶点数: ${boneData.vertices.length / 3}`
+        )
 
         // Native geometry 已经在 Bone Local Space 中 (相对于 Pivot)
         // 所以直接添加到 Bone Group，位置为 (0,0,0)
         boneGroup.add(mesh)
       } else if (boneData.cubes && boneData.cubes.length > 0) {
         // 回退：使用 JS 侧 Cube 解析 (低性能路径)
-        console.log(`[AvatarRenderer] 为骨骼 ${boneData.name} 添加了 ${boneData.cubes.length} 个 Cubes`)
+        console.log(
+          `[AvatarRenderer] 为骨骼 ${boneData.name} 添加了 ${boneData.cubes.length} 个 Cubes`
+        )
         boneData.cubes.forEach((cubeData: any) => {
           this.addCubeToBone(boneGroup, cubeData, boneData.pivot, material)
         })
       }
     })
+  }
+
+  // 创建与 BlockBench 兼容的 Box 几何体
+  // BlockBench 使用自定义的顶点顺序，与 Three.js BoxGeometry 不同
+  private createBedrockBoxGeometry(
+    width: number,
+    height: number,
+    depth: number
+  ): THREE.BufferGeometry {
+    const geometry = new THREE.BufferGeometry()
+
+    const w = width / 2
+    const h = height / 2
+    const d = depth / 2
+
+    // BlockBench setShape 顶点定义 (参照 blockbench-master/js/util/three_custom.js)
+    // 注意：BlockBench 使用 from/to 坐标系，我们这里使用中心点坐标系
+    // from = [-w, -h, -d], to = [w, h, d]
+    const vertices = new Float32Array([
+      // East (+x): to[0], to[1], to[2] -> to[0], to[1], from[2] -> to[0], from[1], to[2] -> to[0], from[1], from[2]
+      w,
+      h,
+      d,
+      w,
+      h,
+      -d,
+      w,
+      -h,
+      d,
+      w,
+      -h,
+      -d,
+      // West (-x): from[0], to[1], from[2] -> from[0], to[1], to[2] -> from[0], from[1], from[2] -> from[0], from[1], to[2]
+      -w,
+      h,
+      -d,
+      -w,
+      h,
+      d,
+      -w,
+      -h,
+      -d,
+      -w,
+      -h,
+      d,
+      // Up (+y): from[0], to[1], from[2] -> to[0], to[1], from[2] -> from[0], to[1], to[2] -> to[0], to[1], to[2]
+      -w,
+      h,
+      -d,
+      w,
+      h,
+      -d,
+      -w,
+      h,
+      d,
+      w,
+      h,
+      d,
+      // Down (-y): from[0], from[1], to[2] -> to[0], from[1], to[2] -> from[0], from[1], from[2] -> to[0], from[1], from[2]
+      -w,
+      -h,
+      d,
+      w,
+      -h,
+      d,
+      -w,
+      -h,
+      -d,
+      w,
+      -h,
+      -d,
+      // South (+z): from[0], to[1], to[2] -> to[0], to[1], to[2] -> from[0], from[1], to[2] -> to[0], from[1], to[2]
+      -w,
+      h,
+      d,
+      w,
+      h,
+      d,
+      -w,
+      -h,
+      d,
+      w,
+      -h,
+      d,
+      // North (-z): to[0], to[1], from[2] -> from[0], to[1], from[2] -> to[0], from[1], from[2] -> from[0], from[1], from[2]
+      w,
+      h,
+      -d,
+      -w,
+      h,
+      -d,
+      w,
+      -h,
+      -d,
+      -w,
+      -h,
+      -d
+    ])
+
+    // UV 坐标 (每个面 4 个顶点，每个顶点 2 个 UV 坐标)
+    const uvs = new Float32Array(24 * 2) // 6 面 * 4 顶点 * 2 UV
+
+    // 索引 (每个面 2 个三角形，每个三角形 3 个索引)
+    // BlockBench 索引顺序: 0, 2, 1, 2, 3, 1 (CCW)
+    const indices = new Uint16Array([
+      0,
+      2,
+      1,
+      2,
+      3,
+      1, // East
+      4,
+      6,
+      5,
+      6,
+      7,
+      5, // West
+      8,
+      10,
+      9,
+      10,
+      11,
+      9, // Up
+      12,
+      14,
+      13,
+      14,
+      15,
+      13, // Down
+      16,
+      18,
+      17,
+      18,
+      19,
+      17, // South
+      20,
+      22,
+      21,
+      22,
+      23,
+      21 // North
+    ])
+
+    geometry.setAttribute('position', new THREE.BufferAttribute(vertices, 3))
+    geometry.setAttribute('uv', new THREE.BufferAttribute(uvs, 2))
+    geometry.setIndex(new THREE.BufferAttribute(indices, 1))
+    geometry.computeVertexNormals()
+
+    return geometry
   }
 
   // 保留用于非 Native 数据源的回退支持
@@ -231,10 +389,8 @@ export class AvatarRenderer {
     const inflate = cubeData.inflate || 0
     const mirror = cubeData.mirror || false
 
-    // 创建几何体
-    // Three.js BoxGeometry 默认中心在 (0,0,0)
-    // 我们需要调整位置使其匹配 Bedrock 的 origin 定义
-    const geometry = new THREE.BoxGeometry(
+    // 创建与 BlockBench 兼容的几何体
+    const geometry = this.createBedrockBoxGeometry(
       size[0] + inflate * 2,
       size[1] + inflate * 2,
       size[2] + inflate * 2
@@ -297,7 +453,7 @@ export class AvatarRenderer {
   }
 
   private applyBedrockUV(
-    geometry: THREE.BoxGeometry,
+    geometry: THREE.BufferGeometry,
     uvData: any,
     size: number[],
     mirror: boolean = false
@@ -315,12 +471,28 @@ export class AvatarRenderer {
     // w, h: 纹理宽高 (像素)
     // faceIndex: 面索引 (0-5)
     const setFaceUV = (faceIndex: number, u: number, v: number, w: number, h: number) => {
-      // 归一化 UV
-      let u0 = u / textureWidth
-      let u1 = (u + w) / textureWidth
+      // BlockBench 标准支持负的 w/h 来表示 UV 翻转
+      // 负值意味着 UV 方向翻转
+      let u0: number, u1: number, v0: number, v1: number
 
-      let v0 = (textureHeight - v - h) / textureHeight // 底部 (UV 中 Y 轴是反向的)
-      let v1 = (textureHeight - v) / textureHeight // 顶部
+      if (w < 0) {
+        // 负宽度：U 方向翻转
+        u0 = (u + w) / textureWidth // u + (-w) 实际上是 u - |w|
+        u1 = u / textureWidth
+      } else {
+        u0 = u / textureWidth
+        u1 = (u + w) / textureWidth
+      }
+
+      if (h < 0) {
+        // 负高度：V 方向翻转
+        // 注意：纹理坐标系 Y 轴向下，但 UV 坐标系 Y 轴向上
+        v0 = (textureHeight - v) / textureHeight
+        v1 = (textureHeight - (v + h)) / textureHeight // v + (-h) 实际上是 v - |h|
+      } else {
+        v0 = (textureHeight - v - h) / textureHeight // 底部 (UV 中 Y 轴是反向的)
+        v1 = (textureHeight - v) / textureHeight // 顶部
+      }
 
       if (mirror) {
         // 镜像翻转 X
@@ -348,7 +520,7 @@ export class AvatarRenderer {
       uvAttribute.setXY(offset + 0, u0, v1) // 左上
       uvAttribute.setXY(offset + 1, u1, v1) // 右上
       uvAttribute.setXY(offset + 2, u0, v0) // 左下
-      uvAttribute.setXY(offset + 3, u1, v0)
+      uvAttribute.setXY(offset + 3, u1, v0) // 右下
     }
 
     if (Array.isArray(uvData)) {
@@ -386,35 +558,30 @@ export class AvatarRenderer {
       // 右: [u, v+d, d, h]
       // 左: [u+d+w, v+d, d, h]
 
-      // 映射 Three.js 面索引到基岩版分片
-      // 0 (右 +x) -> 基岩版 West (纹理左侧?) 不，基岩版 West 是 -x。
-      // 假设标准映射：
-      // 基岩版 北 = -z, 南 = +z, 西 = -x, 东 = +x
+      // BlockBench 标准 Box UV 布局 (参照 blockbench-master/js/outliner/cube.js):
+      // face_list = [
+      //   {face: 'east',  from: [0, size_z],                    size: [size_z,  size_y]},
+      //   {face: 'west',  from: [size_z + size_x, size_z],      size: [size_z,  size_y]},
+      //   {face: 'up',    from: [size_z+size_x, size_z],        size: [-size_x, -size_z]},
+      //   {face: 'down',  from: [size_z+size_x*2, 0],           size: [-size_x, size_z]},
+      //   {face: 'south', from: [size_z*2 + size_x, size_z],    size: [size_x,  size_y]},
+      //   {face: 'north', from: [size_z, size_z],               size: [size_x,  size_y]},
+      // ]
+      //
+      // Three.js BoxGeometry 面索引映射：
+      // 0: +x (East)
+      // 1: -x (West)
+      // 2: +y (Up)
+      // 3: -y (Down)
+      // 4: +z (South/Front)
+      // 5: -z (North/Back)
 
-      // 如果 mirror 为 false:
-      // 面 0 (右, +x) = 基岩版 南 (4) ? 不。
-      // 复制旧版加载器逻辑:
-      // setFaceUV(2, u + d, v, w, d) // 上 (Top)
-      // setFaceUV(3, u + d + w, v, w, d) // 下 (Bottom)
-      // setFaceUV(1, u, v + d, d, h) // 西 (Left, -x) -> Three.js Face 1
-      // setFaceUV(5, u + d, v + d, w, h) // 北 (Front, -z) -> Three.js Face 5 (Back)
-      // setFaceUV(0, u + d + w, v + d, d, h) // 东 (Right, +x) -> Three.js Face 0
-      // setFaceUV(4, u + d + w + d, v + d, w, h) // 南 (Back, +z) -> Three.js Face 4 (Front)
-
-      // 注意：Three.js BoxGeometry 面索引:
-      // 0: +x (右)
-      // 1: -x (左)
-      // 2: +y (上)
-      // 3: -y (Bottom)
-      // 4: +z (Front)
-      // 5: -z (Back)
-
-      setFaceUV(2, u + d, v, w, d) // Top
-      setFaceUV(3, u + d + w, v, w, d) // Bottom
-      setFaceUV(1, u, v + d, d, h) // West -> Three.js Face 1 (-X)
-      setFaceUV(5, u + d, v + d, w, h) // North -> Three.js Face 5 (-Z)
-      setFaceUV(0, u + d + w, v + d, d, h) // East -> Three.js Face 0 (+X)
-      setFaceUV(4, u + d + w + d, v + d, w, h) // South -> Three.js Face 4 (+Z)
+      setFaceUV(0, u, v + d, d, h) // East (+x) -> BlockBench: from [0, d], size [d, h]
+      setFaceUV(1, u + d + w, v + d, d, h) // West (-x) -> BlockBench: from [d+w, d], size [d, h]
+      setFaceUV(2, u + d + w, v + d, -w, -d) // Up (+y) -> BlockBench: from [d+w, d], size [-w, -d]
+      setFaceUV(3, u + d + w * 2, v, -w, d) // Down (-y) -> BlockBench: from [d+w*2, 0], size [-w, d]
+      setFaceUV(4, u + d * 2 + w, v + d, w, h) // South (+z) -> BlockBench: from [d*2+w, d], size [w, h]
+      setFaceUV(5, u + d, v + d, w, h) // North (-z) -> BlockBench: from [d, d], size [w, h]
     } else {
       // Per-face UV
       // Object: { up: { uv: [u, v], uv_size: [w, h] }, ... }

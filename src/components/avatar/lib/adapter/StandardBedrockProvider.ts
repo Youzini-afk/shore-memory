@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { IModelProvider, ParsedModelData } from './IModelProvider'
+import { resolveAssetUrl } from '../../../../utils/assetUrl'
 
 /**
  * 标准 Bedrock JSON 提供者
@@ -23,7 +24,8 @@ export class StandardBedrockProvider implements IModelProvider {
   }
 
   async getModelData(): Promise<ParsedModelData> {
-    const response = await fetch(this.config.model)
+    const url = resolveAssetUrl(this.config.model)
+    const response = await fetch(url)
     if (!response.ok) throw new Error(`Failed to load model: ${this.config.model}`)
     const arrayBuffer = await response.arrayBuffer()
 
@@ -39,7 +41,7 @@ export class StandardBedrockProvider implements IModelProvider {
   }
 
   async getTexture(): Promise<THREE.Texture> {
-    const url = this.config.texture
+    const url = resolveAssetUrl(this.config.texture)
     if (this.textureCache.has(url)) {
       return this.textureCache.get(url)!
     }
@@ -67,7 +69,8 @@ export class StandardBedrockProvider implements IModelProvider {
     if (this.config.animation && Array.isArray(this.config.animation)) {
       for (const path of this.config.animation) {
         try {
-          const res = await fetch(path)
+          const url = resolveAssetUrl(path)
+          const res = await fetch(url)
           const json = await res.json()
           if (json.animations) {
             Object.entries(json.animations).forEach(([key, value]) => {

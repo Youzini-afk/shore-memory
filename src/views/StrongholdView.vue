@@ -1,320 +1,545 @@
 <template>
-  <div class="relative h-full w-full overflow-hidden">
+  <div class="relative h-full w-full overflow-hidden pixel-bg-moe pixel-ui pixel-grid-overlay">
     <CustomTitleBar v-if="isElectron()" title="Stronghold" :show-mode-toggle="false" />
 
-    <div :class="['absolute left-0 right-0 bottom-0 flex', isElectron() ? 'top-8' : 'top-0']">
-      <!-- 左侧边栏：设施与房间 -->
+    <!-- Ambient Light Effects -->
+    <div class="absolute inset-0 pointer-events-none z-0 opacity-30">
       <div
-        class="w-64 flex flex-col border-r border-slate-200 dark:border-slate-800 bg-white/70 dark:bg-slate-900/70 backdrop-blur-md z-10"
+        class="absolute top-0 left-1/4 w-96 h-96 bg-moe-pink/20 blur-[120px] rounded-full animate-pulse"
+      ></div>
+      <div
+        class="absolute bottom-0 right-1/4 w-96 h-96 bg-moe-sky/20 blur-[120px] rounded-full animate-pulse"
+        style="animation-delay: 1s"
+      ></div>
+    </div>
+
+    <div
+      :class="[
+        'absolute inset-0 flex p-4 gap-4 z-10 transition-all duration-500',
+        isElectron() ? 'top-8' : 'top-0'
+      ]"
+    >
+      <!-- 左侧边栏：设施与房间 -->
+      <aside
+        class="w-72 flex flex-col bg-white/60 backdrop-blur-xl pixel-border-moe overflow-hidden shadow-2xl transition-all duration-300 hover:shadow-moe-pink/5"
       >
         <!-- 据点标题 -->
-        <div class="p-4 border-b border-slate-200 dark:border-slate-800">
-          <h2 class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-            <component :is="'HomeFilled'" class="w-5 h-5 text-indigo-500" />
-            Stronghold
+        <div class="p-5 border-b-2 border-moe-cocoa/5 bg-white/40 relative group">
+          <div
+            class="absolute top-0 left-0 w-1 h-full bg-moe-pink scale-y-0 group-hover:scale-y-100 transition-transform origin-top duration-300"
+          ></div>
+          <h2 class="text-xl font-black text-moe-cocoa flex items-center gap-3 tracking-tighter">
+            <div class="p-1.5 bg-moe-pink/10 rounded-sm">
+              <PixelIcon name="home" class="text-moe-pink animate-pixel-bounce" />
+            </div>
+            STRONGHOLD
           </h2>
-          <p class="text-xs text-slate-500 mt-1">据点管理系统</p>
+          <div class="flex items-center gap-2 mt-2">
+            <span
+              class="text-[9px] text-white bg-moe-cocoa px-1.5 py-0.5 font-black uppercase tracking-widest"
+              >HQ</span
+            >
+            <span class="text-[10px] text-moe-cocoa/40 font-bold uppercase tracking-widest"
+              >据点管理中心</span
+            >
+          </div>
         </div>
 
-        <!-- 设施标签页（水平或垂直图标） -->
-        <div
-          class="flex overflow-x-auto p-2 gap-2 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-200 dark:border-slate-800"
-        >
-          <button
-            v-for="fac in facilities"
-            :key="fac.id"
-            class="flex flex-col items-center justify-center p-2 rounded-lg min-w-[60px] transition-colors"
-            :class="
-              currentFacility?.id === fac.id
-                ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400'
-                : 'hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-500'
-            "
-            @click="selectFacility(fac)"
-          >
-            <div class="w-6 h-6 rounded-full bg-current opacity-20 mb-1"></div>
-            <span class="text-[10px] font-medium truncate w-full text-center">{{ fac.name }}</span>
-          </button>
-          <!-- 创建设施按钮（默认隐藏，如需可重新启用） -->
-          <!-- 
-        <button
-          class="flex flex-col items-center justify-center p-2 rounded-lg min-w-[60px] text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-800"
-          @click="showCreateFacility = true"
-        >
-          <component :is="'Plus'" class="w-5 h-5" />
-          <span class="text-[10px]">新建</span>
-        </button>
-        --></div>
+        <!-- 设施标签页 -->
+        <div class="p-3 bg-moe-cocoa/5 border-b-2 border-moe-cocoa/5">
+          <div class="flex gap-2 overflow-x-auto no-scrollbar pb-1">
+            <button
+              v-for="fac in facilities"
+              :key="fac.id"
+              class="flex-shrink-0 flex flex-col items-center justify-center w-16 h-16 transition-all pixel-border-moe group bouncy-hover"
+              :class="
+                currentFacility?.id === fac.id
+                  ? 'bg-moe-pink text-white border-none shadow-lg shadow-moe-pink/20'
+                  : 'bg-white/60 text-moe-cocoa/40 hover:bg-white/90 hover:text-moe-pink'
+              "
+              @click="selectFacility(fac)"
+            >
+              <PixelIcon :name="fac.icon || 'building'" size="sm" class="mb-1" />
+              <span class="text-[9px] font-black truncate w-full px-1 text-center uppercase">{{
+                fac.name
+              }}</span>
+            </button>
+          </div>
+        </div>
 
         <!-- 房间列表 -->
-        <div class="flex-1 overflow-y-auto p-2 space-y-1">
-          <div v-if="loading" class="text-center py-4 text-slate-400 text-xs">加载中...</div>
+        <div class="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
+          <div class="flex items-center justify-between mb-4 px-1">
+            <span class="text-[10px] font-black text-moe-cocoa/30 uppercase tracking-[0.2em]"
+              >Rooms</span
+            >
+            <div class="h-[1px] flex-1 bg-moe-cocoa/10 ml-4"></div>
+          </div>
+
+          <div v-if="loading" class="py-12 flex flex-col items-center justify-center gap-4">
+            <div class="relative">
+              <div class="absolute inset-0 bg-moe-pink/20 blur-xl animate-pulse"></div>
+              <PixelIcon
+                name="loader"
+                animation="spin"
+                size="lg"
+                class="text-moe-pink relative z-10"
+              />
+            </div>
+            <span
+              class="text-[10px] font-black text-moe-pink tracking-[0.3em] uppercase animate-pulse"
+              >Scanning...</span
+            >
+          </div>
+
           <template v-else>
             <div
               v-for="room in rooms"
               :key="room.id"
-              class="flex items-center gap-3 p-3 rounded-lg cursor-pointer transition-all group"
-              :class="
-                currentRoom?.id === room.id
-                  ? 'bg-indigo-50 dark:bg-indigo-900/20 text-indigo-700 dark:text-indigo-300 shadow-sm'
-                  : 'hover:bg-slate-100 dark:hover:bg-slate-800/50 text-slate-600 dark:text-slate-400'
-              "
+              class="relative group cursor-pointer transition-all duration-200 active:scale-[0.98]"
               @click="selectRoom(room)"
             >
               <div
-                class="w-2 h-2 rounded-full"
+                class="flex items-center gap-4 p-4 transition-all pixel-border-moe relative z-10"
                 :class="
-                  currentRoom?.id === room.id ? 'bg-indigo-500' : 'bg-slate-300 dark:bg-slate-600'
+                  currentRoom?.id === room.id
+                    ? 'bg-white shadow-lg -translate-y-1'
+                    : 'bg-white/40 hover:bg-white/70 opacity-70 hover:opacity-100'
                 "
-              ></div>
-              <div class="flex-1 min-w-0">
-                <div class="font-medium text-sm truncate">{{ room.name }}</div>
-                <div class="text-[10px] text-slate-400 truncate">{{ room.description }}</div>
+              >
+                <!-- Selection Indicator -->
+                <div
+                  v-if="currentRoom?.id === room.id"
+                  class="absolute -left-1 top-4 bottom-4 w-1.5 bg-moe-pink shadow-[2px_0_8px_rgba(244,63,94,0.4)]"
+                ></div>
+
+                <div
+                  class="p-2 transition-colors duration-300"
+                  :class="currentRoom?.id === room.id ? 'text-moe-pink' : 'text-moe-cocoa/20'"
+                >
+                  <PixelIcon
+                    :name="currentRoom?.id === room.id ? 'door-open' : 'door-closed'"
+                    size="sm"
+                  />
+                </div>
+
+                <div class="flex-1 min-w-0">
+                  <div class="font-black text-xs text-moe-cocoa truncate uppercase tracking-wide">
+                    {{ room.name }}
+                  </div>
+                  <div class="text-[9px] text-moe-cocoa/40 truncate font-bold mt-0.5">
+                    {{ room.description || 'No description available' }}
+                  </div>
+                </div>
+
+                <div v-if="currentRoom?.id === room.id" class="animate-pixel-bounce">
+                  <PixelIcon name="sparkle" size="xs" class="text-moe-yellow" />
+                </div>
               </div>
+
+              <!-- Shadow Layer -->
+              <div
+                v-if="currentRoom?.id === room.id"
+                class="absolute inset-0 bg-moe-pink/10 blur-md -z-10"
+              ></div>
             </div>
           </template>
         </div>
-      </div>
+      </aside>
 
       <!-- 中间：聊天区域 -->
-      <div
-        class="flex-1 flex flex-col min-w-0 bg-slate-50/70 dark:bg-slate-900/70 backdrop-blur-md relative"
+      <main
+        class="flex-1 flex flex-col min-w-0 bg-white/40 backdrop-blur-xl relative pixel-border-moe overflow-hidden shadow-2xl group"
       >
-        <!-- 背景渐变（复制自 ChatModeView） -->
+        <!-- Corner Accents -->
         <div
-          class="absolute inset-0 bg-gradient-to-br from-sky-200/20 via-sky-100/10 to-transparent pointer-events-none z-0"
-        ></div>
+          class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-30 transition-opacity pointer-events-none"
+        >
+          <PixelIcon name="sparkle" size="md" class="text-moe-pink" />
+        </div>
 
         <div v-if="currentRoom" class="flex flex-col h-full relative z-10">
           <!-- 房间标题 -->
           <header
-            class="bg-white/80 dark:bg-slate-900/80 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-6 py-4 flex justify-between items-center shadow-sm z-20"
+            class="bg-white/60 backdrop-blur-md border-b-2 border-moe-cocoa/5 px-8 py-5 flex justify-between items-center z-20 shadow-sm"
           >
-            <div>
-              <h1
-                class="text-xl font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2"
-              >
-                {{ currentRoom.name }}
-                <span
-                  class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800 text-xs text-slate-500 font-normal"
+            <div class="flex items-center gap-6">
+              <div class="relative">
+                <div
+                  class="absolute inset-0 bg-moe-sky/20 blur-lg rounded-full animate-pulse"
+                ></div>
+                <div
+                  class="w-12 h-12 bg-moe-sky text-white flex items-center justify-center pixel-border-moe relative z-10 shadow-lg shadow-moe-sky/20"
                 >
-                  {{ currentFacility?.name }}
-                </span>
-              </h1>
-              <p class="text-xs text-slate-500 mt-0.5">{{ currentRoom.description }}</p>
+                  <PixelIcon name="door-open" size="md" />
+                </div>
+              </div>
+              <div>
+                <h1
+                  class="text-2xl font-black text-moe-cocoa flex items-center gap-4 tracking-tighter"
+                >
+                  {{ currentRoom.name.toUpperCase() }}
+                  <span
+                    class="px-3 py-1 bg-moe-cocoa text-[9px] text-white font-black pixel-border-moe uppercase tracking-[0.2em]"
+                  >
+                    {{ currentFacility?.name }}
+                  </span>
+                </h1>
+                <p
+                  class="text-[10px] text-moe-cocoa/40 font-black mt-1 uppercase tracking-widest flex items-center gap-2"
+                >
+                  <span class="w-1.5 h-1.5 bg-green-400 animate-pulse"></span>
+                  Connected to Secure Stronghold Line
+                </p>
+              </div>
             </div>
-            <div class="flex items-center gap-2">
-              <!-- 房间操作 -->
-              <button class="p-2 text-slate-400 hover:text-indigo-500 transition-colors">
-                <component :is="'Setting'" class="w-5 h-5" />
+
+            <div class="flex items-center gap-4">
+              <button
+                class="w-10 h-10 flex items-center justify-center bg-white/80 text-moe-cocoa/30 hover:text-moe-pink transition-all pixel-border-moe bouncy-hover active:scale-90"
+              >
+                <PixelIcon name="settings" size="sm" />
               </button>
             </div>
           </header>
 
-          <!-- 复用聊天界面 -->
-          <!-- 使用 key 强制在房间切换时重新挂载，确保为新房间获取历史记录 -->
-          <ChatInterface
-            :key="currentRoom.id"
-            mode="group"
-            :target-id="currentRoom.id.toString()"
-            :agent-name="currentRoom.name"
-            :work-mode="false"
-            class="flex-1"
-          />
+          <!-- 聊天界面容器 -->
+          <div class="flex-1 relative p-4">
+            <div class="absolute inset-0 bg-white/20 pointer-events-none"></div>
+            <div
+              class="h-full bg-white/40 backdrop-blur-sm pixel-border-moe overflow-hidden shadow-inner relative z-10"
+            >
+              <ChatInterface
+                :key="currentRoom.id"
+                mode="group"
+                :target-id="currentRoom.id.toString()"
+                :agent-name="currentRoom.name"
+                :work-mode="false"
+                class="h-full"
+              />
+            </div>
+          </div>
         </div>
 
         <!-- 未选择房间状态 -->
-        <div
-          v-else
-          class="flex flex-col items-center justify-center h-full text-slate-400 relative z-10"
-        >
-          <component :is="'OfficeBuilding'" class="w-16 h-16 mb-4 opacity-30" />
-          <h3 class="text-lg font-medium text-slate-600 dark:text-slate-300">欢迎来到据点</h3>
-          <p class="text-sm">请从左侧选择一个房间开始</p>
+        <div v-else class="flex flex-col items-center justify-center h-full relative z-10">
+          <div class="relative mb-8 group/empty">
+            <div
+              class="absolute inset-0 bg-moe-pink/10 blur-[60px] group-hover/empty:blur-[80px] transition-all duration-1000"
+            ></div>
+            <div
+              class="p-12 bg-white/60 pixel-border-moe animate-pixel-float relative z-10 shadow-2xl"
+            >
+              <PixelIcon
+                name="building"
+                size="3xl"
+                class="text-moe-cocoa/10 group-hover/empty:text-moe-pink/20 transition-colors duration-700"
+              />
+            </div>
+            <!-- Floating Sparkles -->
+            <div
+              class="absolute -top-4 -right-4 animate-pixel-bounce"
+              style="animation-delay: 0.2s"
+            >
+              <PixelIcon name="sparkle" size="sm" class="text-moe-yellow/40" />
+            </div>
+            <div
+              class="absolute -bottom-6 -left-4 animate-pixel-bounce"
+              style="animation-delay: 0.5s"
+            >
+              <PixelIcon name="heart" size="sm" class="text-moe-pink/30" />
+            </div>
+          </div>
+          <h3 class="text-2xl font-black text-moe-cocoa tracking-[0.3em] uppercase">
+            Select a Room
+          </h3>
+          <p
+            class="text-[10px] font-black mt-4 text-moe-cocoa/40 uppercase tracking-[0.4em] animate-pulse"
+          >
+            Waiting for Authorization...
+          </p>
         </div>
-      </div>
+      </main>
 
       <!-- 右侧边栏：房间信息与智能体 -->
-      <div
-        class="w-72 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hidden lg:flex flex-col"
+      <aside
+        class="w-80 bg-white/60 backdrop-blur-xl pixel-border-moe hidden xl:flex flex-col overflow-hidden shadow-2xl"
       >
+        <!-- Top Action Bar -->
         <div
-          class="p-4 border-b border-slate-200 dark:border-slate-800 flex justify-between items-center"
+          class="p-5 border-b-2 border-moe-cocoa/5 bg-white/40 flex justify-between items-center relative group"
         >
-          <h3 class="font-bold text-slate-700 dark:text-slate-200 text-sm uppercase tracking-wider">
-            当前状态
+          <div
+            class="absolute bottom-0 left-0 h-0.5 bg-moe-yellow w-0 group-hover:w-full transition-all duration-500"
+          ></div>
+          <h3 class="font-black text-moe-cocoa/30 text-[10px] uppercase tracking-[0.3em]">
+            System Status
           </h3>
           <!-- 呼叫管家按钮 -->
           <button
-            class="text-xs bg-slate-100 dark:bg-slate-800 hover:bg-indigo-100 dark:hover:bg-indigo-900/50 text-slate-600 dark:text-slate-300 hover:text-indigo-600 dark:hover:text-indigo-400 px-2 py-1 rounded transition-colors flex items-center gap-1"
+            class="text-[9px] bg-moe-yellow text-white px-4 py-2 transition-all flex items-center gap-2 pixel-border-moe font-black bouncy-hover active:scale-95 shadow-lg shadow-moe-yellow/20"
             @click="openButlerModal"
           >
-            <component :is="'Service'" class="w-3 h-3" />
-            呼叫管家
+            <PixelIcon name="bot" size="xs" />
+            CALL BUTLER
           </button>
         </div>
 
         <!-- 房间环境 -->
-        <div v-if="currentRoom" class="p-4 border-b border-slate-200 dark:border-slate-800">
-          <h4 class="text-xs font-bold text-slate-500 mb-2">环境参数</h4>
+        <div v-if="currentRoom" class="p-6 border-b-2 border-moe-cocoa/5 bg-moe-cocoa/[0.02]">
+          <div class="flex items-center gap-3 mb-5">
+            <div class="w-1.5 h-1.5 bg-moe-pink"></div>
+            <h4 class="text-[10px] font-black text-moe-cocoa/60 uppercase tracking-widest">
+              Environmental Parameters
+            </h4>
+          </div>
           <div
-            class="bg-slate-50 dark:bg-slate-800 rounded-lg p-3 text-xs font-mono break-all text-slate-600 dark:text-slate-300"
+            class="bg-white/60 p-5 text-[10px] font-bold text-moe-cocoa/70 pixel-border-moe relative overflow-hidden group"
           >
-            <div v-if="currentRoom.environment_json" class="grid grid-cols-2 gap-y-1">
-              <template v-for="(value, key) in JSON.parse(currentRoom.environment_json)" :key="key">
-                <span class="text-slate-400">{{ key }}:</span>
-                <span class="text-right">{{ value }}</span>
-              </template>
+            <!-- Scanline effect -->
+            <div
+              class="absolute inset-0 bg-gradient-to-b from-transparent via-moe-pink/[0.03] to-transparent h-2 w-full animate-[scanline_3s_linear_infinite] pointer-events-none"
+            ></div>
+
+            <div v-if="currentRoom.environment_json" class="space-y-3 relative z-10">
+              <div
+                v-for="(value, key) in JSON.parse(currentRoom.environment_json)"
+                :key="key"
+                class="flex justify-between items-center border-b border-moe-cocoa/5 pb-1 last:border-0"
+              >
+                <span class="text-moe-cocoa/40 uppercase tracking-tighter">{{ key }}</span>
+                <span class="text-moe-pink font-black">{{ value }}</span>
+              </div>
             </div>
-            <div v-else class="text-slate-400 text-center">无数据</div>
+            <div
+              v-else
+              class="text-moe-cocoa/20 text-center py-4 italic font-black uppercase tracking-widest"
+            >
+              No Telemetry Data
+            </div>
           </div>
         </div>
 
         <!-- 智能体列表 -->
-        <div class="flex-1 overflow-y-auto p-4 space-y-6">
+        <div class="flex-1 overflow-y-auto p-6 space-y-10 custom-scrollbar">
           <!-- 第一部分：本房间 -->
-          <div>
-            <h4 class="text-xs font-bold text-slate-500 mb-3 flex justify-between items-center">
-              本房间
+          <section>
+            <div class="flex items-center justify-between mb-6">
+              <h4 class="text-[10px] font-black text-moe-cocoa/30 uppercase tracking-[0.2em]">
+                Active Presence
+              </h4>
               <span
-                class="bg-green-100 dark:bg-green-900/30 text-green-600 dark:text-green-400 px-1.5 py-0.5 rounded text-[10px]"
-                >Active</span
+                class="px-2 py-0.5 bg-green-400 text-white text-[8px] font-black pixel-border-moe animate-pulse"
+                >LOCAL</span
               >
-            </h4>
-            <div class="space-y-3">
+            </div>
+
+            <div class="space-y-4">
               <template v-if="currentRoomAgents.length > 0">
                 <div
                   v-for="agent in currentRoomAgents"
                   :key="agent.name"
-                  class="flex items-center gap-3"
+                  class="flex items-center gap-4 p-3 bg-white/40 pixel-border-moe hover:bg-white transition-all duration-300 group hover:-translate-y-0.5"
                 >
                   <div
-                    class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700"
+                    class="w-12 h-12 bg-moe-pink text-white flex items-center justify-center pixel-border-moe group-hover:scale-110 transition-transform shadow-lg shadow-moe-pink/10"
                   >
-                    <!-- <img v-if="agent.avatar" :src="agent.avatar" class="w-full h-full object-cover" /> -->
-                    <span class="text-xs font-bold text-slate-500">{{
-                      agent.name[0].toUpperCase()
-                    }}</span>
+                    <span class="text-lg font-black">{{ agent.name[0].toUpperCase() }}</span>
                   </div>
-                  <div>
-                    <div class="text-sm font-medium text-slate-700 dark:text-slate-200">
+                  <div class="flex-1 min-w-0">
+                    <div
+                      class="text-xs font-black text-moe-cocoa uppercase tracking-tight truncate"
+                    >
                       {{ agent.name }}
                     </div>
-                    <div class="text-[10px] text-green-500 flex items-center gap-1">
-                      <span class="w-1.5 h-1.5 rounded-full bg-green-500"></span>
-                      Here
+                    <div
+                      class="text-[9px] text-green-500 font-black flex items-center gap-1.5 mt-1 uppercase tracking-tighter"
+                    >
+                      <span class="w-1.5 h-1.5 bg-green-500 animate-pulse"></span>
+                      Currently Present
                     </div>
                   </div>
                 </div>
               </template>
-              <div v-else class="text-xs text-slate-400 italic py-2 text-center">空无一人</div>
-            </div>
-          </div>
-
-          <!-- 第二部分：所有居民 -->
-          <div>
-            <h4 class="text-xs font-bold text-slate-500 mb-3 flex justify-between items-center">
-              据点全员
-              <span
-                class="bg-slate-100 dark:bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded text-[10px]"
-                >Total</span
+              <div
+                v-else
+                class="text-[10px] text-moe-cocoa/20 font-black uppercase tracking-widest py-8 text-center border-2 border-dashed border-moe-cocoa/5"
               >
-            </h4>
-            <div class="space-y-3">
+                No residents detected
+              </div>
+            </div>
+          </section>
+
+          <!-- 第二部分：据点全员 -->
+          <section>
+            <div class="flex items-center justify-between mb-6">
+              <h4 class="text-[10px] font-black text-moe-cocoa/30 uppercase tracking-[0.2em]">
+                Stronghold Directory
+              </h4>
+              <span class="px-2 py-0.5 bg-moe-sky text-white text-[8px] font-black pixel-border-moe"
+                >REMOTE</span
+              >
+            </div>
+
+            <div class="grid grid-cols-1 gap-3">
               <div
                 v-for="agent in agentsStatus"
                 :key="agent.name"
-                class="flex items-center gap-3 opacity-75 hover:opacity-100 transition-opacity cursor-pointer"
-                title="点击呼叫此角色"
+                class="flex items-center gap-3 p-3 bg-white/20 hover:bg-white/80 transition-all cursor-pointer pixel-border-moe group active:scale-95"
                 @click="summonAgent(agent.name)"
               >
                 <div
-                  class="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden border border-slate-200 dark:border-slate-700"
+                  class="w-10 h-10 bg-moe-cocoa text-white flex items-center justify-center pixel-border-moe opacity-40 group-hover:opacity-100 transition-opacity"
                 >
-                  <!-- <img v-if="agent.avatar" :src="agent.avatar" class="w-full h-full object-cover" /> -->
-                  <span class="text-xs font-bold text-slate-500">{{
-                    agent.name[0].toUpperCase()
-                  }}</span>
+                  <span class="text-sm font-black">{{ agent.name[0].toUpperCase() }}</span>
                 </div>
-                <div>
-                  <div class="text-sm font-medium text-slate-700 dark:text-slate-200">
+                <div class="flex-1 min-w-0">
+                  <div
+                    class="text-[10px] font-black text-moe-cocoa/60 group-hover:text-moe-pink transition-colors truncate uppercase"
+                  >
                     {{ agent.name }}
                   </div>
-                  <div class="text-[10px] text-slate-400 flex items-center gap-1">
-                    <component :is="'Location'" class="w-3 h-3" />
+                  <div
+                    class="text-[8px] text-moe-cocoa/30 font-black flex items-center gap-1.5 mt-0.5 uppercase tracking-tighter"
+                  >
+                    <PixelIcon name="map-pin" size="xs" />
                     {{ agent.room_name }}
                   </div>
                 </div>
+                <PixelIcon
+                  name="bot"
+                  size="xs"
+                  class="text-moe-pink opacity-0 group-hover:opacity-100 transition-opacity"
+                />
               </div>
+            </div>
+          </section>
+        </div>
+
+        <!-- 管家状态面板 -->
+        <div class="p-6 bg-moe-cocoa text-white relative overflow-hidden group">
+          <!-- Background Decoration -->
+          <div
+            class="absolute -right-4 -bottom-4 opacity-10 group-hover:rotate-12 transition-transform duration-700"
+          >
+            <PixelIcon name="bot" size="3xl" />
+          </div>
+
+          <div class="flex items-center gap-3 mb-4 relative z-10">
+            <div class="p-1.5 bg-moe-yellow rounded-sm">
+              <PixelIcon name="bot" size="xs" class="text-moe-cocoa" />
+            </div>
+            <span class="text-[10px] font-black uppercase tracking-[0.2em] text-moe-yellow"
+              >Butler System</span
+            >
+          </div>
+
+          <div class="text-[10px] font-bold text-white/60 leading-relaxed mb-4 relative z-10">
+            {{ butlerConfig?.persona || 'Butler system core initialized. Ready for instructions.' }}
+          </div>
+
+          <div
+            class="flex items-center justify-between pt-4 border-t border-white/10 relative z-10"
+          >
+            <span class="text-[8px] font-black text-white/20 uppercase">Core v4.2.0-moe</span>
+            <div class="flex gap-1">
+              <div class="w-1 h-1 bg-moe-yellow animate-pulse"></div>
+              <div class="w-1 h-1 bg-moe-yellow animate-pulse" style="animation-delay: 0.2s"></div>
+              <div class="w-1 h-1 bg-moe-yellow animate-pulse" style="animation-delay: 0.4s"></div>
             </div>
           </div>
         </div>
-
-        <!-- 管家状态 -->
-        <div
-          class="p-4 bg-slate-50 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-800"
-        >
-          <div class="flex items-center gap-2 mb-2">
-            <component :is="'Service'" class="w-4 h-4 text-amber-500" />
-            <span class="text-xs font-bold text-slate-700 dark:text-slate-300">管家系统</span>
-          </div>
-          <div class="text-[10px] text-slate-500 leading-relaxed line-clamp-2">
-            {{ butlerConfig?.persona || '系统管家运行正常' }}
-          </div>
-          <div class="mt-1 text-[9px] text-slate-400 italic">
-            [提示] 请使用 group/butler/persona.md 进行人设配置
-          </div>
-        </div>
-      </div>
+      </aside>
     </div>
 
     <!-- 呼叫管家弹窗 -->
-    <div
-      v-if="showButlerModal"
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
-    >
+    <transition name="modal">
       <div
-        class="bg-white dark:bg-slate-900 w-96 rounded-xl shadow-2xl border border-slate-200 dark:border-slate-700 overflow-hidden transform transition-all"
+        v-if="showButlerModal"
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-moe-cocoa/40 backdrop-blur-md p-6"
+        @click.self="showButlerModal = false"
       >
         <div
-          class="p-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 flex justify-between items-center"
+          class="bg-[#fffcf9] w-full max-w-lg shadow-[0_0_100px_rgba(45,27,30,0.3)] pixel-border-moe overflow-hidden animate-in"
         >
-          <h3 class="font-bold text-slate-700 dark:text-slate-200 flex items-center gap-2">
-            <component :is="'Service'" class="w-4 h-4 text-amber-500" />
-            呼叫管家
-          </h3>
-          <button
-            class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-            @click="showButlerModal = false"
+          <!-- Modal Header -->
+          <div
+            class="p-8 border-b-2 border-moe-cocoa/5 bg-white relative flex justify-between items-center group"
           >
-            <component :is="'Close'" class="w-4 h-4" />
-          </button>
-        </div>
-        <div class="p-4">
-          <textarea
-            v-model="butlerQuery"
-            class="w-full h-32 bg-slate-100 dark:bg-slate-800 border-0 rounded-lg p-3 text-sm focus:ring-2 focus:ring-indigo-500 resize-none placeholder-slate-400 text-slate-700 dark:text-slate-200"
-            placeholder="告诉管家你需要什么... 例如：&#10;“把客厅灯光调暗一点”&#10;“叫 Pero 过来”&#10;“建一个新房间叫‘书房’”"
-            @keydown.enter.ctrl="submitButlerCall"
-          ></textarea>
-          <div class="flex justify-end mt-4 gap-2">
+            <div class="absolute top-0 left-0 w-full h-1 bg-moe-yellow"></div>
+            <div class="flex items-center gap-4">
+              <div class="p-3 bg-moe-yellow/10 rounded-sm">
+                <PixelIcon name="bot" size="md" class="text-moe-yellow animate-pixel-bounce" />
+              </div>
+              <div>
+                <h3 class="text-2xl font-black text-moe-cocoa tracking-tighter">
+                  BUTLER INTERFACE
+                </h3>
+                <p
+                  class="text-[10px] text-moe-cocoa/30 font-black uppercase tracking-widest mt-0.5"
+                >
+                  据点智能管家指令终端
+                </p>
+              </div>
+            </div>
             <button
-              class="px-3 py-1.5 text-xs text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors"
+              class="w-10 h-10 flex items-center justify-center text-moe-cocoa/20 hover:text-moe-pink transition-all bouncy-hover active:scale-90"
               @click="showButlerModal = false"
             >
-              取消
+              <PixelIcon name="close" size="sm" />
             </button>
-            <button
-              class="px-3 py-1.5 text-xs bg-indigo-600 hover:bg-indigo-700 text-white rounded shadow-sm transition-colors flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!butlerQuery.trim() || callingButler"
-              @click="submitButlerCall"
+          </div>
+
+          <!-- Modal Body -->
+          <div class="p-10">
+            <div class="relative group/input mb-8">
+              <div class="absolute -top-3 left-4 px-2 bg-[#fffcf9] z-10">
+                <span class="text-[10px] font-black text-moe-yellow uppercase tracking-widest"
+                  >Input Directive</span
+                >
+              </div>
+              <textarea
+                v-model="butlerQuery"
+                class="w-full h-48 bg-white/40 border-2 border-moe-cocoa/5 p-6 text-base font-bold focus:border-moe-yellow/30 resize-none placeholder-moe-cocoa/10 text-moe-cocoa focus:outline-none transition-all pixel-border-moe"
+                placeholder="告诉管家你需要什么喵... 例如：&#10;“把客厅灯光调暗一点”&#10;“叫 Pero 过来”&#10;“建一个新房间叫‘书房’”"
+                @keydown.enter.ctrl="submitButlerCall"
+              ></textarea>
+              <div
+                class="absolute bottom-4 right-4 text-[9px] text-moe-cocoa/20 font-black tracking-widest pointer-events-none transition-opacity group-focus-within/input:opacity-0"
+              >
+                CTRL + ENTER TO SEND
+              </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="flex justify-end gap-4">
+              <button
+                class="px-8 py-3 text-[10px] font-black text-moe-cocoa/40 hover:text-moe-cocoa/80 hover:bg-moe-cocoa/5 transition-all pixel-border-moe bouncy-hover active:scale-95 uppercase tracking-widest"
+                @click="showButlerModal = false"
+              >
+                Abort
+              </button>
+              <button
+                class="px-10 py-3 text-[10px] font-black bg-moe-yellow text-white shadow-xl shadow-moe-yellow/20 transition-all flex items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed pixel-border-moe bouncy-hover active:scale-95 uppercase tracking-widest"
+                :disabled="!butlerQuery.trim() || callingButler"
+                @click="submitButlerCall"
+              >
+                <PixelIcon v-if="callingButler" name="loader" size="xs" animation="spin" />
+                <span v-else>Transmit Command</span>
+              </button>
+            </div>
+          </div>
+
+          <!-- Modal Footer -->
+          <div class="px-8 py-4 bg-moe-cocoa/5 flex items-center gap-3">
+            <div class="w-2 h-2 bg-moe-yellow rounded-full animate-pulse"></div>
+            <span class="text-[9px] font-black text-moe-cocoa/20 uppercase tracking-[0.2em]"
+              >Neural Link Established // Safe Mode Active</span
             >
-              <component :is="'Loading'" v-if="callingButler" class="w-3 h-3 animate-spin" />
-              <span v-else>发送指令</span>
-            </button>
           </div>
         </div>
       </div>
-    </div>
+    </transition>
   </div>
 </template>
 
@@ -324,26 +549,24 @@ import { useStronghold } from '../composables/useStronghold'
 import { isElectron } from '@/utils/ipcAdapter'
 import ChatInterface from '../components/chat/ChatInterface.vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
+import PixelIcon from '../components/ui/PixelIcon.vue'
 
 const {
   facilities,
   rooms,
   currentRoom,
   currentFacility,
-  // butlerConfig,
+  butlerConfig,
   agentsStatus,
-  // loading,
+  loading,
   fetchFacilities,
   fetchRooms,
-  // selectFacility,
+  selectFacility,
   selectRoom,
   fetchButler,
   fetchAgentsStatus,
   callButler
 } = useStronghold()
-
-// const showCreateFacility = ref(false)
-// const showCreateRoom = ref(false)
 
 // 管家弹窗
 const showButlerModal = ref(false)
@@ -371,8 +594,6 @@ const submitButlerCall = async () => {
     // 同时重新获取当前房间以获得更新的环境 json
     if (currentRoom.value) {
       // 小技巧：重新选择房间以刷新数据
-      // 更好做法：useStronghold 应该暴露一种刷新当前房间的方法
-      // 目前 fetchRooms 更新列表，我们只需从列表更新 currentRoom 引用
       const updatedRoom = rooms.value.find((r) => r.id === currentRoom.value.id)
       if (updatedRoom) {
         selectRoom(updatedRoom)
@@ -418,7 +639,7 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* 自定义滚动条 */
+/* 自定义滚动条 - 适配萌动可可色 */
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
 }
@@ -426,10 +647,35 @@ onUnmounted(() => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
-  border-radius: 4px;
+  background: rgba(45, 27, 30, 0.1); /* moe-cocoa with opacity */
+  border-radius: 0;
 }
-.dark .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #475569;
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 27, 30, 0.2);
+}
+
+/* 隐藏滚动条但保留滚动功能 */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* 简单的进场动画 */
+@keyframes fadeInScale {
+  from {
+    opacity: 0;
+    transform: scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-in {
+  animation: fadeInScale 0.3s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
 }
 </style>

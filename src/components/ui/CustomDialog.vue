@@ -5,61 +5,107 @@
     @click.self="handleOverlayClick"
   >
     <div
-      class="bg-[#252526] border border-[#454545] rounded-lg shadow-2xl w-[400px] overflow-hidden transform transition-all"
+      class="border shadow-2xl transform transition-all flex flex-col max-h-[90vh]"
+      :class="[
+        overflowVisible ? 'overflow-visible' : 'overflow-hidden',
+        workMode
+          ? 'bg-[#252526] border-slate-800/50 pixel-border-dark'
+          : 'bg-[#fffcf9]/95 backdrop-blur-md border-moe-cocoa/5 pixel-border-moe'
+      ]"
+      :style="{ width: width || '400px' }"
     >
       <!-- 头部 -->
       <div
-        class="px-4 py-3 border-b border-[#333333] flex justify-between items-center bg-[#2d2d2d]"
+        class="px-4 py-3 border-b flex justify-between items-center shrink-0"
+        :class="workMode ? 'border-slate-800/50 bg-[#2d2d2d]' : 'border-moe-cocoa/10 bg-moe-pink/5'"
       >
-        <h3 class="text-sm font-semibold text-[#cccccc] select-none">{{ title }}</h3>
-        <button class="text-[#888888] hover:text-white transition-colors" @click="handleCancel">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <line x1="18" y1="6" x2="6" y2="18"></line>
-            <line x1="6" y1="6" x2="18" y2="18"></line>
-          </svg>
+        <h3
+          class="text-sm font-semibold select-none"
+          :class="workMode ? 'text-[#cccccc]' : 'text-moe-cocoa'"
+        >
+          {{ title }}
+        </h3>
+        <button
+          class="transition-colors"
+          :class="
+            workMode ? 'text-[#888888] hover:text-white' : 'text-moe-cocoa/40 hover:text-moe-cocoa'
+          "
+          @click="handleCancel"
+        >
+          <PixelIcon name="close" size="sm" />
         </button>
       </div>
 
       <!-- 内容 -->
-      <div class="p-4">
-        <p v-if="message" class="text-sm text-[#cccccc] mb-4 whitespace-pre-wrap">{{ message }}</p>
+      <div
+        class="p-4 custom-scrollbar flex-1"
+        :class="[
+          overflowVisible ? 'overflow-visible' : 'overflow-y-auto',
+          workMode ? '' : 'text-moe-cocoa'
+        ]"
+      >
+        <slot>
+          <p
+            v-if="message"
+            class="text-sm mb-4 whitespace-pre-wrap"
+            :class="workMode ? 'text-[#cccccc]' : 'text-moe-cocoa/80'"
+          >
+            {{ message }}
+          </p>
 
-        <div v-if="type === 'prompt'">
-          <input
-            ref="inputRef"
-            v-model="inputValue"
-            class="w-full bg-[#3c3c3c] border border-[#3c3c3c] focus:border-[#007fd4] text-white text-sm px-3 py-2 rounded outline-none placeholder-gray-500"
-            :placeholder="placeholder"
-            @keyup.enter="handleConfirm"
-          />
-        </div>
+          <div v-if="type === 'prompt'">
+            <input
+              ref="inputRef"
+              v-model="inputValue"
+              class="w-full text-sm px-3 py-2 outline-none transition-all"
+              :class="[
+                workMode
+                  ? 'bg-[#3c3c3c] border-[#3c3c3c] focus:border-[#007fd4] text-white pixel-border-sm-dark placeholder-gray-500'
+                  : 'bg-white border-moe-cocoa/10 focus:border-moe-pink text-moe-cocoa pixel-border-moe placeholder-moe-cocoa/30'
+              ]"
+              :placeholder="placeholder"
+              @keyup.enter="handleConfirm"
+            />
+          </div>
+        </slot>
       </div>
 
       <!-- 底部 -->
-      <div class="px-4 py-3 bg-[#2d2d2d] flex justify-end gap-2">
+      <div
+        v-if="!$slots.footer && type !== 'custom'"
+        class="px-4 py-3 flex justify-end gap-2 shrink-0 border-t"
+        :class="workMode ? 'bg-[#2d2d2d] border-slate-800/50' : 'bg-moe-pink/5 border-moe-cocoa/10'"
+      >
         <button
           v-if="type !== 'alert'"
-          class="px-4 py-1.5 text-sm text-white bg-[#454545] hover:bg-[#525252] rounded transition-colors"
+          class="px-4 py-1.5 text-sm transition-all hover:scale-105 active:scale-95"
+          :class="[
+            workMode
+              ? 'text-white bg-[#454545] hover:bg-[#525252] pixel-border-sm-dark'
+              : 'text-moe-cocoa bg-white hover:bg-slate-50 pixel-border-moe'
+          ]"
           @click="handleCancel"
         >
           取消
         </button>
         <button
-          class="px-4 py-1.5 text-sm text-white bg-[#007fd4] hover:bg-[#0069b4] rounded transition-colors"
+          class="px-4 py-1.5 text-sm transition-all hover:scale-105 active:scale-95"
+          :class="[
+            workMode
+              ? 'text-white bg-[#007fd4] hover:bg-[#0069b4] pixel-border-sm-dark'
+              : 'text-white bg-moe-pink hover:bg-moe-pink-hover pixel-border-moe'
+          ]"
           @click="handleConfirm"
         >
           确定
         </button>
+      </div>
+      <div
+        v-else-if="$slots.footer"
+        class="px-4 py-3 border-t shrink-0"
+        :class="workMode ? 'bg-[#2d2d2d] border-slate-800/50' : 'bg-moe-pink/5 border-moe-cocoa/10'"
+      >
+        <slot name="footer"></slot>
       </div>
     </div>
   </div>
@@ -67,13 +113,13 @@
 
 <script setup>
 import { ref, watch, nextTick } from 'vue'
+import PixelIcon from './PixelIcon.vue'
 
 const props = defineProps({
   visible: Boolean,
   type: {
     type: String,
-    default: 'alert', // alert (警告), confirm (确认), prompt (输入)
-    validator: (value) => ['alert', 'confirm', 'prompt'].includes(value)
+    default: 'alert' // 警告, 确认, 输入, 自定义
   },
   title: {
     type: String,
@@ -90,6 +136,20 @@ const props = defineProps({
   placeholder: {
     type: String,
     default: ''
+  },
+  width: {
+    type: String,
+    default: ''
+  },
+  /** 是否处于工作模式 */
+  workMode: {
+    type: Boolean,
+    default: true
+  },
+  /** 是否允许内容溢出显示 (用于包含下拉框时) */
+  overflowVisible: {
+    type: Boolean,
+    default: false
   }
 })
 
@@ -98,7 +158,6 @@ const emit = defineEmits(['update:visible', 'confirm', 'cancel'])
 const inputValue = ref('')
 const inputRef = ref(null)
 
-// Watch for visibility changes to set focus
 // 监听可见性变化以设置焦点
 watch(
   () => props.visible,

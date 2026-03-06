@@ -38,6 +38,7 @@ from rich.console import Console
 from rich.traceback import install as install_rich_traceback
 
 from utils.logging_config import configure_logging
+from utils.workspace_utils import get_workspace_root
 
 # --- 1. Rich 全局初始化 (最优先执行) ---
 
@@ -112,6 +113,7 @@ from models import (
 )
 from nit_core.plugins.social_adapter.social_service import get_social_service
 from routers.agent_router import router as agent_router
+from routers.asset_router import router as asset_router
 from routers.config_router import router as config_router
 from routers.group_chat_router import router as group_chat_router
 from routers.ide_router import router as ide_router
@@ -173,9 +175,16 @@ async def lifespan(app: FastAPI):
 ╚═╝     ╚══════╝╚═╝  ╚═╝ ╚═════╝  ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚══════╝
 """)
     print("=" * 50)
-    print("🚀 PeroCore 后端启动中...")
+    print("🚀 萌动链接：PeroperoChat！ 后端启动中...")
     print(f"📅 时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"📂 数据目录: {os.environ.get('PERO_DATA_DIR', 'Default')}")
+
+    # [AssetRegistry] 优先扫描资产 (插件/模型/模组)
+    from core.asset_registry import get_asset_registry
+
+    registry = get_asset_registry()
+    registry.scan_all()
+    print(f"📦 资产注册表: [就绪] (已索引 {len(registry.assets)} 个资产)")
 
     # 检查 Rust 核心
     try:
@@ -333,16 +342,13 @@ async def lifespan(app: FastAPI):
                         if report:
                             # [修改] 保存到文件 (不入库)
                             try:
-                                import os
-                                from utils.workspace_utils import get_workspace_root
-                                
-                                agent_id = "pero" # Default in chain_service
+                                agent_id = "pero"  # Default in chain_service
                                 workspace = get_workspace_root(agent_id)
                                 report_dir = os.path.join(workspace, "weekly_reports")
                                 os.makedirs(report_dir, exist_ok=True)
                                 date_str = now.strftime("%Y-%m-%d")
                                 file_path = os.path.join(report_dir, f"{date_str}.md")
-                                
+
                                 with open(file_path, "w", encoding="utf-8") as f:
                                     f.write(report)
                                 print(f"[Main] 周报已保存到文件: {file_path}")
@@ -814,7 +820,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="PeroCore Backend",
+    title="萌动链接：PeroperoChat！ 后端服务",
     description="AI Agent powered backend for Pero",
     lifespan=lifespan,
 )
@@ -827,6 +833,7 @@ app.include_router(nit_router)
 app.include_router(ipc_router)
 app.include_router(task_control_router)
 app.include_router(agent_router)
+app.include_router(asset_router)
 app.include_router(group_chat_router)
 app.include_router(stronghold_router)
 

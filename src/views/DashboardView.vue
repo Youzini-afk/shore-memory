@@ -1,2022 +1,3642 @@
 <template>
-  <div class="dashboard-wrapper">
-    <CustomTitleBar v-if="isElectron()" :transparent="true" title="Pero Dashboard" />
-
-    <!-- 动态背景 -->
-    <div class="background-blobs">
-      <div class="blob blob-1"></div>
-      <div class="blob blob-2"></div>
-      <div class="blob blob-3"></div>
+  <div
+    class="min-h-screen bg-sky-50 text-slate-800 selection:bg-sky-500/20 font-sans overflow-hidden"
+  >
+    <div v-once class="fixed top-0 left-0 w-full h-full overflow-hidden pointer-events-none z-0">
+      <div
+        class="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] bg-sky-300/20 blur-[150px] rounded-full animate-pulse"
+        style="will-change: transform, opacity"
+      ></div>
+      <div
+        class="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] bg-sky-300/20 blur-[150px] rounded-full animate-pulse"
+        style="animation-delay: 2s; will-change: transform, opacity"
+      ></div>
     </div>
 
-    <el-container class="main-layout" :class="{ 'pt-8': isElectron() }">
-      <!-- 侧边导航栏 -->
-      <el-aside width="260px" class="glass-sidebar">
-        <div class="brand-area">
-          <div class="logo-box">
-            <img :src="logoImg" class="logo-img" alt="Logo" />
-          </div>
-          <div class="brand-text">
-            <h1>PeroCore</h1>
-            <div style="display: flex; align-items: center; gap: 5px">
-              <span
-                class="version-tag"
-                style="cursor: pointer"
-                title="点击检查更新"
-                @click="checkForUpdates"
-                >v{{ appVersion }}</span
+    <CustomTitleBar v-if="isElectron()" :transparent="true" title="Pero Dashboard" />
+
+    <div class="flex h-screen overflow-hidden relative z-10" :class="{ 'pt-8': isElectron() }">
+      <!-- Sidebar -->
+      <aside
+        class="w-64 flex flex-col border-r-2 border-sky-100/50 glass-effect transition-all duration-300 z-20 relative"
+      >
+        <!-- Pixel Shadow Line on Right -->
+        <div
+          class="absolute right-[-2px] top-0 bottom-0 w-[2px] bg-sky-200/30 pointer-events-none"
+        ></div>
+
+        <!-- Brand -->
+        <div class="p-6 pb-2 relative z-10">
+          <div class="flex items-center gap-4 mb-6">
+            <div
+              class="relative w-12 h-12 pixel-border-sky overflow-hidden group cursor-pointer transition-transform duration-300 hover:scale-110 press-effect bg-sky-50 p-1.5"
+            >
+              <img
+                :src="logoImg"
+                class="w-full h-full object-cover transition-transform duration-500 group-hover:rotate-12"
+                alt="Logo"
+              />
+              <div
+                class="absolute inset-0 bg-gradient-to-tr from-sky-300/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+              ></div>
+            </div>
+            <div class="flex flex-col">
+              <span class="text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-0.5"
+                >PeroperoChat</span
               >
-              <el-icon v-if="isCheckingUpdate" class="is-loading" color="#409eff"
-                ><Refresh
-              /></el-icon>
+              <h1
+                class="text-lg font-black bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-sky-600 font-pixel"
+              >
+                萌动链接
+              </h1>
+              <PTooltip content="点击检查更新" placement="bottom">
+                <div class="flex items-center gap-1.5 mt-1" @click="checkForUpdates">
+                  <span
+                    class="text-[9px] font-mono text-white bg-sky-400 px-1.5 py-[1px] pixel-border-sm cursor-pointer hover:bg-sky-500 transition-all press-effect"
+                    >v{{ appVersion }}</span
+                  >
+                  <PixelIcon
+                    v-if="isCheckingUpdate"
+                    name="refresh"
+                    size="xs"
+                    animation="spin"
+                    class="text-sky-500"
+                  />
+                </div>
+              </PTooltip>
             </div>
           </div>
         </div>
 
-        <el-menu :default-active="currentTab" class="sidebar-menu" @select="handleTabSelect">
-          <el-menu-item index="overview">
-            <el-icon><IconMenu /></el-icon>
-            <span>总览</span>
-          </el-menu-item>
-          <el-menu-item index="logs">
-            <el-icon><ChatLineRound /></el-icon>
-            <span>对话日志</span>
-          </el-menu-item>
-          <el-menu-item index="memories">
-            <el-icon><Cpu /></el-icon>
-            <span>核心记忆</span>
-          </el-menu-item>
-          <el-menu-item index="tasks">
-            <el-icon><Bell /></el-icon>
-            <span>待办任务</span>
-          </el-menu-item>
-          <el-menu-item index="user_settings">
-            <el-icon><User /></el-icon>
-            <span>用户设定</span>
-          </el-menu-item>
-          <el-menu-item index="model_config">
-            <el-icon><SetUp /></el-icon>
-            <span>模型配置</span>
-          </el-menu-item>
-          <el-menu-item index="voice_config">
-            <el-icon><Microphone /></el-icon>
-            <span>语音功能</span>
-          </el-menu-item>
-          <el-menu-item index="mcp_config">
-            <el-icon><Connection /></el-icon>
-            <span>MCP 配置</span>
-          </el-menu-item>
-          <el-menu-item index="napcat">
-            <el-icon><ChatDotSquare /></el-icon>
-            <span>NapCat 终端</span>
-          </el-menu-item>
-          <el-menu-item index="terminal">
-            <el-icon><Monitor /></el-icon>
-            <span>系统终端</span>
-          </el-menu-item>
-          <el-menu-item index="system_reset" style="color: #f56c6c">
-            <el-icon><Warning /></el-icon>
-            <span>危险区域</span>
-          </el-menu-item>
-        </el-menu>
-
-        <div class="sidebar-footer">
-          <el-button class="quit-button" type="danger" plain @click="handleQuitApp">
-            <el-icon><SwitchButton /></el-icon>
-            <span>退出系统</span>
-          </el-button>
-
-          <div
-            style="
-              display: flex;
-              justify-content: space-between;
-              align-items: center;
-              margin-top: 4px;
-            "
-          >
-            <div class="status-indicator" :class="{ online: isBackendOnline }">
-              <span class="dot"></span>
-              {{ isBackendOnline ? '系统在线' : '系统离线' }}
+        <!-- Menu -->
+        <nav class="flex-1 overflow-y-auto px-4 space-y-6 scrollbar-hide py-2">
+          <div v-for="(group, gIndex) in menuGroups" :key="gIndex">
+            <div v-if="group.title" class="px-2 mb-3 mt-2 flex items-center gap-2">
+              <div class="h-1 w-1 bg-slate-300 rounded-full"></div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.15em]">{{
+                group.title
+              }}</span>
+              <div class="flex-1 h-[1px] bg-slate-100"></div>
             </div>
-            <el-button
-              circle
-              size="small"
-              :icon="Refresh"
-              :loading="isGlobalRefreshing"
-              title="刷新数据"
-              style="border: none; background: transparent; color: var(--healing-text-light)"
-              @click="fetchAllData(false)"
+
+            <div class="space-y-1.5">
+              <button
+                v-for="item in group.items"
+                :key="item.id"
+                :class="[
+                  'w-full flex items-center gap-3 px-3 py-2.5 text-sm font-bold transition-all duration-300 group press-effect relative overflow-hidden rounded-xl hover-pixel-bounce',
+                  currentTab === item.id
+                    ? item.variant === 'danger'
+                      ? 'bg-rose-50 text-rose-600 border-2 border-rose-200 translate-x-1 shadow-sm'
+                      : 'bg-white text-sky-600 border-2 border-sky-100 translate-x-1 shadow-md shadow-sky-100/50'
+                    : 'text-slate-500 hover:bg-sky-50/50 hover:text-sky-600 hover:translate-x-1 border border-transparent'
+                ]"
+                @click="handleTabSelect(item.id)"
+              >
+                <!-- Active Indicator -->
+                <div
+                  v-if="currentTab === item.id"
+                  class="absolute left-0 top-2 bottom-2 w-1 rounded-full transition-all duration-500"
+                  :class="item.variant === 'danger' ? 'bg-rose-400' : 'bg-sky-400'"
+                ></div>
+
+                <PixelIcon
+                  :name="item.icon"
+                  size="sm"
+                  class="transition-colors relative z-10"
+                  :class="[
+                    currentTab === item.id
+                      ? item.variant === 'danger'
+                        ? 'text-rose-500'
+                        : 'text-sky-500'
+                      : item.variant === 'danger'
+                        ? 'text-slate-400 group-hover:text-rose-500'
+                        : 'text-slate-400 group-hover:text-sky-500'
+                  ]"
+                />
+                <span class="relative z-10">{{ item.label }}</span>
+
+                <!-- Pixel Arrow for Active -->
+                <div
+                  v-if="currentTab === item.id"
+                  class="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  <div class="w-1.5 h-1.5 bg-current transform rotate-45"></div>
+                </div>
+              </button>
+            </div>
+          </div>
+        </nav>
+
+        <!-- Footer -->
+        <div class="p-4 border-t-2 border-sky-100/50 bg-sky-50/30 relative">
+          <!-- Pixel Decoration -->
+          <div class="absolute top-[-2px] left-4 right-4 h-[2px] bg-white"></div>
+
+          <button
+            class="w-full flex items-center justify-center gap-2 px-4 py-2.5 bg-rose-50 hover:bg-rose-100 text-rose-500 hover:text-rose-600 pixel-border-pink transition-all duration-200 group mb-4 press-effect shadow-sm"
+            @click="handleQuitApp"
+          >
+            <PixelIcon
+              name="logout"
+              size="sm"
+              class="group-hover:-translate-x-1 transition-transform"
             />
+            <span class="text-xs font-black tracking-widest">退出系统</span>
+          </button>
+
+          <div
+            class="flex items-center justify-between px-2 py-1 bg-white/50 rounded border border-sky-100"
+          >
+            <div class="flex items-center gap-2.5">
+              <span class="relative flex h-2.5 w-2.5">
+                <span
+                  v-if="isBackendOnline"
+                  class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"
+                ></span>
+                <span
+                  class="relative inline-flex rounded-full h-2.5 w-2.5 border-2 border-white shadow-sm"
+                  :class="isBackendOnline ? 'bg-emerald-500' : 'bg-rose-500'"
+                ></span>
+              </span>
+              <div class="flex flex-col">
+                <span class="text-[10px] text-slate-400 font-bold uppercase leading-none"
+                  >Status</span
+                >
+                <span
+                  class="text-[10px] font-bold"
+                  :class="isBackendOnline ? 'text-emerald-600' : 'text-rose-600'"
+                  >{{ isBackendOnline ? 'SYSTEM ONLINE' : 'OFFLINE' }}</span
+                >
+              </div>
+            </div>
+            <PTooltip content="刷新数据" placement="top">
+              <button
+                class="p-1.5 bg-white pixel-border-sm hover:bg-sky-50 text-slate-400 hover:text-sky-500 transition-all press-effect"
+                @click="fetchAllData(false)"
+              >
+                <PixelIcon name="refresh" size="xs" :animation="isGlobalRefreshing ? 'spin' : ''" />
+              </button>
+            </PTooltip>
           </div>
         </div>
-      </el-aside>
+      </aside>
 
-      <el-container>
-        <!-- 主内容区 -->
-        <el-main class="content-area">
+      <!-- Main Content -->
+      <main class="flex-1 overflow-hidden relative flex flex-col min-w-0 bg-transparent">
+        <!-- ✨ Background Ambient Light & Particles ✨ -->
+        <div
+          class="absolute inset-0 pointer-events-none transition-all duration-1000 z-0"
+          :style="ambientLightStyle"
+        ></div>
+
+        <!-- 🐾 Floating Background Particles -->
+        <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           <div
-            class="view-container-wrapper"
-            :style="
-              ['logs', 'terminal', 'napcat'].includes(currentTab)
-                ? 'height: 100%; overflow: hidden;'
-                : 'min-height: 100%;'
-            "
+            v-for="p in particles"
+            :key="p.id"
+            class="absolute animate-float-slow opacity-20"
+            :style="p.style"
           >
-            <Transition name="fade-slide" mode="out-in">
-              <!-- 1. 仪表盘概览 -->
-              <div v-if="currentTab === 'overview'" key="overview" class="view-container">
-                <el-row :gutter="20">
-                  <el-col :span="8">
-                    <el-card shadow="hover" class="stat-card pink-gradient">
-                      <div class="stat-content">
-                        <div class="stat-icon">🧠</div>
-                        <div class="stat-info">
-                          <h3>核心记忆</h3>
-                          <div class="number">{{ stats.total_memories || memories.length }}</div>
-                          <el-button
-                            type="primary"
-                            link
-                            size="small"
-                            style="margin-top: 5px"
-                            @click="showImportStoryDialog = true"
-                          >
-                            <el-icon><Upload /></el-icon> 导入故事
-                          </el-button>
-                        </div>
-                      </div>
-                    </el-card>
-                  </el-col>
-                  <el-col :span="8">
-                    <el-card shadow="hover" class="stat-card blue-gradient">
-                      <div class="stat-content">
-                        <div class="stat-icon">💬</div>
-                        <div class="stat-info">
-                          <h3>近期对话</h3>
-                          <div class="number">{{ stats.total_logs || logs.length }}</div>
-                        </div>
-                      </div>
-                    </el-card>
-                  </el-col>
-                  <el-col :span="8">
-                    <el-card shadow="hover" class="stat-card purple-gradient">
-                      <div class="stat-content">
-                        <div class="stat-icon">⚡</div>
-                        <div class="stat-info">
-                          <h3>待办任务</h3>
-                          <div class="number">{{ stats.total_tasks || tasks.length }}</div>
-                        </div>
-                      </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
+            <PixelIcon :name="p.icon" :size="p.size" class="text-sky-300" />
+          </div>
+        </div>
 
-                <el-row :gutter="20" style="margin-top: 20px">
-                  <el-col :span="24">
-                    <el-card shadow="never" class="glass-card">
-                      <template #header>
-                        <div
-                          class="card-header"
-                          style="display: flex; justify-content: space-between; align-items: center"
-                        >
-                          <span>当前状态</span>
-                          <div style="display: flex; align-items: center; gap: 15px">
-                            <!-- NapCat 状态指示器 -->
-                            <div
-                              v-if="!napCatStatus.disabled"
-                              class="status-badge"
-                              :title="
-                                napCatStatus.ws_connected
-                                  ? napCatStatus.api_responsive
-                                    ? 'NapCat 双向连接正常 (' + napCatStatus.latency_ms + 'ms)'
-                                    : 'NapCat API 无响应 (仅 WS 连接)'
-                                  : 'NapCat 未连接'
-                              "
-                            >
-                              <span style="font-size: 12px; color: #909399; margin-right: 5px"
-                                >NapCat:</span
-                              >
-                              <div
-                                :class="[
-                                  'status-dot',
-                                  napCatStatus.ws_connected && napCatStatus.api_responsive
-                                    ? 'online'
-                                    : napCatStatus.ws_connected
-                                      ? 'warning'
-                                      : 'offline'
-                                ]"
-                              ></div>
-                              <span
-                                v-if="napCatStatus.ws_connected && napCatStatus.api_responsive"
-                                style="font-size: 10px; color: #67c23a; margin-left: 2px"
-                                >{{ napCatStatus.latency_ms }}ms</span
-                              >
-                            </div>
-
-                            <div style="display: flex; align-items: center; gap: 10px">
-                              <span style="font-size: 12px; color: #909399">当前代理:</span>
-                              <el-dropdown
-                                trigger="click"
-                                :disabled="isSwitchingAgent"
-                                @command="switchAgent"
-                              >
-                                <span
-                                  class="el-dropdown-link"
-                                  style="
-                                    cursor: pointer;
-                                    display: flex;
-                                    align-items: center;
-                                    gap: 5px;
-                                    color: #409eff;
-                                    font-weight: bold;
-                                  "
-                                >
-                                  {{ activeAgent?.name || '未知' }}
-                                  <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                                </span>
-                                <template #dropdown>
-                                  <el-dropdown-menu>
-                                    <el-dropdown-item
-                                      v-for="agent in availableAgents"
-                                      :key="agent.id"
-                                      :command="agent.id"
-                                      :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
-                                    >
-                                      <div style="display: flex; align-items: center; gap: 8px">
-                                        <span>{{ agent.name }}</span>
-                                        <span
-                                          v-if="!agent.is_enabled"
-                                          style="font-size: 10px; color: #999"
-                                          >(已禁用)</span
-                                        >
-                                      </div>
-                                    </el-dropdown-item>
-                                  </el-dropdown-menu>
-                                </template>
-                              </el-dropdown>
-                            </div>
-                          </div>
-                        </div>
-                      </template>
-                      <el-row :gutter="20">
-                        <el-col :span="8">
-                          <div class="state-box">
-                            <span class="label">心情</span>
-                            <span class="value">{{ petState.mood || '未知' }}</span>
-                            <el-progress :percentage="80" :show-text="false" color="#ff88aa" />
-                          </div>
-                        </el-col>
-                        <el-col :span="8">
-                          <div class="state-box">
-                            <span class="label">氛围</span>
-                            <span class="value">{{ petState.vibe || '未知' }}</span>
-                            <el-progress :percentage="60" :show-text="false" color="#a0c4ff" />
-                          </div>
-                        </el-col>
-                        <el-col :span="8">
-                          <div class="state-box">
-                            <span class="label">想法</span>
-                            <span class="value">{{ petState.mind || '未知' }}</span>
-                            <el-progress :percentage="90" :show-text="false" color="#a8e6cf" />
-                          </div>
-                        </el-col>
-                      </el-row>
-                    </el-card>
-                  </el-col>
-                </el-row>
-
-                <!-- NIT 协议状态卡片 -->
-                <el-row v-if="nitStatus" :gutter="20" style="margin-top: 20px">
-                  <el-col :span="24">
-                    <el-card
-                      shadow="hover"
-                      class="glass-card"
-                      :body-style="{ padding: '15px 20px' }"
+        <div
+          class="view-container-wrapper relative z-10 flex-1"
+          :style="
+            ['logs', 'terminal', 'napcat'].includes(currentTab)
+              ? 'height: 100%; overflow: hidden;'
+              : 'min-height: 100%;'
+          "
+        >
+          <Transition name="fade-slide" mode="out-in">
+            <!-- 1. 仪表盘概览 -->
+            <div
+              v-if="currentTab === 'overview'"
+              key="overview"
+              class="p-6 space-y-6 overflow-y-auto h-full custom-scrollbar"
+            >
+              <!-- 统计卡片 (Overview Cards) -->
+              <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <PCard pixel hoverable variant="purple" glow class="group">
+                  <div class="flex items-center gap-4 relative">
+                    <div
+                      class="p-4 bg-purple-100 pixel-border-pink text-purple-500 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500"
                     >
-                      <div class="nit-status-box">
-                        <div class="nit-header">
-                          <div class="nit-title">
-                            <el-icon><Connection /></el-icon>
-                            <span>NapCat 协议状态</span>
-                            <el-tag size="small" effect="dark" type="success">有效</el-tag>
-                          </div>
-                          <div class="nit-metrics">
-                            <span class="metric">
-                              <strong>{{ nitStatus.plugins_count }}</strong> 插件已加载
-                            </span>
-                            <el-divider direction="vertical" />
-                            <span class="metric">
-                              <strong>{{ nitStatus.active_mcp_count }}</strong> MCP 服务已连接
-                            </span>
-                          </div>
-                        </div>
-                        <div
-                          v-if="nitStatus.plugins && nitStatus.plugins.length"
-                          class="nit-plugins-list"
-                        >
-                          <el-tag
-                            v-for="p in nitStatus.plugins.slice(0, 8)"
-                            :key="p.name"
-                            size="small"
-                            type="info"
-                            effect="plain"
-                            class="mini-plugin-tag"
-                          >
-                            {{ p.name }}
-                          </el-tag>
-                          <span v-if="nitStatus.plugins.length > 8" class="more-tag"
-                            >...及其他 {{ nitStatus.plugins.length - 8 }} 个</span
-                          >
-                        </div>
+                      <PixelIcon name="brain" size="xl" animation="bounce" />
+                    </div>
+                    <div class="relative z-10">
+                      <h3 class="text-sm font-bold text-slate-600 flex items-center gap-1.5">
+                        核心记忆
+                        <span class="text-[10px] text-purple-400 font-mono">Core</span>
+                      </h3>
+                      <div class="text-2xl font-black text-slate-800">
+                        {{ stats.total_memories || memories.length }}
                       </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
-
-                <!-- 轻量聊天模式卡片 -->
-                <el-row :gutter="20" style="margin-top: 20px">
-                  <el-col :span="24">
-                    <el-card
-                      shadow="hover"
-                      class="glass-card"
-                      :body-style="{ padding: '15px 20px' }"
-                    >
-                      <div
-                        style="display: flex; justify-content: space-between; align-items: center"
+                      <button
+                        class="mt-1 text-xs text-purple-500 hover:text-purple-600 font-medium flex items-center gap-1 transition-colors group/btn"
+                        @click="showImportStoryDialog = true"
                       >
-                        <div style="display: flex; align-items: center; gap: 15px">
-                          <div style="font-size: 24px">🍃</div>
-                          <div>
-                            <div style="font-weight: bold; font-size: 16px">轻量聊天模式</div>
-                            <div style="font-size: 13px; color: #666; margin-top: 4px">
-                              开启后，将禁用大部分高级工具以节省资源。仅保留视觉感知、记忆管理和基础管理功能。
-                            </div>
-                          </div>
-                        </div>
-                        <el-switch
-                          v-model="isLightweightEnabled"
-                          active-text="ON"
-                          inactive-text="OFF"
-                          :loading="isTogglingLightweight"
-                          @change="toggleLightweight"
+                        <PixelIcon
+                          name="download"
+                          size="xs"
+                          class="rotate-180 group-hover/btn:-translate-y-0.5 transition-transform"
                         />
-                      </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
-
-                <!-- 主动视觉感应卡片 -->
-                <el-row :gutter="20" style="margin-top: 20px">
-                  <el-col :span="24">
-                    <el-card
-                      shadow="hover"
-                      class="glass-card"
-                      :body-style="{ padding: '15px 20px' }"
+                        导入故事 <PixelIcon name="thought" size="xs" class="ml-0.5" />
+                      </button>
+                    </div>
+                    <!-- Decorative element -->
+                    <div
+                      class="absolute -right-4 -bottom-4 text-purple-200/20 group-hover:opacity-10 group-hover:scale-150 transition-all duration-700 pointer-events-none"
                     >
-                      <div
-                        style="display: flex; justify-content: space-between; align-items: center"
-                      >
-                        <div style="display: flex; align-items: center; gap: 15px">
-                          <div style="font-size: 24px">🔮</div>
-                          <div>
-                            <div style="font-weight: bold; font-size: 16px">
-                              主动视觉感应 (AuraVision)
-                            </div>
-                            <div style="font-size: 13px; color: #666; margin-top: 4px">
-                              开启后，{{ activeAgent?.name || 'Pero' }}
-                              将通过屏幕主动感知你的存在并触发互动。采用隐私保护设计，仅提取特征。
-                            </div>
-                          </div>
-                        </div>
-                        <el-switch
-                          v-model="isAuraVisionEnabled"
-                          active-text="开"
-                          inactive-text="关"
-                          :loading="isTogglingAuraVision"
-                          @change="toggleAuraVision"
-                        />
-                      </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
+                      <PixelIcon name="paw" size="3xl" />
+                    </div>
+                  </div>
+                </PCard>
 
-                <!-- 陪伴模式卡片 -->
-                <el-row :gutter="20" style="margin-top: 20px">
-                  <el-col :span="24">
-                    <el-card
-                      shadow="hover"
-                      class="glass-card"
-                      :class="{ 'disabled-card': !isLightweightEnabled }"
-                      :body-style="{ padding: '15px 20px' }"
+                <PCard pixel hoverable variant="sky" glow class="group">
+                  <div class="flex items-center gap-4 relative">
+                    <div
+                      class="p-4 bg-sky-100 pixel-border-sky text-sky-500 group-hover:scale-110 group-hover:-rotate-6 transition-transform duration-500"
                     >
-                      <div
-                        style="display: flex; justify-content: space-between; align-items: center"
-                      >
-                        <div style="display: flex; align-items: center; gap: 15px">
-                          <div style="font-size: 24px">👀</div>
-                          <div>
-                            <div style="font-weight: bold; font-size: 16px">
-                              智能陪伴模式 (Companion Mode)
-                            </div>
-                            <div style="font-size: 13px; color: #666; margin-top: 4px">
-                              {{ activeAgent?.name || 'Pero' }} 将自动观察你的屏幕动态并进行互动。
-                              <span
-                                v-if="!isLightweightEnabled"
-                                style="color: #f56c6c; margin-left: 8px"
-                                >(需要先开启“轻量模式”)</span
-                              >
-                            </div>
-                          </div>
-                        </div>
-                        <el-tooltip
-                          :content="
-                            !isLightweightEnabled
-                              ? '请先开启轻量模式'
-                              : !isCurrentModelVisionEnabled
-                                ? '当前对话模型未开启“图片模态”能力，无法使用陪伴模式'
-                                : isCompanionEnabled
-                                  ? '关闭陪伴'
-                                  : '开启陪伴'
-                          "
-                          placement="top"
-                        >
-                          <el-switch
-                            v-model="isCompanionEnabled"
-                            active-text="开"
-                            inactive-text="关"
-                            :disabled="!isLightweightEnabled || !isCurrentModelVisionEnabled"
-                            :loading="isTogglingCompanion"
-                            @change="toggleCompanion"
-                          />
-                        </el-tooltip>
+                      <PixelIcon name="chat" size="xl" animation="bounce" />
+                    </div>
+                    <div class="relative z-10">
+                      <h3 class="text-sm font-bold text-slate-600 flex items-center gap-1.5">
+                        近期对话
+                        <span class="text-[10px] text-sky-400 font-mono">Logs</span>
+                      </h3>
+                      <div class="text-2xl font-black text-slate-800">
+                        {{ stats.total_logs || logs.length }}
                       </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
-                <!-- 记忆配置卡片 -->
-                <el-row :gutter="20" style="margin-top: 20px">
-                  <el-col :span="24">
-                    <el-card
-                      shadow="hover"
-                      class="glass-card"
-                      :body-style="{ padding: '15px 20px' }"
+                    </div>
+                    <!-- Decorative element -->
+                    <div
+                      class="absolute -right-4 -bottom-4 text-sky-200/20 group-hover:opacity-10 group-hover:scale-150 transition-all duration-700 pointer-events-none"
                     >
-                      <div
-                        style="
-                          display: flex;
-                          justify-content: space-between;
-                          align-items: center;
-                          margin-bottom: 15px;
-                        "
-                      >
-                        <div style="display: flex; align-items: center; gap: 15px">
-                          <div style="font-size: 24px">🧠</div>
-                          <div>
-                            <div style="font-weight: bold; font-size: 16px">
-                              记忆系统配置 (Memory System)
-                            </div>
-                            <div style="font-size: 13px; color: #666; margin-top: 4px">
-                              配置不同模式下的记忆召回与上下文长度
-                            </div>
-                          </div>
-                        </div>
-                        <el-button
-                          type="primary"
-                          size="small"
-                          :loading="isSavingMemoryConfig"
-                          @click="saveMemoryConfig"
-                          >保存配置</el-button
-                        >
+                      <PixelIcon name="thought" size="3xl" />
+                    </div>
+                  </div>
+                </PCard>
+
+                <PCard pixel hoverable variant="orange" glow class="group">
+                  <div class="flex items-center gap-4 relative">
+                    <div
+                      class="p-4 bg-orange-100 pixel-border-orange text-orange-500 group-hover:scale-110 group-hover:rotate-6 transition-transform duration-500"
+                    >
+                      <PixelIcon name="flash" size="xl" animation="bounce" />
+                    </div>
+                    <div class="relative z-10">
+                      <h3 class="text-sm font-bold text-slate-600 flex items-center gap-1.5">
+                        待办任务
+                        <span class="text-[10px] text-orange-400 font-mono">Tasks</span>
+                      </h3>
+                      <div class="text-2xl font-black text-slate-800">
+                        {{ stats.total_tasks || tasks.length }}
                       </div>
-
-                      <el-tabs v-model="activeMemoryTab" class="memory-config-tabs">
-                        <el-tab-pane label="桌面模式 (Desktop)" name="desktop">
-                          <el-form
-                            label-position="left"
-                            label-width="140px"
-                            style="margin-top: 10px"
-                          >
-                            <el-form-item label="短期记忆上下文">
-                              <el-slider
-                                v-model="memoryConfig.modes.desktop.context_limit"
-                                :min="5"
-                                :max="50"
-                                show-input
-                                :step="1"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                最近对话的条数，用于维持对话连贯性。
-                              </div>
-                            </el-form-item>
-                            <el-form-item label="RAG 召回数量">
-                              <el-slider
-                                v-model="memoryConfig.modes.desktop.rag_limit"
-                                :min="0"
-                                :max="30"
-                                show-input
-                                :step="1"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                从长期记忆库中检索的相关记忆条数。
-                              </div>
-                            </el-form-item>
-                          </el-form>
-                        </el-tab-pane>
-                        <el-tab-pane label="工作模式 (Work)" name="work">
-                          <el-form
-                            label-position="left"
-                            label-width="140px"
-                            style="margin-top: 10px"
-                          >
-                            <el-form-item label="短期记忆上下文">
-                              <el-slider
-                                v-model="memoryConfig.modes.work.context_limit"
-                                :min="10"
-                                :max="100"
-                                show-input
-                                :step="1"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                工作模式通常需要更长的上下文以理解代码或任务背景。
-                              </div>
-                            </el-form-item>
-                            <el-form-item label="RAG 召回数量">
-                              <el-slider
-                                v-model="memoryConfig.modes.work.rag_limit"
-                                :min="0"
-                                :max="50"
-                                show-input
-                                :step="1"
-                              />
-                            </el-form-item>
-                          </el-form>
-                        </el-tab-pane>
-                        <el-tab-pane label="社交模式 (Social)" name="social">
-                          <el-form
-                            label-position="left"
-                            label-width="140px"
-                            style="margin-top: 10px"
-                          >
-                            <el-form-item label="决策上下文长度">
-                              <el-slider
-                                v-model="memoryConfig.modes.social.context_limit"
-                                :min="20"
-                                :max="200"
-                                show-input
-                                :step="10"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                “秘书”决策和主动发言时参考的消息数量。较长上下文有助于更准确的“吃瓜”。
-                              </div>
-                            </el-form-item>
-                            <el-form-item label="RAG 召回数量">
-                              <el-slider
-                                v-model="memoryConfig.modes.social.rag_limit"
-                                :min="0"
-                                :max="30"
-                                show-input
-                                :step="1"
-                              />
-                            </el-form-item>
-
-                            <el-divider content-position="left">高级配置 (Advanced)</el-divider>
-
-                            <el-form-item label="图片感知上限">
-                              <el-input-number
-                                v-model="memoryConfig.modes.social.advanced.image_limit"
-                                :min="0"
-                                :max="4"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                每次处理消息时最多查看的最近图片数量 (Max 4)。
-                              </div>
-                            </el-form-item>
-                            <el-form-item label="跨会话感知人数">
-                              <el-input-number
-                                v-model="memoryConfig.modes.social.advanced.cross_context_users"
-                                :min="0"
-                                :max="10"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                在群聊中同时关注的相关活跃用户数量。
-                              </div>
-                            </el-form-item>
-                            <el-form-item label="跨会话历史深度">
-                              <el-input-number
-                                v-model="memoryConfig.modes.social.advanced.cross_context_history"
-                                :min="0"
-                                :max="50"
-                              />
-                              <div style="font-size: 12px; color: #999; line-height: 1.2">
-                                为每个相关用户/群组拉取的背景消息条数。
-                              </div>
-                            </el-form-item>
-                            <el-alert
-                              title="注意：调高高级配置参数可能会显著增加 Token 消耗及响应延迟。"
-                              type="warning"
-                              show-icon
-                              :closable="false"
-                              style="margin-top: 10px"
-                            />
-                          </el-form>
-                        </el-tab-pane>
-                      </el-tabs>
-                    </el-card>
-                  </el-col>
-                </el-row>
+                    </div>
+                    <!-- Decorative element -->
+                    <div
+                      class="absolute -right-4 -bottom-4 text-orange-200/20 group-hover:opacity-10 group-hover:scale-150 transition-all duration-700 pointer-events-none"
+                    >
+                      <PixelIcon name="sparkle" size="3xl" />
+                    </div>
+                  </div>
+                </PCard>
               </div>
 
-              <!-- 2. 对话日志 -->
-              <div v-else-if="currentTab === 'logs'" key="logs" class="view-container logs-layout">
-                <el-card shadow="never" class="glass-card filter-card">
-                  <el-form :inline="true" size="default">
-                    <el-form-item label="角色">
-                      <el-dropdown
-                        trigger="click"
-                        :disabled="isSwitchingAgent"
-                        @command="switchAgent"
+              <!-- 当前状态 -->
+              <PCard pixel overflow-visible class="z-30">
+                <template #header>
+                  <div class="flex items-center justify-between">
+                    <span class="font-bold text-lg text-slate-800 flex items-center gap-2">
+                      当前状态
+                      <span class="text-xs font-normal text-slate-400 font-mono">Status</span>
+                    </span>
+                    <div class="flex items-center gap-4">
+                      <!-- NapCat Status -->
+                      <PTooltip
+                        v-if="!napCatStatus.disabled"
+                        :content="
+                          napCatStatus.ws_connected
+                            ? napCatStatus.api_responsive
+                              ? `延迟: ${napCatStatus.latency_ms}ms`
+                              : 'API 无响应'
+                            : '未连接'
+                        "
+                        placement="bottom"
                       >
-                        <span
-                          class="el-dropdown-link"
-                          style="
-                            cursor: pointer;
-                            display: flex;
-                            align-items: center;
-                            gap: 5px;
-                            color: #409eff;
-                          "
+                        <div class="flex items-center gap-2 px-3 py-1.5 bg-sky-50 pixel-border-sky">
+                          <span class="text-xs text-sky-400 font-bold font-mono">NAPCAT</span>
+                          <div class="flex items-center gap-1.5">
+                            <span class="relative flex h-2 w-2">
+                              <span
+                                v-if="napCatStatus.ws_connected && napCatStatus.api_responsive"
+                                class="animate-ping absolute inline-flex h-full w-full rounded-full bg-sky-400 opacity-75"
+                              ></span>
+                              <span
+                                class="relative inline-flex rounded-full h-2 w-2"
+                                :class="
+                                  napCatStatus.ws_connected && napCatStatus.api_responsive
+                                    ? 'bg-sky-500'
+                                    : napCatStatus.ws_connected
+                                      ? 'bg-amber-500'
+                                      : 'bg-rose-500'
+                                "
+                              ></span>
+                            </span>
+                            <span
+                              v-if="napCatStatus.ws_connected && napCatStatus.api_responsive"
+                              class="text-xs font-mono font-bold text-sky-600"
+                              >{{ napCatStatus.latency_ms }}ms</span
+                            >
+                          </div>
+                        </div>
+                      </PTooltip>
+
+                      <!-- 角色选择 (Agent Selector) -->
+                      <div class="flex flex-col gap-1.5 min-w-[160px]">
+                        <label
+                          class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
                         >
-                          {{ activeAgent?.name || '未知' }}
-                          <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                        </span>
-                        <template #dropdown>
-                          <el-dropdown-menu>
-                            <el-dropdown-item
+                          <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span>
+                          当前角色 <span class="opacity-50 font-normal">Agent</span>
+                        </label>
+                        <div class="relative group/agent">
+                          <button
+                            class="w-full flex items-center justify-between px-4 py-2.5 bg-white hover:bg-sky-50 pixel-border-sky text-sm transition-all press-effect group/btn"
+                            :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
+                          >
+                            <span class="text-sky-600 font-bold flex items-center gap-2">
+                              <span
+                                class="opacity-0 group-hover/btn:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0"
+                              >
+                                <PixelIcon name="paw" size="xs" />
+                              </span>
+                              {{ activeAgent?.name || '未知' }}
+                              <span class="opacity-40 group-hover:opacity-100 transition-opacity">
+                                <PixelIcon name="sparkle" size="xs" />
+                              </span>
+                            </span>
+                            <PixelIcon
+                              name="chevron-down"
+                              size="xs"
+                              class="text-slate-400 group-hover/agent:rotate-180 transition-transform duration-500"
+                            />
+                          </button>
+
+                          <!-- 下拉菜单 (Dropdown Menu) -->
+                          <div
+                            class="absolute right-0 top-full mt-2 w-full py-2 bg-white/70 backdrop-blur-xl border border-sky-100 rounded-2xl shadow-2xl opacity-0 invisible group-hover/agent:opacity-100 group-hover/agent:visible transition-all duration-300 z-50 transform origin-top scale-95 group-hover/agent:scale-100"
+                          >
+                            <div class="px-3 py-1.5 mb-1 border-b border-sky-50">
+                              <span
+                                class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1"
+                              >
+                                切换角色
+                                <PixelIcon name="sparkle" size="xs" class="animate-bounce" />
+                              </span>
+                            </div>
+                            <button
                               v-for="agent in availableAgents"
                               :key="agent.id"
-                              :command="agent.id"
+                              class="w-full text-left px-4 py-2.5 text-sm hover:bg-sky-50 transition-all flex items-center justify-between group/item"
+                              :class="{
+                                'text-sky-600 font-bold bg-sky-50/50': agent.id === activeAgent?.id,
+                                'text-slate-500': agent.id !== activeAgent?.id,
+                                'opacity-50 cursor-not-allowed': !agent.is_enabled
+                              }"
                               :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
+                              @click="switchAgent(agent.id)"
                             >
-                              <div style="display: flex; align-items: center; gap: 8px">
-                                <span>{{ agent.name }}</span>
-                                <span v-if="!agent.is_enabled" style="font-size: 10px; color: #999"
-                                  >(Disabled)</span
+                              <div class="flex items-center gap-2">
+                                <span
+                                  class="opacity-0 group-hover/item:opacity-100 transition-opacity"
                                 >
+                                  <PixelIcon name="paw" size="xs" />
+                                </span>
+                                <span>{{ agent.name }}</span>
                               </div>
-                            </el-dropdown-item>
-                          </el-dropdown-menu>
-                        </template>
-                      </el-dropdown>
-                    </el-form-item>
-                    <el-form-item label="来源">
-                      <el-select v-model="selectedSource" style="width: 120px" @change="fetchLogs">
-                        <el-option label="全部来源 (All)" value="all" />
-                        <el-option label="Desktop" value="desktop" />
-                        <el-option label="Mobile" value="mobile" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="会话">
-                      <el-select
-                        v-model="selectedSessionId"
-                        style="width: 160px"
-                        allow-create
-                        filterable
-                        default-first-option
-                        placeholder="选择或输入ID"
+                              <span
+                                v-if="!agent.is_enabled"
+                                class="text-[10px] text-slate-400 font-bold px-1.5 py-0.5 bg-sky-50 rounded-md"
+                                >DISABLED</span
+                              >
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div
+                    class="bg-sky-50/40 pixel-border-sky p-5 transition-all hover:bg-white hover:pixel-border-pink group relative"
+                  >
+                    <div
+                      class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3 flex items-center justify-between relative z-10"
+                    >
+                      心情 <span class="text-[10px] text-sky-400/60 font-mono">Mood</span>
+                      <span
+                        class="opacity-0 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-125 group-hover:rotate-12 text-sky-500"
+                        ><PixelIcon name="paw" size="xs"
+                      /></span>
+                    </div>
+                    <div
+                      class="text-2xl font-black text-sky-500 mb-4 relative z-10 group-hover:scale-105 transition-transform origin-left"
+                    >
+                      {{ petState.mood || '未知' }}
+                    </div>
+                    <div
+                      class="h-1.5 bg-sky-100/50 rounded-full overflow-hidden relative z-10 shadow-inner"
+                    >
+                      <div
+                        class="h-full bg-gradient-to-r from-sky-400 to-sky-300 rounded-full transition-all duration-1000 group-hover:shadow-[0_0_12px_rgba(14,165,233,0.3)]"
+                        :style="{ width: '80%' }"
+                      ></div>
+                    </div>
+                    <!-- Decoration -->
+                    <div
+                      class="absolute -right-2 -bottom-2 opacity-[0.05] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none"
+                    >
+                      <PixelIcon name="paw" size="3xl" />
+                    </div>
+                  </div>
+
+                  <div
+                    class="bg-sky-50/40 pixel-border-sky p-5 transition-all hover:bg-white hover:pixel-border-pink group relative"
+                  >
+                    <div
+                      class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3 flex items-center justify-between relative z-10"
+                    >
+                      氛围 <span class="text-[10px] text-sky-400/60 font-mono">Vibe</span>
+                      <span
+                        class="opacity-0 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-125 group-hover:-rotate-12 text-sky-500"
+                        ><PixelIcon name="sparkle" size="xs"
+                      /></span>
+                    </div>
+                    <div
+                      class="text-2xl font-black text-sky-500 mb-4 relative z-10 group-hover:scale-105 transition-transform origin-left"
+                    >
+                      {{ petState.vibe || '未知' }}
+                    </div>
+                    <div
+                      class="h-1.5 bg-sky-100/50 rounded-full overflow-hidden relative z-10 shadow-inner"
+                    >
+                      <div
+                        class="h-full bg-gradient-to-r from-sky-400 to-sky-300 rounded-full transition-all duration-1000 group-hover:shadow-[0_0_12px_rgba(14,165,233,0.3)]"
+                        :style="{ width: '60%' }"
+                      ></div>
+                    </div>
+                    <!-- Decoration -->
+                    <div
+                      class="absolute -right-2 -bottom-2 opacity-[0.05] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none"
+                    >
+                      <PixelIcon name="thought" size="3xl" />
+                    </div>
+                  </div>
+
+                  <div
+                    class="bg-sky-50/40 pixel-border-sky p-5 transition-all hover:bg-white hover:pixel-border-pink group relative"
+                  >
+                    <div
+                      class="text-xs text-slate-500 font-bold uppercase tracking-wider mb-3 flex items-center justify-between relative z-10"
+                    >
+                      想法 <span class="text-[10px] text-sky-400/60 font-mono">Mind</span>
+                      <span
+                        class="opacity-0 group-hover:opacity-100 transition-all duration-500 transform group-hover:scale-125 group-hover:rotate-12 text-sky-500"
+                        ><PixelIcon name="thought" size="xs"
+                      /></span>
+                    </div>
+                    <div
+                      class="text-2xl font-black text-sky-500 mb-4 relative z-10 group-hover:scale-105 transition-transform origin-left"
+                    >
+                      {{ petState.mind || '未知' }}
+                    </div>
+                    <div
+                      class="h-1.5 bg-sky-100/50 rounded-full overflow-hidden relative z-10 shadow-inner"
+                    >
+                      <div
+                        class="h-full bg-gradient-to-r from-sky-400 to-sky-300 rounded-full transition-all duration-1000 group-hover:shadow-[0_0_12px_rgba(14,165,233,0.3)]"
+                        :style="{ width: '90%' }"
+                      ></div>
+                    </div>
+                    <!-- Decoration -->
+                    <div
+                      class="absolute -right-2 -bottom-2 opacity-[0.05] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none"
+                    >
+                      <PixelIcon name="sparkle" size="3xl" />
+                    </div>
+                  </div>
+                </div>
+              </PCard>
+
+              <!-- NIT Status -->
+              <PCard
+                v-if="nitStatus"
+                pixel
+                class="hover:pixel-border-pink transition-all group/nit"
+              >
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-3">
+                    <div class="p-3 bg-sky-100 pixel-border-sm text-sky-500 group">
+                      <PixelIcon
+                        name="chart"
+                        size="md"
+                        class="group-hover:scale-110 transition-transform"
+                      />
+                    </div>
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <span class="font-bold text-slate-800">NapCat 协议状态</span>
+                        <span
+                          class="px-2 py-0.5 bg-sky-100 text-sky-600 text-[10px] font-bold pixel-border-sm border-sky-200 uppercase"
+                          >Active</span
+                        >
+                      </div>
+                      <div class="text-sm text-slate-500 mt-0.5 flex items-center gap-3">
+                        <span
+                          ><strong class="text-sky-600 font-mono">{{
+                            nitStatus.plugins_count
+                          }}</strong>
+                          <span class="text-slate-400 ml-1">插件已加载</span></span
+                        >
+                        <span class="w-px h-3 bg-sky-100"></span>
+                        <span
+                          ><strong class="text-sky-600 font-mono">{{
+                            nitStatus.active_mcp_count
+                          }}</strong>
+                          <span class="text-slate-400 ml-1">MCP 服务已连接</span></span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <div v-if="nitStatus.plugins?.length" class="mt-4 flex flex-wrap gap-2">
+                  <span
+                    v-for="p in nitStatus.plugins.slice(0, 8)"
+                    :key="p.name"
+                    class="px-2.5 py-1 bg-sky-50 pixel-border-sm text-[10px] font-bold text-sky-500 hover:bg-sky-100 transition-all cursor-default hover:scale-105"
+                  >
+                    {{ p.name }}
+                  </span>
+                  <span
+                    v-if="nitStatus.plugins.length > 8"
+                    class="px-2 py-1 text-xs text-slate-400 font-medium italic"
+                    >...及其他 {{ nitStatus.plugins.length - 8 }} 个</span
+                  >
+                </div>
+              </PCard>
+
+              <!-- 功能开关卡片组 -->
+              <div class="space-y-4">
+                <!-- 轻量模式 -->
+                <PCard pixel class="group/switch">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="text-2xl group-hover/switch:scale-110 transition-transform duration-300"
+                      >
+                        <PixelIcon name="leaf" size="lg" />
+                      </div>
+                      <div>
+                        <div class="font-bold text-slate-800 flex items-center gap-2">
+                          轻量聊天模式
+                          <span class="text-[10px] text-sky-400/60 font-mono font-normal"
+                            >Lightweight</span
+                          >
+                        </div>
+                        <div class="text-sm text-slate-500 mt-0.5 leading-relaxed">
+                          开启后，将禁用大部分高级工具以节省资源。仅保留视觉感知、记忆管理和基础管理功能。
+                        </div>
+                      </div>
+                    </div>
+                    <PSwitch
+                      v-model="isLightweightEnabled"
+                      :loading="isTogglingLightweight"
+                      @update:model-value="toggleLightweight"
+                    />
+                  </div>
+                </PCard>
+
+                <!-- 视觉感应 -->
+                <PCard pixel class="group/switch">
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="text-2xl group-hover/switch:scale-110 transition-transform duration-300"
+                      >
+                        <PixelIcon name="crystal" size="lg" />
+                      </div>
+                      <div>
+                        <div class="font-bold text-slate-800 flex items-center gap-2">
+                          主动视觉感应
+                          <span class="text-[10px] text-sky-400/60 font-mono font-normal"
+                            >AuraVision</span
+                          >
+                        </div>
+                        <div class="text-sm text-slate-500 mt-0.5 leading-relaxed">
+                          开启后，{{ activeAgent?.name || 'Pero' }}
+                          将通过屏幕主动感知你的存在并触发互动。
+                        </div>
+                      </div>
+                    </div>
+                    <PSwitch
+                      v-model="isAuraVisionEnabled"
+                      :loading="isTogglingAuraVision"
+                      @update:model-value="toggleAuraVision"
+                    />
+                  </div>
+                </PCard>
+
+                <!-- 陪伴模式 -->
+                <PCard
+                  pixel
+                  class="group/switch"
+                  :class="{ 'opacity-50 pointer-events-none': !isLightweightEnabled }"
+                >
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="text-2xl group-hover/switch:scale-110 transition-transform duration-300"
+                      >
+                        <PixelIcon name="eye" size="lg" />
+                      </div>
+                      <div>
+                        <div class="font-bold text-slate-800 flex items-center gap-2">
+                          智能陪伴模式
+                          <span class="text-[10px] text-sky-400/60 font-mono font-normal"
+                            >Companion</span
+                          >
+                        </div>
+                        <div class="text-sm text-slate-500 mt-0.5 leading-relaxed">
+                          {{ activeAgent?.name || 'Pero' }} 将自动观察你的屏幕动态并进行互动。
+                          <span
+                            v-if="!isLightweightEnabled"
+                            class="text-rose-500 font-bold ml-2 text-xs"
+                            >(需要先开启“轻量模式”)</span
+                          >
+                        </div>
+                      </div>
+                    </div>
+                    <PSwitch
+                      v-model="isCompanionEnabled"
+                      :loading="isTogglingCompanion"
+                      :disabled="!isLightweightEnabled || !isCurrentModelVisionEnabled"
+                      @update:model-value="toggleCompanion"
+                    />
+                  </div>
+                </PCard>
+              </div>
+
+              <!-- 记忆系统配置 -->
+              <PCard pixel>
+                <template #header>
+                  <div class="flex items-center justify-between">
+                    <div class="flex items-center gap-3">
+                      <div class="text-2xl text-sky-500">
+                        <PixelIcon name="brain" size="lg" />
+                      </div>
+                      <div>
+                        <div class="font-bold text-slate-800 flex items-center gap-2 text-lg">
+                          记忆系统配置
+                          <span class="text-xs font-normal text-slate-400 font-mono"
+                            >Memory System</span
+                          >
+                          <span class="text-xs animate-pulse">
+                            <PixelIcon name="sparkle" size="xs" />
+                          </span>
+                        </div>
+                        <div class="text-sm text-slate-500 font-medium flex items-center gap-1.5">
+                          配置不同模式下的记忆召回与上下文长度 <PixelIcon name="paw" size="xs" />
+                        </div>
+                      </div>
+                    </div>
+                    <PButton
+                      variant="primary"
+                      size="sm"
+                      :loading="isSavingMemoryConfig"
+                      class="shadow-lg shadow-sky-300/30"
+                      @click="saveMemoryConfig"
+                      >保存配置</PButton
+                    >
+                  </div>
+                </template>
+
+                <!-- 模式切换 (Mode Tabs) -->
+                <div
+                  class="border-b border-sky-100 flex gap-8 mb-8 overflow-x-auto pb-1 custom-scrollbar group/tabs"
+                >
+                  <button
+                    v-for="tab in [
+                      { id: 'desktop', label: '桌面模式', icon: 'desktop' },
+                      { id: 'work', label: '工作模式', icon: 'desktop' },
+                      { id: 'social', label: '社交模式', icon: 'chat' }
+                    ]"
+                    :key="tab.id"
+                    class="pb-4 text-sm font-bold transition-all relative active:scale-95 flex items-center gap-2 group/tab hover-pixel-bounce"
+                    :class="
+                      activeMemoryTab === tab.id
+                        ? 'text-sky-600'
+                        : 'text-slate-500 hover:text-sky-500'
+                    "
+                    @click="activeMemoryTab = tab.id"
+                  >
+                    <span class="relative z-10 flex items-center gap-2">
+                      <span class="group-hover/tab:scale-125 transition-transform duration-300"
+                        ><PixelIcon :name="tab.icon" size="sm"
+                      /></span>
+                      {{ tab.label }}
+                      <span v-if="activeMemoryTab === tab.id" class="animate-bounce"
+                        ><PixelIcon name="sparkle" size="xs"
+                      /></span>
+                    </span>
+
+                    <!-- 🐾 Hover indicator -->
+                    <span
+                      class="absolute -top-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/tab:opacity-100 transition-all duration-300 -translate-y-2 group-hover/tab:translate-y-0 pointer-events-none"
+                    >
+                      <PixelIcon name="paw" size="xs" />
+                    </span>
+
+                    <div
+                      v-if="activeMemoryTab === tab.id"
+                      class="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-sky-500 to-sky-300 rounded-full shadow-[0_0_12px_rgba(56,189,248,0.3)]"
+                    ></div>
+                  </button>
+                </div>
+
+                <!-- Tab Content -->
+                <div class="space-y-6">
+                  <!-- 桌面模式 (Desktop Mode) -->
+                  <div v-if="activeMemoryTab === 'desktop'" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div
+                        class="bg-sky-50/50 p-6 pixel-border-sky transition-all duration-300 group/mconfig hover:pixel-border-pink"
+                      >
+                        <div class="flex justify-between items-center mb-4">
+                          <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <span
+                              class="w-2 h-2 rounded-full bg-sky-500 group-hover/mconfig:animate-pulse"
+                            ></span>
+                            短期记忆上下文
+                            <span class="text-[10px] text-sky-400 font-bold font-mono"
+                              >Context</span
+                            >
+                          </label>
+                          <span
+                            class="px-2 py-0.5 bg-sky-100 text-sky-600 rounded-lg text-xs font-mono font-bold border border-sky-200"
+                            >{{ memoryConfig.modes.desktop.context_limit }}</span
+                          >
+                        </div>
+                        <PSlider
+                          v-model="memoryConfig.modes.desktop.context_limit"
+                          :min="5"
+                          :max="50"
+                        />
+                        <div
+                          class="mt-4 text-xs text-slate-500 font-medium flex items-start gap-2 bg-sky-100/30 p-3 rounded-xl border border-sky-100/50"
+                        >
+                          <span class="text-base group-hover/mconfig:rotate-12 transition-transform"
+                            ><PixelIcon name="thought" size="sm"
+                          /></span>
+                          <p class="leading-relaxed">
+                            最近对话的条数，用于维持对话连贯性。建议设置在 10-20 条左右。<PixelIcon
+                              name="sparkle"
+                              size="xs"
+                            />
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        class="bg-sky-50/50 p-6 pixel-border-sky transition-all duration-300 group/mconfig hover:pixel-border-pink"
+                      >
+                        <div class="flex justify-between items-center mb-4">
+                          <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <span
+                              class="w-2 h-2 rounded-full bg-sky-500 group-hover/mconfig:animate-pulse"
+                            ></span>
+                            RAG 召回数量
+                            <span class="text-[10px] text-slate-400 font-bold">Retrieval</span>
+                          </label>
+                          <span
+                            class="px-2 py-0.5 bg-sky-500/10 text-sky-400 rounded-lg text-xs font-mono font-bold"
+                            >{{ memoryConfig.modes.desktop.rag_limit }}</span
+                          >
+                        </div>
+                        <PSlider
+                          v-model="memoryConfig.modes.desktop.rag_limit"
+                          :min="0"
+                          :max="30"
+                        />
+                        <div
+                          class="mt-4 text-xs text-slate-500 flex items-start gap-2 bg-sky-50/50 p-3 rounded-xl border border-sky-100/50"
+                        >
+                          <span class="text-base group-hover/mconfig:scale-110 transition-transform"
+                            ><PixelIcon name="book" size="sm"
+                          /></span>
+                          <p class="leading-relaxed">
+                            从长期记忆库中检索的相关记忆条数。召回越多，回复内容越精准。<PixelIcon
+                              name="paw"
+                              size="xs"
+                            />
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 工作模式 (Work Mode) -->
+                  <div v-if="activeMemoryTab === 'work'" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div
+                        class="bg-sky-50/50 p-5 pixel-border-sky transition-all duration-300 group/mconfig hover:pixel-border-pink"
+                      >
+                        <div class="flex justify-between items-center mb-4">
+                          <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <span
+                              class="w-2 h-2 rounded-full bg-sky-500 group-hover/mconfig:animate-pulse"
+                            ></span>
+                            短期记忆上下文
+                            <span class="text-[10px] text-slate-400 font-bold">Context</span>
+                          </label>
+                          <span
+                            class="px-2 py-0.5 bg-sky-100 text-sky-600 rounded-lg text-xs font-mono font-bold border border-sky-200"
+                            >{{ memoryConfig.modes.work.context_limit }}</span
+                          >
+                        </div>
+                        <PSlider
+                          v-model="memoryConfig.modes.work.context_limit"
+                          :min="10"
+                          :max="100"
+                        />
+                        <div
+                          class="mt-4 text-xs text-slate-500 font-medium flex items-start gap-2 bg-sky-100/30 p-3 rounded-xl border border-sky-100/50"
+                        >
+                          <span class="text-base group-hover/mconfig:rotate-12 transition-transform"
+                            ><PixelIcon name="desktop" size="sm"
+                          /></span>
+                          <p class="leading-relaxed">
+                            工作模式通常需要更长的上下文以理解代码或任务背景。建议设置在 30-50
+                            条左右。<PixelIcon name="sparkle" size="xs" />
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        class="bg-sky-50/50 p-5 pixel-border-sky transition-all duration-300 group/mconfig hover:pixel-border-pink"
+                      >
+                        <div class="flex justify-between items-center mb-4">
+                          <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <span
+                              class="w-2 h-2 rounded-full bg-sky-500 group-hover/mconfig:animate-pulse"
+                            ></span>
+                            RAG 召回数量
+                            <span class="text-[10px] text-slate-400 font-bold">Retrieval</span>
+                          </label>
+                          <span
+                            class="px-2 py-0.5 bg-sky-100 text-sky-600 rounded-lg text-xs font-mono font-bold border border-sky-200"
+                            >{{ memoryConfig.modes.work.rag_limit }}</span
+                          >
+                        </div>
+                        <PSlider v-model="memoryConfig.modes.work.rag_limit" :min="0" :max="50" />
+                        <div
+                          class="mt-4 text-xs text-slate-500 font-medium flex items-start gap-2 bg-sky-100/30 p-3 rounded-xl border border-sky-100/50"
+                        >
+                          <span class="text-base group-hover/mconfig:scale-110 transition-transform"
+                            ><PixelIcon name="search" size="sm"
+                          /></span>
+                          <p class="leading-relaxed">
+                            从长期记忆库中检索的相关记忆条数。工作模式建议召回更多事实。<PixelIcon
+                              name="paw"
+                              size="xs"
+                            />
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 社交模式 (Social Mode) -->
+                  <div v-if="activeMemoryTab === 'social'" class="space-y-6">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div
+                        class="bg-sky-50/50 p-5 rounded-[2rem] border border-sky-100/50 hover:border-sky-300 transition-all duration-300 group/mconfig shadow-sm"
+                      >
+                        <div class="flex justify-between items-center mb-4">
+                          <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <span
+                              class="w-2 h-2 rounded-full bg-sky-500 group-hover/mconfig:animate-pulse"
+                            ></span>
+                            决策上下文长度
+                            <span class="text-[10px] text-slate-400 font-bold">Context</span>
+                          </label>
+                          <span
+                            class="px-2 py-0.5 bg-sky-100 text-sky-600 rounded-lg text-xs font-mono font-bold border border-sky-200"
+                            >{{ memoryConfig.modes.social.context_limit }}</span
+                          >
+                        </div>
+                        <PSlider
+                          v-model="memoryConfig.modes.social.context_limit"
+                          :min="20"
+                          :max="200"
+                          :step="10"
+                        />
+                        <div
+                          class="mt-4 text-xs text-slate-500 font-medium flex items-start gap-2 bg-sky-100/30 p-3 rounded-xl border border-sky-100/50"
+                        >
+                          <span class="text-base group-hover/mconfig:rotate-12 transition-transform"
+                            ><PixelIcon name="thought" size="sm"
+                          /></span>
+                          <p class="leading-relaxed">
+                            “秘书”决策和主动发言时参考的消息数量。社交模式需要更全面的视野。<PixelIcon
+                              name="sparkle"
+                              size="xs"
+                            />
+                          </p>
+                        </div>
+                      </div>
+                      <div
+                        class="bg-sky-50/50 p-5 rounded-[2rem] border border-sky-100/50 hover:border-sky-300 transition-all duration-300 group/mconfig shadow-sm"
+                      >
+                        <div class="flex justify-between items-center mb-4">
+                          <label class="text-sm font-bold text-slate-700 flex items-center gap-2">
+                            <span
+                              class="w-2 h-2 rounded-full bg-sky-500 group-hover/mconfig:animate-pulse"
+                            ></span>
+                            RAG 召回数量
+                            <span class="text-[10px] text-slate-400 font-bold">Retrieval</span>
+                          </label>
+                          <span
+                            class="px-2 py-0.5 bg-sky-100 text-sky-600 rounded-lg text-xs font-mono font-bold border border-sky-200"
+                            >{{ memoryConfig.modes.social.rag_limit }}</span
+                          >
+                        </div>
+                        <PSlider v-model="memoryConfig.modes.social.rag_limit" :min="0" :max="30" />
+                        <div
+                          class="mt-4 text-xs text-slate-500 font-medium flex items-start gap-2 bg-sky-100/30 p-3 rounded-xl border border-sky-100/50"
+                        >
+                          <span class="text-base group-hover/mconfig:scale-110 transition-transform"
+                            ><PixelIcon name="heart" size="sm"
+                          /></span>
+                          <p class="leading-relaxed">
+                            从长期记忆库中检索的相关记忆条数。用于在群聊中识别熟人和往事。<PixelIcon
+                              name="paw"
+                              size="xs"
+                            />
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div class="border-t border-sky-100 pt-8">
+                      <h4
+                        class="text-xs font-bold text-slate-500 mb-6 uppercase tracking-widest flex items-center gap-2"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-amber-500 animate-ping"></span>
+                        高级配置 <span class="opacity-50 font-normal">Advanced Settings</span>
+                      </h4>
+                      <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                        <div
+                          class="bg-white/60 p-5 rounded-3xl border border-sky-100 hover:border-sky-300 transition-all group/adv shadow-sm"
+                        >
+                          <label
+                            class="text-sm font-bold text-slate-700 block mb-3 flex items-center gap-2"
+                          >
+                            图片感知上限
+                            <span
+                              class="text-[10px] text-slate-400 font-normal opacity-0 group-hover/adv:opacity-100 transition-opacity"
+                              ># Image Limit</span
+                            >
+                          </label>
+                          <PInputNumber
+                            v-model="memoryConfig.modes.social.advanced.image_limit"
+                            :min="0"
+                            :max="4"
+                            class="!bg-sky-50/50 !border-sky-100 focus:!border-sky-300"
+                          />
+                          <div class="mt-3 text-[11px] text-slate-500 font-medium leading-relaxed">
+                            每次处理消息时最多查看的最近图片数量。<PixelIcon name="eye" size="xs" />
+                          </div>
+                        </div>
+                        <div
+                          class="bg-white/60 p-5 rounded-3xl border border-sky-100 hover:border-sky-300 transition-all group/adv shadow-sm"
+                        >
+                          <label
+                            class="text-sm font-bold text-slate-700 block mb-3 flex items-center gap-2"
+                          >
+                            跨会话感知人数
+                            <span
+                              class="text-[10px] text-slate-400 font-normal opacity-0 group-hover/adv:opacity-100 transition-opacity"
+                              ># User Count</span
+                            >
+                          </label>
+                          <PInputNumber
+                            v-model="memoryConfig.modes.social.advanced.cross_context_users"
+                            :min="0"
+                            :max="10"
+                            class="!bg-sky-50/50 !border-sky-100 focus:!border-sky-300"
+                          />
+                          <div class="mt-3 text-[11px] text-slate-500 font-medium leading-relaxed">
+                            在群聊中同时关注的相关活跃用户数量。<PixelIcon name="users" size="xs" />
+                          </div>
+                        </div>
+                        <div
+                          class="bg-white/60 p-5 rounded-3xl border border-sky-100 hover:border-sky-300 transition-all group/adv shadow-sm"
+                        >
+                          <label
+                            class="text-sm font-bold text-slate-700 block mb-3 flex items-center gap-2"
+                          >
+                            跨会话历史深度
+                            <span
+                              class="text-[10px] text-slate-400 font-normal opacity-0 group-hover/adv:opacity-100 transition-opacity"
+                              ># History Depth</span
+                            >
+                          </label>
+                          <PInputNumber
+                            v-model="memoryConfig.modes.social.advanced.cross_context_history"
+                            :min="0"
+                            :max="50"
+                            class="!bg-sky-50/50 !border-sky-100 focus:!border-sky-300"
+                          />
+                          <div class="mt-3 text-[11px] text-slate-500 font-medium leading-relaxed">
+                            为每个相关用户/群组拉取的背景消息条数。<PixelIcon
+                              name="book"
+                              size="xs"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                      <div
+                        class="mt-6 p-4 bg-sky-50/80 border border-sky-100 rounded-[1.5rem] flex items-start gap-4 backdrop-blur-md group/notice shadow-sm"
+                      >
+                        <div
+                          class="p-2 bg-sky-100 rounded-xl text-sky-500 group-hover/notice:scale-110 transition-transform"
+                        >
+                          <PixelIcon name="alert" size="md" />
+                        </div>
+                        <p class="text-[11px] text-slate-500 font-medium leading-relaxed py-1">
+                          注意：调高高级配置参数可能会显著增加
+                          <span class="text-sky-600 font-bold">Token 消耗</span>
+                          及响应延迟，建议根据实际性能情况进行微调哦~
+                          <PixelIcon name="sparkle" size="xs" /> <PixelIcon name="paw" size="xs" />
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </PCard>
+            </div>
+
+            <!-- 2. 对话日志 (重构版) -->
+            <div
+              v-else-if="currentTab === 'logs'"
+              key="logs"
+              class="h-full flex flex-col overflow-hidden"
+            >
+              <!-- Toolbar -->
+              <div class="p-6 pb-0 flex-none">
+                <PCard
+                  glass
+                  soft3d
+                  overflow-visible
+                  class="mb-4 !p-4 rounded-[2rem] relative group/toolbar z-30"
+                >
+                  <!-- 背景装饰 ✨ -->
+                  <div
+                    class="absolute -right-20 -top-20 w-40 h-40 bg-sky-400/10 blur-[60px] rounded-full pointer-events-none group-hover/toolbar:bg-sky-400/20 transition-all duration-1000"
+                  ></div>
+                  <div
+                    class="absolute -left-10 -bottom-10 w-32 h-32 bg-sky-300/5 blur-[50px] rounded-full pointer-events-none group-hover/toolbar:bg-sky-300/15 transition-all duration-1000 delay-150"
+                  ></div>
+
+                  <div class="flex flex-wrap items-end gap-5 relative z-10">
+                    <!-- Agent Selector -->
+                    <div class="flex flex-col gap-2 min-w-[150px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500 animate-pulse"></span> 角色
+                        <span class="opacity-50 font-normal">Agent</span>
+                      </label>
+                      <div class="relative group/agent">
+                        <button
+                          class="w-full flex items-center justify-between px-4 py-2.5 bg-white hover:bg-sky-50 border border-sky-100 rounded-2xl text-sm transition-all active:scale-95 shadow-lg shadow-black/30 backdrop-blur-md group/btn"
+                          :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
+                        >
+                          <span class="text-sky-600 font-bold flex items-center gap-2">
+                            <span
+                              class="text-xs opacity-0 group-hover/btn:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0"
+                              ><PixelIcon name="paw" size="xs"
+                            /></span>
+                            {{ activeAgent?.name || '未知' }}
+                            <span
+                              class="text-[10px] font-normal opacity-40 group-hover:opacity-100 transition-opacity"
+                              ><PixelIcon name="sparkle" size="xs"
+                            /></span>
+                          </span>
+                          <PixelIcon
+                            name="chevron-down"
+                            size="xs"
+                            class="text-slate-400 group-hover/agent:rotate-180 transition-transform duration-500"
+                          />
+                        </button>
+                        <!-- Dropdown -->
+                        <div
+                          class="absolute left-0 top-full mt-3 w-full py-2 bg-white/70 backdrop-blur-2xl border border-sky-100 rounded-2xl shadow-2xl shadow-sky-200/40 opacity-0 invisible group-hover/agent:opacity-100 group-hover/agent:visible transition-all duration-500 z-50 transform origin-top scale-90 group-hover/agent:scale-100 ring-1 ring-sky-100/5"
+                        >
+                          <button
+                            v-for="agent in availableAgents"
+                            :key="agent.id"
+                            class="w-full text-left px-4 py-2.5 text-sm hover:bg-sky-50 transition-all flex items-center justify-between group/item"
+                            :class="{
+                              'text-sky-600 font-bold bg-sky-50': agent.id === activeAgent?.id,
+                              'text-slate-500': agent.id !== activeAgent?.id
+                            }"
+                            :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
+                            @click="switchAgent(agent.id)"
+                          >
+                            <span
+                              class="group-hover/item:translate-x-1.5 transition-transform flex items-center gap-2"
+                            >
+                              <span v-if="agent.id === activeAgent?.id" class="text-xs"
+                                ><PixelIcon name="paw" size="xs"
+                              /></span>
+                              {{ agent.name }}
+                            </span>
+                            <div class="flex items-center gap-2">
+                              <span
+                                v-if="!agent.is_enabled"
+                                class="text-[10px] text-slate-500 font-normal bg-sky-100 px-1.5 py-0.5 rounded-lg border border-sky-200"
+                                >禁用</span
+                              >
+                              <span
+                                v-if="agent.id === activeAgent?.id"
+                                class="text-sky-400 drop-shadow-[0_0_8px_rgba(14,165,233,0.5)]"
+                                ><PixelIcon name="heart" size="xs"
+                              /></span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Source -->
+                    <div class="flex flex-col gap-2 w-[140px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span> 来源
+                        <span class="opacity-50 font-normal">Source</span>
+                      </label>
+                      <PSelect
+                        v-model="selectedSource"
+                        :options="[
+                          { label: '全部来源', value: 'all', icon: 'sparkle' },
+                          { label: 'Desktop', value: 'desktop', icon: 'desktop' },
+                          { label: 'Mobile', value: 'mobile', icon: 'mobile' }
+                        ]"
+                        class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
+                        size="md"
                         @change="fetchLogs"
                       >
-                        <el-option label="全部会话 (All)" value="all" />
-                        <el-option label="默认会话 (Text)" value="default" />
-                        <el-option label="语音会话 (Voice)" value="voice_session" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item label="日期">
-                      <el-date-picker
-                        v-model="selectedDate"
-                        type="date"
-                        placeholder="选择日期"
-                        format="YYYY-MM-DD"
-                        value-format="YYYY-MM-DD"
-                        style="width: 140px"
-                        clearable
-                        @change="fetchLogs"
-                      />
-                    </el-form-item>
-                    <el-form-item label="排序">
-                      <el-select v-model="selectedSort" style="width: 100px" @change="fetchLogs">
-                        <el-option label="正序" value="asc" />
-                        <el-option label="倒序" value="desc" />
-                      </el-select>
-                    </el-form-item>
-                    <el-form-item>
-                      <el-button
-                        type="primary"
-                        :icon="Refresh"
-                        :loading="isLogsFetching"
-                        circle
-                        @click="fetchLogs"
-                      ></el-button>
-                    </el-form-item>
-                  </el-form>
-                </el-card>
+                        <template #option="{ option }">
+                          <div class="flex items-center gap-2">
+                            <PixelIcon
+                              v-if="option.icon"
+                              :name="option.icon"
+                              size="xs"
+                              class="opacity-70"
+                            />
+                            <span>{{ option.label }}</span>
+                          </div>
+                        </template>
+                      </PSelect>
+                    </div>
 
-                <div class="chat-scroll-area">
-                  <el-empty v-if="logs.length === 0" description="暂无对话记录" />
+                    <!-- Session -->
+                    <div class="flex flex-col gap-2 w-[160px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span> 会话
+                        <span class="opacity-50 font-normal">Session</span>
+                      </label>
+                      <PSelect
+                        v-model="selectedSessionId"
+                        :options="[
+                          { label: '全部会话', value: 'all', icon: 'chat' },
+                          { label: '默认会话 (Text)', value: 'default', icon: 'thought' },
+                          { label: '语音会话 (Voice)', value: 'voice_session', icon: 'sparkle' }
+                        ]"
+                        class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
+                        size="md"
+                        @change="fetchLogs"
+                      >
+                        <template #option="{ option }">
+                          <div class="flex items-center gap-2">
+                            <PixelIcon
+                              v-if="option.icon"
+                              :name="option.icon"
+                              size="xs"
+                              class="opacity-70"
+                            />
+                            <span>{{ option.label }}</span>
+                          </div>
+                        </template>
+                      </PSelect>
+                    </div>
+
+                    <!-- Date -->
+                    <div class="flex flex-col gap-2 w-[160px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span> 日期
+                        <span class="opacity-50 font-normal">Date</span>
+                      </label>
+                      <div class="relative group/datepicker">
+                        <PDatePicker
+                          v-model="selectedDate"
+                          placeholder="选择日期"
+                          class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
+                          @update:model-value="fetchLogs"
+                        />
+                        <div
+                          class="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none opacity-50 group-hover/datepicker:opacity-100 transition-opacity"
+                        >
+                          <PixelIcon name="calendar" size="xs" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- Sort -->
+                    <div class="flex flex-col gap-2 w-[120px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-500"></span> 排序
+                        <span class="opacity-50 font-normal">Sort</span>
+                      </label>
+                      <PSelect
+                        v-model="selectedSort"
+                        :options="[
+                          { label: '最新在前', value: 'desc', icon: 'hourglass' },
+                          { label: '最早在前', value: 'asc', icon: 'clock' }
+                        ]"
+                        class="!rounded-2xl shadow-lg shadow-black/30 backdrop-blur-md"
+                        size="md"
+                        @change="fetchLogs"
+                      >
+                        <template #option="{ option }">
+                          <div class="flex items-center gap-2 text-xs">
+                            <PixelIcon
+                              v-if="option.icon"
+                              :name="option.icon"
+                              size="xs"
+                              class="opacity-70"
+                            />
+                            <span>{{ option.label }}</span>
+                          </div>
+                        </template>
+                      </PSelect>
+                    </div>
+
+                    <!-- Refresh -->
+                    <div class="pb-0.5 ml-auto">
+                      <PButton
+                        variant="secondary"
+                        :loading="isLogsFetching"
+                        class="!rounded-2xl shadow-xl shadow-black/30 hover:scale-110 active:scale-95 transition-all px-6 group/refresh"
+                        @click="fetchLogs"
+                      >
+                        <span
+                          class="group-hover/refresh:rotate-180 transition-transform duration-700"
+                          >刷新</span
+                        >
+                        <PixelIcon name="refresh" size="xs" />
+                      </PButton>
+                    </div>
+                  </div>
+                </PCard>
+              </div>
+
+              <!-- Chat List -->
+              <div class="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
+                <PEmpty v-if="logs.length === 0">
+                  <template #description>
+                    <div class="flex items-center gap-2 justify-center">
+                      暂无对话记录 <PixelIcon name="thought" size="xs" />
+                    </div>
+                  </template>
+                </PEmpty>
+
+                <div v-else class="space-y-8 max-w-4xl mx-auto pt-4">
                   <div
                     v-for="log in logs"
                     :key="log.id"
-                    class="chat-bubble-wrapper"
-                    :class="[
-                      log.role === 'user' ? 'user' : 'assistant',
-                      { editing: editingLogId === log.id }
-                    ]"
+                    class="flex gap-4 group"
+                    :class="log.role === 'user' ? 'flex-row-reverse' : ''"
                   >
-                    <div class="avatar">
-                      {{ log.role === 'user' ? '👤' : '🎀' }}
-                    </div>
-                    <div class="bubble-content-box">
-                      <div class="bubble-meta">
-                        <span class="role-name">{{
-                          log.role === 'user' ? '你' : activeAgent?.name || 'Pero'
-                        }}</span>
-                        <span class="time">{{ log.displayTime }}</span>
-
-                        <!-- 消息元数据指示器 -->
-                        <span
-                          v-if="log.sentiment && log.sentiment !== 'neutral'"
-                          class="log-meta-tag"
-                          :title="`情感: ${log.sentiment}`"
-                        >
-                          {{ getSentimentEmoji(log.sentiment) }}
-                        </span>
-                        <span
-                          v-if="log.importance > 1"
-                          class="log-meta-tag importance"
-                          :title="`重要度: ${log.importance}`"
-                        >
-                          ⭐{{ log.importance }}
-                        </span>
-                        <span
-                          v-if="log.metadata?.memory_extracted || log.memory_id"
-                          class="log-meta-tag memory"
-                          title="此对话已提取为核心记忆"
-                        >
-                          🧠
-                        </span>
-
-                        <!-- Scorer 状态 -->
-                        <span
-                          v-if="log.analysis_status === 'processing'"
-                          class="log-meta-tag processing"
-                          title="秘书正在分析..."
-                          style="color: #409eff"
-                        >
-                          <el-icon class="is-loading"><Loading /></el-icon>
-                        </span>
-                        <el-tooltip
-                          v-if="log.analysis_status === 'failed'"
-                          :content="log.last_error || '分析失败'"
-                          placement="top"
-                        >
-                          <span class="log-meta-tag failed" style="color: #f56c6c; cursor: help">
-                            <el-icon><Warning /></el-icon>
-                          </span>
-                        </el-tooltip>
-                      </div>
-
-                      <!-- 图片预览 -->
+                    <!-- Avatar -->
+                    <div
+                      class="flex-none w-14 h-14 rounded-2xl flex items-center justify-center text-lg shadow-xl border transition-all duration-500 group-hover:scale-110 group-hover:rotate-6 group-hover:shadow-sky-200/50 relative overflow-hidden"
+                      :class="
+                        log.role === 'user'
+                          ? 'bg-sky-50 text-sky-600 border-sky-200 shadow-sky-100/30'
+                          : 'bg-white text-purple-500 border-purple-100 shadow-purple-100/20'
+                      "
+                    >
                       <div
-                        v-if="log.images && log.images.length > 0"
-                        class="log-images-preview"
-                        style="margin-top: 8px; display: flex; gap: 8px; flex-wrap: wrap"
+                        class="absolute inset-0 bg-gradient-to-tr from-white/20 to-transparent"
+                      ></div>
+                      <PixelIcon
+                        v-if="log.role === 'user'"
+                        name="user"
+                        size="xl"
+                        class="relative z-10"
+                      />
+                      <PixelIcon v-else name="robot" size="xl" class="relative z-10" />
+                      <!-- 🐾 小脚印装饰 -->
+                      <div
+                        class="absolute -bottom-1 -right-1 text-[10px] opacity-0 group-hover:opacity-100 transition-opacity duration-500 z-20"
                       >
-                        <div v-for="(img, iIdx) in log.images" :key="iIdx" class="log-image-item">
-                          <el-image
-                            :src="img"
-                            :preview-src-list="log.images"
-                            fit="cover"
-                            style="
-                              width: 120px;
-                              height: 120px;
-                              border-radius: 8px;
-                              border: 1px solid rgba(0, 0, 0, 0.1);
-                            "
-                            hide-on-click-modal
-                            :initial-index="iIdx"
+                        <PixelIcon name="paw" size="xs" animation="bounce" />
+                      </div>
+                    </div>
+
+                    <!-- Bubble Content -->
+                    <div
+                      class="flex flex-col max-w-[85%] relative"
+                      :class="log.role === 'user' ? 'items-end' : 'items-start'"
+                    >
+                      <!-- Meta -->
+                      <div
+                        class="flex items-center gap-2 mb-2 text-[11px] text-slate-400 px-3 font-bold"
+                      >
+                        <span
+                          class="tracking-widest uppercase flex items-center gap-1.5"
+                          :class="log.role === 'user' ? 'text-sky-600/70' : 'text-purple-500'"
+                        >
+                          <PixelIcon
+                            v-if="log.role !== 'user'"
+                            name="sparkle"
+                            size="xs"
+                            animation="spin"
+                          />
+                          {{ log.role === 'user' ? '主人' : activeAgent?.name || 'Pero' }}
+                          <PixelIcon
+                            v-if="log.role === 'user'"
+                            name="heart"
+                            size="xs"
+                            animation="pulse"
+                          />
+                        </span>
+                        <span class="opacity-40 font-mono text-[9px]">{{ log.displayTime }}</span>
+
+                        <!-- Tags -->
+                        <div class="flex items-center gap-2">
+                          <PTooltip
+                            v-if="log.sentiment && log.sentiment !== 'neutral'"
+                            :content="`情感: ${getSentimentLabel(log.sentiment)}`"
                           >
-                            <template #error>
+                            <span
+                              class="px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-600 border border-sky-100 shadow-sm backdrop-blur-md flex items-center gap-1.5 hover:scale-105 transition-transform"
+                            >
+                              <PixelIcon :name="getSentimentEmoji(log.sentiment)" size="xs" />
+                              <span class="text-[10px] font-bold">{{
+                                getSentimentLabel(log.sentiment)
+                              }}</span>
+                            </span>
+                          </PTooltip>
+                          <span
+                            v-if="log.importance > 1"
+                            class="px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-600 font-bold border border-amber-100 shadow-sm backdrop-blur-md flex items-center gap-1 hover:scale-105 transition-transform"
+                          >
+                            <PixelIcon name="star" size="xs" />
+                            {{ log.importance }}
+                          </span>
+                          <PTooltip
+                            v-if="log.metadata?.memory_extracted || log.memory_id"
+                            content="已提取记忆"
+                          >
+                            <span
+                              class="px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-500 border border-sky-100 shadow-sm flex items-center gap-1.5 backdrop-blur-md hover:scale-105 transition-transform"
+                            >
+                              <PixelIcon name="brain" size="xs" />
+                              <span class="text-[10px] font-bold flex items-center gap-1"
+                                >已记下 <PixelIcon name="paw" size="xs"
+                              /></span>
+                            </span>
+                          </PTooltip>
+                          <span
+                            v-if="log.analysis_status === 'processing'"
+                            class="px-2.5 py-0.5 rounded-full bg-sky-50 text-sky-500 animate-pulse border border-sky-100 shadow-sm backdrop-blur-md"
+                          >
+                            <PixelIcon name="refresh" size="xs" animation="spin" />
+                          </span>
+                          <PTooltip
+                            v-if="log.analysis_status === 'failed'"
+                            :content="log.last_error"
+                          >
+                            <span
+                              class="px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-500 cursor-help border border-rose-100 shadow-sm backdrop-blur-md"
+                            >
+                              <PixelIcon name="alert" size="xs" />
+                            </span>
+                          </PTooltip>
+                        </div>
+                      </div>
+
+                      <!-- Bubble -->
+                      <div
+                        class="relative px-7 py-5 rounded-[2.5rem] text-[14.5px] leading-relaxed shadow-xl transition-all duration-500 border group/bubble backdrop-blur-xl"
+                        :class="[
+                          log.role === 'user'
+                            ? 'bg-sky-50/80 text-slate-700 rounded-tr-none border-sky-100 hover:border-sky-300 hover:bg-sky-100/90 shadow-sky-100/30'
+                            : 'bg-white/80 text-slate-700 rounded-tl-none border-purple-100 hover:border-purple-300 hover:shadow-purple-100/50 shadow-purple-100/20',
+                          editingLogId === log.id ? 'w-full min-w-[400px]' : ''
+                        ]"
+                      >
+                        <!-- Floating Icons for Bot ✨ -->
+                        <div
+                          v-if="log.role !== 'user' && !editingLogId"
+                          class="absolute -right-5 -top-5 opacity-0 group-hover/bubble:opacity-100 transition-all duration-700 transform scale-0 group-hover/bubble:scale-125 rotate-12 group-hover/bubble:rotate-0 drop-shadow-[0_0_12px_rgba(192,132,252,0.4)] flex flex-col gap-1"
+                        >
+                          <PixelIcon name="sparkle" size="lg" animation="spin" />
+                          <PixelIcon
+                            name="heart"
+                            size="xs"
+                            animation="pulse"
+                            class="text-pink-400 ml-2"
+                          />
+                        </div>
+
+                        <!-- Floating Paw for User 🐾 -->
+                        <div
+                          v-if="log.role === 'user' && !editingLogId"
+                          class="absolute -left-5 -top-5 opacity-0 group-hover/bubble:opacity-100 transition-all duration-700 transform scale-0 group-hover/bubble:scale-125 -rotate-12 group-hover/bubble:rotate-0 drop-shadow-[0_0_12px_rgba(14,165,233,0.3)]"
+                        >
+                          <PixelIcon name="paw" size="lg" animation="bounce" />
+                        </div>
+
+                        <!-- Edit Mode -->
+                        <div v-if="editingLogId === log.id" class="space-y-4">
+                          <PTextarea
+                            v-model="editingContent"
+                            :rows="4"
+                            placeholder="编辑内容..."
+                            class="!rounded-2xl border-sky-200 focus:border-sky-400 transition-all"
+                          />
+                          <div class="flex items-center gap-3 justify-end">
+                            <PButton
+                              size="sm"
+                              variant="ghost"
+                              class="rounded-xl"
+                              @click="cancelLogEdit"
+                              >取消</PButton
+                            >
+                            <PButton
+                              size="sm"
+                              variant="primary"
+                              class="rounded-xl px-6"
+                              @click="saveLogEdit(log.id)"
+                              >保存 💭</PButton
+                            >
+                          </div>
+                        </div>
+
+                        <!-- Display Mode -->
+                        <div v-else class="relative z-10">
+                          <!-- Images -->
+                          <div
+                            v-if="log.images && log.images.length > 0"
+                            class="flex flex-wrap gap-3 mb-3"
+                          >
+                            <div
+                              v-for="(img, idx) in log.images"
+                              :key="idx"
+                              class="relative w-32 h-32 rounded-2xl overflow-hidden border border-sky-100 cursor-zoom-in group/img shadow-lg shadow-sky-100/40 hover:scale-105 transition-transform duration-500"
+                              @click="openImageViewer(log.images, idx)"
+                            >
+                              <img :src="img" class="w-full h-full object-cover" />
                               <div
-                                class="image-slot"
-                                style="
-                                  display: flex;
-                                  justify-content: center;
-                                  align-items: center;
-                                  width: 100%;
-                                  height: 100%;
-                                  background: #f5f7fa;
-                                  color: #909399;
-                                  font-size: 20px;
-                                "
+                                class="absolute inset-0 bg-sky-500/20 opacity-0 group-hover/img:opacity-100 transition-opacity flex items-center justify-center backdrop-blur-[2px]"
                               >
-                                <el-icon><Picture /></el-icon>
+                                <PixelIcon name="eye" size="lg" class="text-white drop-shadow-md" />
                               </div>
-                            </template>
-                          </el-image>
+                            </div>
+                          </div>
+
+                          <!-- Text Content -->
+                          <AsyncMarkdown
+                            :content="formatLogContent(log.content)"
+                            class="prose prose-sky prose-sm max-w-none"
+                          />
                         </div>
                       </div>
 
-                      <div v-if="editingLogId === log.id" class="edit-mode">
-                        <el-input
-                          v-model="editingContent"
-                          type="textarea"
-                          :autosize="{ minRows: 6, maxRows: 20 }"
-                          resize="none"
-                          class="dashboard-edit-textarea"
-                        />
-                        <div class="edit-tools">
-                          <el-button size="small" type="primary" @click="saveLogEdit(log.id)"
-                            >保存</el-button
+                      <!-- Actions -->
+                      <div
+                        class="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 px-2"
+                      >
+                        <PTooltip v-if="log.analysis_status === 'failed'" content="重试分析">
+                          <button
+                            class="p-1.5 text-amber-500 hover:bg-amber-500/15 rounded-xl transition-colors active:scale-90"
+                            @click="retryLogAnalysis(log)"
                           >
-                          <el-button size="small" @click="cancelLogEdit">取消</el-button>
-                        </div>
-                      </div>
-
-                      <div v-else class="message-content-wrapper">
-                        <AsyncMarkdown :content="formatLogContent(log.content)" />
-                      </div>
-
-                      <div class="bubble-actions">
-                        <el-button
-                          v-if="log.analysis_status === 'failed'"
-                          link
-                          :icon="RefreshRight"
-                          size="small"
-                          style="color: #e6a23c"
-                          @click="retryLogAnalysis(log)"
-                        >
-                          重试 ({{ log.retry_count }})
-                        </el-button>
-
-                        <el-button link :icon="Edit" size="small" @click="startLogEdit(log)"
-                          >编辑</el-button
-                        >
-                        <el-button
-                          link
-                          :icon="View"
-                          size="small"
-                          style="color: #909399"
-                          @click="openDebugDialog(log)"
-                          >调试</el-button
-                        >
-                        <el-button
-                          link
-                          :icon="Delete"
-                          size="small"
-                          style="color: #f56c6c"
-                          @click="deleteLog(log.id)"
-                          >删除</el-button
-                        >
+                            <PixelIcon name="refresh" size="xs" />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="编辑">
+                          <button
+                            class="p-1.5 text-slate-500 hover:text-sky-400 hover:bg-sky-500/15 rounded-xl transition-all active:scale-90"
+                            @click="startLogEdit(log)"
+                          >
+                            <PixelIcon name="pencil" size="xs" />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="调试信息">
+                          <button
+                            class="p-1.5 text-slate-500 hover:text-sky-400 hover:bg-sky-500/15 rounded-xl transition-all active:scale-90"
+                            @click="openDebugDialog(log)"
+                          >
+                            <PixelIcon name="terminal" size="xs" />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="删除">
+                          <button
+                            class="p-1.5 text-slate-500 hover:text-rose-400 hover:bg-rose-500/15 rounded-xl transition-all active:scale-90"
+                            @click="deleteLog(log.id)"
+                          >
+                            <PixelIcon name="trash" size="xs" />
+                          </button>
+                        </PTooltip>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
+            </div>
 
-              <!-- 3. 核心记忆 (重构版) -->
-              <div v-else-if="currentTab === 'memories'" key="memories" class="view-container">
-                <div class="toolbar memory-toolbar">
-                  <div class="memory-header-enhanced">
-                    <div class="header-icon-wrapper">
-                      <el-icon><Collection /></el-icon>
-                    </div>
-                    <div class="header-text-content">
-                      <h3 class="section-title-enhanced">长期记忆库</h3>
-                      <span class="section-subtitle">Long-term Memory Storage</span>
-                    </div>
-                  </div>
-                  <div class="filters-glass-panel">
-                    <div class="filter-row-top">
-                      <div class="filter-group-left">
-                        <div class="agent-selector-wrapper">
-                          <span class="label">当前人格:</span>
-                          <el-dropdown
-                            trigger="click"
-                            :disabled="isSwitchingAgent"
-                            @command="switchAgent"
-                          >
-                            <span class="el-dropdown-link agent-name">
-                              {{ activeAgent?.name || 'Unknown' }}
-                              <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                            </span>
-                            <template #dropdown>
-                              <el-dropdown-menu>
-                                <el-dropdown-item
-                                  v-for="agent in availableAgents"
-                                  :key="agent.id"
-                                  :command="agent.id"
-                                  :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
-                                >
-                                  <div style="display: flex; align-items: center; gap: 8px">
-                                    <span>{{ agent.name }}</span>
-                                    <span
-                                      v-if="!agent.is_enabled"
-                                      style="font-size: 10px; color: #999"
-                                      >(Disabled)</span
-                                    >
-                                  </div>
-                                </el-dropdown-item>
-                              </el-dropdown-menu>
-                            </template>
-                          </el-dropdown>
-                        </div>
+            <!-- 3. 核心记忆 (重构版) -->
+            <div
+              v-else-if="currentTab === 'memories'"
+              key="memories"
+              class="h-full flex flex-col overflow-hidden"
+            >
+              <!-- Toolbar -->
+              <div class="p-6 pb-0 flex-none">
+                <PCard
+                  glass
+                  soft3d
+                  variant="purple"
+                  overflow-visible
+                  class="mb-4 !p-5 rounded-[2rem] relative group/mtoolbar z-30"
+                >
+                  <!-- 背景装饰 ✨ -->
+                  <div
+                    class="absolute -right-20 -top-20 w-40 h-40 bg-purple-400/10 blur-[60px] rounded-full pointer-events-none group-hover/mtoolbar:bg-purple-400/20 transition-all duration-1000"
+                  ></div>
 
-                        <div class="divider-vertical"></div>
-
-                        <el-select
-                          v-model="memoryFilterType"
-                          placeholder="类型筛选"
-                          size="small"
-                          style="width: 140px"
-                          clearable
-                          class="glass-input"
-                          @change="fetchMemories"
+                  <div class="flex flex-wrap items-end gap-5 relative z-10">
+                    <!-- Agent Selector -->
+                    <div class="flex flex-col gap-2 min-w-[160px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse"></span>
+                        角色
+                        <span class="opacity-50 font-normal">Agent</span>
+                      </label>
+                      <div class="relative group/magent">
+                        <button
+                          class="w-full flex items-center justify-between px-4 py-2.5 bg-purple-50/50 hover:bg-purple-100/50 border border-purple-100/50 hover:border-purple-300 rounded-2xl text-sm transition-all active:scale-95 shadow-sm backdrop-blur-md group/mbtn hover-pixel-bounce"
+                          :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
                         >
-                          <el-option label="全部类型" value="" />
-                          <el-option label="🧩 记忆块 (Event)" value="event" />
-                          <el-option label="🧠 事实 (Fact)" value="fact" />
-                          <el-option label="🤝 誓言 (Promise)" value="promise" />
-                          <el-option label="💖 偏好 (Preference)" value="preference" />
-                          <el-option label="📝 工作日志 (Log)" value="work_log" />
-                          <el-option label="🗄️ 归档 (Archived)" value="archived_event" />
-                        </el-select>
+                          <span class="text-purple-600 font-bold flex items-center gap-2">
+                            <span
+                              class="text-xs opacity-0 group-hover/mbtn:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0"
+                              ><PixelIcon name="paw" size="xs" animation="bounce"
+                            /></span>
+                            {{ activeAgent?.name || '未知' }}
+                          </span>
+                          <PixelIcon
+                            name="chevron-down"
+                            size="xs"
+                            class="text-slate-400 group-hover/magent:rotate-180 transition-transform duration-500"
+                          />
+                        </button>
+                        <div
+                          class="absolute left-0 top-full mt-3 w-full py-2 bg-white/70 backdrop-blur-2xl border border-purple-100 rounded-2xl shadow-2xl shadow-purple-200/40 opacity-0 invisible group-hover/magent:opacity-100 group-hover/magent:visible transition-all duration-500 z-50 transform origin-top scale-90 group-hover/magent:scale-100 ring-1 ring-purple-100/5"
+                        >
+                          <button
+                            v-for="agent in availableAgents"
+                            :key="agent.id"
+                            class="w-full text-left px-4 py-2.5 text-sm hover:bg-purple-50 transition-all flex items-center justify-between group/mitem"
+                            :class="{
+                              'text-purple-600 font-bold bg-purple-50':
+                                agent.id === activeAgent?.id,
+                              'text-slate-500': agent.id !== activeAgent?.id
+                            }"
+                            :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
+                            @click="switchAgent(agent.id)"
+                          >
+                            <span
+                              class="group-hover/mitem:translate-x-1.5 transition-transform flex items-center gap-2"
+                            >
+                              <span v-if="agent.id === activeAgent?.id" class="text-xs"
+                                ><PixelIcon name="paw" size="xs"
+                              /></span>
+                              {{ agent.name }}
+                            </span>
+                            <div class="flex items-center gap-2">
+                              <span
+                                v-if="!agent.is_enabled"
+                                class="text-[10px] text-slate-400 font-bold bg-slate-50 px-1.5 py-0.5 rounded-lg border border-slate-200"
+                                >禁用</span
+                              >
+                              <span v-if="agent.id === activeAgent?.id" class="text-purple-400"
+                                ><PixelIcon name="heart" size="xs"
+                              /></span>
+                            </div>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
 
-                        <el-date-picker
+                    <!-- Filter Type -->
+                    <div class="flex flex-col gap-2 w-[160px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> 类型
+                        <span class="opacity-50 font-normal">Type</span>
+                      </label>
+                      <PSelect
+                        v-model="memoryFilterType"
+                        :options="[
+                          { label: '全部类型', value: '', icon: 'sparkle' },
+                          { label: '记忆块 (Event)', value: 'event', icon: 'puzzle' },
+                          { label: '事实 (Fact)', value: 'fact', icon: 'brain' },
+                          { label: '誓言 (Promise)', value: 'promise', icon: 'handshake' },
+                          { label: '偏好 (Preference)', value: 'preference', icon: 'heart' },
+                          { label: '工作日志 (Log)', value: 'work_log', icon: 'pencil' },
+                          { label: '归档 (Archived)', value: 'archived_event', icon: 'archive' }
+                        ]"
+                        size="md"
+                        class="!rounded-2xl shadow-sm backdrop-blur-md"
+                        @change="fetchMemories"
+                      >
+                        <template #option="{ option }">
+                          <div class="flex items-center gap-2 text-xs">
+                            <PixelIcon
+                              v-if="option.icon"
+                              :name="option.icon"
+                              size="xs"
+                              class="opacity-70"
+                            />
+                            <span>{{ option.label }}</span>
+                          </div>
+                        </template>
+                      </PSelect>
+                    </div>
+
+                    <!-- Date Filter -->
+                    <div class="flex flex-col gap-2 w-[160px]">
+                      <label
+                        class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1.5 h-1.5 rounded-full bg-purple-500"></span> 日期
+                        <span class="opacity-50 font-normal">Date</span>
+                      </label>
+                      <div class="relative group/mdate">
+                        <PDatePicker
                           v-model="memoryFilterDate"
-                          type="date"
-                          placeholder="按日期筛选"
-                          value-format="YYYY-MM-DD"
-                          size="small"
-                          style="width: 140px"
-                          class="glass-input"
-                          @change="fetchMemories"
+                          placeholder="选择日期"
+                          class="!rounded-2xl shadow-sm backdrop-blur-md"
+                          @update:model-value="fetchMemories"
                         />
+                        <div
+                          class="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none opacity-40 group-hover/mdate:opacity-100 transition-opacity"
+                        >
+                          <PixelIcon name="calendar" size="xs" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- View Mode -->
+                    <div
+                      class="flex bg-purple-50/50 p-1 rounded-2xl border border-purple-100 self-end h-[42px] items-center relative group/vmode shadow-sm backdrop-blur-md"
+                    >
+                      <!-- 🐾 Floating decoration -->
+                      <div
+                        class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] opacity-0 group-hover/vmode:opacity-60 transition-all duration-500 translate-y-2 group-hover/vmode:translate-y-0"
+                      >
+                        <PixelIcon name="paw" size="xs" animation="bounce" />
                       </div>
 
-                      <div class="filter-group-right">
-                        <el-radio-group
-                          v-model="memoryViewMode"
-                          size="small"
-                          class="glass-radio-group"
-                          @change="
-                            (val) => {
-                              if (val === 'graph') fetchMemoryGraph()
+                      <div
+                        class="absolute h-[34px] bg-white border border-purple-200 rounded-xl transition-all duration-500 ease-out pointer-events-none shadow-sm shadow-purple-100/50"
+                        :style="{
+                          left: memoryViewMode === 'list' ? '4px' : '56px',
+                          width: memoryViewMode === 'list' ? '48px' : '48px'
+                        }"
+                      ></div>
+                      <PTooltip
+                        v-for="mode in [
+                          { id: 'list', icon: 'list', label: '列表' },
+                          { id: 'graph', icon: 'chart', label: '图谱' }
+                        ]"
+                        :key="mode.id"
+                        :content="mode.label"
+                      >
+                        <button
+                          class="relative flex items-center justify-center w-12 py-1.5 rounded-xl text-xs font-medium transition-all z-10 hover:scale-110 active:scale-90 group/vbtn"
+                          :class="
+                            memoryViewMode === mode.id
+                              ? 'text-purple-600 font-bold'
+                              : 'text-slate-400 hover:text-purple-500'
+                          "
+                          @click="
+                            () => {
+                              memoryViewMode = mode.id
+                              if (mode.id === 'graph') fetchMemoryGraph()
                             }
                           "
                         >
-                          <el-radio-button value="list">列表</el-radio-button>
-                          <el-radio-button value="graph">图谱</el-radio-button>
-                        </el-radio-group>
-                      </div>
+                          <PixelIcon
+                            :name="mode.icon"
+                            size="sm"
+                            class="transition-transform duration-500 group-hover/vbtn:rotate-12"
+                          />
+                        </button>
+                      </PTooltip>
                     </div>
 
-                    <div class="filter-row-bottom">
-                      <div v-if="topTags.length" class="tag-cloud-inline">
-                        <span class="tag-label">热门:</span>
-                        <div class="tag-scroll-area">
-                          <el-check-tag
-                            v-for="{ tag, count } in topTags"
-                            :key="tag"
-                            :checked="memoryFilterTags.includes(tag)"
-                            class="glass-check-tag"
-                            @change="
-                              (checked) => {
-                                if (checked) memoryFilterTags.push(tag)
-                                else memoryFilterTags = memoryFilterTags.filter((t) => t !== tag)
-                                fetchMemories()
-                              }
-                            "
-                          >
-                            {{ tag }}
-                          </el-check-tag>
-                        </div>
-                      </div>
-
-                      <div class="action-buttons">
-                        <el-tooltip content="清除无效的连线数据" placement="top">
-                          <el-button
-                            type="danger"
-                            plain
-                            size="small"
-                            :icon="Delete"
-                            :loading="isClearingEdges"
-                            class="glass-button"
-                            @click="clearOrphanedEdges"
-                          >
-                            清理
-                          </el-button>
-                        </el-tooltip>
-
-                        <el-tooltip content="扫描并处理孤立记忆" placement="top">
-                          <el-button
-                            type="primary"
-                            plain
-                            size="small"
-                            :icon="Search"
-                            :loading="isScanningLonely"
-                            class="glass-button"
-                            @click="triggerScanLonely"
-                          >
-                            扫描
-                          </el-button>
-                        </el-tooltip>
-
-                        <el-tooltip content="执行每日深度维护" placement="top">
-                          <el-button
-                            type="warning"
-                            plain
-                            size="small"
-                            :icon="Tools"
-                            :loading="isRunningMaintenance"
-                            class="glass-button"
-                            @click="triggerMaintenance"
-                          >
-                            维护
-                          </el-button>
-                        </el-tooltip>
-
-                        <el-tooltip content="触发梦境联想机制" placement="top">
-                          <el-button
-                            type="success"
-                            plain
-                            size="small"
-                            :icon="Connection"
-                            :loading="isDreaming"
-                            class="glass-button"
-                            @click="triggerDream"
-                          >
-                            梦境
-                          </el-button>
-                        </el-tooltip>
-                      </div>
+                    <!-- Actions -->
+                    <div class="flex items-center gap-3 pb-0.5 ml-auto">
+                      <PTooltip content="清除无效连线">
+                        <PButton
+                          variant="danger"
+                          size="sm"
+                          :loading="isClearingEdges"
+                          class="!rounded-xl flat-action-btn"
+                          @click="clearOrphanedEdges"
+                          ><div class="flex items-center gap-1.5">
+                            <PixelIcon name="trash" size="xs" />清理
+                          </div></PButton
+                        >
+                      </PTooltip>
+                      <PTooltip content="扫描孤立记忆">
+                        <PButton
+                          variant="primary"
+                          size="sm"
+                          :loading="isScanningLonely"
+                          class="!rounded-xl flat-action-btn"
+                          @click="triggerScanLonely"
+                          ><div class="flex items-center gap-1.5">
+                            <PixelIcon name="search" size="xs" />扫描
+                          </div></PButton
+                        >
+                      </PTooltip>
+                      <PTooltip content="每日深度维护">
+                        <PButton
+                          variant="warning"
+                          size="sm"
+                          :loading="isRunningMaintenance"
+                          class="!rounded-xl flat-action-btn"
+                          @click="triggerMaintenance"
+                          ><div class="flex items-center gap-1.5">
+                            <PixelIcon name="settings" size="xs" />维护
+                          </div></PButton
+                        >
+                      </PTooltip>
+                      <PTooltip content="触发梦境联想">
+                        <PButton
+                          variant="success"
+                          size="sm"
+                          :loading="isDreaming"
+                          class="!rounded-xl flat-action-btn"
+                          @click="triggerDream"
+                          ><div class="flex items-center gap-1.5">
+                            <PixelIcon name="sparkle" size="xs" />梦境
+                          </div></PButton
+                        >
+                      </PTooltip>
                     </div>
                   </div>
-                </div>
 
-                <!-- 列表模式 -->
-                <div v-show="memoryViewMode === 'list'" class="memory-waterfall">
-                  <div v-for="m in memories" :key="m.id" class="memory-item">
-                    <el-card shadow="hover" class="memory-card" :class="m.type">
-                      <div class="memory-top">
-                        <div class="badges-left">
-                          <el-tag :type="getMemoryTagType(m.type)" effect="dark" size="small" round>
-                            {{ getMemoryTypeLabel(m.type) }}
-                          </el-tag>
-                          <el-tag
-                            v-if="m.sentiment && m.sentiment !== 'neutral'"
-                            type="info"
-                            effect="plain"
-                            size="small"
-                            round
-                          >
-                            {{ getSentimentEmoji(m.sentiment) }}
-                          </el-tag>
-                        </div>
-                        <div class="actions-right">
-                          <span class="importance-indicator" :title="`Base: ${m.base_importance}`">
-                            ⭐ {{ m.importance }}
-                          </span>
-                          <span class="access-indicator" title="被回忆次数">
-                            🔥 {{ m.access_count || 0 }}
-                          </span>
-                          <el-button
-                            type="danger"
-                            link
-                            :icon="Delete"
-                            circle
-                            size="small"
-                            @click="deleteMemory(m.id)"
-                          ></el-button>
-                        </div>
-                      </div>
-
-                      <div class="memory-text">{{ m.content }}</div>
-
-                      <div class="memory-bottom">
-                        <div class="tags-row">
-                          <!-- 显示簇 -->
-                          <el-tag
-                            v-for="c in m.clusters ? m.clusters.split(',') : []"
-                            :key="c"
-                            size="small"
-                            effect="dark"
-                            type="warning"
-                            class="mini-tag"
-                            style="margin-right: 4px"
-                          >
-                            {{ c.replace(/[\[\]]/g, '') }}
-                          </el-tag>
-                          <!-- 显示标签 -->
-                          <el-tag
-                            v-for="t in m.tags ? m.tags.split(',') : []"
-                            :key="t"
-                            size="small"
-                            effect="plain"
-                            class="mini-tag"
-                          >
-                            {{ t }}
-                          </el-tag>
-                        </div>
-                        <div class="time-hint">{{ m.realTime }}</div>
-                      </div>
-                    </el-card>
-                  </div>
-                </div>
-
-                <!-- Graph Mode -->
-                <!-- 图谱模式 -->
-                <div
-                  v-show="memoryViewMode === 'graph'"
-                  v-loading="isLoadingGraph"
-                  class="memory-graph-container"
-                >
-                  <div v-if="memoryGraphData.nodes.length === 0" class="graph-placeholder">
-                    <el-empty description="暂无关联数据或数据量过少" />
-                  </div>
+                  <!-- Tags -->
                   <div
-                    v-else
-                    class="simple-graph-view"
-                    style="display: flex; gap: 20px; background: #fafafa; padding: 10px"
+                    v-if="topTags.length"
+                    class="mt-5 flex items-center gap-3 overflow-x-auto pb-1.5 custom-scrollbar group/tags"
                   >
-                    <div
-                      ref="graphRef"
-                      style="
-                        flex: 1;
-                        height: 500px;
-                        border-radius: 8px;
-                        overflow: hidden;
-                        border: 1px solid #eee;
-                      "
-                    ></div>
-
-                    <div
-                      class="graph-legend-panel"
-                      style="
-                        width: 240px;
-                        padding: 15px;
-                        background: #ffffff;
-                        border-radius: 8px;
-                        box-shadow: 0 2px 12px 0 rgba(0, 0, 0, 0.05);
-                        overflow-y: auto;
-                      "
+                    <span
+                      class="text-[11px] font-bold text-slate-500 shrink-0 flex items-center gap-2 uppercase tracking-wider"
                     >
-                      <h4 style="margin: 0 0 15px 0; color: #303133; font-size: 15px">
-                        图谱图例说明
-                      </h4>
-
-                      <div style="margin-bottom: 15px">
-                        <div
-                          style="
-                            font-weight: bold;
-                            font-size: 13px;
-                            margin-bottom: 5px;
-                            color: #606266;
-                          "
+                      <span
+                        class="text-xs opacity-0 group-hover/tags:opacity-100 transition-all duration-500 -translate-x-2 group-hover/tags:translate-x-0"
+                        >🐾</span
+                      >
+                      热门标签 <span class="opacity-40 font-normal">Tags</span>:
+                    </span>
+                    <div class="flex items-center gap-2">
+                      <button
+                        v-for="{ tag, count } in topTags"
+                        :key="tag"
+                        class="px-4 py-1.5 rounded-full text-[10px] font-bold transition-all border shrink-0 active:scale-90 flex items-center gap-2 group/tag backdrop-blur-md"
+                        :class="
+                          memoryFilterTags.includes(tag)
+                            ? 'bg-sky-500/20 text-sky-600 border-sky-500/40 shadow-lg shadow-sky-500/20'
+                            : 'bg-sky-50/50 text-slate-500 border-sky-100 hover:bg-sky-100/50 hover:border-sky-300 hover:text-sky-600'
+                        "
+                        @click="
+                          () => {
+                            if (memoryFilterTags.includes(tag))
+                              memoryFilterTags = memoryFilterTags.filter((t) => t !== tag)
+                            else memoryFilterTags.push(tag)
+                            fetchMemories()
+                          }
+                        "
+                      >
+                        <span
+                          class="opacity-0 w-0 group-hover/tag:w-auto group-hover/tag:opacity-100 transition-all duration-500 overflow-hidden"
+                          >✨</span
                         >
-                          🧠 节点 (Node)
-                        </div>
-                        <div style="font-size: 12px; color: #909399; line-height: 1.5">
-                          代表一个独立的记忆片段。颜色代表情感，节点大小代表重要度。
-                        </div>
+                        # {{ tag }}
+                        <span
+                          v-if="count > 1"
+                          class="text-[9px] opacity-40 group-hover:opacity-100 transition-opacity"
+                          >({{ count }})</span
+                        >
+                      </button>
+                    </div>
+                  </div>
+                </PCard>
+              </div>
+
+              <!-- List Mode -->
+              <div
+                v-show="memoryViewMode === 'list'"
+                class="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar"
+              >
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                  <div
+                    v-for="m in memories"
+                    :key="m.id"
+                    class="group relative bg-white/80 hover:bg-sky-50/50 border border-sky-100 hover:border-sky-300 rounded-2xl p-4 transition-all duration-300 flex flex-col h-[280px] hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-100/30"
+                  >
+                    <!-- Hover Effect ✨ -->
+                    <div
+                      class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-0 group-hover:scale-110 z-20"
+                    >
+                      <div class="bg-sky-500 shadow-lg shadow-sky-500/40 rounded-full p-1.5">
+                        <PixelIcon name="sparkle" size="xs" class="text-white" />
                       </div>
+                    </div>
 
-                      <div style="margin-bottom: 15px">
-                        <div
-                          style="
-                            font-weight: bold;
-                            font-size: 13px;
-                            margin-bottom: 5px;
-                            color: #606266;
-                          "
+                    <!-- Header -->
+                    <div class="flex items-start justify-between mb-3">
+                      <div class="flex flex-wrap gap-2">
+                        <span
+                          class="px-2 py-0.5 rounded-full text-[10px] uppercase font-bold tracking-wider bg-sky-100 text-sky-600 border border-sky-200 shadow-sm shadow-sky-100/10"
                         >
-                          🔗 连线 (Edge)
-                        </div>
-                        <div style="font-size: 12px; color: #909399; line-height: 1.5">
-                          代表记忆之间的逻辑关联。
-                        </div>
+                          {{ getMemoryTypeLabel(m.type) }}
+                        </span>
+                        <span
+                          v-if="m.sentiment && m.sentiment !== 'neutral'"
+                          class="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-white/50 border border-sky-100 shadow-sm animate-bounce"
+                          style="animation-duration: 3s"
+                        >
+                          <PixelIcon
+                            :name="getSentimentEmoji(m.sentiment)"
+                            size="xs"
+                            class="text-sky-500"
+                          />
+                          <span class="text-[10px] font-bold text-sky-600">{{
+                            getSentimentLabel(m.sentiment)
+                          }}</span>
+                        </span>
                       </div>
+                      <button
+                        class="p-1.5 rounded-lg text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all opacity-0 group-hover:opacity-100 active:scale-90"
+                        @click="deleteMemory(m.id)"
+                      >
+                        <PixelIcon name="trash" size="xs" />
+                      </button>
+                    </div>
 
-                      <div style="margin-bottom: 15px">
-                        <div
-                          style="
-                            font-weight: bold;
-                            font-size: 13px;
-                            margin-bottom: 5px;
-                            color: #606266;
-                          "
-                        >
-                          🎨 情感 (Sentiment)
-                        </div>
-                        <div style="display: flex; gap: 5px; flex-wrap: wrap">
-                          <el-tag size="small" type="success" effect="dark">正面</el-tag>
-                          <el-tag size="small" type="danger" effect="dark">负面</el-tag>
-                          <el-tag size="small" type="info" effect="dark">中性</el-tag>
-                        </div>
-                      </div>
+                    <!-- Content -->
+                    <div
+                      class="flex-1 overflow-y-auto custom-scrollbar mb-3 text-sm text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors"
+                    >
+                      {{ m.content }}
+                    </div>
 
-                      <div style="margin-bottom: 15px">
-                        <div
-                          style="
-                            font-weight: bold;
-                            font-size: 13px;
-                            margin-bottom: 5px;
-                            color: #606266;
-                          "
+                    <!-- Footer -->
+                    <div class="mt-auto pt-3 border-t border-sky-100/50 flex flex-col gap-2">
+                      <div class="flex flex-wrap gap-1">
+                        <span
+                          v-for="c in m.clusters ? m.clusters.split(',') : []"
+                          :key="c"
+                          class="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-50 text-amber-600 border border-amber-100"
                         >
-                          ⭐ 重要度 (Importance)
-                        </div>
-                        <div style="font-size: 12px; color: #909399; line-height: 1.5">
-                          1-10分，分数越高越不易遗忘。
-                        </div>
-                      </div>
-
-                      <div style="margin-bottom: 15px">
-                        <div
-                          style="
-                            font-weight: bold;
-                            font-size: 13px;
-                            margin-bottom: 5px;
-                            color: #606266;
-                          "
+                          {{ c.replace(/[\[\]]/g, '') }}
+                        </span>
+                        <span
+                          v-for="t in m.tags ? m.tags.split(',') : []"
+                          :key="t"
+                          class="px-1.5 py-0.5 rounded-full text-[10px] bg-sky-50 text-sky-600 border border-sky-100"
                         >
-                          🔥 活跃度 (Access)
-                        </div>
-                        <div style="font-size: 12px; color: #909399; line-height: 1.5">
-                          记忆被唤醒和引用的次数。
-                        </div>
+                          #{{ t }}
+                        </span>
                       </div>
 
                       <div
-                        class="graph-hint-mini"
-                        style="margin-top: 20px; border-top: 1px solid #eee; padding-top: 10px"
+                        class="flex items-center justify-between text-[10px] text-slate-400 font-mono"
                       >
-                        <p style="margin: 0; font-size: 12px; color: #909399">
-                          当前节点: {{ memoryGraphData.nodes.length }}
-                        </p>
-                        <p style="margin: 5px 0 0 0; font-size: 12px; color: #909399">
-                          当前连线: {{ memoryGraphData.edges.length }}
-                        </p>
+                        <div class="flex gap-2">
+                          <PTooltip content="重要度">
+                            <span class="flex items-center gap-0.5">
+                              ⭐ <span class="text-amber-500/80">{{ m.importance }}</span>
+                            </span>
+                          </PTooltip>
+                          <PTooltip content="活跃度">
+                            <span class="flex items-center gap-0.5">
+                              🔥
+                              <span class="text-rose-500/80">{{ m.access_count || 0 }}</span>
+                            </span>
+                          </PTooltip>
+                        </div>
+                        <span class="group-hover:text-slate-500 transition-colors">{{
+                          m.realTime
+                        }}</span>
                       </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <!-- 4. 待办任务 -->
-              <div v-else-if="currentTab === 'tasks'" key="tasks" class="view-container">
+              <!-- Graph Mode -->
+              <div
+                v-show="memoryViewMode === 'graph'"
+                v-loading="isLoadingGraph"
+                class="flex-1 flex gap-4 p-6 pt-0 overflow-hidden"
+              >
                 <div
-                  class="toolbar"
-                  style="display: flex; justify-content: space-between; align-items: center"
+                  v-if="memoryGraphData.nodes.length === 0"
+                  class="flex-1 flex items-center justify-center"
                 >
-                  <h3 class="section-title">待办与计划列表</h3>
-                  <div style="display: flex; align-items: center">
-                    <span style="font-size: 12px; margin-right: 8px; color: #606266">角色:</span>
-                    <el-dropdown
-                      trigger="click"
-                      :disabled="isSwitchingAgent"
-                      @command="switchAgent"
-                    >
-                      <span
-                        class="el-dropdown-link"
-                        style="
-                          cursor: pointer;
-                          display: flex;
-                          align-items: center;
-                          gap: 5px;
-                          color: #409eff;
-                        "
-                      >
-                        {{ activeAgent?.name || 'Unknown' }}
-                        <el-icon class="el-icon--right"><ArrowDown /></el-icon>
-                      </span>
-                      <template #dropdown>
-                        <el-dropdown-menu>
-                          <el-dropdown-item
-                            v-for="agent in availableAgents"
-                            :key="agent.id"
-                            :command="agent.id"
-                            :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
-                          >
-                            <div style="display: flex; align-items: center; gap: 8px">
-                              <span>{{ agent.name }}</span>
-                              <span v-if="!agent.is_enabled" style="font-size: 10px; color: #999"
-                                >(Disabled)</span
-                              >
-                            </div>
-                          </el-dropdown-item>
-                        </el-dropdown-menu>
-                      </template>
-                    </el-dropdown>
-                  </div>
+                  <PEmpty description="暂无关联数据或数据量过少" />
                 </div>
+                <div v-else class="flex-1 flex gap-4 h-full">
+                  <!-- Chart -->
+                  <div
+                    ref="graphRef"
+                    class="flex-1 h-full bg-sky-50/30 border border-sky-100 rounded-xl overflow-hidden"
+                  ></div>
 
-                <div class="task-waterfall">
-                  <div v-for="task in tasks" :key="task.id" class="task-item">
-                    <el-card shadow="hover" class="task-card-modern" :class="task.type">
-                      <div class="task-top">
-                        <el-tag
-                          :type="task.type === 'reminder' ? 'danger' : 'primary'"
-                          effect="light"
-                          size="small"
-                          round
+                  <!-- Legend -->
+                  <div
+                    class="w-64 bg-white/90 backdrop-blur border border-sky-100 rounded-xl p-4 overflow-y-auto custom-scrollbar"
+                  >
+                    <h4 class="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                      <PixelIcon name="chart" size="xs" class="text-sky-400" /> 图谱图例 🎨✨
+                    </h4>
+
+                    <div class="space-y-4">
+                      <div class="group/item cursor-help transition-all hover:translate-x-1">
+                        <div class="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
+                          <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span> 🧠
+                          节点 (Node)
+                        </div>
+                        <p
+                          class="text-[10px] text-slate-400 leading-relaxed group-hover/item:text-slate-500"
                         >
-                          {{ task.type === 'reminder' ? '⏰ 提醒' : '💡 话题' }}
-                        </el-tag>
-                        <el-button
-                          type="danger"
-                          link
-                          :icon="Delete"
-                          circle
-                          size="small"
-                          @click="deleteTask(task.id)"
-                        ></el-button>
+                          代表独立的记忆片段。颜色代表情感，大小代表重要度。🐾
+                        </p>
                       </div>
 
-                      <div class="task-content">{{ task.content }}</div>
+                      <div class="group/item cursor-help transition-all hover:translate-x-1">
+                        <div class="text-xs font-bold text-slate-500 mb-1 flex items-center gap-1">
+                          <span class="w-3 h-[1.5px] bg-sky-500/50"></span> 🔗 连线 (Edge)
+                        </div>
+                        <p
+                          class="text-[10px] text-slate-400 leading-relaxed group-hover/item:text-slate-500"
+                        >
+                          代表记忆之间的逻辑关联。🤝
+                        </p>
+                      </div>
 
-                      <div class="task-bottom">
-                        <div class="task-time">
-                          <el-icon><Calendar /></el-icon>
-                          <span>{{ new Date(task.time).toLocaleString() }}</span>
+                      <div>
+                        <div class="text-xs font-bold text-slate-500 mb-2 flex items-center gap-1">
+                          🎨 情感 (Sentiment)
+                          <span class="text-[10px] opacity-50 font-normal">颜色参考</span>
+                        </div>
+                        <div class="flex gap-2 flex-wrap">
+                          <span
+                            class="px-2 py-0.5 rounded-full text-[10px] bg-sky-50 text-sky-600 border border-sky-100 hover:bg-sky-100 transition-colors"
+                            >正面 😊</span
+                          >
+                          <span
+                            class="px-2 py-0.5 rounded-full text-[10px] bg-rose-50 text-rose-600 border border-rose-100 hover:bg-rose-100 transition-colors"
+                            >负面 😟</span
+                          >
+                          <span
+                            class="px-2 py-0.5 rounded-full text-[10px] bg-sky-50 text-slate-500 border border-sky-100 hover:bg-sky-100 transition-colors"
+                            >中性 😐</span
+                          >
                         </div>
                       </div>
-                    </el-card>
+
+                      <div class="pt-4 border-t border-sky-100">
+                        <p class="text-[10px] text-slate-400 flex justify-between">
+                          <span>当前节点:</span>
+                          <span class="text-slate-600 font-mono">{{
+                            memoryGraphData.nodes.length
+                          }}</span>
+                        </p>
+                        <p class="text-[10px] text-slate-400 flex justify-between mt-1">
+                          <span>当前连线:</span>
+                          <PTooltip content="记忆强度">
+                            <span class="text-slate-600 font-mono cursor-help">{{
+                              memoryGraphData.edges.length
+                            }}</span>
+                          </PTooltip>
+                        </p>
+                        <p class="text-[10px] text-slate-400 flex justify-between mt-1">
+                          <span>上次激活:</span>
+                          <PTooltip content="上次激活时间">
+                            <span class="text-slate-600 font-mono cursor-help">{{
+                              memoryGraphData.lastActive
+                                ? new Date(memoryGraphData.lastActive).toLocaleTimeString()
+                                : '-'
+                            }}</span>
+                          </PTooltip>
+                        </p>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <el-empty v-if="tasks.length === 0" description="暂无待办任务" />
               </div>
+            </div>
 
-              <!-- 5. 模型配置 -->
-              <div
-                v-else-if="currentTab === 'model_config'"
-                key="model_config"
-                class="view-container"
-              >
-                <div class="toolbar">
-                  <el-button @click="openGlobalSettings">🌍 全局服务商配置</el-button>
-                  <el-button type="primary" :icon="Edit" @click="openModelEditor(null)"
-                    >添加模型</el-button
-                  >
-                </div>
+            <!-- 4. 待办任务 -->
+            <div
+              v-else-if="currentTab === 'tasks'"
+              key="tasks"
+              class="h-full flex flex-col overflow-hidden"
+            >
+              <!-- Toolbar -->
+              <div class="p-6 pb-4 flex-none">
+                <PCard
+                  glass
+                  soft3d
+                  variant="orange"
+                  overflow-visible
+                  class="flex items-center justify-between !p-5 rounded-[2rem] relative group/ttoolbar z-30"
+                >
+                  <!-- 背景装饰 ✨ -->
+                  <div
+                    class="absolute -right-20 -top-20 w-40 h-40 bg-orange-400/10 blur-[60px] rounded-full pointer-events-none group-hover/ttoolbar:bg-orange-400/20 transition-all duration-1000"
+                  ></div>
 
-                <div class="models-grid-layout">
-                  <el-card
-                    v-for="model in models"
-                    :key="model.id"
-                    class="model-config-card"
-                    :class="{
-                      'active-main': currentActiveModelId === model.id,
-                      'active-secretary': secretaryModelId === model.id,
-                      'active-reflection': reflectionModelId === model.id
-                    }"
-                    shadow="hover"
-                  >
-                    <div class="model-header">
-                      <h3>{{ model.name }}</h3>
-                      <div class="badges">
-                        <el-tag v-if="model.enable_vision" type="success" size="small">视觉</el-tag>
-                        <el-tag v-if="model.enable_voice" type="warning" size="small">语音</el-tag>
-                        <el-tag v-if="model.enable_video" type="danger" size="small">视频</el-tag>
-                        <el-tag
-                          v-if="currentActiveModelId === model.id"
-                          effect="dark"
-                          color="#ff88aa"
-                          style="border: none; color: white"
-                          >主模型</el-tag
-                        >
-                        <el-tag v-if="secretaryModelId === model.id" type="warning" size="small"
-                          >秘书</el-tag
-                        >
-                        <el-tag v-if="reflectionModelId === model.id" type="danger" size="small"
-                          >反思</el-tag
-                        >
-                        <el-tag v-if="auxModelId === model.id" type="info" size="small"
-                          >辅助</el-tag
-                        >
-                      </div>
-                    </div>
-                    <div class="model-body">
-                      <p><strong>ID:</strong> {{ model.model_id }}</p>
-                      <p>
-                        <strong>Provider:</strong>
-                        <el-tag
-                          size="small"
-                          :type="
-                            model.provider === 'gemini'
-                              ? 'info'
-                              : model.provider === 'anthropic'
-                                ? 'warning'
-                                : 'success'
-                          "
-                          >{{ model.provider || 'openai' }}</el-tag
-                        >
-                      </p>
-                      <p><strong>Temp:</strong> {{ model.temperature }}</p>
-                      <p>
-                        <strong>Source:</strong>
-                        {{ model.provider_type === 'global' ? 'Global' : 'Custom' }}
-                      </p>
-                    </div>
-                    <div class="model-actions">
-                      <el-button-group class="action-group">
-                        <el-button
-                          size="small"
-                          :type="currentActiveModelId === model.id ? 'success' : 'default'"
-                          :disabled="currentActiveModelId === model.id"
-                          @click="activateModel(model.id, 'current_model_id')"
-                        >
-                          主模型
-                        </el-button>
-                        <el-button
-                          size="small"
-                          :type="secretaryModelId === model.id ? 'warning' : 'default'"
-                          @click="
-                            secretaryModelId === model.id
-                              ? activateModel(null, 'scorer_model_id')
-                              : activateModel(model.id, 'scorer_model_id')
-                          "
-                        >
-                          秘书
-                        </el-button>
-                        <el-button
-                          size="small"
-                          :type="reflectionModelId === model.id ? 'danger' : 'default'"
-                          @click="
-                            reflectionModelId === model.id
-                              ? activateModel(null, 'reflection_model_id')
-                              : activateModel(model.id, 'reflection_model_id')
-                          "
-                        >
-                          反思
-                        </el-button>
-                        <el-button
-                          size="small"
-                          :type="auxModelId === model.id ? 'info' : 'default'"
-                          @click="
-                            auxModelId === model.id
-                              ? activateModel(null, 'aux_model_id')
-                              : activateModel(model.id, 'aux_model_id')
-                          "
-                        >
-                          辅助
-                        </el-button>
-                      </el-button-group>
-                      <div class="utils-group">
-                        <el-button
-                          circle
-                          :icon="Edit"
-                          size="small"
-                          @click="openModelEditor(model)"
-                        ></el-button>
-                        <el-button
-                          circle
-                          :icon="Delete"
-                          size="small"
-                          type="danger"
-                          :disabled="currentActiveModelId === model.id"
-                          @click="deleteModel(model.id)"
-                        ></el-button>
-                      </div>
-                    </div>
-                  </el-card>
-                </div>
-              </div>
-
-              <!-- 6. 语音功能 -->
-              <div
-                v-else-if="currentTab === 'voice_config'"
-                key="voice_config"
-                class="view-container"
-              >
-                <VoiceConfigPanel />
-              </div>
-
-              <!-- 7. MCP 配置 -->
-              <div v-else-if="currentTab === 'mcp_config'" key="mcp_config" class="view-container">
-                <div class="toolbar">
-                  <el-button type="primary" :icon="Connection" @click="openMcpEditor(null)"
-                    >添加 MCP 服务器</el-button
-                  >
-                </div>
-                <el-row :gutter="20">
-                  <el-col v-for="mcp in mcps" :key="mcp.id" :xs="24" :sm="12" :md="8">
-                    <el-card
-                      class="mcp-card-modern"
-                      :class="{ disabled: !mcp.enabled }"
-                      shadow="hover"
+                  <div class="flex items-center gap-4 relative z-10">
+                    <div
+                      class="p-3 bg-orange-50 rounded-2xl text-orange-500 border border-orange-100 shadow-sm shadow-orange-200/20 group-hover/ttoolbar:scale-110 group-hover/ttoolbar:rotate-6 transition-all duration-500"
                     >
-                      <div class="mcp-header">
-                        <div class="mcp-title">{{ mcp.name }}</div>
-                        <el-switch
+                      <PixelIcon name="list" size="md" animation="bounce" />
+                    </div>
+                    <div>
+                      <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                        待办与计划
+                        <span
+                          class="text-xs font-normal text-slate-400 tracking-widest uppercase ml-1 opacity-50 group-hover/ttoolbar:opacity-100 transition-opacity"
+                          ># Tasks</span
+                        >
+                      </h3>
+                      <p class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                        管理 AI 生成的提醒事项与话题
+                        <span class="group-hover/ttoolbar:animate-pulse">✨ 🐾</span>
+                      </p>
+                    </div>
+                  </div>
+
+                  <!-- 角色选择 (Agent Selector) -->
+                  <div class="flex items-center gap-4 relative z-10">
+                    <div class="flex flex-col gap-1 min-w-[150px]">
+                      <label
+                        class="text-[10px] font-bold text-slate-400 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
+                      >
+                        <span class="w-1 h-1 rounded-full bg-orange-400 animate-pulse"></span>
+                        归属角色
+                      </label>
+                      <div class="relative group/tagent">
+                        <button
+                          class="w-full flex items-center justify-between px-4 py-2 bg-white/60 hover:bg-white/90 border border-orange-100/50 hover:border-orange-300 rounded-xl text-sm transition-all active:scale-95 shadow-sm soft-3d-shadow group/btn hover-pixel-bounce"
+                          :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
+                        >
+                          <span class="text-orange-600 font-bold flex items-center gap-2">
+                            <span
+                              class="text-xs opacity-0 group-hover/btn:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0"
+                              ><PixelIcon name="paw" size="xs"
+                            /></span>
+                            {{ activeAgent?.name || '未知' }}
+                          </span>
+                          <PixelIcon
+                            name="chevron-down"
+                            size="xs"
+                            class="text-slate-400 group-hover/tagent:rotate-180 transition-transform duration-500"
+                          />
+                        </button>
+
+                        <!-- 下拉菜单 (Dropdown Menu) -->
+                        <div
+                          class="absolute right-0 top-full mt-2 w-full py-2 bg-white/70 backdrop-blur-xl border border-orange-100 rounded-2xl shadow-xl shadow-orange-200/30 opacity-0 invisible group-hover/tagent:opacity-100 group-hover/tagent:visible transition-all duration-300 z-50 transform origin-top scale-95 group-hover/tagent:scale-100"
+                        >
+                          <div class="px-3 py-1.5 mb-1 border-b border-orange-50">
+                            <span
+                              class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-1"
+                            >
+                              切换角色 <span class="animate-bounce">✨</span>
+                            </span>
+                          </div>
+                          <button
+                            v-for="agent in availableAgents"
+                            :key="agent.id"
+                            class="w-full text-left px-4 py-2.5 text-sm hover:bg-orange-50 transition-all flex items-center justify-between group/item"
+                            :class="{
+                              'text-orange-600 font-bold bg-orange-50':
+                                agent.id === activeAgent?.id,
+                              'text-slate-600': agent.id !== activeAgent?.id,
+                              'opacity-50 cursor-not-allowed': !agent.is_enabled
+                            }"
+                            :disabled="agent.id === activeAgent?.id || !agent.is_enabled"
+                            @click="switchAgent(agent.id)"
+                          >
+                            <div class="flex items-center gap-2">
+                              <span
+                                class="text-xs opacity-0 group-hover/item:opacity-100 transition-opacity"
+                                ><PixelIcon name="paw" size="xs"
+                              /></span>
+                              <span>{{ agent.name }}</span>
+                            </div>
+                            <span
+                              v-if="!agent.is_enabled"
+                              class="text-[10px] text-slate-400 font-bold px-1.5 py-0.5 bg-slate-50 rounded-md"
+                              >DISABLED</span
+                            >
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </PCard>
+              </div>
+
+              <!-- 任务列表 (Task List) -->
+              <div class="flex-1 overflow-y-auto px-6 py-2 custom-scrollbar">
+                <div
+                  v-if="tasks.length"
+                  class="columns-1 md:columns-2 lg:columns-3 xl:columns-4 gap-6 space-y-6 pb-8"
+                >
+                  <div v-for="task in taskList" :key="task.id" class="break-inside-avoid mb-6">
+                    <PCard
+                      glass
+                      soft3d
+                      hoverable
+                      :variant="task.type === 'reminder' ? 'pink' : 'orange'"
+                      class="group/tcard relative !p-6 !rounded-[2rem] transition-all duration-500 overflow-hidden"
+                    >
+                      <!-- 背景装饰 ✨ -->
+                      <div
+                        class="absolute -right-10 -top-10 w-24 h-24 blur-[40px] rounded-full pointer-events-none transition-opacity duration-500 opacity-10 group-hover/tcard:opacity-20"
+                        :class="task.type === 'reminder' ? 'bg-pink-400' : 'bg-orange-400'"
+                      ></div>
+
+                      <!-- 🐾 Hover icon -->
+                      <div
+                        class="absolute -top-1 -right-1 opacity-0 group-hover/tcard:opacity-100 transition-all duration-500 scale-50 group-hover/tcard:scale-100 z-20"
+                      >
+                        <div
+                          class="shadow-lg rounded-full p-2"
+                          :class="
+                            task.type === 'reminder'
+                              ? 'bg-pink-400 shadow-pink-400/30'
+                              : 'bg-orange-400 shadow-orange-400/30'
+                          "
+                        >
+                          <PixelIcon name="sparkle" size="sm" class="text-white" />
+                        </div>
+                      </div>
+
+                      <!-- Header -->
+                      <div class="flex items-start justify-between mb-4 relative z-10">
+                        <span
+                          class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border backdrop-blur-md transition-all duration-300"
+                          :class="
+                            task.type === 'reminder'
+                              ? 'bg-pink-50 text-pink-500 border-pink-200 group-hover/tcard:bg-pink-100'
+                              : 'bg-orange-50 text-orange-500 border-orange-200 group-hover/tcard:bg-orange-100'
+                          "
+                        >
+                          <span class="mr-1">{{ task.type === 'reminder' ? '⏰' : '💡' }}</span>
+                          {{ task.type === 'reminder' ? '提醒' : '话题' }}
+                        </span>
+                        <button
+                          class="text-slate-400 hover:text-pink-500 transition-all opacity-0 group-hover/tcard:opacity-100 p-2 rounded-xl hover:bg-pink-50 active:scale-90"
+                          @click="deleteTask(task.id)"
+                        >
+                          <PixelIcon name="trash" size="xs" />
+                        </button>
+                      </div>
+
+                      <!-- Content -->
+                      <div
+                        class="text-[15px] text-slate-600 leading-relaxed mb-6 font-medium relative z-10 group-hover/tcard:text-slate-800 transition-colors"
+                      >
+                        {{ task.content }}
+                      </div>
+
+                      <!-- Footer -->
+                      <div
+                        class="flex items-center justify-between text-[11px] text-slate-400 font-mono border-t border-sky-100/30 pt-4 mt-auto relative z-10 group-hover/tcard:border-sky-200 transition-colors"
+                      >
+                        <div class="flex items-center gap-2">
+                          <PixelIcon
+                            name="calendar"
+                            size="xs"
+                            class="text-slate-300 group-hover/tcard:text-orange-500 transition-colors"
+                          />
+                          <span class="group-hover/tcard:text-slate-500 transition-colors">{{
+                            new Date(task.time).toLocaleString('zh-CN', {
+                              month: '2-digit',
+                              day: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
+                            })
+                          }}</span>
+                        </div>
+                        <span
+                          class="opacity-0 group-hover/tcard:opacity-100 transition-opacity duration-700"
+                          ><PixelIcon name="paw" size="xs"
+                        /></span>
+                      </div>
+                    </PCard>
+                  </div>
+                </div>
+
+                <!-- Empty State -->
+                <PEmpty v-else description="暂无待办任务，Pero 正在休息中... 🐾" />
+              </div>
+            </div>
+
+            <!-- 5. 模型配置 (重构版) -->
+            <div
+              v-else-if="currentTab === 'model_config'"
+              key="model_config"
+              class="h-full flex flex-col overflow-hidden"
+            >
+              <!-- Toolbar -->
+              <div class="p-6 pb-0 flex-none">
+                <PCard
+                  glass
+                  soft3d
+                  variant="sky"
+                  overflow-visible
+                  class="mb-4 !p-5 rounded-[2rem] relative group/mtoolbar z-30"
+                >
+                  <!-- 背景装饰 ✨ -->
+                  <div
+                    class="absolute -right-20 -top-20 w-40 h-40 bg-sky-400/10 blur-[60px] rounded-full pointer-events-none group-hover/mtoolbar:bg-sky-400/20 transition-all duration-1000"
+                  ></div>
+                  <div
+                    class="absolute -left-10 -bottom-10 w-32 h-32 bg-sky-400/5 blur-[50px] rounded-full pointer-events-none group-hover/mtoolbar:bg-sky-400/15 transition-all duration-1000 delay-150"
+                  ></div>
+
+                  <div class="flex flex-wrap items-center justify-between gap-5 relative z-10">
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="p-3 bg-sky-50 rounded-2xl text-sky-500 border border-sky-100 shadow-sm shadow-sky-200/20 group-hover/mtoolbar:scale-110 group-hover/mtoolbar:rotate-6 transition-all duration-500"
+                      >
+                        <PixelIcon name="settings" size="md" animation="spin" />
+                      </div>
+                      <div>
+                        <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                          模型配置
+                          <span
+                            class="text-xs font-normal text-slate-400 tracking-widest uppercase ml-1 opacity-50 group-hover/mtoolbar:opacity-100 transition-opacity"
+                            ># Models</span
+                          >
+                        </h3>
+                        <p class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                          配置 Pero 的大脑，支持多模型协作
+                          <span class="group-hover/mtoolbar:animate-pulse">✨ 🐾</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="flex items-center gap-3">
+                      <PButton
+                        variant="secondary"
+                        class="!rounded-2xl shadow-lg shadow-sky-200/20 hover:scale-105 active:scale-95 transition-all px-5 border-sky-100 hover:border-sky-300 hover-pixel-bounce"
+                        @click="openGlobalSettings"
+                      >
+                        <div class="flex items-center gap-1.5">
+                          <PixelIcon name="globe" size="xs" />
+                          全局服务商 <span class="ml-1 opacity-60">Global</span>
+                        </div>
+                      </PButton>
+                      <PButton
+                        variant="primary"
+                        class="!rounded-2xl shadow-lg shadow-sky-400/20 hover:scale-105 active:scale-95 transition-all px-6 hover-pixel-bounce"
+                        @click="openModelEditor(null)"
+                      >
+                        <div class="flex items-center gap-1.5">
+                          <PixelIcon name="plus" size="xs" />
+                          添加模型 <span class="ml-1 opacity-80">Add New</span>
+                        </div>
+                      </PButton>
+                    </div>
+                  </div>
+                </PCard>
+              </div>
+
+              <!-- Models Grid -->
+              <div class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+                <div
+                  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8"
+                >
+                  <div v-for="model in models" :key="model.id" class="group relative">
+                    <!-- 卡片主体 -->
+                    <PCard
+                      glass
+                      soft3d
+                      hoverable
+                      class="h-full !p-6 !rounded-[2rem] transition-all duration-500 overflow-hidden flex flex-col group/mcard"
+                      :class="[
+                        currentActiveModelId === model.id
+                          ? 'border-sky-300 bg-sky-50/50 ring-1 ring-sky-200'
+                          : '',
+                        secretaryModelId === model.id ? 'border-amber-300 bg-amber-50/50' : '',
+                        reflectionModelId === model.id ? 'border-rose-300 bg-rose-50/50' : ''
+                      ]"
+                    >
+                      <!-- 背景装饰 ✨ -->
+                      <div
+                        class="absolute -right-10 -top-10 w-24 h-24 blur-[40px] rounded-full pointer-events-none transition-all duration-700 opacity-10 group-hover/mcard:opacity-30"
+                        :class="[
+                          currentActiveModelId === model.id ? 'bg-sky-400' : 'bg-sky-200',
+                          secretaryModelId === model.id ? 'bg-amber-400' : '',
+                          reflectionModelId === model.id ? 'bg-rose-400' : ''
+                        ]"
+                      ></div>
+
+                      <!-- 头部信息 -->
+                      <div class="flex items-start justify-between mb-5 relative z-10">
+                        <div class="flex-1 min-w-0 pr-4">
+                          <PTooltip :content="model.name">
+                            <h3
+                              class="text-lg font-bold text-slate-700 truncate group-hover/mcard:text-slate-900 transition-colors"
+                            >
+                              {{ model.name }}
+                            </h3>
+                          </PTooltip>
+                          <div class="flex items-center gap-2 mt-1.5">
+                            <span
+                              class="text-[10px] font-mono text-slate-400 uppercase tracking-widest group-hover/mcard:text-slate-500"
+                            >
+                              {{ model.provider }}
+                            </span>
+                            <div
+                              v-if="model.enable_vision"
+                              class="flex items-center gap-1 px-1.5 py-0.5 rounded-md bg-sky-50 text-sky-500 border border-sky-100 text-[9px] font-bold"
+                            >
+                              <PixelIcon name="eye" size="xs" /> VISION
+                            </div>
+                          </div>
+                        </div>
+
+                        <!-- 角色指示器 (图标) -->
+                        <div class="flex -space-x-2">
+                          <PTooltip
+                            v-if="currentActiveModelId === model.id"
+                            content="主模型 (Main)"
+                          >
+                            <div
+                              class="w-8 h-8 rounded-full bg-sky-400 flex items-center justify-center text-white shadow-lg shadow-sky-400/30 border-2 border-white z-30"
+                            >
+                              <PixelIcon name="terminal" size="sm" />
+                            </div>
+                          </PTooltip>
+                          <PTooltip
+                            v-if="secretaryModelId === model.id"
+                            content="秘书模型 (Secretary)"
+                          >
+                            <div
+                              class="w-8 h-8 rounded-full bg-amber-400 flex items-center justify-center text-white shadow-lg shadow-amber-400/30 border-2 border-white z-20"
+                            >
+                              <PixelIcon name="chat" size="sm" />
+                            </div>
+                          </PTooltip>
+                          <PTooltip
+                            v-if="reflectionModelId === model.id"
+                            content="反思模型 (Reflection)"
+                          >
+                            <div
+                              class="w-8 h-8 rounded-full bg-rose-400 flex items-center justify-center text-white shadow-lg shadow-rose-400/30 border-2 border-white z-10"
+                            >
+                              <PixelIcon name="brain" size="sm" />
+                            </div>
+                          </PTooltip>
+                          <PTooltip v-if="auxModelId === model.id" content="辅助模型 (Aux)">
+                            <div
+                              class="w-8 h-8 rounded-full bg-indigo-400 flex items-center justify-center text-white shadow-lg shadow-indigo-400/30 border-2 border-white z-0"
+                            >
+                              <PixelIcon name="sparkle" size="sm" />
+                            </div>
+                          </PTooltip>
+                        </div>
+                      </div>
+
+                      <!-- 统计 / 信息 -->
+                      <div class="space-y-3 mb-6 relative z-10">
+                        <div class="flex items-center justify-between text-[11px]">
+                          <span class="text-slate-400">模型 ID</span>
+                          <span class="text-slate-500 font-mono truncate max-w-[120px]">{{
+                            model.model_id
+                          }}</span>
+                        </div>
+                        <div class="flex items-center justify-between text-[11px]">
+                          <span class="text-slate-400">上下文窗口</span>
+                          <span class="text-slate-500 font-mono">{{
+                            model.max_tokens ? (model.max_tokens / 1024).toFixed(0) + 'K' : '自动'
+                          }}</span>
+                        </div>
+                      </div>
+
+                      <!-- 操作按钮 (常驻但带主题色) -->
+                      <div
+                        class="mt-auto pt-4 border-t border-sky-100/30 flex items-center justify-end gap-2 relative z-30"
+                      >
+                        <PTooltip content="编辑模型" placement="top">
+                          <button
+                            class="p-2 rounded-xl text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-all active:scale-90 group/btn-edit"
+                            @click="openModelEditor(model)"
+                          >
+                            <PixelIcon
+                              name="pencil"
+                              size="xs"
+                              class="group-hover/btn-edit:rotate-12 transition-transform"
+                            />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="删除模型" placement="top">
+                          <button
+                            class="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-90 group/btn-del"
+                            @click="deleteModel(model.id)"
+                          >
+                            <PixelIcon
+                              name="trash"
+                              size="xs"
+                              class="group-hover/btn-del:shake transition-transform"
+                            />
+                          </button>
+                        </PTooltip>
+                      </div>
+
+                      <!-- 快速切换角色操作 (仅悬停显示) - 优化后的设计 ✨ -->
+                      <div
+                        class="absolute left-1/2 -translate-x-1/2 bottom-12 bg-white/90 backdrop-blur-2xl p-2.5 rounded-2xl border border-sky-100/50 opacity-0 group-hover/mcard:opacity-100 translate-y-2 group-hover/mcard:translate-y-0 transition-all duration-500 z-40 flex gap-1.5 justify-center shadow-2xl shadow-sky-200/40 pointer-events-none group-hover/mcard:pointer-events-auto border-b-2 border-b-sky-200/50"
+                      >
+                        <div
+                          class="absolute -top-2 left-1/2 -translate-x-1/2 px-2 py-0.5 bg-sky-500 rounded-full text-[7px] text-white font-black tracking-widest uppercase shadow-sm whitespace-nowrap"
+                        >
+                          Quick Roles
+                        </div>
+                        <PTooltip content="设为主模型" placement="top">
+                          <button
+                            class="p-2 rounded-xl transition-all active:scale-90"
+                            :class="
+                              currentActiveModelId === model.id
+                                ? 'bg-sky-500 text-white shadow-lg shadow-sky-200 soft-3d-shadow'
+                                : 'bg-sky-50/50 text-sky-500 hover:bg-sky-100 border border-sky-100/50'
+                            "
+                            @click="setActiveModel(model.id)"
+                          >
+                            <PixelIcon name="terminal" size="xs" />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="设为秘书模型" placement="top">
+                          <button
+                            class="p-2 rounded-xl transition-all active:scale-90"
+                            :class="
+                              secretaryModelId === model.id
+                                ? 'bg-amber-400 text-white shadow-lg shadow-amber-200 soft-3d-shadow'
+                                : 'bg-amber-50/50 text-amber-500 hover:bg-amber-100 border border-amber-100/50'
+                            "
+                            @click="setSecretaryModel(model.id)"
+                          >
+                            <PixelIcon name="chat" size="xs" />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="设为反思模型" placement="top">
+                          <button
+                            class="p-2 rounded-xl transition-all active:scale-90"
+                            :class="
+                              reflectionModelId === model.id
+                                ? 'bg-rose-400 text-white shadow-lg shadow-rose-200 soft-3d-shadow'
+                                : 'bg-rose-50/50 text-rose-500 hover:bg-rose-100 border border-rose-100/50'
+                            "
+                            @click="setReflectionModel(model.id)"
+                          >
+                            <PixelIcon name="brain" size="xs" />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="设为辅助模型" placement="top">
+                          <button
+                            class="p-2 rounded-xl transition-all active:scale-90"
+                            :class="
+                              auxModelId === model.id
+                                ? 'bg-indigo-400 text-white shadow-lg shadow-indigo-200 soft-3d-shadow'
+                                : 'bg-indigo-50/50 text-indigo-500 hover:bg-indigo-100 border border-indigo-100/50'
+                            "
+                            @click="setAuxModel(model.id)"
+                          >
+                            <PixelIcon name="sparkle" size="xs" />
+                          </button>
+                        </PTooltip>
+                      </div>
+                    </PCard>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 6. 语音功能 -->
+            <div
+              v-else-if="currentTab === 'voice_config'"
+              key="voice_config"
+              class="view-container"
+            >
+              <VoiceConfigPanel />
+            </div>
+
+            <!-- 7. MCP 配置 (重构版) -->
+            <div
+              v-else-if="currentTab === 'mcp_config'"
+              key="mcp_config"
+              class="h-full flex flex-col overflow-hidden"
+            >
+              <!-- Toolbar -->
+              <div class="p-6 pb-0 flex-none">
+                <PCard
+                  glass
+                  soft3d
+                  variant="sky"
+                  overflow-visible
+                  class="mb-4 !p-5 rounded-[2rem] relative group/mtoolbar z-30"
+                >
+                  <!-- 背景装饰 ✨ -->
+                  <div
+                    class="absolute -right-20 -top-20 w-40 h-40 bg-sky-400/10 blur-[60px] rounded-full pointer-events-none group-hover/mtoolbar:bg-sky-400/20 transition-all duration-1000"
+                  ></div>
+
+                  <div class="flex flex-wrap items-center justify-between gap-5 relative z-10">
+                    <div class="flex items-center gap-4">
+                      <div
+                        class="p-3 bg-sky-50 rounded-2xl text-sky-500 border border-sky-100 shadow-sm shadow-sky-200/20 group-hover/mtoolbar:scale-110 group-hover/mtoolbar:rotate-6 transition-all duration-500"
+                      >
+                        <PixelIcon name="terminal" size="md" animation="bounce" />
+                      </div>
+                      <div>
+                        <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                          MCP 扩展能力
+                          <span
+                            class="text-xs font-normal text-slate-400 tracking-widest uppercase ml-1 opacity-50 group-hover/mtoolbar:opacity-100 transition-opacity"
+                            ># MCP Config</span
+                          >
+                        </h3>
+                        <p class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
+                          让 Pero 拥有操作工具、访问网页和执行命令的能力
+                          <span class="group-hover/mtoolbar:animate-bounce">🛠️ 🐾</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <PButton
+                      variant="primary"
+                      class="!rounded-2xl shadow-lg shadow-sky-400/20 hover:scale-105 active:scale-95 transition-all px-6 relative z-10 hover-pixel-bounce"
+                      @click="openMcpEditor(null)"
+                    >
+                      <div class="flex items-center gap-1.5">
+                        <PixelIcon name="plus" size="xs" />
+                        添加 MCP 服务器 <span class="ml-1 opacity-80">Add Server</span>
+                      </div>
+                    </PButton>
+                  </div>
+                </PCard>
+              </div>
+
+              <!-- MCP Servers Grid -->
+              <div class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+                <div
+                  class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8"
+                >
+                  <div v-for="mcp in mcps" :key="mcp.id" class="group/mcp-container relative">
+                    <!-- 卡片主体 -->
+                    <PCard
+                      glass
+                      soft3d
+                      hoverable
+                      variant="sky"
+                      class="h-full !p-6 !rounded-[2rem] transition-all duration-500 overflow-hidden flex flex-col group/mcard"
+                      :class="[
+                        mcp.enabled
+                          ? 'border-sky-300/30 hover:shadow-sky-100/50'
+                          : 'opacity-60 grayscale'
+                      ]"
+                    >
+                      <!-- 背景装饰 ✨ -->
+                      <div
+                        class="absolute -right-10 -top-10 w-24 h-24 blur-[40px] rounded-full pointer-events-none transition-all duration-700 opacity-10 group-hover/mcard:opacity-30"
+                        :class="mcp.enabled ? 'bg-sky-400' : 'bg-sky-200'"
+                      ></div>
+
+                      <!-- Header -->
+                      <div class="flex items-center justify-between mb-5 relative z-10">
+                        <div class="flex-1 min-w-0 pr-4">
+                          <PTooltip :content="mcp.name">
+                            <h3
+                              class="text-base font-black text-slate-800 truncate group-hover/mcard:text-sky-600 transition-colors"
+                            >
+                              {{ mcp.name }}
+                            </h3>
+                          </PTooltip>
+                          <div class="flex items-center gap-2 mt-1">
+                            <span
+                              class="px-2.5 py-1 rounded-lg text-[9px] uppercase font-black border tracking-widest transition-all"
+                              :class="
+                                mcp.type === 'stdio'
+                                  ? 'bg-slate-50 text-slate-400 border-slate-100 group-hover/mcard:border-slate-200'
+                                  : 'bg-sky-50 text-sky-500 border-sky-100 group-hover/mcard:border-sky-200 shadow-sm shadow-sky-100'
+                              "
+                              >{{ mcp.type }}</span
+                            >
+                          </div>
+                        </div>
+                        <PSwitch
                           v-model="mcp.enabled"
-                          inline-prompt
-                          active-text="ON"
-                          inactive-text="OFF"
+                          class="scale-90"
                           @change="() => toggleMcpEnabled(mcp)"
                         />
                       </div>
-                      <div class="mcp-info">
-                        <el-tag size="small" :type="mcp.type === 'stdio' ? 'info' : 'primary'">{{
-                          mcp.type.toUpperCase()
-                        }}</el-tag>
-                        <div class="mcp-detail">
-                          {{ mcp.type === 'stdio' ? mcp.command : mcp.url }}
+
+                      <!-- Config Details -->
+                      <div class="space-y-3 mb-6 relative z-10">
+                        <div class="flex flex-col gap-2">
+                          <span
+                            class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >
+                            {{ mcp.type === 'stdio' ? '启动命令 Command' : '服务地址 URL' }}
+                          </span>
+                          <PTooltip :content="mcp.type === 'stdio' ? mcp.command : mcp.url">
+                            <div
+                              class="text-[11px] text-slate-600 font-mono break-all bg-sky-50/50 p-3.5 rounded-2xl border border-sky-100/50 group-hover/mcard:border-sky-200 transition-all leading-relaxed soft-3d-shadow"
+                            >
+                              {{ mcp.type === 'stdio' ? mcp.command : mcp.url }}
+                            </div>
+                          </PTooltip>
                         </div>
                       </div>
-                      <div class="mcp-footer">
-                        <el-button link :icon="Edit" @click="openMcpEditor(mcp)">配置</el-button>
-                        <el-button link :icon="Delete" type="danger" @click="deleteMcp(mcp.id)"
-                          >删除</el-button
-                        >
-                      </div>
-                    </el-card>
-                  </el-col>
-                </el-row>
-              </div>
 
-              <!-- 8. 用户设定 -->
-              <div
-                v-else-if="currentTab === 'user_settings'"
-                key="user_settings"
-                class="view-container"
-              >
-                <el-card shadow="never" class="glass-card">
-                  <template #header>
-                    <div class="card-header">
-                      <span>主人身份设定</span>
-                    </div>
-                  </template>
-                  <el-form label-position="top">
-                    <el-form-item label="主人的名字 (Owner Name)">
-                      <el-input
-                        v-model="userSettings.owner_name"
-                        :placeholder="(activeAgent?.name || 'Pero') + ' 对你的称呼'"
-                      />
-                    </el-form-item>
-                    <el-form-item label="主人的 QQ 号 (Owner QQ)">
-                      <el-input
-                        v-model="userSettings.owner_qq"
-                        :placeholder="'用于 ' + (activeAgent?.name || 'Pero') + ' 主动联系你'"
-                      />
-                    </el-form-item>
-                    <el-form-item label="主人的人设信息 (Owner Persona)">
-                      <el-input
-                        v-model="userSettings.user_persona"
-                        type="textarea"
-                        :rows="6"
-                        placeholder="描述一下你自己，比如你的性格、职业、与 Pero 的关系等。这些信息会帮助 Pero 更好地了解你并调整交流方式。"
-                      />
-                    </el-form-item>
-                    <el-form-item>
-                      <el-button type="primary" :loading="isSaving" @click="saveUserSettings"
-                        >保存设定</el-button
+                      <!-- Actions -->
+                      <div
+                        class="mt-auto pt-5 border-t border-sky-100/30 flex items-center justify-end gap-2 relative z-10"
                       >
-                    </el-form-item>
-                  </el-form>
-                </el-card>
+                        <PTooltip content="配置服务器" placement="top">
+                          <button
+                            class="p-2 rounded-xl text-slate-400 hover:text-sky-500 hover:bg-sky-50 transition-all active:scale-90 group/btn-edit"
+                            @click="openMcpEditor(mcp)"
+                          >
+                            <PixelIcon
+                              name="pencil"
+                              size="xs"
+                              class="group-hover/btn-edit:rotate-12 transition-transform"
+                            />
+                          </button>
+                        </PTooltip>
+                        <PTooltip content="删除服务器" placement="top">
+                          <button
+                            class="p-2 rounded-xl text-slate-400 hover:text-rose-500 hover:bg-rose-50 transition-all active:scale-90 group/btn-del"
+                            @click="deleteMcp(mcp.id)"
+                          >
+                            <PixelIcon
+                              name="trash"
+                              size="xs"
+                              class="group-hover/btn-del:shake transition-transform"
+                            />
+                          </button>
+                        </PTooltip>
+                      </div>
+                    </PCard>
+                  </div>
+                </div>
               </div>
+            </div>
 
-              <!-- 9. 恢复出厂设置 -->
-              <div
-                v-else-if="currentTab === 'system_reset'"
-                key="system_reset"
-                class="view-container"
-              >
-                <el-card shadow="never" class="glass-card danger-card">
-                  <template #header>
-                    <div class="card-header">
-                      <span style="color: #f56c6c; font-weight: bold">⚠️ 恢复出厂设置</span>
-                    </div>
-                  </template>
-                  <div class="danger-content">
-                    <p>此操作将执行以下清理：</p>
-                    <ul>
-                      <li>清除所有<strong>长期记忆</strong> (Memories)</li>
-                      <li>清除所有<strong>对话历史</strong> (Conversation Logs)</li>
-                      <li>重置 Pero 的<strong>状态与情绪</strong> (Pet State)</li>
-                      <li>清除所有<strong>待办提醒与话题</strong> (Tasks)</li>
-                      <li>重置<strong>主人设定</strong> (Owner Persona)</li>
-                    </ul>
-                    <p style="margin-top: 15px; color: #909399">
-                      注：模型 API 配置、语音配置、MCP 配置将被保留。
+            <!-- 8. 用户设定 (重构版) -->
+            <div
+              v-else-if="currentTab === 'user_settings'"
+              key="user_settings"
+              class="h-full overflow-y-auto custom-scrollbar p-6"
+            >
+              <div class="max-w-2xl mx-auto pb-12">
+                <!-- Header -->
+                <div class="flex items-center gap-4 mb-8">
+                  <div
+                    class="p-3 bg-sky-50 rounded-2xl text-sky-500 border border-sky-100 shadow-sm shadow-sky-200/20"
+                  >
+                    <PixelIcon name="user" size="md" animation="bounce" />
+                  </div>
+                  <div>
+                    <h3 class="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                      主人身份设定
+                      <span
+                        class="text-xs font-normal text-slate-400 tracking-widest uppercase ml-1"
+                        ># Owner Persona</span
+                      >
+                    </h3>
+                    <p class="text-sm text-slate-500 flex items-center gap-1">
+                      让 {{ activeAgent?.name || 'Pero' }} 更好地认识主人吧
+                      <PixelIcon name="sparkle" size="xs" animation="pulse" />
+                      <PixelIcon name="paw" size="xs" />
                     </p>
+                  </div>
+                </div>
 
-                    <div style="margin-top: 30px">
-                      <el-button
-                        type="danger"
-                        size="large"
+                <PCard
+                  glass
+                  soft3d
+                  pixel
+                  variant="sky"
+                  class="relative overflow-hidden border-sky-100 hover:border-sky-300 transition-all duration-700 rounded-[2.5rem] shadow-xl shadow-sky-100/30 group/settings-card bg-white/80"
+                >
+                  <!-- 背景装饰 ✨ -->
+                  <div
+                    class="absolute -right-20 -top-20 w-60 h-60 bg-sky-400/5 blur-[80px] rounded-full pointer-events-none group-hover/settings-card:bg-sky-400/10 transition-all duration-1000"
+                  ></div>
+                  <div
+                    class="absolute -left-10 -bottom-10 w-40 h-40 bg-sky-400/5 blur-[60px] rounded-full pointer-events-none group-hover/settings-card:bg-sky-400/10 transition-all duration-1000 delay-300"
+                  ></div>
+
+                  <div class="p-4 space-y-8 relative z-10">
+                    <!-- Name & QQ -->
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div class="space-y-3">
+                        <label
+                          class="text-sm font-bold text-slate-600 flex items-center gap-2 ml-1"
+                        >
+                          <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                          主人的名字
+                          <span class="text-[10px] text-slate-400 font-normal uppercase"
+                            >Owner Name</span
+                          >
+                        </label>
+                        <PInput
+                          v-model="userSettings.owner_name"
+                          class="!rounded-2xl !bg-white/80 !border-sky-100 focus:!border-sky-300 transition-all shadow-sm"
+                          :placeholder="(activeAgent?.name || 'Pero') + ' 对你的称呼'"
+                        />
+                      </div>
+                      <div class="space-y-3">
+                        <label
+                          class="text-sm font-bold text-slate-600 flex items-center gap-2 ml-1"
+                        >
+                          <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                          主人的 QQ 号
+                          <span class="text-[10px] text-slate-400 font-normal uppercase"
+                            >Owner QQ</span
+                          >
+                        </label>
+                        <PInput
+                          v-model="userSettings.owner_qq"
+                          class="!rounded-2xl !bg-white/80 !border-sky-100 focus:!border-sky-300 transition-all shadow-sm"
+                          :placeholder="'用于 ' + (activeAgent?.name || 'Pero') + ' 主动联系你'"
+                        />
+                      </div>
+                    </div>
+
+                    <!-- Persona -->
+                    <div class="space-y-3">
+                      <label class="text-sm font-bold text-slate-600 flex items-center gap-2 ml-1">
+                        <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
+                        主人的人设信息
+                        <span class="text-[10px] text-slate-400 font-normal uppercase"
+                          >Owner Persona</span
+                        >
+                      </label>
+                      <PTextarea
+                        v-model="userSettings.user_persona"
+                        class="!rounded-[2rem] !bg-white/80 !border-sky-100 focus:!border-sky-300 transition-all shadow-sm leading-relaxed"
+                        :rows="10"
+                        placeholder="描述一下你自己，比如你的性格、职业、与 Pero 的关系等。这些信息会帮助 Pero 更好地了解你并调整交流方式。🐾"
+                      />
+                      <p class="text-[11px] text-slate-400 px-2 flex items-center gap-1.5">
+                        💡 完善的人设能让对话更具个性化和沉浸感哦~
+                      </p>
+                    </div>
+
+                    <!-- Actions -->
+                    <div class="pt-4 flex justify-end">
+                      <PButton
+                        variant="primary"
+                        size="lg"
+                        class="!rounded-2xl px-10 py-6 shadow-lg shadow-sky-400/20 hover:scale-105 active:scale-95 transition-all group/save-btn hover-pixel-bounce"
+                        :loading="isSaving"
+                        @click="saveUserSettings"
+                      >
+                        <span class="flex items-center gap-2">
+                          保存设定
+                          <span class="text-lg group-hover/save-btn:scale-125 transition-transform"
+                            ><PixelIcon name="thought" size="sm"
+                          /></span>
+                        </span>
+                      </PButton>
+                    </div>
+                  </div>
+                </PCard>
+              </div>
+            </div>
+
+            <!-- 9. 恢复出厂设置 (重构版) -->
+            <div
+              v-else-if="currentTab === 'system_reset'"
+              key="system_reset"
+              class="h-full overflow-y-auto custom-scrollbar p-6 flex items-center justify-center"
+            >
+              <PCard
+                glass
+                soft3d
+                pixel
+                variant="rose"
+                class="max-w-lg w-full !p-8 !rounded-[2.5rem] relative overflow-hidden group/reset-card"
+              >
+                <!-- 背景装饰 ✨ -->
+                <div
+                  class="absolute -right-20 -top-20 w-60 h-60 bg-rose-400/10 blur-[80px] rounded-full pointer-events-none group-hover/reset-card:bg-rose-400/20 transition-all duration-1000"
+                ></div>
+                <div
+                  class="absolute -left-20 -bottom-20 w-40 h-40 bg-amber-400/5 blur-[60px] rounded-full pointer-events-none group-hover/reset-card:bg-amber-400/10 transition-all duration-1000 delay-300"
+                ></div>
+
+                <div class="relative z-10">
+                  <div class="flex items-center gap-4 mb-8">
+                    <div
+                      class="p-4 bg-rose-50 rounded-2xl text-rose-500 border border-rose-100 shadow-sm shadow-rose-100/30 group-hover/reset-card:scale-110 group-hover/reset-card:rotate-6 transition-all duration-500 soft-3d-shadow"
+                    >
+                      <PixelIcon name="alert" size="lg" animation="pulse" />
+                    </div>
+                    <div>
+                      <h3 class="text-xl font-black text-slate-800">恢复出厂设置</h3>
+                      <p
+                        class="text-[10px] text-slate-400 mt-1 uppercase tracking-widest font-bold"
+                      >
+                        # System Factory Reset
+                      </p>
+                    </div>
+                  </div>
+
+                  <div class="space-y-6">
+                    <div
+                      class="bg-white/40 backdrop-blur-md rounded-[2rem] p-6 border border-rose-100/50 soft-3d-shadow"
+                    >
+                      <p class="text-sm font-bold text-slate-700 mb-4 flex items-center gap-2">
+                        <span class="w-1.5 h-1.5 rounded-full bg-rose-500 animate-pulse"></span>
+                        此操作将执行以下清理：
+                      </p>
+                      <ul class="space-y-3 text-slate-500 text-xs font-medium">
+                        <li
+                          class="flex items-center gap-3 group/item hover:text-slate-800 transition-colors"
+                        >
+                          <span
+                            class="w-1 h-1 rounded-full bg-rose-200 group-hover/item:bg-rose-500 transition-colors"
+                          ></span>
+                          清除所有 <strong class="text-rose-500">长期记忆</strong> (Memories)
+                        </li>
+                        <li
+                          class="flex items-center gap-3 group/item hover:text-slate-800 transition-colors"
+                        >
+                          <span
+                            class="w-1 h-1 rounded-full bg-rose-200 group-hover/item:bg-rose-500 transition-colors"
+                          ></span>
+                          清除所有 <strong class="text-rose-500">对话历史</strong> (Logs)
+                        </li>
+                        <li
+                          class="flex items-center gap-3 group/item hover:text-slate-800 transition-colors"
+                        >
+                          <span
+                            class="w-1 h-1 rounded-full bg-rose-200 group-hover/item:bg-rose-500 transition-colors"
+                          ></span>
+                          重置 Pero 的 <strong class="text-rose-500">状态与情绪</strong> (Pet State)
+                        </li>
+                        <li
+                          class="flex items-center gap-3 group/item hover:text-slate-800 transition-colors"
+                        >
+                          <span
+                            class="w-1 h-1 rounded-full bg-rose-200 group-hover/item:bg-rose-500 transition-colors"
+                          ></span>
+                          清除所有 <strong class="text-rose-500">待办提醒与话题</strong> (Tasks)
+                        </li>
+                        <li
+                          class="flex items-center gap-3 group/item hover:text-slate-800 transition-colors"
+                        >
+                          <span
+                            class="w-1 h-1 rounded-full bg-rose-200 group-hover/item:bg-rose-500 transition-colors"
+                          ></span>
+                          重置 <strong class="text-rose-500">主人设定</strong> (Owner Persona)
+                        </li>
+                      </ul>
+                    </div>
+
+                    <div
+                      class="p-4 bg-amber-50/50 backdrop-blur-md border border-amber-100 rounded-2xl text-[11px] text-amber-600 font-medium leading-relaxed soft-3d-shadow"
+                    >
+                      <span class="mr-1">💡</span>
+                      注：模型 API 配置、语音配置、MCP 配置将被保留，不用担心重新配置服务器哦~ ✨
+                    </div>
+
+                    <div class="pt-4 flex justify-center">
+                      <PButton
+                        variant="danger"
+                        size="lg"
+                        class="!rounded-2xl px-10 py-7 shadow-xl shadow-rose-400/20 hover:scale-105 active:scale-95 transition-all group/reset-btn relative overflow-hidden hover-pixel-bounce"
                         :loading="isSaving"
                         @click="handleSystemReset"
                       >
-                        立即恢复出厂设置
-                      </el-button>
+                        <div class="flex items-center gap-3 relative z-10">
+                          <PixelIcon
+                            name="trash"
+                            size="md"
+                            class="group-hover/reset-btn:shake transition-transform"
+                          />
+                          <span class="font-black tracking-widest text-base">立即执行深度重置</span>
+                          <span class="text-xl group-hover/reset-btn:rotate-12 transition-transform"
+                            ><PixelIcon name="firecracker" size="md"
+                          /></span>
+                        </div>
+                        <!-- Button gloss effect -->
+                        <div
+                          class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"
+                        ></div>
+                      </PButton>
                     </div>
                   </div>
-                </el-card>
-              </div>
+                </div>
+              </PCard>
+            </div>
 
-              <!-- 10. NapCat Terminal -->
-              <!-- 10. NapCat 终端 -->
+            <!-- 10. NapCat Terminal -->
+            <!-- 10. NapCat 终端 -->
+            <div
+              v-else-if="currentTab === 'napcat'"
+              key="napcat"
+              class="h-full flex flex-col p-6 overflow-hidden relative"
+            >
+              <!-- 背景装饰 ✨ -->
               <div
-                v-else-if="currentTab === 'napcat'"
-                key="napcat"
-                class="view-container"
-                style="height: 100%; display: flex; flex-direction: column"
-              >
-                <el-card
-                  shadow="never"
-                  class="glass-card"
-                  :body-style="{
-                    padding: '0',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    height: '100%'
-                  }"
-                  style="flex: 1; display: flex; flex-direction: column"
-                >
-                  <NapCatTerminal style="height: 100%" />
-                </el-card>
-              </div>
+                class="absolute -right-20 -top-20 w-80 h-80 bg-emerald-400/5 blur-[100px] rounded-full pointer-events-none"
+              ></div>
+              <div
+                class="absolute -left-20 -bottom-20 w-80 h-80 bg-sky-400/5 blur-[100px] rounded-full pointer-events-none"
+              ></div>
 
-              <!-- 11. 系统终端 -->
-              <div
-                v-else-if="currentTab === 'terminal'"
-                key="terminal"
-                class="view-container"
-                style="height: 100%"
+              <PCard
+                glass
+                soft3d
+                full-height
+                class="flex-1 flex flex-col overflow-hidden !p-0 border-emerald-100/50"
               >
-                <el-card
-                  shadow="never"
-                  class="glass-card"
-                  :body-style="{ padding: '0', height: '100%' }"
-                  style="height: 100%; display: flex; flex-direction: column"
-                >
-                  <TerminalPanel style="height: 100%" />
-                </el-card>
-              </div>
-            </Transition>
-          </div>
-        </el-main>
-      </el-container>
-    </el-container>
+                <NapCatTerminal class="h-full w-full" />
+              </PCard>
+            </div>
+
+            <!-- 11. 系统终端 -->
+            <div
+              v-else-if="currentTab === 'terminal'"
+              key="terminal"
+              class="h-full flex flex-col p-6 overflow-hidden relative"
+            >
+              <!-- 背景装饰 ✨ -->
+              <div
+                class="absolute -right-20 -top-20 w-80 h-80 bg-blue-400/5 blur-[100px] rounded-full pointer-events-none"
+              ></div>
+              <div
+                class="absolute -left-20 -bottom-20 w-80 h-80 bg-indigo-400/5 blur-[100px] rounded-full pointer-events-none"
+              ></div>
+
+              <PCard
+                glass
+                soft3d
+                full-height
+                class="flex-1 flex flex-col overflow-hidden !p-0 border-blue-100/50"
+              >
+                <TerminalPanel class="h-full w-full" />
+              </PCard>
+            </div>
+          </Transition>
+        </div>
+      </main>
+    </div>
 
     <!-- Dialogs -->
     <!-- Story Import Dialog -->
-    <el-dialog v-model="showImportStoryDialog" title="导入故事生成记忆" width="600px">
-      <div style="margin-bottom: 15px; color: #909399; line-height: 1.5">
-        <p>你可以将小说设定、人物背景、日记或长篇回忆录粘贴在这里。</p>
-        <p>Pero 将会阅读这些内容，并将其拆解为一系列关键记忆节点存入数据库，作为它的“长期记忆”。</p>
-        <p>⚠️ 注意：这是一个耗时操作，且会消耗较多 Token。</p>
-      </div>
-      <el-input
-        v-model="importStoryText"
-        type="textarea"
-        :rows="10"
-        placeholder="在此粘贴长文本..."
-      />
-      <template #footer>
-        <span class="dialog-footer">
-          <el-button @click="showImportStoryDialog = false">取消</el-button>
-          <el-button type="primary" :loading="isImportingStory" @click="handleImportStory">
-            开始生成
-          </el-button>
-        </span>
-      </template>
-    </el-dialog>
-
-    <!-- 弹窗 -->
-    <el-dialog v-model="showGlobalSettings" title="全局服务商配置" width="500px" center>
-      <el-form label-position="top">
-        <el-form-item label="服务商 (Provider)">
-          <el-select
-            v-model="globalConfig.provider"
-            placeholder="选择服务商"
-            style="width: 100%"
-            @change="handleGlobalProviderChange"
+    <PModal
+      v-model="showImportStoryDialog"
+      title="导入故事生成记忆"
+      width="600px"
+      class="backdrop-blur-2xl bg-white/80 border-sky-100 shadow-2xl shadow-sky-100/40"
+    >
+      <div class="space-y-4">
+        <div class="text-sm text-slate-600 leading-relaxed">
+          <p>你可以将小说设定、人物背景、日记或长篇回忆录粘贴在这里。</p>
+          <p>
+            Pero 将会阅读这些内容，并将其拆解为一系列关键记忆节点存入数据库，作为它的“长期记忆”。
+          </p>
+          <p
+            class="mt-2 text-amber-600 text-xs font-bold flex items-center gap-1.5 bg-amber-50 px-3 py-2 rounded-lg border border-amber-200"
           >
-            <el-option label="OpenAI (兼容)" value="openai" />
-            <el-option label="SiliconFlow (硅基流动)" value="siliconflow" />
-            <el-option label="DeepSeek (深度求索)" value="deepseek" />
-            <el-option label="Moonshot (Kimi)" value="moonshot" />
-            <el-option label="DashScope (阿里百炼)" value="dashscope" />
-            <el-option label="Volcengine (火山引擎)" value="volcengine" />
-            <el-option label="Groq" value="groq" />
-            <el-option label="Zhipu (智谱GLM)" value="zhipu" />
-            <el-option label="MiniMax" value="minimax" />
-            <el-option label="Mistral" value="mistral" />
-            <el-option label="01.AI (零一万物)" value="yi" />
-            <el-option label="xAI (Grok)" value="xai" />
-            <el-option label="StepFun (阶跃星辰)" value="stepfun" />
-            <el-option label="Hunyuan (腾讯混元)" value="hunyuan" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="API Key">
-          <el-input v-model="globalConfig.global_llm_api_key" type="password" show-password />
-        </el-form-item>
-        <el-form-item label="API Base URL">
-          <el-input
+            <PixelIcon name="alert" size="xs" />
+            注意：这是一个耗时操作，且会消耗较多 Token。
+          </p>
+        </div>
+        <PTextarea
+          v-model="importStoryText"
+          :rows="10"
+          placeholder="在此粘贴长文本..."
+          class="bg-sky-50/50 border-sky-100 focus:border-sky-300 transition-all duration-300"
+        />
+        <div class="flex justify-end gap-3 pt-2">
+          <PButton variant="ghost" @click="showImportStoryDialog = false">取消</PButton>
+          <PButton
+            variant="primary"
+            :loading="isImportingStory"
+            class="shadow-lg shadow-sky-400/20"
+            @click="handleImportStory"
+          >
+            开始生成
+          </PButton>
+        </div>
+      </div>
+    </PModal>
+
+    <!-- Global Settings Dialog -->
+    <PModal
+      v-model="showGlobalSettings"
+      title="全局服务商配置"
+      width="500px"
+      overflow-visible
+      class="backdrop-blur-2xl bg-white/80 border-sky-100 shadow-2xl shadow-sky-100/40"
+    >
+      <div class="space-y-5">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">服务商 (Provider)</label>
+          <PSelect
+            v-model="globalConfig.provider"
+            :options="providerOptions"
+            placeholder="选择服务商"
+            class="bg-white/80 border-sky-100"
+            @change="handleGlobalProviderChange"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">API Key</label>
+          <PInput
+            v-model="globalConfig.global_llm_api_key"
+            type="password"
+            placeholder="sk-..."
+            class="bg-white/80 border-sky-100"
+          />
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">API Base URL</label>
+          <PInput
             v-model="globalConfig.global_llm_api_base"
             placeholder="https://api.openai.com"
             :disabled="globalConfig.provider === 'deepseek'"
+            class="bg-white/80 border-sky-100"
           />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showGlobalSettings = false">取消</el-button>
-        <el-button type="primary" :loading="isSaving" @click="saveGlobalSettings">保存</el-button>
-      </template>
-    </el-dialog>
+        </div>
+        <div class="flex justify-end gap-3 pt-4 border-t border-sky-100 mt-6">
+          <PButton variant="ghost" @click="showGlobalSettings = false">取消</PButton>
+          <PButton
+            variant="primary"
+            :loading="isSaving"
+            class="shadow-lg shadow-sky-400/20"
+            @click="saveGlobalSettings"
+            >保存</PButton
+          >
+        </div>
+      </div>
+    </PModal>
 
-    <el-dialog
+    <!-- Model Editor Dialog -->
+    <PModal
       v-model="showModelEditor"
       :title="currentEditingModel.id ? '编辑模型' : '添加模型'"
       width="600px"
+      overflow-visible
+      class="backdrop-blur-2xl bg-white/80 border-sky-100 shadow-2xl shadow-sky-100/40"
     >
-      <el-form label-width="120px">
-        <el-form-item label="显示名称">
-          <el-input v-model="currentEditingModel.name" placeholder="例如：GPT-4o" />
-        </el-form-item>
-        <el-form-item label="服务商 (Provider)">
-          <el-select
-            v-model="currentEditingModel.provider"
-            placeholder="选择服务商"
-            style="width: 100%"
-            @change="handleProviderChange"
-          >
-            <el-option label="OpenAI (兼容)" value="openai" />
-            <el-option label="Gemini (原生)" value="gemini" />
-            <el-option label="Claude (Anthropic)" value="anthropic" />
-            <el-option label="SiliconFlow (硅基流动)" value="siliconflow" />
-            <el-option label="DeepSeek (深度求索)" value="deepseek" />
-            <el-option label="Moonshot (Kimi)" value="moonshot" />
-            <el-option label="DashScope (阿里百炼)" value="dashscope" />
-            <el-option label="Volcengine (火山引擎)" value="volcengine" />
-            <el-option label="Groq" value="groq" />
-            <el-option label="Zhipu (智谱GLM)" value="zhipu" />
-            <el-option label="MiniMax" value="minimax" />
-            <el-option label="Mistral" value="mistral" />
-            <el-option label="01.AI (零一万物)" value="yi" />
-            <el-option label="xAI (Grok)" value="xai" />
-            <el-option label="StepFun (阶跃星辰)" value="stepfun" />
-            <el-option label="Hunyuan (腾讯混元)" value="hunyuan" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="Model ID">
-          <div style="display: flex; gap: 10px; width: 100%">
-            <el-input v-model="currentEditingModel.model_id" placeholder="gpt-4" />
-            <el-button :loading="isFetchingRemote" @click="fetchRemoteModels">获取列表</el-button>
-          </div>
-          <el-select
-            v-if="remoteModels.length"
-            v-model="currentEditingModel.model_id"
-            placeholder="选择获取到的模型"
-            style="width: 100%; margin-top: 5px"
-          >
-            <el-option v-for="m in remoteModels" :key="m" :label="m" :value="m" />
-          </el-select>
-        </el-form-item>
-        <el-form-item label="配置来源">
-          <el-radio-group v-model="currentEditingModel.provider_type">
-            <el-radio value="global">全局继承</el-radio>
-            <el-radio value="custom">独立配置</el-radio>
-          </el-radio-group>
-        </el-form-item>
-
-        <div v-if="currentEditingModel.provider_type === 'custom'" class="sub-form">
-          <el-form-item label="API Key">
-            <el-input v-model="currentEditingModel.api_key" type="password" />
-          </el-form-item>
-          <el-form-item
-            v-if="!['gemini', 'anthropic'].includes(currentEditingModel.provider)"
-            label="Base URL"
-          >
-            <el-input
-              v-model="currentEditingModel.api_base"
-              :disabled="!!providerDefaults[currentEditingModel.provider]"
-            />
-          </el-form-item>
+      <div class="space-y-5">
+        <!-- Display Name -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">显示名称</label>
+          <PInput
+            v-model="currentEditingModel.name"
+            placeholder="例如：GPT-4o"
+            class="bg-white/80 border-sky-100"
+          />
         </div>
 
-        <el-divider content-position="left">参数设置</el-divider>
+        <!-- Provider -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">服务商 (Provider)</label>
+          <PSelect
+            v-model="currentEditingModel.provider"
+            :options="providerOptions"
+            placeholder="选择服务商"
+            class="bg-white/80 border-sky-100"
+            @change="handleProviderChange"
+          />
+        </div>
 
-        <el-row :gutter="20">
-          <el-col :span="12">
-            <el-form-item label="Temperature">
-              <el-input-number
-                v-model="currentEditingModel.temperature"
-                :step="0.1"
-                :min="0"
-                :max="2"
-              />
-            </el-form-item>
-          </el-col>
-          <el-col :span="12">
-            <el-form-item label="Max Tokens">
-              <el-input-number v-model="currentEditingModel.max_tokens" :step="100" />
-            </el-form-item>
-          </el-col>
-        </el-row>
-
-        <el-form-item>
-          <el-checkbox v-model="currentEditingModel.stream">开启流式传输 (Stream)</el-checkbox>
-          <div style="display: flex; gap: 10px; flex-wrap: wrap">
-            <el-checkbox v-model="currentEditingModel.enable_vision">视觉模态</el-checkbox>
-            <el-checkbox v-model="currentEditingModel.enable_voice">语音模态 (Input)</el-checkbox>
-            <el-checkbox v-model="currentEditingModel.enable_video">视频模态</el-checkbox>
+        <!-- Model ID -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">Model ID</label>
+          <div class="flex gap-2">
+            <PInput
+              v-model="currentEditingModel.model_id"
+              placeholder="gpt-4"
+              class="flex-1 bg-white/80 border-sky-100"
+            />
+            <PButton
+              :loading="isFetchingRemote"
+              class="bg-sky-50 text-sky-600 border-sky-100 hover:bg-sky-100"
+              @click="fetchRemoteModels"
+              >获取列表</PButton
+            >
           </div>
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showModelEditor = false">取消</el-button>
-        <el-button type="primary" :loading="isSaving" @click="saveModel">保存</el-button>
-      </template>
-    </el-dialog>
+          <PSelect
+            v-if="remoteModels.length"
+            v-model="currentEditingModel.model_id"
+            :options="remoteModels.map((m) => ({ label: m, value: m }))"
+            placeholder="选择获取到的模型"
+            class="mt-1 bg-white/80 border-sky-100"
+          />
+        </div>
 
-    <el-dialog
+        <!-- Configuration Source -->
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">配置来源</label>
+          <div class="flex items-center gap-6">
+            <label class="flex items-center gap-2 cursor-pointer group">
+              <input
+                v-model="currentEditingModel.provider_type"
+                type="radio"
+                value="global"
+                class="hidden"
+              />
+              <div
+                class="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-200"
+                :class="
+                  currentEditingModel.provider_type === 'global'
+                    ? 'border-sky-500 shadow-lg shadow-sky-500/20'
+                    : 'border-slate-300 group-hover:border-sky-300'
+                "
+              >
+                <div
+                  class="w-2 h-2 rounded-full bg-sky-500 transform transition-transform duration-200"
+                  :class="currentEditingModel.provider_type === 'global' ? 'scale-100' : 'scale-0'"
+                ></div>
+              </div>
+              <span
+                class="text-sm text-slate-600 group-hover:text-sky-600 flex items-center gap-1.5"
+                >全局继承 <PixelIcon name="sparkle" size="xs"
+              /></span>
+            </label>
+
+            <label class="flex items-center gap-2 cursor-pointer group">
+              <input
+                v-model="currentEditingModel.provider_type"
+                type="radio"
+                value="custom"
+                class="hidden"
+              />
+              <div
+                class="w-4 h-4 rounded-full border-2 flex items-center justify-center transition-all duration-200"
+                :class="
+                  currentEditingModel.provider_type === 'custom'
+                    ? 'border-sky-500 shadow-lg shadow-sky-500/20'
+                    : 'border-slate-300 group-hover:border-sky-300'
+                "
+              >
+                <div
+                  class="w-2 h-2 rounded-full bg-sky-500 transform transition-transform duration-200"
+                  :class="currentEditingModel.provider_type === 'custom' ? 'scale-100' : 'scale-0'"
+                ></div>
+              </div>
+              <span
+                class="text-sm text-slate-600 group-hover:text-sky-600 flex items-center gap-1.5"
+                >独立配置 <PixelIcon name="thought" size="xs"
+              /></span>
+            </label>
+          </div>
+        </div>
+
+        <!-- Custom Config Fields -->
+        <div
+          v-if="currentEditingModel.provider_type === 'custom'"
+          class="space-y-4 p-4 rounded-2xl bg-sky-50/30 border border-sky-100 shadow-inner"
+        >
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600 flex items-center gap-2">
+              <span class="w-1 h-1 rounded-full bg-sky-400"></span>
+              API Key
+            </label>
+            <PInput
+              v-model="currentEditingModel.api_key"
+              type="password"
+              class="!rounded-xl bg-white border-sky-100"
+            />
+          </div>
+          <div
+            v-if="!['gemini', 'anthropic'].includes(currentEditingModel.provider)"
+            class="space-y-2"
+          >
+            <label class="text-sm font-medium text-slate-600 flex items-center gap-2">
+              <span class="w-1 h-1 rounded-full bg-sky-400"></span>
+              Base URL
+            </label>
+            <PInput
+              v-model="currentEditingModel.api_base"
+              class="!rounded-xl bg-white border-sky-100"
+              :disabled="!!providerDefaults[currentEditingModel.provider]"
+            />
+          </div>
+        </div>
+
+        <div class="w-full h-px bg-sky-100 my-4"></div>
+        <h4
+          class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2"
+        >
+          参数设置 <span class="text-[10px] font-normal opacity-50"># Parameters</span>
+        </h4>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600">Temperature</label>
+            <PInputNumber
+              v-model="currentEditingModel.temperature"
+              :step="0.1"
+              :min="0"
+              :max="2"
+              class="!rounded-xl bg-white/80 border-sky-100"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600">Max Tokens</label>
+            <PInputNumber
+              v-model="currentEditingModel.max_tokens"
+              :step="100"
+              class="!rounded-xl bg-white/80 border-sky-100"
+            />
+          </div>
+        </div>
+
+        <div class="space-y-3 pt-2">
+          <PCheckbox v-model="currentEditingModel.stream" label="开启流式传输 (Stream)" />
+          <div class="flex flex-wrap gap-4">
+            <PCheckbox v-model="currentEditingModel.enable_vision" label="视觉模态" />
+            <PCheckbox v-model="currentEditingModel.enable_voice" label="语音模态 (Input)" />
+            <PCheckbox v-model="currentEditingModel.enable_video" label="视频模态" />
+          </div>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-6 border-t border-sky-100 mt-6">
+          <PButton variant="ghost" class="!rounded-xl" @click="showModelEditor = false"
+            >取消</PButton
+          >
+          <PButton
+            variant="primary"
+            class="!rounded-xl px-8 shadow-lg shadow-sky-400/20"
+            :loading="isSaving"
+            @click="saveModel"
+            >保存设定 <PixelIcon name="thought" size="xs" class="ml-1"
+          /></PButton>
+        </div>
+      </div>
+    </PModal>
+
+    <!-- MCP Editor Dialog -->
+    <PModal
       v-model="showMcpEditor"
       :title="currentEditingMcp.id ? '编辑 MCP' : '添加 MCP'"
       width="600px"
+      overflow-visible
+      class="backdrop-blur-2xl bg-white/70 border-sky-100 shadow-2xl shadow-sky-200/40"
     >
-      <el-form label-width="100px">
-        <el-form-item label="名称">
-          <el-input v-model="currentEditingMcp.name" />
-        </el-form-item>
-        <el-form-item label="类型">
-          <el-select v-model="currentEditingMcp.type">
-            <el-option label="Stdio (本地)" value="stdio" />
-            <el-option label="SSE (远程)" value="sse" />
-          </el-select>
-        </el-form-item>
+      <div class="space-y-5">
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">名称</label>
+          <PInput v-model="currentEditingMcp.name" class="bg-sky-50/50 border-sky-100" />
+        </div>
+        <div class="space-y-2">
+          <label class="text-sm font-medium text-slate-600">类型</label>
+          <PSelect
+            v-model="currentEditingMcp.type"
+            :options="mcpTypeOptions"
+            class="bg-sky-50/50 border-sky-100"
+          />
+        </div>
 
         <template v-if="currentEditingMcp.type === 'stdio'">
-          <el-form-item label="命令">
-            <el-input v-model="currentEditingMcp.command" placeholder="node, python..." />
-          </el-form-item>
-          <el-form-item label="参数 (JSON)">
-            <el-input
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600">命令</label>
+            <PInput
+              v-model="currentEditingMcp.command"
+              placeholder="node, python..."
+              class="bg-sky-50/50 border-sky-100"
+            />
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600">参数 (JSON)</label>
+            <PTextarea
               v-model="currentEditingMcp.args"
-              type="textarea"
               :rows="2"
               placeholder='["arg1", "arg2"]'
+              class="bg-sky-50/50 border-sky-100"
             />
-          </el-form-item>
-          <el-form-item label="环境变量">
-            <el-input
+          </div>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600">环境变量 (JSON)</label>
+            <PTextarea
               v-model="currentEditingMcp.env"
-              type="textarea"
               :rows="2"
               placeholder='{"KEY": "VALUE"}'
+              class="bg-sky-50/50 border-sky-100"
             />
-          </el-form-item>
+          </div>
         </template>
 
         <template v-if="currentEditingMcp.type === 'sse'">
-          <el-form-item label="URL">
-            <el-input v-model="currentEditingMcp.url" />
-          </el-form-item>
+          <div class="space-y-2">
+            <label class="text-sm font-medium text-slate-600">URL</label>
+            <PInput v-model="currentEditingMcp.url" class="bg-sky-50/50 border-sky-100" />
+          </div>
         </template>
 
-        <el-form-item>
-          <el-switch v-model="currentEditingMcp.enabled" active-text="启用" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showMcpEditor = false">取消</el-button>
-        <el-button type="primary" :loading="isSaving" @click="saveMcp">保存</el-button>
-      </template>
-    </el-dialog>
+        <div class="pt-2 flex items-center gap-3">
+          <PSwitch v-model="currentEditingMcp.enabled" />
+          <span class="text-sm text-slate-600">启用此 MCP 服务器</span>
+        </div>
+
+        <div class="flex justify-end gap-3 pt-4 border-t border-sky-100 mt-6">
+          <PButton variant="ghost" @click="showMcpEditor = false">取消</PButton>
+          <PButton
+            variant="primary"
+            :loading="isSaving"
+            class="shadow-lg shadow-sky-400/20"
+            @click="saveMcp"
+            >保存</PButton
+          >
+        </div>
+      </div>
+    </PModal>
 
     <!-- 调试日志弹窗 -->
-    <el-dialog
+    <PModal
       v-model="showDebugDialog"
       title="对话调试详情 (Debug View)"
       width="900px"
-      custom-class="debug-dialog"
-      destroy-on-close
+      class="backdrop-blur-2xl bg-white/70 border-sky-100 shadow-2xl shadow-sky-200/40"
     >
-      <div v-if="currentDebugLog" class="debug-content-container">
+      <div v-if="currentDebugLog" class="h-[70vh] flex flex-col">
         <!-- 顶部控制栏 -->
-        <div style="margin-bottom: 20px; display: flex; justify-content: center">
-          <el-radio-group v-model="debugViewMode" size="small" @change="handleDebugModeChange">
-            <el-radio-button label="response">回复记录解析 (Response)</el-radio-button>
-            <el-radio-button label="prompt">完整提示词 & ReAct (Prompt)</el-radio-button>
-          </el-radio-group>
-        </div>
-
-        <!-- 模式 1: 回复记录解析 -->
-        <div v-if="debugViewMode === 'response'">
-          <div
-            class="debug-meta-info"
-            style="
-              margin-bottom: 15px;
-              padding: 10px;
-              background: #f5f7fa;
-              border-radius: 4px;
-              font-size: 12px;
-              color: #606266;
+        <div
+          class="flex justify-center mb-4 bg-sky-50/50 p-1 rounded-lg self-center border border-sky-100 shrink-0"
+        >
+          <button
+            v-for="mode in [
+              { label: '回复记录解析 (Response)', value: 'response' },
+              { label: '完整提示词 & ReAct (Prompt)', value: 'prompt' }
+            ]"
+            :key="mode.value"
+            class="px-4 py-1.5 text-xs font-medium rounded-md transition-all duration-200 focus:outline-none"
+            :class="[
+              debugViewMode === mode.value
+                ? 'bg-sky-500 text-white shadow-lg shadow-sky-400/20'
+                : 'text-slate-500 hover:text-sky-600 hover:bg-sky-100'
+            ]"
+            @click="
+              () => {
+                handleDebugModeChange(mode.value)
+                debugViewMode = mode.value
+              }
             "
           >
-            <p><strong>Log ID:</strong> {{ currentDebugLog.id }}</p>
-            <p><strong>Role:</strong> {{ currentDebugLog.role }}</p>
-            <p>
-              <strong>Raw Content Length:</strong>
-              {{ (currentDebugLog.raw_content || currentDebugLog.content || '').length }} chars
-            </p>
-          </div>
-
-          <div class="debug-segments-viewer">
-            <div
-              v-for="(segment, index) in debugSegments"
-              :key="index"
-              :class="['debug-segment', segment.type]"
-            >
-              <div v-if="segment.type === 'thinking'" class="segment-label">
-                Thinking Chain (思维链)
-              </div>
-              <div v-if="segment.type === 'monologue'" class="segment-label">
-                Inner Monologue (内心独白)
-              </div>
-              <div v-if="segment.type === 'nit'" class="segment-label">NIT Script (工具调用)</div>
-
-              <div v-if="segment.type === 'thinking'" class="segment-content thinking-content">
-                {{ segment.content }}
-              </div>
-              <div
-                v-else-if="segment.type === 'monologue'"
-                class="segment-content monologue-content"
-              >
-                {{ segment.content }}
-              </div>
-              <div v-else-if="segment.type === 'nit'" class="segment-content nit-content">
-                <pre>{{ segment.content }}</pre>
-              </div>
-              <div v-else class="segment-content text-content">
-                <AsyncMarkdown :content="segment.content" />
-              </div>
-            </div>
-          </div>
+            {{ mode.label }}
+          </button>
         </div>
 
-        <!-- 模式 2: 完整提示词 & ReAct -->
-        <div v-else-if="debugViewMode === 'prompt'" class="prompt-view-container">
-          <div
-            v-if="isLoadingPrompt"
-            class="loading-state"
-            style="padding: 40px; text-align: center"
-          >
-            <div class="animate-spin text-2xl text-indigo-500 mb-2">⟳</div>
-            <div class="text-slate-500">正在从后端获取完整 Context...</div>
-          </div>
-
-          <div v-else>
-            <!-- 统计信息 -->
+        <div class="flex-1 overflow-y-auto pr-2 custom-scrollbar">
+          <!-- 模式 1: 回复记录解析 -->
+          <template v-if="debugViewMode === 'response'">
             <div
-              class="debug-meta-info"
-              style="
-                margin-bottom: 15px;
-                padding: 10px;
-                background: #ecf5ff;
-                border-radius: 4px;
-                border: 1px solid #d9ecff;
-              "
+              class="bg-white/80 border border-sky-200 rounded-lg p-4 mb-4 text-xs text-slate-500 space-y-1 shadow-sm shadow-sky-100/20"
             >
-              <div style="display: flex; gap: 20px; font-size: 13px; color: #409eff">
-                <div><strong>Total Messages:</strong> {{ currentPromptMessages.length }}</div>
-                <div><strong>Total Length (Chars):</strong> {{ totalPromptLength }}</div>
-                <div><strong>Est. Tokens:</strong> ~{{ Math.ceil(totalPromptLength / 3.5) }}</div>
-              </div>
+              <p><strong class="text-slate-700">Log ID:</strong> {{ currentDebugLog.id }}</p>
+              <p><strong class="text-slate-700">Role:</strong> {{ currentDebugLog.role }}</p>
+              <p>
+                <strong class="text-slate-700">Raw Content Length:</strong>
+                {{ (currentDebugLog.raw_content || currentDebugLog.content || '').length }} chars
+              </p>
             </div>
 
-            <!-- 消息列表 -->
-            <div class="prompt-preview-container">
+            <div class="space-y-3">
               <div
-                v-for="(msg, idx) in currentPromptMessages"
-                :key="idx"
-                class="prompt-message-item"
+                v-for="(segment, index) in debugSegments"
+                :key="index"
+                class="rounded-lg border overflow-hidden transition-colors duration-200"
+                :class="{
+                  'bg-amber-50 border-amber-200': segment.type === 'thinking',
+                  'bg-sky-50 border-sky-200': segment.type === 'monologue',
+                  'bg-cyan-50 border-cyan-200': segment.type === 'nit',
+                  'bg-white border-sky-100 shadow-sm': !['thinking', 'monologue', 'nit'].includes(
+                    segment.type
+                  )
+                }"
               >
-                <div :class="['prompt-role-badge', msg.role]">
-                  {{ msg.role.toUpperCase() }}
-                  <span style="opacity: 0.7; font-weight: normal; margin-left: 10px">
-                    {{ (msg.content || '').length }} chars
-                  </span>
+                <div
+                  v-if="segment.type === 'thinking'"
+                  class="px-3 py-1.5 bg-amber-100/50 text-amber-700 text-xs font-bold border-b border-amber-200 flex items-center gap-2"
+                >
+                  <PixelIcon name="brain" size="xs" />
+                  Thinking Chain (思维链)
                 </div>
-                <div class="prompt-content-box">
-                  <pre>{{ msg.content }}</pre>
+                <div
+                  v-else-if="segment.type === 'monologue'"
+                  class="px-3 py-1.5 bg-sky-100/50 text-sky-700 text-xs font-bold border-b border-sky-200 flex items-center gap-2"
+                >
+                  <PixelIcon name="chat" size="xs" />
+                  Inner Monologue (内心独白)
+                </div>
+                <div
+                  v-else-if="segment.type === 'nit'"
+                  class="px-3 py-1.5 bg-cyan-100/50 text-cyan-700 text-xs font-bold border-b border-cyan-200 flex items-center gap-2"
+                >
+                  <PixelIcon name="terminal" size="xs" />
+                  NIT Script (工具调用)
+                </div>
+
+                <div class="p-3 text-sm leading-relaxed overflow-x-auto">
+                  <div
+                    v-if="segment.type === 'thinking'"
+                    class="text-slate-600 font-mono text-xs whitespace-pre-wrap"
+                  >
+                    {{ segment.content }}
+                  </div>
+                  <div v-else-if="segment.type === 'monologue'" class="text-slate-600 italic">
+                    {{ segment.content }}
+                  </div>
+                  <div
+                    v-else-if="segment.type === 'nit'"
+                    class="font-mono text-xs text-cyan-700 bg-sky-50/50 p-2 rounded border border-cyan-100"
+                  >
+                    <pre>{{ segment.content }}</pre>
+                  </div>
+                  <div v-else class="text-slate-700 prose prose-slate max-w-none prose-sm">
+                    <AsyncMarkdown :content="segment.content" />
+                  </div>
                 </div>
               </div>
             </div>
+          </template>
+
+          <!-- 模式 2: 完整提示词 & ReAct -->
+          <template v-else-if="debugViewMode === 'prompt'">
+            <div
+              v-if="isLoadingPrompt"
+              class="flex flex-col items-center justify-center h-full text-slate-400 min-h-[300px]"
+            >
+              <PixelIcon name="refresh" size="xl" animation="spin" class="text-sky-500 mb-3" />
+              <p>正在从后端获取完整 Context... <PixelIcon name="sparkle" size="xs" /></p>
+            </div>
+
+            <div v-else class="space-y-4">
+              <!-- 统计信息 -->
+              <div
+                class="bg-sky-50 border border-sky-100 rounded-lg p-3 flex gap-6 text-xs text-sky-600 mb-4"
+              >
+                <div>
+                  <strong class="text-sky-700">Total Messages:</strong>
+                  {{ currentPromptMessages.length }}
+                </div>
+                <div>
+                  <strong class="text-sky-700">Total Length (Chars):</strong>
+                  {{ totalPromptLength }}
+                </div>
+                <div>
+                  <strong class="text-sky-700">Est. Tokens:</strong> ~{{
+                    Math.ceil(totalPromptLength / 3.5)
+                  }}
+                </div>
+              </div>
+
+              <!-- 消息列表 -->
+              <div class="space-y-3">
+                <div
+                  v-for="(msg, idx) in currentPromptMessages"
+                  :key="idx"
+                  class="rounded-lg overflow-hidden border border-sky-100 bg-white shadow-sm"
+                >
+                  <div
+                    class="px-3 py-1.5 text-xs font-bold uppercase flex justify-between items-center border-b border-sky-100"
+                    :class="{
+                      'bg-sky-50 text-sky-600': msg.role === 'user',
+                      'bg-sky-100 text-sky-700 font-bold': msg.role === 'assistant',
+                      'bg-rose-50 text-rose-600': msg.role === 'system',
+                      'bg-sky-50 text-slate-500': !['user', 'assistant', 'system'].includes(
+                        msg.role
+                      )
+                    }"
+                  >
+                    <span>{{ msg.role }}</span>
+                    <span class="font-normal opacity-50 font-mono"
+                      >{{ (msg.content || '').length }} chars</span
+                    >
+                  </div>
+                  <pre
+                    class="p-3 font-mono text-xs text-slate-600 whitespace-pre-wrap overflow-x-auto max-h-[400px] custom-scrollbar"
+                    >{{ msg.content }}</pre
+                  >
+                </div>
+              </div>
+            </div>
+          </template>
+        </div>
+      </div>
+    </PModal>
+
+    <!-- Confirm Dialog -->
+    <PModal
+      v-model="showConfirmModal"
+      :title="confirmModalTitle"
+      width="400px"
+      class="backdrop-blur-2xl bg-white/70 border-sky-100 shadow-2xl shadow-sky-200/40"
+      @close="handleCancel"
+    >
+      <div class="p-4">
+        <div class="flex items-start gap-4">
+          <div
+            class="w-10 h-10 rounded-full flex items-center justify-center shrink-0"
+            :class="{
+              'bg-amber-100 text-amber-600': confirmType === 'warning',
+              'bg-sky-100 text-sky-600': confirmType === 'info',
+              'bg-rose-100 text-rose-600': confirmType === 'error'
+            }"
+          >
+            <PixelIcon v-if="confirmType === 'warning'" name="alert" size="md" />
+            <PixelIcon v-else-if="confirmType === 'info'" name="info" size="md" />
+            <PixelIcon v-else name="alert" size="md" />
+          </div>
+          <div class="flex-1">
+            <p class="text-slate-600 text-sm leading-relaxed" v-html="confirmModalContent"></p>
+            <PInput
+              v-if="isPrompt"
+              v-model="promptValue"
+              :placeholder="promptPlaceholder"
+              class="mt-4 w-full bg-sky-50/50 border-sky-100"
+            />
           </div>
         </div>
       </div>
-    </el-dialog>
+      <template #footer>
+        <div class="flex justify-end gap-3">
+          <PButton variant="ghost" @click="handleCancel">取消</PButton>
+          <PButton
+            :variant="confirmType === 'error' ? 'danger' : 'primary'"
+            class="shadow-lg"
+            :class="confirmType === 'error' ? 'shadow-rose-400/20' : 'shadow-sky-400/20'"
+            @click="handleConfirm"
+          >
+            确定
+          </PButton>
+        </div>
+      </template>
+    </PModal>
   </div>
 </template>
 
@@ -2027,35 +3647,77 @@ import { listen, invoke, isElectron } from '@/utils/ipcAdapter'
 import VoiceConfigPanel from '../components/settings/VoiceConfigPanel.vue'
 import AsyncMarkdown from '../components/markdown/AsyncMarkdown.vue'
 import * as echarts from 'echarts'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import {
-  Menu as IconMenu,
-  ChatLineRound,
-  Cpu,
-  Bell,
-  SetUp,
-  Connection,
-  Refresh,
-  Edit,
-  Delete,
-  Search,
-  User,
-  SwitchButton,
-  Microphone,
-  Warning,
-  View,
-  ChatDotSquare,
-  Monitor,
-  Tools,
-  Picture,
-  ArrowDown,
-  Upload,
-  Collection
-} from '@element-plus/icons-vue'
+import PButton from '../components/ui/PButton.vue'
+import PSwitch from '../components/ui/PSwitch.vue'
+import PCard from '../components/ui/PCard.vue'
+import PModal from '../components/ui/PModal.vue'
+import PCheckbox from '../components/ui/PCheckbox.vue'
+import PSlider from '../components/ui/PSlider.vue'
+import PInputNumber from '../components/ui/PInputNumber.vue'
+import PInput from '../components/ui/PInput.vue'
+import PSelect from '../components/ui/PSelect.vue'
+import PDatePicker from '../components/ui/PDatePicker.vue'
+import PEmpty from '../components/ui/PEmpty.vue'
+import PTextarea from '../components/ui/PTextarea.vue'
+import PTooltip from '../components/ui/PTooltip.vue'
+import PixelIcon from '../components/ui/PixelIcon.vue'
 import TerminalPanel from '../components/terminal/TerminalPanel.vue'
 import NapCatTerminal from '../components/terminal/NapCatTerminal.vue'
-import logoImg from '../assets/logo1.png'
+import logoImg from '../assets/logo.png'
 import { gatewayClient } from '../api/gateway'
+
+const menuGroups = [
+  {
+    title: null,
+    items: [
+      { id: 'overview', label: '总览', icon: 'desktop' },
+      { id: 'logs', label: '对话日志', icon: 'chat' },
+      { id: 'memories', label: '核心记忆', icon: 'brain' },
+      { id: 'tasks', label: '待办任务', icon: 'list' }
+    ]
+  },
+  {
+    title: 'CONFIGURATION',
+    items: [
+      { id: 'user_settings', label: '用户设定', icon: 'user' },
+      { id: 'model_config', label: '模型配置', icon: 'settings' },
+      { id: 'voice_config', label: '语音功能', icon: 'mic' },
+      { id: 'mcp_config', label: 'MCP 配置', icon: 'terminal' }
+    ]
+  },
+  {
+    title: 'SYSTEM',
+    items: [
+      { id: 'napcat', label: 'NapCat 终端', icon: 'terminal' },
+      { id: 'terminal', label: '系统终端', icon: 'desktop' },
+      { id: 'system_reset', label: '危险区域', icon: 'alert', variant: 'danger' }
+    ]
+  }
+]
+
+const providerOptions = [
+  { label: 'OpenAI (兼容)', value: 'openai' },
+  { label: 'Gemini (原生)', value: 'gemini' },
+  { label: 'Claude (Anthropic)', value: 'anthropic' },
+  { label: 'SiliconFlow (硅基流动)', value: 'siliconflow' },
+  { label: 'DeepSeek (深度求索)', value: 'deepseek' },
+  { label: 'Moonshot (Kimi)', value: 'moonshot' },
+  { label: 'DashScope (阿里百炼)', value: 'dashscope' },
+  { label: 'Volcengine (火山引擎)', value: 'volcengine' },
+  { label: 'Groq', value: 'groq' },
+  { label: 'Zhipu (智谱GLM)', value: 'zhipu' },
+  { label: 'MiniMax', value: 'minimax' },
+  { label: 'Mistral', value: 'mistral' },
+  { label: '01.AI (零一万物)', value: 'yi' },
+  { label: 'xAI (Grok)', value: 'xai' },
+  { label: 'StepFun (阶跃星辰)', value: 'stepfun' },
+  { label: 'Hunyuan (腾讯混元)', value: 'hunyuan' }
+]
+
+const mcpTypeOptions = [
+  { label: 'Stdio (本地)', value: 'stdio' },
+  { label: 'SSE (远程)', value: 'sse' }
+]
 
 // 为了防止在非 Tauri 环境下报错，定义一个 fallback 的 listen
 const listenSafe = (event, callback) => {
@@ -2073,6 +3735,24 @@ const isSaving = ref(false)
 const isGlobalRefreshing = ref(false)
 const isCompanionEnabled = ref(false)
 const isTogglingCompanion = ref(false)
+
+// --- Particles Optimization ---
+// --- 粒子优化 ---
+const particles = ref([])
+const initParticles = () => {
+  particles.value = Array.from({ length: 12 }, (_, i) => ({
+    id: i,
+    style: {
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${10 + Math.random() * 15}s`,
+      willChange: 'transform, opacity' // 显式开启 GPU 加速
+    },
+    icon: i % 2 === 0 ? 'sparkle' : 'heart',
+    size: i % 3 === 0 ? 'sm' : 'xs'
+  }))
+}
 
 // Memory Config
 const activeMemoryTab = ref('desktop')
@@ -2120,13 +3800,13 @@ const isImportingStory = ref(false)
 
 const handleImportStory = async () => {
   if (!importStoryText.value.trim()) {
-    ElMessage.warning('请输入内容')
+    window.$notify('请输入内容', 'warning')
     return
   }
 
   isImportingStory.value = true
   try {
-    const response = await fetch(`${API_BASE}/api/memory/import_story`, {
+    const response = await fetch(`${API_BASE}/memory/import_story`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -2143,7 +3823,7 @@ const handleImportStory = async () => {
     }
 
     const result = await response.json()
-    ElMessage.success(`导入成功！共生成 ${result.count} 条记忆。`)
+    window.$notify(`导入成功！共生成 ${result.count} 条记忆。`, 'success')
     showImportStoryDialog.value = false
     importStoryText.value = ''
     // Refresh memories if function exists
@@ -2154,10 +3834,56 @@ const handleImportStory = async () => {
       fetchAllData(true)
     }
   } catch (error) {
-    ElMessage.error(`导入失败: ${error.message}`)
+    window.$notify(`导入失败: ${error.message}`, 'error')
   } finally {
     isImportingStory.value = false
   }
+}
+
+// --- Confirm Modal State ---
+const showConfirmModal = ref(false)
+const confirmModalTitle = ref('')
+const confirmModalContent = ref('')
+const confirmCallback = ref(null)
+const confirmCancelCallback = ref(null)
+const confirmType = ref('warning') // warning, info, error
+const isPrompt = ref(false)
+const promptValue = ref('')
+const promptPlaceholder = ref('')
+
+const openConfirm = (title, content, options = {}) => {
+  return new Promise((resolve, reject) => {
+    confirmModalTitle.value = title
+    confirmModalContent.value = content
+    confirmType.value = options.type || 'warning'
+    isPrompt.value = !!options.isPrompt
+    promptValue.value = options.inputValue || ''
+    promptPlaceholder.value = options.inputPlaceholder || ''
+
+    confirmCallback.value = () => {
+      if (isPrompt.value) {
+        resolve({ value: promptValue.value, action: 'confirm' })
+      } else {
+        resolve()
+      }
+      showConfirmModal.value = false
+    }
+
+    confirmCancelCallback.value = () => {
+      reject(new Error('User cancelled'))
+      showConfirmModal.value = false
+    }
+
+    showConfirmModal.value = true
+  })
+}
+
+const handleConfirm = () => {
+  if (confirmCallback.value) confirmCallback.value()
+}
+
+const handleCancel = () => {
+  if (confirmCancelCallback.value) confirmCancelCallback.value()
 }
 
 // --- Auto Updater ---
@@ -2171,7 +3897,7 @@ const checkForUpdates = async () => {
   try {
     await invoke('check_update')
   } catch {
-    ElMessage.error('检查更新失败')
+    window.$notify('检查更新失败', 'error')
     isCheckingUpdate.value = false
   }
 }
@@ -2186,9 +3912,8 @@ const handleUpdateMessage = (data) => {
       break
     case 'available':
       isCheckingUpdate.value = false
-      ElMessageBox.confirm(`检测到新版本 v${data.info.version}，是否立即更新？`, '发现新版本', {
-        confirmButtonText: '下载更新',
-        cancelButtonText: '稍后'
+      openConfirm('发现新版本', `检测到新版本 v${data.info.version}，是否立即更新？`, {
+        type: 'info'
       })
         .then(() => {
           invoke('download_update')
@@ -2197,19 +3922,18 @@ const handleUpdateMessage = (data) => {
       break
     case 'not-available':
       isCheckingUpdate.value = false
-      ElMessage.success('当前已是最新版本')
+      window.$notify('当前已是最新版本', 'success')
       break
     case 'error':
       isCheckingUpdate.value = false
-      ElMessage.error(`更新错误: ${data.error}`)
+      window.$notify(`更新错误: ${data.error}`, 'error')
       break
     case 'progress':
       // Can show progress notification or toast
       break
     case 'downloaded':
-      ElMessageBox.confirm('更新已下载完毕，是否立即重启以安装？', '更新就绪', {
-        confirmButtonText: '立即重启',
-        cancelButtonText: '稍后'
+      openConfirm('更新就绪', '更新已下载完毕，是否立即重启以安装？', {
+        type: 'success'
       })
         .then(() => {
           invoke('quit_and_install')
@@ -2249,7 +3973,7 @@ const fetchWithTimeout = async (url, options = {}, timeout = 5000) => {
 
     // 只有未开启 silent 模式时才弹窗提示
     if (!options.silent) {
-      ElMessage.error(errorMsg)
+      window.$notify(errorMsg, 'error')
 
       if (error.name !== 'AbortError') {
         console.warn(`[Fetch] 请求失败 ${url}:`, error.message)
@@ -2380,7 +4104,7 @@ const handleDebugModeChange = async (val) => {
         throw new Error(err.detail || '获取提示词失败')
       }
     } catch (e) {
-      ElMessage.error(formatLLMError(e))
+      window.$notify(formatLLMError(e), 'error')
     } finally {
       isLoadingPrompt.value = false
     }
@@ -2479,6 +4203,27 @@ const logs = shallowRef([])
 const tasks = shallowRef([])
 const stats = ref({ total_memories: 0, total_logs: 0, total_tasks: 0 })
 const petState = ref({})
+
+// 🎨 背景氛围灯样式，随心情动态变化
+const ambientLightStyle = computed(() => {
+  const mood = petState.value?.mood || 'neutral'
+  const colors = {
+    happy: { primary: 'rgba(252, 165, 165, 0.2)', secondary: 'rgba(253, 224, 71, 0.15)' },
+    sad: { primary: 'rgba(96, 165, 250, 0.2)', secondary: 'rgba(165, 180, 252, 0.15)' },
+    angry: { primary: 'rgba(244, 63, 94, 0.2)', secondary: 'rgba(253, 186, 116, 0.15)' },
+    surprised: { primary: 'rgba(192, 132, 252, 0.2)', secondary: 'rgba(240, 171, 252, 0.15)' },
+    neutral: { primary: 'rgba(125, 211, 252, 0.2)', secondary: 'rgba(153, 246, 228, 0.15)' }
+  }
+
+  const color = colors[mood] || colors.neutral
+
+  return {
+    background: `radial-gradient(circle at 20% 30%, ${color.primary} 0%, transparent 70%),
+                radial-gradient(circle at 80% 70%, ${color.secondary} 0%, transparent 70%)`,
+    filter: 'blur(100px)',
+    opacity: 0.8
+  }
+})
 const userSettings = ref({
   owner_name: '主人',
   user_persona: '未设定',
@@ -2589,16 +4334,6 @@ const topTags = computed(() => {
     .map(([tag, count]) => ({ tag, count }))
 })
 
-const getMemoryTagType = (type) => {
-  if (type === 'preference') return 'danger'
-  if (type === 'event' || type === 'summary' || type === 'interaction_summary') return 'primary'
-  if (type === 'archived_event') return 'info'
-  if (type === 'fact') return 'success' // Green for facts // 事实为绿色
-  if (type === 'promise') return 'warning' // Orange for promises // 誓言为橙色
-  if (type === 'work_log') return 'warning'
-  return 'info'
-}
-
 const getMemoryTypeLabel = (type) => {
   const map = {
     event: '🧩 记忆块',
@@ -2614,17 +4349,31 @@ const getMemoryTypeLabel = (type) => {
 }
 
 const getSentimentEmoji = (sentiment) => {
-  if (!sentiment) return ''
+  if (!sentiment) return 'mood-neutral'
   const map = {
-    positive: '😊',
-    negative: '😔',
-    neutral: '😐',
-    happy: '😄',
-    sad: '😢',
-    angry: '😠',
-    excited: '🤩'
+    positive: 'mood-happy',
+    negative: 'mood-sad',
+    neutral: 'mood-neutral',
+    happy: 'mood-happy',
+    sad: 'mood-sad',
+    angry: 'mood-angry',
+    excited: 'mood-excited'
   }
-  return map[sentiment.toLowerCase()] || '😐'
+  return map[sentiment.toLowerCase()] || 'mood-neutral'
+}
+
+const getSentimentLabel = (sentiment) => {
+  if (!sentiment) return '平静'
+  const map = {
+    positive: '开心',
+    negative: '忧郁',
+    neutral: '平静',
+    happy: '开心',
+    sad: '忧郁',
+    angry: '愤怒',
+    excited: '激动'
+  }
+  return map[sentiment.toLowerCase()] || sentiment
 }
 
 const getLogMetadata = (log) => {
@@ -2674,7 +4423,7 @@ const switchAgent = async (agentId) => {
 
     // 2. Refresh list to update UI
     await fetchAgents()
-    ElMessage.success(`已切换到角色: ${activeAgent.value?.name}`)
+    window.$notify(`已切换到角色: ${activeAgent.value?.name}`, 'success')
 
     // 3. Persist to launch config via Electron IPC (Fire and forget)
     // 3. 通过 Electron IPC 持久化启动配置（即发即弃）
@@ -2686,7 +4435,7 @@ const switchAgent = async (agentId) => {
       activeAgent: agentId
     }).catch((e) => console.error('保存启动配置失败:', e))
   } catch (e) {
-    ElMessage.error(e.message)
+    window.$notify(e.message, 'error')
   } finally {
     isSwitchingAgent.value = false
   }
@@ -2718,7 +4467,7 @@ const waitForBackend = async () => {
       isBackendOnline.value = false
       setTimeout(check, 1000)
     } else {
-      ElMessage.error('无法连接到 Pero 后端，请检查后台进程是否运行。')
+      window.$notify('无法连接到 Pero 后端，请检查后台进程是否运行。', 'error')
     }
   }
 
@@ -2728,6 +4477,7 @@ const waitForBackend = async () => {
 // [Feature] Listen for new messages via Gateway
 
 onMounted(() => {
+  initParticles() // Initialize particles with fixed random values
   waitForBackend() // 启动检测
 
   // [Fix] Only connect gateway when backend is confirmed online
@@ -2848,12 +4598,12 @@ const fetchAllData = async (silent = false) => {
 
       fetchTagCloud()
       if (!silent) {
-        ElMessage.success('所有数据已同步')
+        window.$notify('所有数据已同步', 'success')
       }
     } catch {
       console.error('标签页数据获取错误')
       if (!silent) {
-        ElMessage.error('部分数据刷新失败')
+        window.$notify('部分数据刷新失败', 'error')
       }
     } finally {
       isGlobalRefreshing.value = false
@@ -2916,15 +4666,9 @@ const fetchMemoryGraph = async () => {
 const clearOrphanedEdges = async () => {
   if (isClearingEdges.value) return
   try {
-    await ElMessageBox.confirm(
-      '确定要清理数据库中所有无效的连线吗？这不会删除任何记忆节点。',
-      '清理确认',
-      {
-        confirmButtonText: '确定清理',
-        cancelButtonText: '取消',
-        type: 'warning'
-      }
-    )
+    await openConfirm('清理确认', '确定要清理数据库中所有无效的连线吗？这不会删除任何记忆节点。', {
+      type: 'warning'
+    })
 
     isClearingEdges.value = true
     const res = await fetchWithTimeout(
@@ -2936,7 +4680,7 @@ const clearOrphanedEdges = async () => {
     )
     const data = await res.json()
 
-    ElMessage.success(`清理完成，共移除 ${data.deleted_count} 条无效连线`)
+    window.$notify(`清理完成，共移除 ${data.deleted_count} 条无效连线`, 'success')
 
     // Refresh graph if in graph mode
     // 如果在图谱模式下，刷新图谱
@@ -2944,9 +4688,9 @@ const clearOrphanedEdges = async () => {
       fetchMemoryGraph()
     }
   } catch (e) {
-    if (e !== 'cancel') {
+    if (e.message !== 'User cancelled') {
       console.error('清理孤立连线错误:', e)
-      ElMessage.error('清理失败: ' + e.message)
+      window.$notify('清理失败: ' + e.message, 'error')
     }
   } finally {
     isClearingEdges.value = false
@@ -2962,19 +4706,20 @@ const triggerScanLonely = async () => {
     })
     const data = await res.json()
     if (data.status === 'success') {
-      ElMessage.success(
-        `扫描完成: 处理了 ${data.processed_count} 条记忆，发现了 ${data.connections_found} 个新关联`
+      window.$notify(
+        `扫描完成: 处理了 ${data.processed_count} 条记忆，发现了 ${data.connections_found} 个新关联`,
+        'success'
       )
       fetchMemories() // Refresh list
       // 刷新列表
     } else if (data.status === 'skipped') {
-      ElMessage.warning(`扫描跳过: ${data.reason}`)
+      window.$notify(`扫描跳过: ${data.reason}`, 'warning')
     } else {
-      ElMessage.error('扫描失败')
+      window.$notify('扫描失败', 'error')
     }
   } catch (e) {
     console.error(e)
-    ElMessage.error('请求出错: ' + e.message)
+    window.$notify('请求出错: ' + e.message, 'error')
   } finally {
     isScanningLonely.value = false
   }
@@ -2983,12 +4728,10 @@ const triggerScanLonely = async () => {
 const triggerMaintenance = async () => {
   if (isRunningMaintenance.value) return
   try {
-    await ElMessageBox.confirm(
-      '深度维护可能需要较长时间，且会消耗一定的 Tokens。确定要立即执行吗？',
+    await openConfirm(
       '执行确认',
+      '深度维护可能需要较长时间，且会消耗一定的 Tokens。确定要立即执行吗？',
       {
-        confirmButtonText: '立即执行',
-        cancelButtonText: '取消',
         type: 'info'
       }
     )
@@ -3004,17 +4747,18 @@ const triggerMaintenance = async () => {
     // 深度维护需要更长的超时时间
     const data = await res.json()
     if (data.status === 'success') {
-      ElMessage.success(
-        `维护完成: 标记重要性 ${data.important_tagged}, 记忆合并 ${data.consolidated}, 清理 ${data.cleaned_count}`
+      window.$notify(
+        `维护完成: 标记重要性 ${data.important_tagged}, 记忆合并 ${data.consolidated}, 清理 ${data.cleaned_count}`,
+        'success'
       )
       fetchMemories()
     } else {
-      ElMessage.error(data.error || '维护失败')
+      window.$notify(data.error || '维护失败', 'error')
     }
   } catch (e) {
-    if (e !== 'cancel') {
+    if (e.message !== 'User cancelled') {
       console.error(e)
-      ElMessage.error('请求出错: ' + e.message)
+      window.$notify('请求出错: ' + e.message, 'error')
     }
   } finally {
     isRunningMaintenance.value = false
@@ -3024,15 +4768,9 @@ const triggerMaintenance = async () => {
 const triggerDream = async () => {
   if (isDreaming.value) return
   try {
-    await ElMessageBox.confirm(
-      '梦境联想将扫描近期记忆并尝试建立新的关联。确定要执行吗？',
-      '执行确认',
-      {
-        confirmButtonText: '进入梦境',
-        cancelButtonText: '取消',
-        type: 'info'
-      }
-    )
+    await openConfirm('执行确认', '梦境联想将扫描近期记忆并尝试建立新的关联。确定要执行吗？', {
+      type: 'info'
+    })
 
     isDreaming.value = true
     const res = await fetchWithTimeout(
@@ -3044,19 +4782,20 @@ const triggerDream = async () => {
     )
     const data = await res.json()
     if (data.status === 'success') {
-      ElMessage.success(
-        `梦境完成: 扫描 ${data.anchors_processed} 个锚点，发现 ${data.new_relations} 个新关联`
+      window.$notify(
+        `梦境完成: 扫描 ${data.anchors_processed} 个锚点，发现 ${data.new_relations} 个新关联`,
+        'success'
       )
       if (memoryViewMode.value === 'graph') fetchMemoryGraph()
     } else if (data.status === 'skipped') {
-      ElMessage.warning(`梦境跳过: ${data.reason}`)
+      window.$notify(`梦境跳过: ${data.reason}`, 'warning')
     } else {
-      ElMessage.error('联想失败')
+      window.$notify('联想失败', 'error')
     }
   } catch (e) {
-    if (e !== 'cancel') {
+    if (e.message !== 'User cancelled') {
       console.error('梦境联想请求错误:', e)
-      ElMessage.error('请求出错: ' + e.message)
+      window.$notify('请求出错: ' + e.message, 'error')
     }
   } finally {
     isDreaming.value = false
@@ -3113,7 +4852,7 @@ const initGraph = () => {
                         <div>情感: ${d.sentiment} ${getSentimentEmoji(d.sentiment)}</div>
                         <div>重要度: ${d.value}/10</div>
                         <div>活跃度: ${d.access_count}</div>
-                        <div style="font-size:10px; color:#aaa; margin-top:5px;">${d.realTime}</div>
+                        <div style="font-size:10px; color:#94a3b8; margin-top:5px;">${d.realTime}</div>
                     `
         } else {
           return `<div style="max-width: 240px; white-space: normal; word-break: break-word; line-height: 1.5;">
@@ -3127,7 +4866,7 @@ const initGraph = () => {
     legend: [
       {
         data: categories.map((a) => a.name),
-        textStyle: { color: '#ccc' },
+        textStyle: { color: '#94a3b8' }, // slate-400
         orient: 'vertical',
         left: 'left',
         top: 'center'
@@ -3197,15 +4936,15 @@ const initGraph = () => {
 // 颜色助手
 const getSentimentColor = (sentiment) => {
   const map = {
-    positive: '#67c23a', // green // 绿色
-    negative: '#f56c6c', // red // 红色
-    neutral: '#a0c4ff', // blue // 蓝色
-    happy: '#e6a23c', // orange/yellow // 橙色/黄色
-    sad: '#909399', // grey // 灰色
-    angry: '#f56c6c',
-    excited: '#ff88aa' // pink // 粉色
+    positive: '#0ea5e9', // sky-500 // 天蓝色
+    negative: '#f43f5e', // rose-500 // 玫瑰红
+    neutral: '#94a3b8', // slate-400 // 石板灰
+    happy: '#fbbf24', // amber-400 // 琥珀黄
+    sad: '#cbd5e1', // slate-300 // 浅灰蓝
+    angry: '#ef4444', // red-500 // 鲜红色
+    excited: '#f472b6' // pink-400 // 粉色
   }
-  return map[sentiment] || '#a0c4ff'
+  return map[sentiment] || '#0ea5e9'
 }
 
 const fetchCompanionStatus = async () => {
@@ -3236,15 +4975,15 @@ const toggleCompanion = async (val) => {
     if (res.ok) {
       const data = await res.json()
       isCompanionEnabled.value = data.enabled
-      ElMessage.success(data.enabled ? '已开启陪伴模式' : '已关闭陪伴模式')
+      window.$notify(data.enabled ? '已开启陪伴模式' : '已关闭陪伴模式', 'success')
     } else {
       const errorData = await res.json()
       isCompanionEnabled.value = !val // revert // 恢复
-      ElMessage.warning(errorData.detail || '切换失败')
+      window.$notify(errorData.detail || '切换失败', 'warning')
     }
   } catch {
     isCompanionEnabled.value = !val // revert // 恢复
-    ElMessage.error('网络错误')
+    window.$notify('网络错误', 'error')
   } finally {
     isTogglingCompanion.value = false
   }
@@ -3290,14 +5029,14 @@ const toggleLightweight = async (val) => {
     if (res.ok) {
       const data = await res.json()
       isLightweightEnabled.value = data.enabled
-      ElMessage.success(data.enabled ? '已开启轻量聊天模式' : '已关闭轻量聊天模式')
+      window.$notify(data.enabled ? '已开启轻量聊天模式' : '已关闭轻量聊天模式', 'success')
     } else {
       isLightweightEnabled.value = !val // revert // 恢复
-      ElMessage.error('切换失败')
+      window.$notify('切换失败', 'error')
     }
   } catch {
     isLightweightEnabled.value = !val // revert // 恢复
-    ElMessage.error('网络错误')
+    window.$notify('网络错误', 'error')
   } finally {
     isTogglingLightweight.value = false
   }
@@ -3331,36 +5070,38 @@ const toggleAuraVision = async (val) => {
     if (res.ok) {
       const data = await res.json()
       isAuraVisionEnabled.value = data.enabled
-      ElMessage.success(
-        data.enabled ? '已开启主动视觉感应 (AuraVision)' : '已关闭主动视觉感应 (AuraVision)'
+      window.$notify(
+        data.enabled ? '已开启主动视觉感应 (AuraVision)' : '已关闭主动视觉感应 (AuraVision)',
+        'success'
       )
     } else {
       isAuraVisionEnabled.value = !val // revert // 恢复
-      ElMessage.error('切换失败')
+      window.$notify('切换失败', 'error')
     }
   } catch {
     isAuraVisionEnabled.value = !val // revert // 恢复
-    ElMessage.error('网络错误')
+    window.$notify('网络错误', 'error')
   } finally {
     isTogglingAuraVision.value = false
   }
 }
 
 // 退出程序
-const handleQuitApp = () => {
-  ElMessageBox.confirm('确定要关闭 Pero 并退出所有相关程序吗？', '退出 PeroCore', {
-    confirmButtonText: '确定',
-    cancelButtonText: '取消',
-    type: 'warning'
-  })
-    .then(async () => {
-      try {
-        await invoke('quit_app')
-      } catch {
-        console.error('Failed to quit app')
+const handleQuitApp = async () => {
+  try {
+    await openConfirm(
+      '退出 萌动链接：PeroperoChat！',
+      '确定要关闭 Peropero 并退出所有相关程序吗？',
+      {
+        type: 'warning'
       }
-    })
-    .catch(() => {})
+    )
+    await invoke('quit_app')
+  } catch (e) {
+    if (e.message !== 'User cancelled') {
+      console.error('Failed to quit app', e)
+    }
+  }
 }
 
 const fetchMemoryConfig = async () => {
@@ -3582,7 +5323,7 @@ const fetchConfig = async () => {
     }
   } catch (e) {
     console.error(e)
-    ElMessage.error('获取配置失败: ' + formatLLMError(e))
+    window.$notify('获取配置失败: ' + formatLLMError(e), 'error')
   }
 }
 
@@ -3597,9 +5338,105 @@ const fetchModels = async () => {
     models.value = await res.json()
   } catch (e) {
     console.error(e)
-    ElMessage.error('获取模型列表失败: ' + formatLLMError(e))
+    window.$notify('获取模型列表失败: ' + formatLLMError(e), 'error')
   } finally {
     fetchModels.isLoading = false
+  }
+}
+
+// 设置主模型
+const setActiveModel = async (id) => {
+  const isCurrentlyActive = currentActiveModelId.value === id
+  const targetId = isCurrentlyActive ? '' : String(id)
+
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/configs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ current_model_id: targetId }),
+        silent: true
+      },
+      5000
+    )
+    if (!res.ok) throw new Error(isCurrentlyActive ? '取消主模型失败' : '设置主模型失败')
+    currentActiveModelId.value = isCurrentlyActive ? null : id
+    window.$notify(isCurrentlyActive ? '主模型配置已取消' : '主模型已更新', 'success')
+  } catch (e) {
+    window.$notify(formatLLMError(e), 'error')
+  }
+}
+
+// 设置秘书模型
+const setSecretaryModel = async (id) => {
+  const isCurrentlyActive = secretaryModelId.value === id
+  const targetId = isCurrentlyActive ? '' : String(id)
+
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/configs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scorer_model_id: targetId }),
+        silent: true
+      },
+      5000
+    )
+    if (!res.ok) throw new Error(isCurrentlyActive ? '取消秘书模型失败' : '设置秘书模型失败')
+    secretaryModelId.value = isCurrentlyActive ? null : id
+    window.$notify(isCurrentlyActive ? '秘书模型配置已取消' : '秘书模型已更新', 'success')
+  } catch (e) {
+    window.$notify(formatLLMError(e), 'error')
+  }
+}
+
+// 设置反思模型
+const setReflectionModel = async (id) => {
+  const isCurrentlyActive = reflectionModelId.value === id
+  const targetId = isCurrentlyActive ? '' : String(id)
+
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/configs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reflection_model_id: targetId }),
+        silent: true
+      },
+      5000
+    )
+    if (!res.ok) throw new Error(isCurrentlyActive ? '取消反思模型失败' : '设置反思模型失败')
+    reflectionModelId.value = isCurrentlyActive ? null : id
+    window.$notify(isCurrentlyActive ? '反思模型配置已取消' : '反思模型已更新', 'success')
+  } catch (e) {
+    window.$notify(formatLLMError(e), 'error')
+  }
+}
+
+// 设置辅助模型
+const setAuxModel = async (id) => {
+  const isCurrentlyActive = auxModelId.value === id
+  const targetId = isCurrentlyActive ? '' : String(id)
+
+  try {
+    const res = await fetchWithTimeout(
+      `${API_BASE}/configs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ aux_model_id: targetId }),
+        silent: true
+      },
+      5000
+    )
+    if (!res.ok) throw new Error(isCurrentlyActive ? '取消辅助模型失败' : '设置辅助模型失败')
+    auxModelId.value = isCurrentlyActive ? null : id
+    window.$notify(isCurrentlyActive ? '辅助模型配置已取消' : '辅助模型已更新', 'success')
+  } catch (e) {
+    window.$notify(formatLLMError(e), 'error')
   }
 }
 
@@ -3625,10 +5462,10 @@ const saveGlobalSettings = async () => {
     if (!res.ok) throw new Error('保存配置失败')
 
     showGlobalSettings.value = false
-    ElMessage.success('全局配置已保存')
+    window.$notify('全局配置已保存', 'success')
     await fetchConfig()
   } catch (e) {
-    ElMessage.error(formatLLMError(e))
+    window.$notify(formatLLMError(e), 'error')
   } finally {
     isSaving.value = false
   }
@@ -3652,10 +5489,10 @@ const saveUserSettings = async () => {
       },
       5000
     )
-    ElMessage.success('用户设定已保存')
+    window.$notify('用户设定已保存', 'success')
     await fetchConfig()
   } catch (e) {
-    ElMessage.error('保存失败: ' + e.message)
+    window.$notify('保存失败: ' + e.message, 'error')
   } finally {
     isSaving.value = false
   }
@@ -3666,27 +5503,23 @@ const saveUserSettings = async () => {
 const handleSystemReset = async () => {
   if (isSaving.value) return
   try {
-    const { value, action } = await ElMessageBox.prompt(
+    const { value, action } = await openConfirm(
+      '终极警告',
       '<div class="danger-main-text">主人，真的要让 ' +
         (activeAgent.value?.name || 'Pero') +
         ' 忘掉你吗？o(╥﹏╥)o</div>' +
         '<div class="danger-sub-text">（此操作将执行深度清理，如需继续，请在文本框中输入“我们还会再见的...”）</div>',
-      '终极警告',
       {
-        inputValue: '',
-        inputPlaceholder: '请输入：我们还会再见的...',
-        confirmButtonText: '确定重置',
-        cancelButtonText: '取消',
         type: 'error',
-        customClass: 'danger-reset-box',
-        center: true,
-        dangerouslyUseHTMLString: true
+        isPrompt: true,
+        inputValue: '',
+        inputPlaceholder: '请输入：我们还会再见的...'
       }
     )
 
     if (action === 'confirm') {
       if (String(value || '').trim() !== '我们还会再见的...') {
-        ElMessage.error('输入不匹配，已取消')
+        window.$notify('输入不匹配，已取消', 'error')
         return
       }
 
@@ -3694,7 +5527,7 @@ const handleSystemReset = async () => {
       const res = await fetchWithTimeout(`${API_BASE}/system/reset`, { method: 'POST' }, 10000)
 
       if (res.ok) {
-        ElMessage.success('系统已恢复出厂设置')
+        window.$notify('系统已恢复出厂设置', 'success')
         // 刷新所有数据以同步 UI
         await fetchAllData(true)
         currentTab.value = 'overview'
@@ -3704,8 +5537,8 @@ const handleSystemReset = async () => {
       }
     }
   } catch (e) {
-    if (e !== 'cancel' && e?.action !== 'cancel') {
-      ElMessage.error(e.message || '重置过程中发生错误')
+    if (e.message !== 'User cancelled') {
+      window.$notify(e.message || '重置过程中发生错误', 'error')
     }
   } finally {
     isSaving.value = false
@@ -3760,9 +5593,9 @@ const saveMcp = async () => {
 
     showMcpEditor.value = false
     await fetchMcps()
-    ElMessage.success('MCP 配置已保存')
+    window.$notify('MCP 配置已保存', 'success')
   } catch (e) {
-    ElMessage.error(e.message)
+    window.$notify(e.message, 'error')
   } finally {
     isSaving.value = false
   }
@@ -3770,20 +5603,14 @@ const saveMcp = async () => {
 
 const deleteMcp = async (id) => {
   if (!id || deleteMcp.isLoading) {
-    if (!id) ElMessage.error('无效的MCP ID')
+    if (!id) window.$notify('无效的MCP ID', 'error')
     return
   }
 
   try {
-    const confirmed = await ElMessageBox.confirm('确定删除此 MCP 配置吗？', '警告', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await openConfirm('警告', '确定删除此 MCP 配置吗？', {
       type: 'warning'
     })
-      .then(() => true)
-      .catch(() => false)
-
-    if (!confirmed) return
 
     deleteMcp.isLoading = true
     const res = await fetchWithTimeout(`${API_BASE}/mcp/${id}`, { method: 'DELETE' }, 5000)
@@ -3793,10 +5620,12 @@ const deleteMcp = async (id) => {
       throw new Error(err.message || '删除失败')
     }
     await fetchMcps()
-    ElMessage.success('已删除')
+    window.$notify('已删除', 'success')
   } catch (e) {
-    console.error('Unexpected error in deleteMcp:', e)
-    ElMessage.error('系统错误: ' + (e.message || '未知错误'))
+    if (e.message !== 'User cancelled') {
+      console.error('Unexpected error in deleteMcp:', e)
+      window.$notify('系统错误: ' + (e.message || '未知错误'), 'error')
+    }
   } finally {
     deleteMcp.isLoading = false
   }
@@ -3816,7 +5645,7 @@ const toggleMcpEnabled = async (mcp) => {
     if (!res.ok) throw new Error('更新失败')
     await fetchMcps()
   } catch (e) {
-    ElMessage.error(e.message)
+    window.$notify(e.message, 'error')
     mcp.enabled = !mcp.enabled // revert
   }
 }
@@ -3914,7 +5743,7 @@ const fetchRemoteModels = async () => {
         'ollama'
       ].includes(currentEditingModel.value.provider)
     ) {
-      ElMessage.warning('请先配置 API Base URL')
+      window.$notify('请先配置 API Base URL', 'warning')
       return
     }
 
@@ -3947,12 +5776,12 @@ const fetchRemoteModels = async () => {
     const data = await res.json()
     if (data.models?.length) {
       remoteModels.value = data.models
-      ElMessage.success(`获取到 ${data.models.length} 个模型`)
+      window.$notify(`获取到 ${data.models.length} 个模型`, 'success')
     } else {
-      ElMessage.warning('未找到模型或 API 不支持')
+      window.$notify('未找到模型或 API 不支持', 'warning')
     }
   } catch (e) {
-    ElMessage.error(formatLLMError(e))
+    window.$notify(formatLLMError(e), 'error')
   } finally {
     isFetchingRemote.value = false
   }
@@ -3981,9 +5810,9 @@ const saveModel = async () => {
 
     showModelEditor.value = false
     await fetchModels()
-    ElMessage.success('模型已保存')
+    window.$notify('模型已保存', 'success')
   } catch (e) {
-    ElMessage.error(formatLLMError(e))
+    window.$notify(formatLLMError(e), 'error')
   } finally {
     isSaving.value = false
   }
@@ -3991,20 +5820,14 @@ const saveModel = async () => {
 
 const deleteModel = async (id) => {
   if (!id || deleteModel.isLoading) {
-    if (!id) ElMessage.error('无效的模型ID')
+    if (!id) window.$notify('无效的模型ID', 'error')
     return
   }
 
   try {
-    const confirmed = await ElMessageBox.confirm('确定删除此模型配置吗？', '警告', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await openConfirm('警告', '确定删除此模型配置吗？', {
       type: 'warning'
     })
-      .then(() => true)
-      .catch(() => false)
-
-    if (!confirmed) return
 
     deleteModel.isLoading = true
     const res = await fetchWithTimeout(`${API_BASE}/models/${id}`, { method: 'DELETE' }, 5000)
@@ -4014,54 +5837,21 @@ const deleteModel = async (id) => {
       throw new Error(err.message || '删除失败')
     }
     await fetchModels()
-    ElMessage.success('已删除')
+    window.$notify('已删除', 'success')
   } catch (e) {
-    console.error('Unexpected error in deleteModel:', e)
-    ElMessage.error('系统错误: ' + (e.message || '未知错误'))
+    if (e.message !== 'User cancelled') {
+      console.error('Unexpected error in deleteModel:', e)
+      window.$notify('系统错误: ' + (e.message || '未知错误'), 'error')
+    }
   } finally {
     deleteModel.isLoading = false
   }
 }
 
-const activateModel = async (id, configKey) => {
-  try {
-    const value = id ? id.toString() : ''
-    const payload = { [configKey]: value }
-    if (configKey === 'reflection_model_id') {
-      payload['reflection_enabled'] = id ? 'true' : 'false'
-    }
-    if (configKey === 'aux_model_id') {
-      payload['aux_model_enabled'] = id ? 'true' : 'false'
-    }
-
-    const res = await fetchWithTimeout(
-      `${API_BASE}/configs`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-        silent: true
-      },
-      5000
-    )
-
-    if (!res.ok) throw new Error('设置更新失败')
-
-    if (configKey === 'current_model_id') currentActiveModelId.value = id
-    else if (configKey === 'scorer_model_id') secretaryModelId.value = id
-    else if (configKey === 'reflection_model_id') reflectionModelId.value = id
-    else if (configKey === 'aux_model_id') auxModelId.value = id
-
-    ElMessage.success('设置已更新')
-  } catch (e) {
-    ElMessage.error(formatLLMError(e))
-  }
-}
-
-// Logs Logic
+// 日志逻辑
 // 日志逻辑
 
-// Cloud Sync State
+// 云同步状态
 const initSessionAndFetchLogs = async () => {
   // 不在这里设置 isLogsFetching，而是交给 fetchLogs 统一管理
   // 仅负责初始化 session ID
@@ -4078,7 +5868,7 @@ const fetchLogs = async () => {
   if (!selectedSessionId.value || isLogsFetching.value) return
   isLogsFetching.value = true
 
-  // Create a unique symbol for this fetch request
+  // 为此获取请求创建一个唯一的符号
   // 为此获取请求创建一个唯一的符号
   const currentRequestId = Symbol('fetchLogs')
   fetchLogs.lastRequestId = currentRequestId
@@ -4088,7 +5878,7 @@ const fetchLogs = async () => {
     if (selectedDate.value) {
       url += `&date=${selectedDate.value}`
     }
-    // Add active agent filter
+    // 添加活动助手过滤器
     // 添加活动助手过滤器
     if (activeAgent.value) {
       url += `&agent_id=${activeAgent.value.id}`
@@ -4097,13 +5887,13 @@ const fetchLogs = async () => {
     const res = await fetchWithTimeout(url, {}, 5000)
     const rawLogs = await res.json()
 
-    // Only skip update if the request is stale
+    // 仅当请求过时时跳过更新
     // 仅当请求过时时跳过更新
     if (fetchLogs.lastRequestId !== currentRequestId) {
       return
     }
 
-    // Filter out invalid logs first
+    // 首先过滤掉无效日志
     // 首先过滤掉无效日志
     const processedLogs = (Array.isArray(rawLogs) ? rawLogs : [])
       .filter((log) => log && typeof log === 'object')
@@ -4118,7 +5908,7 @@ const fetchLogs = async () => {
 
         return Object.freeze({
           ...log,
-          // content is passed raw to AsyncMarkdown
+          // 内容原始传递给 AsyncMarkdown
           displayTime: new Date(log.timestamp).toLocaleString(),
           metadata: metadata || {},
           sentiment: log.sentiment || (metadata?.sentiment ?? null),
@@ -4129,7 +5919,7 @@ const fetchLogs = async () => {
 
     logs.value = processedLogs
 
-    // Auto scroll
+    // 自动滚动
     setTimeout(() => {
       if (currentTab.value !== 'logs') return
       const container = document.querySelector('.chat-scroll-area')
@@ -4143,7 +5933,7 @@ const fetchLogs = async () => {
     }, 50)
   } catch (e) {
     console.error(e)
-    ElMessage.error('获取日志失败')
+    window.$notify('获取日志失败', 'error')
   } finally {
     isLogsFetching.value = false
   }
@@ -4174,30 +5964,24 @@ const saveLogEdit = async (logId) => {
     if (res.ok) {
       editingLogId.value = null
       await fetchLogs()
-      ElMessage.success('已修改')
-    } else ElMessage.error('修改失败')
+      window.$notify('已修改', 'success')
+    } else window.$notify('修改失败', 'error')
   } catch (e) {
-    ElMessage.error('网络错误')
+    window.$notify('网络错误', 'error')
     console.error(e)
   }
 }
 
 const deleteLog = async (logId) => {
   if (!logId) {
-    ElMessage.error('无效的记录ID')
+    window.$notify('无效的记录ID', 'error')
     return
   }
 
   try {
-    const confirmed = await ElMessageBox.confirm('确定删除这条记录？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await openConfirm('提示', '确定删除这条记录？', {
       type: 'warning'
     })
-      .then(() => true)
-      .catch(() => false)
-
-    if (!confirmed) return
 
     const res = await fetchWithTimeout(
       `${API_BASE}/history/${logId}`,
@@ -4208,15 +5992,17 @@ const deleteLog = async (logId) => {
     )
 
     if (res.ok) {
-      ElMessage.success('已删除')
+      window.$notify('已删除', 'success')
       await fetchLogs()
     } else {
       const err = await res.json()
-      ElMessage.error(err.message || '删除失败')
+      window.$notify(err.message || '删除失败', 'error')
     }
   } catch (e) {
-    console.error('Error in deleteLog:', e)
-    ElMessage.error('系统错误: ' + (e.message || '未知错误'))
+    if (e.message !== 'User cancelled') {
+      console.error('Error in deleteLog:', e)
+      window.$notify('系统错误: ' + (e.message || '未知错误'), 'error')
+    }
   }
 }
 
@@ -4234,7 +6020,7 @@ const updateLogStatus = (logId, status) => {
 
 const retryLogAnalysis = async (log) => {
   if (!log || !log.id) {
-    ElMessage.error('无效的日志 ID')
+    window.$notify('无效的日志 ID', 'error')
     return
   }
 
@@ -4258,7 +6044,7 @@ const retryLogAnalysis = async (log) => {
     ) // Increase timeout to 10s
 
     if (res.ok) {
-      ElMessage.success('已提交重试请求')
+      window.$notify('已提交重试请求', 'success')
       // 后台异步处理，稍后刷新或通过 WebSocket 更新
       // 这里简单起见，延迟刷新一下
       setTimeout(() => fetchLogs(), 2000)
@@ -4269,27 +6055,21 @@ const retryLogAnalysis = async (log) => {
   } catch (e) {
     console.error('Retry failed:', e)
     // 详细输出错误信息以便排查
-    ElMessage.error(formatLLMError(e))
+    window.$notify(formatLLMError(e), 'error')
     updateLogStatus(log.id, 'failed')
   }
 }
 
 const deleteMemory = async (memoryId) => {
   if (!memoryId || deleteMemory.isLoading) {
-    if (!memoryId) ElMessage.error('无效的记忆ID')
+    if (!memoryId) window.$notify('无效的记忆ID', 'error')
     return
   }
 
   try {
-    const confirmed = await ElMessageBox.confirm('确定要遗忘这段记忆吗？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await openConfirm('提示', '确定要遗忘这段记忆吗？', {
       type: 'warning'
     })
-      .then(() => true)
-      .catch(() => false)
-
-    if (!confirmed) return
 
     deleteMemory.isLoading = true
     const res = await fetchWithTimeout(
@@ -4300,14 +6080,16 @@ const deleteMemory = async (memoryId) => {
 
     if (res.ok) {
       await fetchMemories()
-      ElMessage.success('已遗忘')
+      window.$notify('已遗忘', 'success')
     } else {
       const err = await res.json()
-      ElMessage.error(err.message || '操作失败')
+      window.$notify(err.message || '操作失败', 'error')
     }
   } catch (e) {
-    console.error('Error in deleteMemory:', e)
-    ElMessage.error('系统错误: ' + (e.message || '未知错误'))
+    if (e.message !== 'User cancelled') {
+      console.error('Error in deleteMemory:', e)
+      window.$notify('系统错误: ' + (e.message || '未知错误'), 'error')
+    }
   } finally {
     deleteMemory.isLoading = false
   }
@@ -4315,34 +6097,30 @@ const deleteMemory = async (memoryId) => {
 
 const deleteTask = async (taskId) => {
   if (!taskId || deleteTask.isLoading) {
-    if (!taskId) ElMessage.error('无效的任务ID')
+    if (!taskId) window.$notify('无效的任务ID', 'error')
     return
   }
 
   try {
-    const confirmed = await ElMessageBox.confirm('确定删除此任务？', '提示', {
-      confirmButtonText: '确定',
-      cancelButtonText: '取消',
+    await openConfirm('提示', '确定删除此任务？', {
       type: 'warning'
     })
-      .then(() => true)
-      .catch(() => false)
-
-    if (!confirmed) return
 
     deleteTask.isLoading = true
     const res = await fetchWithTimeout(`${API_BASE}/tasks/${taskId}`, { method: 'DELETE' }, 5000)
 
     if (res.ok) {
       await fetchTasks()
-      ElMessage.success('已删除')
+      window.$notify('已删除', 'success')
     } else {
       const err = await res.json()
-      ElMessage.error(err.message || '操作失败')
+      window.$notify(err.message || '操作失败', 'error')
     }
   } catch (e) {
-    console.error('Error in deleteTask:', e)
-    ElMessage.error('系统错误: ' + (e.message || '未知错误'))
+    if (e.message !== 'User cancelled') {
+      console.error('Error in deleteTask:', e)
+      window.$notify('系统错误: ' + (e.message || '未知错误'), 'error')
+    }
   } finally {
     deleteTask.isLoading = false
   }
@@ -4437,590 +6215,59 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-/* Prompt Dialog Styles */
-.prompt-preview-container {
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 10px;
-}
-.prompt-message-item {
-  margin-bottom: 20px;
-  border: 1px solid #e4e7ed;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.prompt-role-badge {
-  padding: 5px 15px;
-  font-weight: bold;
-  font-size: 12px;
-  color: white;
-  background: #909399;
-}
-.prompt-role-badge.system {
-  background: #f56c6c;
-}
-.prompt-role-badge.user {
-  background: #409eff;
-}
-.prompt-role-badge.assistant {
-  background: #67c23a;
+/* 平面化动作按钮 */
+.flat-action-btn {
+  box-shadow: none !important;
+  border: 1.5px solid rgba(255, 255, 255, 0.3) !important;
+  background-image: none !important;
+  transition: all 0.2s ease !important;
 }
 
-.prompt-content-box {
-  padding: 15px;
-  background: #fcfcfc;
-  overflow-x: auto;
-}
-.prompt-content-box pre {
-  margin: 0;
-  white-space: pre-wrap;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
-  color: #303133;
+.flat-action-btn:hover {
+  transform: translateY(-1px) !important;
+  filter: brightness(1.05);
 }
 
-/* Debug Dialog Styles */
-/* 调试对话框样式 */
-.debug-segments-viewer {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
-  max-height: 60vh;
-  overflow-y: auto;
-  padding: 10px;
+.flat-action-btn:active {
+  transform: translateY(0) !important;
 }
 
-.debug-segment {
-  border: 1px solid #e4e7ed;
-  border-radius: 6px;
-  padding: 10px;
-  position: relative;
-}
-
-.debug-segment.thinking {
-  background-color: #f0f9eb;
-  border-color: #e1f3d8;
-}
-
-.debug-segment.monologue {
-  background-color: #fdf6ec;
-  border-color: #faecd8;
-}
-
-.debug-segment.nit {
-  background-color: #f4f4f5;
-  border-color: #e9e9eb;
-}
-
-.debug-segment.text {
-  background-color: #fff;
-  border-color: #fff; /* Invisible border for text */
-}
-
-.segment-label {
-  font-size: 11px;
-  font-weight: bold;
-  margin-bottom: 5px;
-  text-transform: uppercase;
-  color: #909399;
-}
-
-.thinking-content {
-  color: #67c23a;
-  font-style: italic;
-  font-family: monospace;
-  white-space: pre-wrap;
-  font-size: 0.9em;
-}
-
-.monologue-content {
-  color: #e6a23c;
-  font-style: italic;
-  font-family: monospace;
-  white-space: pre-wrap;
-  font-size: 0.9em;
-}
-
-.nit-content pre {
-  margin: 0;
-  color: #909399;
-  font-family: 'Consolas', monospace;
-  white-space: pre-wrap;
-  word-break: break-all;
-  font-size: 0.85em;
-}
-</style>
-
-<style scoped>
-/* --- 1. Design Tokens (Healing Theme) --- */
-.dashboard-wrapper {
-  /* Palette */
-  --healing-primary: #6cb4ee; /* Glacial Blue */
-  --healing-secondary: #a2d2ff; /* Baby Blue */
-  --healing-bg: rgba(240, 248, 255, 0.6);
-  --healing-surface: rgba(255, 255, 255, 0.65);
-  --healing-text: #475569;
-  --healing-text-light: #94a3b8;
-
-  /* Dimensions */
-  --radius-lg: 24px;
-  --radius-md: 16px;
-  --radius-sm: 8px;
-
-  /* Element Plus Overrides (Scoped) */
-  --el-color-primary: var(--healing-primary);
-  --el-color-primary-light-3: #92cbf6;
-  --el-color-primary-light-5: #b9dff9;
-  --el-color-primary-light-7: #dff1ff;
-  --el-color-primary-light-9: #f0f9ff;
-  --el-text-color-primary: var(--healing-text);
-  --el-border-radius-base: var(--radius-md);
-  --el-bg-color: transparent; /* Important for glass effect */
-
-  /* Fonts */
-  font-family: 'Inter', 'PingFang SC', 'Microsoft YaHei', 'Segoe UI', system-ui, sans-serif;
-  color: var(--healing-text);
-  font-size: 15px;
-  line-height: 1.6;
-  letter-spacing: 0.01em;
-  -webkit-font-smoothing: antialiased;
-
-  /* Layout */
-  position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  overflow: hidden;
-  background-color: #f0f9ff; /* Fallback */
-  z-index: 10;
-}
-
-/* --- 2. Dynamic Background (Blobs) --- */
-.background-blobs {
-  position: absolute;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  z-index: 0;
-  overflow: hidden;
-  background: radial-gradient(circle at 50% 50%, #fdfbfb 0%, #ebedee 100%); /* Subtle base */
-}
-
-.blob {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(80px);
-  opacity: 0.6;
-  animation: floatBlob 20s infinite alternate;
-  will-change: transform;
-}
-
-.blob-1 {
-  width: 600px;
-  height: 600px;
-  background: #a2d2ff;
-  top: -100px;
-  left: -100px;
-  animation-delay: 0s;
-}
-
-.blob-2 {
-  width: 500px;
-  height: 500px;
-  background: #ffb7b2; /* Soft pink for contrast */
-  bottom: -50px;
-  right: -50px;
-  animation-delay: -5s;
-}
-
-.blob-3 {
-  width: 400px;
-  height: 400px;
-  background: #e2f0cb; /* Soft green */
-  bottom: 20%;
-  left: 30%;
-  animation-delay: -10s;
-}
-
-.disabled-card {
-  opacity: 0.65;
-  filter: grayscale(0.4);
-  cursor: not-allowed;
-  transition: all 0.3s ease;
-}
-
-.disabled-card :deep(*) {
-  pointer-events: none;
-}
-
-.disabled-card :deep(.el-switch) {
-  pointer-events: auto;
-}
-
-@keyframes floatBlob {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-  33% {
-    transform: translate(30px, -50px) scale(1.1);
-  }
-  66% {
-    transform: translate(-20px, 20px) scale(0.9);
-  }
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
-}
-
-/* Server Info Box */
-.server-info-box {
-  background: rgba(255, 255, 255, 0.5);
-  padding: 15px;
-  border-radius: 8px;
-  border: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.token-display {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-}
-
-.token-display span {
-  font-family: monospace;
-  background: rgba(0, 0, 0, 0.05);
-  padding: 2px 6px;
-  border-radius: 4px;
-}
-
-/* --- 3. Main Glass Layout --- */
-.main-layout {
-  position: relative;
-  width: 95%; /* Floating card style */
-  height: 92vh;
-  margin: 4vh auto; /* Center vertically */
-  background: rgba(255, 255, 255, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  overflow: hidden; /* Round corners for children */
-  z-index: 10;
-}
-
-/* Glass Sidebar */
-.glass-sidebar {
-  position: relative;
-  z-index: 100;
-  width: 260px !important;
-  min-width: 260px;
-  background: rgba(255, 255, 255, 0.3); /* Transparent for glass */
-  border-right: 1px solid rgba(255, 255, 255, 0.2);
-  display: flex;
-  flex-direction: column;
-  transition: all 0.3s;
-  pointer-events: auto !important;
-}
-
-/* 按钮点击强化 */
-.sidebar-menu :deep(.el-menu-item),
-.quit-button,
-.header-right .el-button,
-.view-container .el-button,
-.action-group .el-button,
-.utils-group .el-button {
-  pointer-events: auto !important;
-  cursor: pointer !important;
-}
-
-.brand-area {
-  padding: 30px 20px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  user-select: none;
-}
-
-.logo-box {
-  width: 42px;
-  height: 42px;
-  background: #ffffff;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 24px;
-  box-shadow: 0 4px 12px rgba(108, 180, 238, 0.3);
-  overflow: hidden; /* 防止图片溢出圆角 */
-}
-
-.logo-img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover; /* 让图片填满容器 */
-}
-
-.brand-text h1 {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0;
-  background: linear-gradient(90deg, #2c3e50, var(--healing-primary));
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.version-tag {
-  font-size: 10px;
-  color: var(--healing-text-light);
-  background: rgba(255, 255, 255, 0.5);
-  padding: 1px 6px;
-  border-radius: 4px;
-}
-
-.sidebar-menu {
-  border-right: none !important;
-  flex: 1;
-  background-color: transparent !important;
-  padding-top: 10px;
-}
-
-.sidebar-menu :deep(.el-menu-item) {
-  height: 48px;
-  line-height: 48px;
-  margin: 4px 16px;
-  border-radius: 12px; /* Rounder */
-  color: var(--healing-text);
+/* 动画效果 */
+.fade-slide-enter-active,
+.fade-slide-leave-active {
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  cursor: pointer !important;
-  border: 1px solid transparent; /* Prevent layout shift */
 }
 
-.sidebar-menu :deep(.el-menu-item:hover) {
-  background-color: rgba(255, 255, 255, 0.4) !important;
-  color: var(--healing-primary) !important;
-  transform: translateX(4px);
+.fade-slide-enter-from {
+  opacity: 0;
+  transform: translateX(20px);
 }
 
-.sidebar-menu :deep(.el-menu-item.is-active) {
-  background: #ffffff !important;
-  color: var(--healing-primary) !important;
-  font-weight: 600;
-  box-shadow: 0 4px 12px rgba(108, 180, 238, 0.15);
-  transform: scale(1.02);
+.fade-slide-leave-to {
+  opacity: 0;
+  transform: translateX(-20px);
 }
 
-.sidebar-menu :deep(.el-icon) {
-  font-size: 18px;
-  margin-right: 12px;
-  transition: all 0.3s;
+/* 自定义滚动条 */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
 }
 
-.sidebar-menu :deep(.el-menu-item.is-active .el-icon) {
-  color: var(--healing-primary);
-  transform: scale(1.1);
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
 }
 
-.sidebar-footer {
-  padding: 24px;
-  border-top: 1px solid rgba(255, 255, 255, 0.3);
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  background: rgba(255, 255, 255, 0.1); /* Subtle footer separation */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
 }
 
-.quit-button {
-  width: 100%;
-  height: 42px;
-  border-radius: 12px;
-  font-weight: 600;
-  border: 1px solid rgba(245, 108, 108, 0.2);
-  background: rgba(255, 255, 255, 0.5) !important;
-  color: #f56c6c !important;
-  transition: all 0.3s;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  gap: 8px;
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
 }
 
-.quit-button:hover {
-  background: #f56c6c !important;
-  color: #ffffff !important;
-  box-shadow: 0 6px 16px rgba(245, 108, 108, 0.25);
-  transform: translateY(-2px);
-  border-color: #f56c6c;
-}
-
-.status-indicator {
-  font-size: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--healing-text-light);
-  padding: 8px;
-  background: rgba(255, 255, 255, 0.3);
-  border-radius: 8px;
-}
-
-.status-indicator.online {
-  color: #67c23a;
-}
-
-.status-indicator .dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: currentColor;
-  box-shadow: 0 0 8px currentColor;
-}
-
-/* Glass Header */
-.glass-header {
-  position: relative;
-  z-index: 50;
-  height: 64px;
-  background: transparent; /* Full transparent */
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 0 30px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.2); /* Subtle divider */
-}
-
-.page-title {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 700;
-  color: var(--healing-text);
-  letter-spacing: 0.5px;
-}
-
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-/* Content Area */
-.content-area {
-  position: relative;
-  z-index: 10;
-  padding: 24px;
-  overflow-y: auto;
-  scroll-behavior: smooth;
-  pointer-events: auto !important;
-}
-
-.view-container {
-  width: 100%;
-  max-width: 1400px;
-  margin: 0;
-}
-
-/* Stats Cards */
-.stat-card {
-  border: none !important;
-  border-radius: var(--radius-lg);
-  color: white;
-  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
-  overflow: hidden;
-  box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.1);
-}
-
-.stat-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.15);
-}
-
-.stat-content {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-}
-
-.stat-icon {
-  font-size: 32px;
-  background: rgba(255, 255, 255, 0.25);
-  width: 60px;
-  height: 60px;
-  border-radius: 16px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  backdrop-filter: blur(4px);
-}
-
-.stat-info h3 {
-  margin: 0;
-  font-size: 14px;
-  opacity: 0.95;
-  font-weight: 500;
-}
-
-.stat-info .number {
-  font-size: 32px; /* Bigger number */
-  font-weight: 800;
-  letter-spacing: -1px;
-}
-
-/* Refined Gradients */
-.pink-gradient {
-  background: linear-gradient(135deg, #ff9a9e 0%, #ffc3a0 100%);
-}
-.blue-gradient {
-  background: linear-gradient(135deg, #89f7fe 0%, #66a6ff 100%);
-}
-.purple-gradient {
-  background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
-}
-
-/* Glass Cards Generic - The "Healing Card" */
-.glass-card {
-  background: rgba(255, 255, 255, 0.5) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.4) !important;
-  border-radius: var(--radius-lg) !important;
-  box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.05) !important;
-  transition: transform 0.3s ease;
-}
-
-.glass-card:hover {
-  transform: translateY(-2px);
-  background: rgba(255, 255, 255, 0.65) !important;
-  box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.08) !important;
-}
-
-/* Remove default card header border */
-.glass-card :deep(.el-card__header) {
-  border-bottom: 1px solid rgba(255, 255, 255, 0.3);
-  padding: 18px 24px;
-}
-
-.card-header span {
-  font-weight: 700;
-  font-size: 16px;
-  color: var(--healing-text);
-}
-
-/* State Box */
-.state-box {
-  text-align: center;
-  padding: 20px;
-  background: rgba(255, 255, 255, 0.4);
-  border-radius: var(--radius-md);
-  transition: all 0.3s;
-}
-
-.state-box:hover {
-  background: rgba(255, 255, 255, 0.7);
-  transform: scale(1.02);
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
 
 .state-box .label {
@@ -5102,21 +6349,38 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(108, 180, 238, 0.3);
 }
 
+/* 消息气泡样式 */
+.chat-bubble-wrapper {
+  display: flex;
+  margin-bottom: 20px;
+  max-width: 85%;
+  position: relative;
+}
+
+.chat-bubble-wrapper.user {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.bubble-content-box {
+  padding: 12px 18px;
+  border-radius: 20px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  position: relative;
+  transition: all 0.3s;
+}
+
+.chat-bubble-wrapper.user .bubble-content-box {
+  background: var(--healing-primary);
+  color: white;
+  border-bottom-right-radius: 4px;
+  box-shadow: 0 4px 12px rgba(108, 180, 238, 0.3);
+}
+
 .chat-bubble-wrapper.assistant .bubble-content-box {
   background: white;
   color: var(--healing-text);
-  border-bottom-left-radius: 4px; /* Squircle effect */
-}
-
-/* Edit/Delete icons inside bubble */
-.edit-tools .el-button {
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.2);
-  border: none;
-  color: inherit;
-}
-.edit-tools .el-button:hover {
-  background: rgba(255, 255, 255, 0.4);
+  border-bottom-left-radius: 4px;
 }
 
 .bubble-meta {
@@ -5137,13 +6401,13 @@ onUnmounted(() => {
 }
 
 .log-meta-tag.importance {
-  color: #e6a23c;
-  background: #fdf6ec;
+  color: #f59e0b; /* amber-500 */
+  background: #fffbeb; /* amber-50 */
 }
 
 .log-meta-tag.memory {
-  background: #f0f9eb;
-  color: #67c23a;
+  background: #f0f9ff; /* sky-50 */
+  color: #0ea5e9; /* sky-500 */
 }
 
 .message-markdown {
@@ -5178,8 +6442,8 @@ onUnmounted(() => {
 }
 
 .chat-bubble-wrapper.user .message-content-wrapper :deep(.markdown-body pre) {
-  background-color: #f6f8fa;
-  color: #333;
+  background-color: #f8fafc; /* slate-50 */
+  color: #1e293b; /* slate-800 */
 }
 
 .chat-bubble-wrapper.user .message-content-wrapper :deep(.markdown-body pre code) {
@@ -5219,7 +6483,7 @@ onUnmounted(() => {
 :deep(.expand-arrow) {
   margin-left: auto;
   font-size: 10px;
-  color: #909399;
+  color: #94a3b8; /* slate-400 */
   transition: transform 0.2s;
 }
 
@@ -5238,45 +6502,45 @@ onUnmounted(() => {
 
 /* Specific Block Themes */
 :deep(.trigger-block.perocue) {
-  border-color: #ff9a9e;
+  border-color: #fca5a5; /* red-300 */
 }
 :deep(.trigger-block.perocue .trigger-header) {
-  background: linear-gradient(90deg, #fff0f5, #ffe4e1);
-  color: #ff6b81;
+  background: linear-gradient(90deg, #fff1f2, #ffe4e6); /* red-50/100 */
+  color: #f43f5e; /* rose-500 */
 }
 
 :deep(.trigger-block.memory) {
-  border-color: #a18cd1;
+  border-color: #bae6fd; /* sky-200 */
 }
 :deep(.trigger-block.memory .trigger-header) {
-  background: linear-gradient(90deg, #f3e5f5, #ede7f6);
-  color: #673ab7;
+  background: linear-gradient(90deg, #f0f9ff, #e0f2fe); /* sky-50/100 */
+  color: #0ea5e9; /* sky-500 */
 }
 
 :deep(.trigger-block.click_messages) {
-  border-color: #ffcc33;
+  border-color: #fde047; /* yellow-300 */
 }
 :deep(.trigger-block.click_messages .trigger-header) {
-  background: linear-gradient(90deg, #fff9e6, #fff3cd);
-  color: #b8860b;
+  background: linear-gradient(90deg, #fefce8, #fef9c3); /* yellow-50/100 */
+  color: #a16207; /* yellow-700 */
 }
 
 :deep(.trigger-block.idle_messages),
 :deep(.trigger-block.back_messages) {
-  border-color: #409eff;
+  border-color: #7dd3fc; /* sky-300 */
 }
 :deep(.trigger-block.idle_messages .trigger-header),
 :deep(.trigger-block.back_messages .trigger-header) {
-  background: linear-gradient(90deg, #ecf5ff, #d9ecff);
-  color: #409eff;
+  background: linear-gradient(90deg, #f0f9ff, #e0f2fe); /* sky-50/100 */
+  color: #0ea5e9; /* sky-500 */
 }
 
 :deep(.trigger-block.unknown-xml) {
-  border-color: #909399;
+  border-color: #cbd5e1; /* slate-300 */
 }
 :deep(.trigger-block.unknown-xml .trigger-header) {
-  background: linear-gradient(90deg, #f4f4f5, #e9e9eb);
-  color: #606266;
+  background: linear-gradient(90deg, #f8fafc, #f1f5f9); /* slate-50/100 */
+  color: #64748b; /* slate-500 */
 }
 
 /* Sub-elements styling */
@@ -5290,31 +6554,31 @@ onUnmounted(() => {
 
 :deep(.pero-label) {
   font-size: 11px;
-  color: #909399;
-  background: #f4f4f5;
+  color: #64748b; /* slate-500 */
+  background: #f1f5f9; /* slate-100 */
   padding: 2px 6px;
   border-radius: 4px;
 }
 
 :deep(.pero-val) {
   font-weight: 600;
-  color: #303133;
+  color: #1e293b; /* slate-800 */
 }
 
 :deep(.pero-mind-box) {
-  background: #fff9fb;
-  border-left: 3px solid #ff9a9e;
+  background: #fff5f7; /* rose-50 */
+  border-left: 3px solid #fda4af; /* rose-300 */
   padding: 8px 10px;
   border-radius: 4px;
   font-style: italic;
-  color: #555;
+  color: #475569; /* slate-600 */
   line-height: 1.5;
 }
 
 :deep(.pero-memory-content) {
   line-height: 1.6;
   margin-bottom: 10px;
-  color: #2c3e50;
+  color: #334155; /* slate-700 */
 }
 
 :deep(.pero-tag-cloud) {
@@ -5339,8 +6603,8 @@ onUnmounted(() => {
 }
 
 :deep(.pero-part-card) {
-  background: #fffdf5;
-  border: 1px solid #ffecb3;
+  background: #fdfdfb; /* stone-50 */
+  border: 1px solid #fde68a; /* amber-200 */
   border-radius: 8px;
   padding: 8px;
 }
@@ -5348,9 +6612,9 @@ onUnmounted(() => {
 :deep(.part-name) {
   font-size: 11px;
   font-weight: bold;
-  color: #856404;
+  color: #92400e; /* amber-800 */
   margin-bottom: 4px;
-  border-bottom: 1px dashed #ffeeba;
+  border-bottom: 1px dashed #fef3c7; /* amber-100 */
   padding-bottom: 2px;
 }
 
@@ -5360,7 +6624,7 @@ onUnmounted(() => {
   margin: 0;
   padding-left: 18px;
   font-size: 12px;
-  color: #444;
+  color: #475569; /* slate-600 */
 }
 
 :deep(.part-list li) {
@@ -5370,17 +6634,17 @@ onUnmounted(() => {
 :deep(.pero-task-box),
 :deep(.pero-topic-box) {
   padding: 8px;
-  background: #f0f9eb;
+  background: #f0f9ff; /* sky-50 */
   border-radius: 6px;
-  color: #67c23a;
+  color: #0284c7; /* sky-600 */
   list-style: none;
 }
 
 :deep(.trigger-block.error) {
-  border-color: #f56c6c;
-  color: #f56c6c;
+  border-color: #fca5a5; /* red-300 */
+  color: #ef4444; /* red-500 */
   padding: 8px;
-  background: #fef0f0;
+  background: #fef2f2; /* red-50 */
 }
 
 .bubble-actions {
@@ -5426,11 +6690,11 @@ onUnmounted(() => {
   width: 42px;
   height: 42px;
   border-radius: 12px;
-  background: linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%);
+  background: linear-gradient(135deg, #7dd3fc 0%, #0ea5e9 100%); /* sky-300 to sky-500 */
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 4px 10px rgba(161, 140, 209, 0.4);
+  box-shadow: 0 4px 10px rgba(14, 165, 233, 0.3);
   color: white;
   font-size: 20px;
 }
@@ -5445,17 +6709,17 @@ onUnmounted(() => {
   font-size: 20px;
   font-weight: 800;
   margin: 0;
-  background: linear-gradient(90deg, #5e60ce 0%, #6930c3 100%);
+  background: linear-gradient(90deg, #0369a1 0%, #0ea5e9 100%); /* sky-700 to sky-500 */
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
-  color: #5e60ce;
+  color: #0369a1;
   line-height: 1.2;
 }
 
 .section-subtitle {
   font-size: 10px;
-  color: #909399;
+  color: #64748b; /* slate-500 */
   font-weight: 600;
   letter-spacing: 0.5px;
   text-transform: uppercase;
@@ -5504,27 +6768,27 @@ onUnmounted(() => {
   left: 0;
   right: 0;
   height: 4px;
-  background: #e4e7ed;
+  background: #cbd5e1; /* slate-300 */
   z-index: 1;
 }
 
 .memory-card.preference::after {
-  background: linear-gradient(90deg, #ff9a9e 0%, #fecfef 100%);
+  background: linear-gradient(90deg, #fb7185 0%, #fda4af 100%); /* rose-400 to rose-300 */
 }
 .memory-card.event::after {
-  background: linear-gradient(90deg, #a18cd1 0%, #fbc2eb 100%);
+  background: linear-gradient(90deg, #7dd3fc 0%, #bae6fd 100%); /* sky-300 to sky-200 */
 }
 .memory-card.fact::after {
-  background: linear-gradient(90deg, #84fab0 0%, #8fd3f4 100%);
+  background: linear-gradient(90deg, #38bdf8 0%, #7dd3fc 100%); /* sky-400 to sky-300 */
 }
 .memory-card.summary::after {
-  background: linear-gradient(90deg, #fccb90 0%, #d57eeb 100%);
+  background: linear-gradient(90deg, #fbbf24 0%, #fcd34d 100%); /* amber-400 to amber-300 */
 }
 .memory-card.promise::after {
-  background: linear-gradient(90deg, #ffecd2 0%, #fcb69f 100%);
+  background: linear-gradient(90deg, #38bdf8 0%, #7dd3fc 100%); /* sky-400 to sky-300 */
 }
 .memory-card.work_log::after {
-  background: linear-gradient(90deg, #cfd9df 0%, #e2ebf0 100%);
+  background: linear-gradient(90deg, #94a3b8 0%, #cbd5e1 100%); /* slate-400 to slate-300 */
 }
 
 /* Remove old specific borders */
@@ -5538,7 +6802,7 @@ onUnmounted(() => {
 .memory-text {
   font-size: 14.5px;
   line-height: 1.65;
-  color: #4a5568;
+  color: #334155; /* slate-700 */
   margin: 12px 0 16px 0;
   padding: 0 4px;
   font-weight: 500;
@@ -5618,13 +6882,13 @@ onUnmounted(() => {
 
 .agent-selector-wrapper .label {
   font-size: 12px;
-  color: #606266;
+  color: #64748b; /* slate-500 */
   font-weight: 500;
 }
 
 .agent-name {
   font-weight: 600;
-  color: #5e60ce;
+  color: var(--healing-primary);
   font-size: 13px;
   display: flex;
   align-items: center;
@@ -5658,7 +6922,7 @@ onUnmounted(() => {
 
 .tag-label {
   font-size: 11px;
-  color: #909399;
+  color: #94a3b8; /* slate-400 */
   white-space: nowrap;
 }
 
@@ -5682,20 +6946,20 @@ onUnmounted(() => {
   font-size: 11px !important;
   padding: 2px 8px !important;
   border-radius: 6px !important;
-  color: #606266 !important;
+  color: #475569; /* slate-600 */
   transition: all 0.2s !important;
   cursor: pointer;
 }
 
 .glass-check-tag:hover {
   background: #fff !important;
-  color: #5e60ce !important;
+  color: var(--healing-primary) !important;
 }
 
 .glass-check-tag.is-checked {
-  background: #5e60ce !important;
+  background: var(--healing-primary) !important;
   color: white !important;
-  border-color: #5e60ce !important;
+  border-color: var(--healing-primary) !important;
 }
 
 .action-buttons {
@@ -5714,19 +6978,6 @@ onUnmounted(() => {
   transform: translateY(-2px);
   background: #fff !important;
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-}
-
-.glass-radio-group :deep(.el-radio-button__inner) {
-  background: rgba(255, 255, 255, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  box-shadow: none !important;
-}
-
-.glass-radio-group :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-  background-color: #5e60ce !important;
-  border-color: #5e60ce !important;
-  color: white !important;
-  box-shadow: -1px 0 0 0 #5e60ce !important;
 }
 
 /* Tasks Waterfall */
@@ -5756,13 +7007,13 @@ onUnmounted(() => {
 }
 
 .task-card-modern.reminder {
-  border-left: 4px solid #f56c6c !important;
+  border-left: 4px solid #f43f5e !important; /* rose-500 */
 }
 .task-card-modern.topic {
-  border-left: 4px solid #409eff !important;
+  border-left: 4px solid #0ea5e9 !important; /* sky-500 */
 }
 .task-card-modern.todo {
-  border-left: 4px solid #67c23a !important;
+  border-left: 4px solid #0ea5e9 !important; /* sky-500 */
 }
 
 .task-top {
@@ -5793,74 +7044,18 @@ onUnmounted(() => {
   color: var(--healing-text-light);
 }
 
-/* Global Input Styling */
-:deep(.el-input__wrapper),
-:deep(.el-textarea__inner) {
-  box-shadow: none !important;
-  background-color: rgba(255, 255, 255, 0.6) !important;
-  border: 1px solid rgba(255, 255, 255, 0.5) !important;
-  border-radius: var(--radius-sm) !important;
-  transition: all 0.3s;
-}
-
-:deep(.el-input__wrapper:hover),
-:deep(.el-textarea__inner:hover) {
-  background-color: rgba(255, 255, 255, 0.9) !important;
-  border-color: var(--healing-secondary) !important;
-}
-
-:deep(.el-input__wrapper.is-focus),
-:deep(.el-textarea__inner:focus) {
-  background-color: #ffffff !important;
-  box-shadow: 0 0 0 2px var(--healing-secondary) !important;
-}
-
 /* Fix Dialog Transparency Issue */
-:deep(.el-dialog) {
-  background: rgba(255, 255, 255, 0.95) !important;
+.custom-modal-content {
+  background: rgba(15, 23, 42, 0.95) !important; /* slate-900 */
   backdrop-filter: blur(20px);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.2);
-  border: 1px solid rgba(255, 255, 255, 0.3);
+  border-radius: 24px;
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-:deep(.el-dialog__title) {
-  color: var(--healing-text);
-  font-weight: 700;
-}
-
-:deep(.el-dialog__body) {
-  color: var(--healing-text);
-  padding-top: 20px;
-  padding-bottom: 20px;
-}
-
-/* 确保对话框内的表单标签可见 */
-:deep(.el-form-item__label) {
-  color: var(--healing-text);
-  font-weight: 500;
-}
-
-/* Ensure input text is visible */
-:deep(.el-input__inner) {
-  color: #333 !important;
-}
-
-/* Select dropdown menu styling */
-:deep(.el-select__popper.el-popper) {
-  background: rgba(255, 255, 255, 0.95) !important;
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.3);
-}
-
-:deep(.el-select-dropdown__item) {
-  color: var(--healing-text);
-}
-
-:deep(.el-select-dropdown__item.hover),
-:deep(.el-select-dropdown__item:hover) {
-  background-color: var(--healing-secondary);
-  color: white;
+/* Ensure input text is visible in custom components */
+.p-input-inner {
+  color: #f1f5f9 !important; /* slate-100 */
 }
 
 .memory-top {
@@ -5870,7 +7065,7 @@ onUnmounted(() => {
 }
 .memory-text {
   font-size: 14px;
-  color: #606266;
+  color: #475569; /* slate-600 */
   line-height: 1.5;
   margin-bottom: 12px;
 }
@@ -5881,7 +7076,7 @@ onUnmounted(() => {
 }
 .time-hint {
   font-size: 11px;
-  color: #c0c4cc;
+  color: #94a3b8; /* slate-400 */
 }
 
 /* 模型网格 */
@@ -5917,32 +7112,32 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #909399; /* Offline */
+  background-color: #94a3b8; /* Offline - slate-400 */
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
   transition: all 0.3s;
 }
 
 .status-dot.online {
-  background-color: #67c23a;
-  box-shadow: 0 0 4px #67c23a;
+  background-color: #0ea5e9; /* Online - sky-500 */
+  box-shadow: 0 0 4px #0ea5e9;
 }
 
 .status-dot.warning {
-  background-color: #e6a23c;
+  background-color: #f59e0b; /* amber-500 */
 }
 
 .status-dot.offline {
-  background-color: #f56c6c;
+  background-color: #f43f5e; /* rose-500 */
 }
 
 .model-config-card.active-main {
-  border: 2px solid #ff88aa;
+  border: 2px solid var(--healing-primary);
 }
 .model-config-card.active-secretary {
-  border: 2px solid #e6a23c;
+  border: 2px solid #f59e0b; /* amber-500 */
 }
 .model-config-card.active-reflection {
-  border: 2px solid #f56c6c;
+  border: 2px solid #0284c7; /* sky-600 */
 }
 
 /* Scrollbar Beauty */
@@ -5979,7 +7174,7 @@ onUnmounted(() => {
 .model-body p {
   margin: 4px 0;
   font-size: 13px;
-  color: #606266;
+  color: #64748b; /* slate-500 */
 }
 
 .model-actions {
@@ -6017,11 +7212,11 @@ onUnmounted(() => {
 }
 .mcp-detail {
   font-size: 12px;
-  color: #909399;
+  color: #64748b; /* slate-500 */
   margin-top: 4px;
   word-break: break-all;
   font-family: monospace;
-  background: #f4f4f5;
+  background: #f1f5f9; /* slate-100 */
   padding: 4px;
   border-radius: 4px;
 }
@@ -6069,23 +7264,24 @@ onUnmounted(() => {
 }
 
 /* Dashboard Global Edit Input Style */
-:deep(.dashboard-edit-textarea .el-textarea__inner) {
-  font-size: 15px !important;
-  line-height: 1.6 !important;
-  padding: 12px 16px !important;
-  border-radius: 12px !important;
-  background-color: #ffffff !important;
-  border: 2px solid #e4e7ed !important;
-  color: #303133 !important;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05) !important;
-  transition: all 0.3s ease !important;
-  font-family: 'Segoe UI', system-ui, sans-serif !important;
+.dashboard-edit-textarea {
+  font-size: 15px;
+  line-height: 1.6;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background-color: #ffffff;
+  border: 2px solid #e2e8f0; /* slate-200 */
+  color: #1e293b; /* slate-800 */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  transition: all 0.3s ease;
+  font-family: 'Segoe UI', system-ui, sans-serif;
+  width: 100%;
+  outline: none;
 }
 
-:deep(.dashboard-edit-textarea .el-textarea__inner:focus) {
-  border-color: #ff88aa !important;
-  box-shadow: 0 4px 16px rgba(255, 136, 170, 0.15) !important;
-  background-color: #fff !important;
+.dashboard-edit-textarea:focus {
+  border-color: #0ea5e9; /* sky-500 */
+  box-shadow: 0 4px 16px rgba(14, 165, 233, 0.15);
 }
 
 .edit-mode {
@@ -6099,80 +7295,6 @@ onUnmounted(() => {
   gap: 10px;
   justify-content: flex-end;
 }
-/* 记忆重置弹窗美化 */
-:deep(.danger-reset-box) {
-  animation: dangerShake 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) 2 both;
-  border-radius: 20px !important;
-  border: 1px solid rgba(248, 113, 113, 0.3) !important;
-  box-shadow: 0 20px 50px rgba(244, 63, 94, 0.15) !important;
-  background: white !important;
-}
-
-:deep(.danger-reset-box .el-message-box__header) {
-  padding-top: 24px;
-}
-
-:deep(.danger-reset-box .el-message-box__title) {
-  color: #ef4444;
-  font-weight: 700;
-  font-size: 18px;
-}
-
-:deep(.danger-reset-box .danger-main-text) {
-  font-weight: 600;
-  font-size: 16px;
-  color: #1e293b;
-  margin-bottom: 8px;
-}
-
-:deep(.danger-reset-box .danger-sub-text) {
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.6;
-}
-
-:deep(.danger-reset-box .el-message-box__input) {
-  padding-top: 15px;
-}
-
-:deep(.danger-reset-box .el-input__wrapper) {
-  border-radius: 12px;
-  background: #f8fafc;
-  box-shadow: none !important;
-  border: 1px solid #e2e8f0;
-}
-
-:deep(.danger-reset-box .el-button--primary) {
-  background: #ef4444;
-  border-color: #ef4444;
-  border-radius: 10px;
-  padding: 10px 20px;
-}
-
-:deep(.danger-reset-box .el-button:not(.el-button--primary)) {
-  border-radius: 10px;
-  padding: 10px 20px;
-}
-
-@keyframes dangerShake {
-  0%,
-  100% {
-    transform: translate3d(0, 0, 0);
-  }
-  20% {
-    transform: translate3d(-4px, 0, 0);
-  }
-  40% {
-    transform: translate3d(4px, 0, 0);
-  }
-  60% {
-    transform: translate3d(-3px, 0, 0);
-  }
-  80% {
-    transform: translate3d(3px, 0, 0);
-  }
-}
-
 /* New Memory UI Styles */
 .memory-top {
   display: flex;
@@ -6195,13 +7317,13 @@ onUnmounted(() => {
 }
 
 .importance-indicator {
-  color: #e6a23c;
+  color: #f59e0b; /* amber-500 */
   font-weight: bold;
   cursor: help;
 }
 
 .access-indicator {
-  color: #f56c6c;
+  color: #f43f5e; /* rose-500 */
   font-weight: bold;
   cursor: help;
 }
@@ -6223,14 +7345,14 @@ onUnmounted(() => {
   gap: 8px;
   font-weight: 600;
   font-size: 16px;
-  color: #2c3e50;
+  color: #1e293b; /* slate-800 */
 }
 .nit-metrics {
   display: flex;
   align-items: center;
   gap: 12px;
   font-size: 13px;
-  color: #606266;
+  color: #64748b; /* slate-500 */
 }
 .nit-plugins-list {
   display: flex;
@@ -6243,7 +7365,7 @@ onUnmounted(() => {
 }
 .more-tag {
   font-size: 12px;
-  color: #909399;
+  color: #94a3b8; /* slate-400 */
 }
 
 /* --- Memory Dashboard Styles --- */
@@ -6270,7 +7392,7 @@ onUnmounted(() => {
 .tag-cloud-label {
   font-size: 13px;
   font-weight: bold;
-  color: #606266;
+  color: #475569; /* slate-600 */
   white-space: nowrap;
   margin-top: 4px;
 }
@@ -6295,7 +7417,7 @@ onUnmounted(() => {
   position: relative;
   width: 100%;
   height: 500px;
-  border: 1px solid #eee;
+  border: 1px solid #f1f5f9; /* slate-100 */
   border-radius: 8px;
   overflow: hidden;
   background: #fafafa;
@@ -6309,7 +7431,7 @@ onUnmounted(() => {
   bottom: 10px;
   left: 10px;
   font-size: 12px;
-  color: #909399;
+  color: #94a3b8; /* slate-400 */
   background: rgba(255, 255, 255, 0.8);
   padding: 8px;
   border-radius: 4px;

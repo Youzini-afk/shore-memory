@@ -1,29 +1,43 @@
 <template>
   <div
-    class="h-full w-full bg-gradient-to-br from-gray-950 via-slate-900 to-gray-950 text-slate-200 font-sans flex overflow-hidden relative p-4 gap-4"
+    class="absolute inset-0 bg-[#1e293b] text-slate-200 font-sans flex overflow-hidden p-4 gap-4 pixel-ui pixel-grid-overlay"
   >
+    <!-- 像素背景点缀 -->
+    <div class="absolute inset-0 pointer-events-none opacity-10">
+      <div
+        v-for="i in 10"
+        :key="'pixel-' + i"
+        class="absolute bg-white/20"
+        :style="{
+          width: '4px',
+          height: '4px',
+          top: Math.random() * 100 + '%',
+          left: Math.random() * 100 + '%'
+        }"
+      ></div>
+    </div>
     <!-- 错误遮罩 -->
     <div
       v-if="error"
-      class="absolute inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
+      class="absolute inset-0 z-[60] flex items-center justify-center bg-black/80 backdrop-blur-sm p-8"
     >
       <div
-        class="bg-slate-900/90 border border-red-500/30 p-6 rounded-2xl shadow-2xl max-w-2xl w-full"
+        class="bg-[#1e293b] border border-red-500/30 p-6 pixel-border-dark shadow-2xl max-w-2xl w-full"
       >
         <div class="flex items-center gap-3 text-red-400 mb-4">
-          <XCircleIcon class="w-6 h-6" />
+          <PixelIcon name="close" size="sm" />
           <span class="text-xl font-bold">组件错误</span>
         </div>
         <pre
-          class="bg-black/50 p-4 rounded-xl text-left overflow-auto text-xs font-mono text-slate-300 mb-6 border border-white/5"
+          class="bg-black/50 p-4 pixel-border-sm-dark text-left overflow-auto text-xs font-mono text-slate-300 mb-6 border border-moe-cocoa/30"
           >{{ error }}</pre
         >
         <div class="flex justify-end">
           <button
-            class="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 rounded-lg transition text-white font-medium flex items-center gap-2"
+            class="px-6 py-2.5 bg-slate-800 hover:bg-slate-700 pixel-border-sm-dark transition text-white font-medium flex items-center gap-2 border border-moe-cocoa/30"
             @click="emit('exit', false)"
           >
-            <LogOutIcon class="w-4 h-4" />
+            <PixelIcon name="logout" size="xs" />
             退出工作模式
           </button>
         </div>
@@ -33,18 +47,15 @@
     <!-- 加载遮罩 -->
     <div
       v-if="!internalReady && !error"
-      class="absolute inset-0 z-50 flex items-center justify-center bg-slate-950"
+      class="absolute inset-0 z-[60] flex items-center justify-center bg-[#1e293b] pixel-grid-overlay"
     >
       <div class="flex flex-col items-center gap-6">
         <div class="relative">
-          <div
-            class="w-12 h-12 border-4 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin"
-          ></div>
-          <div class="absolute inset-0 flex items-center justify-center">
-            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
+          <div class="text-moe-pink">
+            <PixelIcon name="loader" size="3xl" animation="spin" />
           </div>
         </div>
-        <span class="text-slate-400 text-sm font-medium tracking-wide animate-pulse"
+        <span class="text-moe-pink/60 text-sm font-bold tracking-widest animate-pulse uppercase"
           >正在初始化工作环境...</span
         >
       </div>
@@ -53,15 +64,16 @@
     <!-- 左侧面板: 资源管理器 (悬浮卡片) -->
     <div
       v-show="internalReady && !error"
-      class="w-72 bg-[#1e293b]/60 backdrop-blur-xl border border-white/5 rounded-2xl flex flex-col shadow-2xl overflow-hidden transition-all duration-300 hover:border-white/10 group/sidebar"
+      class="w-72 bg-[#1e293b]/80 backdrop-blur-md pixel-border-dark flex flex-col shadow-2xl overflow-hidden transition-all duration-300 group/sidebar border border-moe-cocoa/20"
     >
       <!-- 面板标题栏 -->
-      <div class="h-14 px-5 flex items-center justify-between border-b border-white/5 bg-white/5">
-        <div class="flex items-center gap-2 text-indigo-400">
-          <FolderOpenIcon class="w-5 h-5" />
+      <div
+        class="h-14 px-5 flex items-center justify-between border-b border-moe-cocoa/30 bg-black/20"
+      >
+        <div class="flex items-center gap-2 text-moe-sky">
+          <PixelIcon name="folder" size="sm" />
           <span class="font-bold tracking-wide text-sm">项目工程</span>
         </div>
-        <!-- 可选: 侧边栏切换按钮可放在此处 -->
       </div>
 
       <!-- 文件树 -->
@@ -73,104 +85,107 @@
     <!-- 主内容区域 (悬浮卡片) -->
     <div
       v-show="internalReady && !error"
-      class="flex-1 flex flex-col relative gap-4 overflow-hidden"
+      class="flex-1 flex flex-col relative gap-4 overflow-hidden min-h-0"
     >
       <!-- 顶部导航栏 -->
       <header
-        class="h-14 px-6 bg-[#1e293b]/60 backdrop-blur-xl border border-white/5 rounded-2xl flex items-center justify-between shadow-lg shrink-0"
+        class="h-14 px-6 bg-[#1e293b]/80 backdrop-blur-md pixel-border-dark flex items-center justify-between shadow-lg shrink-0 border border-moe-cocoa/20"
       >
         <!-- 面包屑 / 状态 -->
         <div class="flex items-center gap-4">
           <div
-            class="flex items-center gap-2 px-3 py-1 bg-indigo-500/10 border border-indigo-500/20 rounded-full"
+            class="flex items-center gap-2 px-3 py-1 bg-moe-pink/10 border border-moe-pink/20 pixel-border-sm-dark"
           >
-            <div class="w-2 h-2 bg-indigo-500 rounded-full animate-pulse"></div>
-            <span class="text-indigo-400 text-xs font-bold tracking-wide uppercase">专注模式</span>
+            <div class="w-2 h-2 bg-moe-pink animate-pulse"></div>
+            <span class="text-moe-pink text-xs font-bold tracking-wide uppercase">专注模式</span>
           </div>
-          <div class="h-4 w-px bg-white/10"></div>
+          <div class="h-4 w-px bg-moe-cocoa/30"></div>
           <span class="text-slate-400 text-sm flex items-center gap-2">
-            <LayoutGridIcon class="w-4 h-4" />
-            <span>工作区</span>
+            <PixelIcon name="layout" size="xs" />
+            <span class="font-bold opacity-80">工作区</span>
           </span>
         </div>
 
         <!-- 工作模式操作 -->
         <div class="flex items-center gap-3">
           <button
-            class="flex items-center gap-2 px-4 py-2 hover:bg-white/5 text-slate-400 hover:text-red-400 rounded-xl transition-all duration-200 group"
+            class="flex items-center gap-2 px-4 py-2 hover:bg-red-500/10 text-slate-400 hover:text-red-400 pixel-border-sm-dark transition-all duration-200 group border border-transparent"
             title="取消工作 (不保存日志)"
             @click="emit('exit', false)"
           >
-            <XCircleIcon class="w-4 h-4 group-hover:scale-110 transition-transform" />
+            <PixelIcon name="close" size="xs" class="group-hover:scale-110 transition-transform" />
             <span class="text-sm font-medium">取消工作</span>
           </button>
 
           <button
-            class="flex items-center gap-2 px-5 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white rounded-xl transition-all duration-200 shadow-lg shadow-indigo-500/25 group hover:scale-105 active:scale-95"
+            class="flex items-center gap-2 px-5 py-2 bg-moe-pink hover:bg-pink-400 text-white pixel-border-sm-dark transition-all duration-200 shadow-lg shadow-moe-pink/20 group hover:scale-105 active:scale-95 border border-moe-cocoa/30"
             title="完成工作 (生成日志)"
             @click="emit('exit', true)"
           >
-            <CheckCircleIcon class="w-4 h-4 group-hover:rotate-12 transition-transform" />
+            <PixelIcon name="check" size="xs" class="group-hover:rotate-12 transition-transform" />
             <span class="text-sm font-bold">完成工作</span>
           </button>
         </div>
       </header>
 
       <!-- 编辑器 & 聊天 & 终端容器 -->
-      <div class="flex-1 flex flex-col gap-4 overflow-hidden">
+      <div class="flex-1 flex flex-col gap-4 overflow-hidden min-h-0">
         <!-- 编辑器 & 聊天分屏视图 -->
         <div class="flex-1 flex gap-4 overflow-hidden min-h-0">
           <!-- 代码编辑器容器 -->
           <div
-            class="flex-1 flex flex-col bg-[#1e293b]/80 backdrop-blur-md border border-white/5 rounded-2xl shadow-2xl overflow-hidden relative group/editor"
+            class="flex-1 flex flex-col bg-[#1e293b]/80 backdrop-blur-md pixel-border-dark shadow-2xl overflow-hidden relative group/editor border border-moe-cocoa/20 z-10"
           >
             <!-- 编辑器标签页 -->
-            <div class="h-10 bg-black/20 flex items-center px-2 gap-1 overflow-x-auto no-scrollbar">
+            <div
+              class="h-10 bg-black/40 flex items-center px-2 gap-1 overflow-x-auto no-scrollbar border-b border-moe-cocoa/30"
+            >
               <div
                 v-for="file in openFiles"
                 :key="file.path"
-                class="group/tab flex items-center gap-2 px-4 py-1.5 text-xs rounded-lg cursor-pointer transition-all border border-transparent min-w-[120px] max-w-[200px] relative"
+                class="group/tab flex items-center gap-2 px-4 py-1.5 text-xs pixel-border-sm-dark cursor-pointer transition-all border border-transparent min-w-[120px] max-w-[200px] relative"
                 :class="
                   currentFile?.path === file.path
-                    ? 'bg-indigo-500/10 text-indigo-300 border-indigo-500/20 shadow-sm'
+                    ? 'bg-moe-sky/20 text-moe-sky border-moe-sky/30 shadow-sm'
                     : 'text-slate-500 hover:bg-white/5 hover:text-slate-300'
                 "
                 @click="currentFile = file"
               >
-                <FileCodeIcon class="w-3.5 h-3.5 opacity-70" />
-                <span class="truncate">{{ file.name }}</span>
+                <PixelIcon name="file" size="xs" class="opacity-70" />
+                <span class="truncate font-bold">{{ file.name }}</span>
                 <!-- 关闭按钮 -->
                 <button
-                  class="absolute right-1 p-0.5 rounded-md opacity-0 group-hover/tab:opacity-100 hover:bg-white/10 text-slate-400 transition-all"
+                  class="absolute right-1 p-0.5 opacity-0 group-hover/tab:opacity-100 hover:bg-red-500/20 text-slate-400 hover:text-red-400 transition-all"
                   @click.stop="closeFile(file)"
                 >
-                  <XIcon class="w-3 h-3" />
+                  <PixelIcon name="close" size="xs" />
                 </button>
                 <!-- 未保存指示器 -->
                 <div
                   v-if="dirtyFiles.has(file.path)"
-                  class="absolute right-2 w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.5)]"
+                  class="absolute right-2 w-1.5 h-1.5 bg-moe-yellow shadow-[0_0_8px_rgba(253,224,71,0.5)]"
                 ></div>
               </div>
             </div>
 
             <!-- 编辑器内容 -->
             <div class="flex-1 relative bg-[#0f172a]/50">
-              <CodeEditor
-                v-if="currentFile"
-                :initial-content="currentFile.content"
-                :language="getLanguage(currentFile.name)"
-                :file-path="currentFile.path"
-                class="h-full w-full"
-                @save="saveFile"
-                @change="onContentChange"
-              />
+              <template v-if="currentFile">
+                <CodeEditor
+                  :initial-content="currentFile.content"
+                  :language="getLanguage(currentFile.name)"
+                  :file-path="currentFile.path"
+                  class="h-full w-full"
+                  @save="saveFile"
+                  @change="onContentChange"
+                />
+              </template>
               <div
                 v-else
                 class="absolute inset-0 flex flex-col items-center justify-center text-slate-600/50"
               >
-                <div class="p-6 rounded-full bg-white/5 mb-6 animate-pulse">
-                  <Code2Icon class="w-16 h-16 opacity-50" />
+                <div class="p-6 pixel-border-sm-dark bg-slate-800/20 mb-6 animate-pulse">
+                  <PixelIcon name="code" size="2xl" class="opacity-50" />
                 </div>
                 <p class="text-sm font-medium tracking-wide uppercase text-slate-500">
                   选择一个文件以开始编辑
@@ -182,11 +197,11 @@
               <Transition name="fade">
                 <button
                   v-if="currentFile && dirtyFiles.has(currentFile.path)"
-                  class="absolute bottom-6 right-6 p-4 bg-indigo-500 hover:bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-500/40 transition-all hover:scale-110 active:scale-95 z-20 group flex items-center gap-2"
+                  class="absolute bottom-6 right-6 p-4 bg-moe-pink hover:bg-pink-400 text-white pixel-border-sm-dark shadow-lg shadow-moe-pink/40 transition-all hover:scale-110 active:scale-95 z-20 group flex items-center gap-2 border border-moe-cocoa/30"
                   title="保存文件 (Ctrl+S)"
                   @click="saveFile(currentFile.content)"
                 >
-                  <SaveIcon class="w-6 h-6" />
+                  <PixelIcon name="save" size="md" />
                   <span
                     class="max-w-0 overflow-hidden group-hover:max-w-[100px] transition-all duration-300 whitespace-nowrap font-bold text-sm"
                     >保存更改</span
@@ -198,7 +213,7 @@
 
           <!-- 聊天区域 (悬浮侧边栏) -->
           <div
-            class="w-[400px] flex flex-col bg-[#1e293b]/80 backdrop-blur-md border border-white/5 rounded-2xl shadow-2xl overflow-hidden transition-all duration-500"
+            class="w-[400px] flex flex-col bg-[#1e293b]/80 backdrop-blur-md pixel-border-dark shadow-2xl overflow-hidden transition-all duration-500 border border-moe-cocoa/20"
           >
             <ChatInterface
               :key="agentId"
@@ -228,22 +243,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, onErrorCaptured, reactive } from 'vue'
-import {
-  CheckCircle as CheckCircleIcon,
-  XCircle as XCircleIcon,
-  X as XIcon,
-  LogOut as LogOutIcon,
-  FolderOpen as FolderOpenIcon,
-  LayoutGrid as LayoutGridIcon,
-  FileCode as FileCodeIcon,
-  Code2 as Code2Icon
-} from 'lucide-vue-next'
+import { ref, onMounted, onActivated, onErrorCaptured, reactive, computed } from 'vue'
 import FileExplorer from '../components/ide/FileExplorer.vue'
 import CodeEditor from '../components/ide/CodeEditor.vue'
 import ChatInterface from '../components/chat/ChatInterface.vue'
 import CustomDialog from '../components/ui/CustomDialog.vue'
 import TerminalManager from '../components/ide/TerminalManager.vue'
+import PixelIcon from '../components/ui/PixelIcon.vue'
 
 defineProps({
   isReady: {
@@ -298,7 +304,7 @@ const agentId = ref('pero')
 
 const fetchActiveAgent = async () => {
   try {
-    const res = await fetch('http://127.0.0.1:9120/api/agents')
+    const res = await fetch('http://localhost:9120/api/agents')
     if (res.ok) {
       const agents = await res.json()
       const active = agents.find((a) => a.is_active)
@@ -330,6 +336,8 @@ onActivated(() => {
 
 // 文件处理
 const onFileSelected = async (fileNode) => {
+  if (fileNode.type === 'directory') return // 忽略目录点击
+
   const existing = openFiles.value.find((f) => f.path === fileNode.path)
   if (existing) {
     currentFile.value = existing
@@ -337,7 +345,7 @@ const onFileSelected = async (fileNode) => {
   }
 
   try {
-    const res = await fetch('http://127.0.0.1:9120/api/ide/file/read', {
+    const res = await fetch('http://localhost:9120/api/ide/file/read', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fileNode.path })
@@ -412,7 +420,7 @@ const getLanguage = (filename) => {
 
 const onContentChange = (newContent) => {
   if (currentFile.value) {
-    currentFile.value.content = newContent // 更新内存中的内容
+    currentFile.value.content = newContent
     dirtyFiles.value.add(currentFile.value.path)
   }
 }
@@ -421,7 +429,7 @@ const saveFile = async (content) => {
   if (!currentFile.value) return
 
   try {
-    const res = await fetch('http://127.0.0.1:9120/api/ide/file/write', {
+    const res = await fetch('http://localhost:9120/api/ide/file/write', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -452,10 +460,10 @@ const saveFile = async (content) => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: #334155;
-  border-radius: 2px;
+  background: #2d1b1e80; /* moe-cocoa with transparency */
+  border-radius: 0;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: #2d1b1e;
 }
 </style>

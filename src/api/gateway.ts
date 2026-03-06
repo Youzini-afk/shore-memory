@@ -11,7 +11,7 @@ const logToMain = (msg: string, ...args: any[]) => {
 
 export class GatewayClient {
   private ws: WebSocket | null = null
-  private url: string = 'ws://127.0.0.1:14747/ws'
+  private url: string = 'ws://localhost:14747/ws'
   private reconnectInterval: number = 3000
   private heartbeatInterval: any = null
   private deviceId: string = 'electron-client-' + Math.random().toString(36).substr(2, 9)
@@ -236,7 +236,7 @@ export class GatewayClient {
   private sendHello() {
     const hello: Hello = {
       token: this.token,
-      deviceName: 'PeroCore Desktop',
+      deviceName: '萌动链接：PeroperoChat！ 桌面端',
       clientVersion: '1.0.0',
       platform: 'windows',
       capabilities: ['audio.in', 'audio.out', 'screen.view', 'notification.push']

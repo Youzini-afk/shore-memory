@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { IModelProvider, ParsedModelData } from './IModelProvider'
+import { resolveAssetUrl } from '../../../../utils/assetUrl'
 
 /**
  * 容器内文件结构
@@ -43,7 +44,8 @@ export class PeroContainerProvider implements IModelProvider {
 
     try {
       // 1. 获取加密的容器数据
-      const response = await fetch(this.containerUrl)
+      const url = resolveAssetUrl(this.containerUrl)
+      const response = await fetch(url)
       if (!response.ok) {
         throw new Error(`加载容器失败: ${this.containerUrl}`)
       }

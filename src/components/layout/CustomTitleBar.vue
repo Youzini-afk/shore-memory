@@ -1,13 +1,27 @@
 <template>
   <div
-    class="h-8 w-full flex items-center justify-between select-none z-[9999] fixed top-0 left-0 right-0 transition-colors duration-300"
-    :class="transparent ? 'bg-transparent' : 'bg-slate-900/50 backdrop-blur-sm'"
+    class="h-8 w-full flex items-center justify-between select-none z-[9999] fixed top-0 left-0 right-0 transition-all duration-300 pixel-ui"
+    :class="[
+      transparent
+        ? 'bg-transparent'
+        : isWorkMode
+          ? 'bg-[#0f172a] border-b-2 border-slate-700'
+          : 'bg-sky-50 border-b-2 border-sky-100',
+      isMaximized ? 'px-4' : ''
+    ]"
+    :style="isMaximized ? { paddingTop: '4px' } : {}"
     style="-webkit-app-region: drag"
   >
     <!-- 左侧：应用标题 / 图标 -->
-    <div class="flex items-center gap-3 px-4 pointer-events-none text-slate-400">
-      <div class="w-3 h-3 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.4)]"></div>
-      <span class="text-xs font-medium tracking-wide font-mono opacity-80">{{ title }}</span>
+    <div
+      class="flex items-center gap-3 px-4 pointer-events-none"
+      :class="isWorkMode ? 'text-slate-400' : 'text-sky-700'"
+    >
+      <div
+        class="w-3 h-3"
+        :class="isWorkMode ? 'bg-slate-600 pixel-border-sm-dark' : 'bg-moe-pink pixel-border-moe'"
+      ></div>
+      <span class="text-xs font-bold tracking-wide font-mono opacity-90">{{ title }}</span>
     </div>
 
     <!-- 右侧：窗口控制 -->
@@ -15,11 +29,16 @@
       <!-- 模式切换 -->
       <button
         v-if="showModeToggle"
-        class="h-full px-3 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 gap-2 mr-1"
-        :title="isWorkMode ? 'Switch to Chat' : 'Switch to Work'"
+        class="h-full px-3 flex items-center justify-center transition-all duration-200 gap-2 mr-1 group"
+        :class="
+          isWorkMode
+            ? 'hover:bg-white/5 text-slate-400 hover:text-amber-500'
+            : 'hover:bg-sky-100 text-sky-600/70 hover:text-sky-600'
+        "
+        :title="isWorkMode ? '切换至对话' : '切换至工作'"
         @click="$emit('toggle-mode')"
       >
-        <component :is="isWorkMode ? MessageSquare : Briefcase" class="w-3.5 h-3.5" />
+        <PixelIcon :name="isWorkMode ? 'chat' : 'briefcase'" size="xs" />
         <span class="text-[10px] font-bold tracking-wider uppercase opacity-80">{{
           isWorkMode ? 'Chat' : 'Work'
         }}</span>
@@ -27,38 +46,50 @@
 
       <!-- 最小化 -->
       <button
-        class="h-full w-12 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 group"
+        class="h-full w-12 flex items-center justify-center transition-all duration-200 group"
+        :class="
+          isWorkMode
+            ? 'hover:bg-white/5 text-slate-400 hover:text-sky-400'
+            : 'hover:bg-sky-100 text-sky-600/70 hover:text-sky-600'
+        "
         @click="minimize"
       >
-        <Minus class="w-4 h-4 group-hover:scale-110 transition-transform" />
+        <PixelIcon name="minus" size="sm" />
       </button>
 
       <!-- 最大化 / 还原 -->
       <button
-        class="h-full w-12 flex items-center justify-center hover:bg-slate-800/50 text-slate-400 hover:text-white transition-all duration-200 group"
+        class="h-full w-12 flex items-center justify-center transition-all duration-200 group"
+        :class="
+          isWorkMode
+            ? 'hover:bg-white/5 text-slate-400 hover:text-sky-400'
+            : 'hover:bg-sky-100 text-sky-600/70 hover:text-sky-600'
+        "
         @click="toggleMaximize"
       >
-        <component
-          :is="isMaximized ? Copy : Square"
-          class="w-3.5 h-3.5 group-hover:scale-110 transition-transform"
-        />
+        <PixelIcon :name="isMaximized ? 'copy' : 'square'" size="sm" />
       </button>
 
       <!-- 关闭 -->
       <button
-        class="h-full w-12 flex items-center justify-center hover:bg-red-500 text-slate-400 hover:text-white transition-all duration-200 group"
+        class="h-full w-12 flex items-center justify-center transition-all duration-200 group"
+        :class="
+          isWorkMode
+            ? 'hover:bg-red-500/80 text-slate-400 hover:text-white'
+            : 'hover:bg-red-500 text-sky-600/70 hover:text-white'
+        "
         @click="close"
       >
-        <X class="w-4 h-4 group-hover:scale-110 transition-transform" />
+        <PixelIcon name="close" size="sm" />
       </button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue'
-import { invoke } from '../../utils/ipcAdapter'
-import { Minus, Square, Copy, X, Briefcase, MessageSquare } from 'lucide-vue-next'
+import { ref, onMounted, onUnmounted } from 'vue'
+import { invoke, listen } from '../../utils/ipcAdapter'
+import PixelIcon from '../ui/PixelIcon.vue'
 import { APP_TITLE } from '../../config'
 
 defineProps({
@@ -68,7 +99,7 @@ defineProps({
   },
   transparent: {
     type: Boolean,
-    default: true
+    default: false
   },
   isWorkMode: {
     type: Boolean,
@@ -83,19 +114,45 @@ defineEmits(['toggle-mode'])
 
 const isMaximized = ref(false)
 
+const updateMaximizedState = async () => {
+  try {
+    isMaximized.value = await invoke('window-is-maximized')
+  } catch (e) {
+    console.warn('Failed to get window maximize state', e)
+  }
+}
+
 const minimize = () => invoke('window-minimize')
 const toggleMaximize = async () => {
-  await invoke('window-maximize')
-  isMaximized.value = await invoke('window-is-maximized')
+  try {
+    // 立即乐观更新 UI
+    isMaximized.value = !isMaximized.value
+    // 调用主进程并获取最终真实状态
+    const newState = await invoke('window-toggle-maximize')
+    if (newState !== null && newState !== undefined) {
+      isMaximized.value = newState
+    }
+  } catch (e) {
+    console.error('Maximize toggle failed', e)
+    // 失败时回滚
+    updateMaximizedState()
+  }
 }
 const close = () => invoke('window-close')
 
+let unlistenState = null
+
 onMounted(async () => {
-  try {
-    isMaximized.value = await invoke('window-is-maximized')
-  } catch {
-    // 回退或忽略
-  }
+  updateMaximizedState()
+
+  // 监听来自 Electron 主进程的状态变更事件
+  unlistenState = await listen('window-maximized-state-changed', (state) => {
+    isMaximized.value = !!state
+  })
+})
+
+onUnmounted(() => {
+  if (unlistenState) unlistenState()
 })
 </script>
 

@@ -1,22 +1,70 @@
 <template>
-  <div class="terminal-panel">
-    <div class="terminal-header">
-      <div class="title">
-        <el-icon><Monitor /></el-icon> 实时终端 (Native Terminal)
+  <div
+    class="flex flex-col h-full bg-slate-950 text-slate-300 font-mono text-sm overflow-hidden relative group/terminal pixel-border-dark"
+  >
+    <!-- CRT Scanline Effect -->
+    <div
+      class="absolute inset-0 pointer-events-none z-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))]"
+      style="
+        background-size:
+          100% 3px,
+          3px 100%;
+      "
+    ></div>
+
+    <div
+      class="flex items-center justify-between px-4 py-2 bg-slate-900 border-b-2 border-slate-800 shrink-0 relative z-20"
+    >
+      <div class="flex items-center gap-2 font-bold text-slate-200">
+        <div class="animate-pulse">
+          <PixelIcon name="terminal" size="sm" class="text-moe-sky" />
+        </div>
+        <span class="tracking-wider pixel-font">实时终端 (Native Terminal)</span>
       </div>
-      <div class="actions">
-        <el-checkbox v-model="autoScroll" label="自动滚动" size="small" />
-        <el-button size="small" circle title="清空" @click="clearLogs">
-          <el-icon><Delete /></el-icon>
-        </el-button>
+      <div class="flex items-center gap-4">
+        <label
+          class="flex items-center gap-2 text-xs text-slate-400 cursor-pointer hover:text-moe-sky transition-colors group/check"
+        >
+          <div
+            class="w-4 h-4 border-2 border-slate-600 flex items-center justify-center transition-colors group-hover/check:border-moe-sky pixel-border-sm-dark"
+            :class="autoScroll ? 'bg-moe-sky border-moe-sky' : 'bg-transparent'"
+          >
+            <PixelIcon v-if="autoScroll" name="check" size="xs" class="text-white" />
+          </div>
+          <input v-model="autoScroll" type="checkbox" class="hidden" />
+          <span class="font-bold pixel-font">自动滚动</span>
+        </label>
+        <button
+          class="p-1.5 hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors group active:scale-90 pixel-border-sm-transparent hover:pixel-border-sm-dark"
+          title="清空"
+          @click="clearLogs"
+        >
+          <PixelIcon name="trash" size="xs" class="group-hover:shake" />
+        </button>
       </div>
     </div>
 
-    <div ref="logContainer" class="terminal-content">
-      <div v-for="(log, index) in logs" :key="index" class="log-line" :class="log.type">
-        <span class="timestamp">[{{ log.timestamp }}]</span>
-        <span class="source" :class="log.source">[{{ log.source }}]</span>
+    <div ref="logContainer" class="flex-1 overflow-y-auto p-4 custom-scrollbar relative z-0">
+      <div
+        v-for="(log, index) in logs"
+        :key="index"
+        class="break-all whitespace-pre-wrap leading-none text-[13px] font-mono hover:bg-white/5 transition-colors px-1 border-l-2 border-transparent hover:border-moe-sky/30 pl-2 -ml-2"
+        :class="getLogClass(log.type)"
+      >
+        <span class="text-slate-500 mr-2 opacity-70">[{{ log.timestamp }}]</span>
+        <span class="mr-2 font-bold tracking-wider" :class="getSourceClass(log.source)"
+          >[{{ log.source }}]</span
+        >
         <span class="message" v-html="formatMessage(log.message)"></span>
+      </div>
+
+      <!-- Empty State -->
+      <div
+        v-if="logs.length === 0"
+        class="flex flex-col items-center justify-center h-full text-slate-600 gap-3 opacity-50"
+      >
+        <PixelIcon name="desktop" size="xl" class="text-moe-sky/50" />
+        <span class="text-xs tracking-widest uppercase pixel-font">等待系统日志...</span>
       </div>
     </div>
   </div>
@@ -24,7 +72,7 @@
 
 <script setup>
 import { ref, shallowRef, onMounted, onUnmounted, nextTick } from 'vue'
-import { Monitor, Delete } from '@element-plus/icons-vue'
+import PixelIcon from '../ui/PixelIcon.vue'
 import { listen } from '@/utils/ipcAdapter'
 // 引入调用函数
 import { invoke } from '@/utils/ipcAdapter'
@@ -35,6 +83,23 @@ const autoScroll = ref(true)
 let unlistenFn = null
 let pendingLogs = []
 let updateTimer = null
+
+const getLogClass = (type) => {
+  switch (type) {
+    case 'error':
+      return 'text-red-400'
+    case 'warn':
+      return 'text-amber-400'
+    case 'info':
+      return 'text-slate-300'
+    default:
+      return 'text-slate-400'
+  }
+}
+
+const getSourceClass = (source) => {
+  return source === 'backend' ? 'text-blue-400' : 'text-emerald-400'
+}
 
 const extractTimestamp = (msg) => {
   // 尝试从消息中提取时间戳 HH:mm:ss (例如 21:35:06)

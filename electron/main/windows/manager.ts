@@ -2,7 +2,6 @@ import { BrowserWindow, shell, screen } from 'electron'
 import { join } from 'path'
 import { existsSync } from 'fs'
 import { logger } from '../utils/logger'
-import { initSteam } from '../services/steam'
 
 export class WindowManager {
   private static instance: WindowManager
@@ -29,8 +28,7 @@ export class WindowManager {
   }
 
   private getIconPath(): string {
-    // 在 Windows 上优先使用 ICO 以获得更好的质量/兼容性
-    const iconName = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+    const iconName = 'Logo.png'
     const paths = [
       join(process.cwd(), 'public', iconName), // 开发环境
       join(process.cwd(), 'resources', iconName), // 生产环境
@@ -55,6 +53,23 @@ export class WindowManager {
     }
   }
 
+  private setupWindowStateListeners(window: BrowserWindow) {
+    window.on('maximize', () => {
+      window.webContents.send('window-maximized-state-changed', true)
+    })
+    window.on('unmaximize', () => {
+      window.webContents.send('window-maximized-state-changed', false)
+    })
+    window.on('restore', () => {
+      // restore 也会在从最小化恢复时触发，所以检查是否是最大化状态
+      window.webContents.send('window-maximized-state-changed', window.isMaximized())
+    })
+    window.on('resize', () => {
+      // 某些情况下系统事件可能不完整，resize 是最后的保障
+      window.webContents.send('window-maximized-state-changed', window.isMaximized())
+    })
+  }
+
   public createLauncherWindow(): BrowserWindow {
     if (this.launcherWin && !this.launcherWin.isDestroyed()) {
       if (!this.launcherWin.isVisible()) this.launcherWin.show()
@@ -64,7 +79,7 @@ export class WindowManager {
     }
 
     this.launcherWin = new BrowserWindow({
-      title: 'PeroCore',
+      title: '萌动链接：PeroperoChat！',
       icon: this.getIconPath(),
       width: 900,
       height: 600,
@@ -96,6 +111,8 @@ export class WindowManager {
     this.launcherWin.loadURL(this.getPageUrl('/launcher'))
     logger.info('Main', `正在加载 URL: ${this.getPageUrl('/launcher')}`)
 
+    this.setupWindowStateListeners(this.launcherWin)
+
     this.launcherWin.on('ready-to-show', () => {
       logger.info('Main', '窗口 ready-to-show 事件已触发')
       this.launcherWin?.show()
@@ -123,7 +140,7 @@ export class WindowManager {
     }
 
     this.strongholdWin = new BrowserWindow({
-      title: 'PeroCore',
+      title: '萌动链接：PeroperoChat！',
       icon: this.getIconPath(),
       width: 1200,
       height: 800,
@@ -150,6 +167,8 @@ export class WindowManager {
 
     this.strongholdWin.loadURL(this.getPageUrl('/stronghold'))
 
+    this.setupWindowStateListeners(this.strongholdWin)
+
     this.strongholdWin.on('ready-to-show', () => {
       this.strongholdWin?.show()
     })
@@ -170,7 +189,7 @@ export class WindowManager {
     const { width, height } = primaryDisplay.workAreaSize
 
     this.petWin = new BrowserWindow({
-      title: 'PeroCore',
+      title: '萌动链接：PeroperoChat！',
       icon: this.getIconPath(),
       width: 600,
       height: 600,
@@ -268,7 +287,7 @@ export class WindowManager {
     }
 
     this.dashboardWin = new BrowserWindow({
-      title: 'PeroCore',
+      title: '萌动链接：PeroperoChat！',
       icon: this.getIconPath(),
       width: 1280,
       height: 800,
@@ -294,17 +313,14 @@ export class WindowManager {
       }
     }
 
-    // [Steam] 尝试在 Dashboard 窗口初始化 Steam Overlay
+    // [Steam] Steam Overlay 已在应用启动时全局初始化
     // 注意：Steam Overlay 通常只能依附于一个渲染进程。
     // 我们选择 DashboardView 作为主要依附对象，因为它是一个标准窗口，适合展示 Overlay。
-    try {
-      initSteam()
-    } catch (e) {
-      logger.error('Main', `Dashboard Steam 初始化失败: ${e}`)
-    }
 
     this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
     logger.info('Main', `Dashboard 正在加载 URL: ${this.getPageUrl('/dashboard')}`)
+
+    this.setupWindowStateListeners(this.dashboardWin)
 
     this.dashboardWin.on('ready-to-show', () => {
       logger.info('Main', 'Dashboard ready-to-show')
@@ -340,7 +356,7 @@ export class WindowManager {
     }
 
     this.ideWin = new BrowserWindow({
-      title: 'PeroCore',
+      title: '萌动链接：PeroperoChat！',
       icon: this.getIconPath(),
       width: 1400,
       height: 900,
@@ -366,6 +382,8 @@ export class WindowManager {
     }
 
     this.ideWin.loadURL(this.getPageUrl('/ide'))
+
+    this.setupWindowStateListeners(this.ideWin)
 
     this.ideWin.on('ready-to-show', () => {
       this.ideWin?.show()

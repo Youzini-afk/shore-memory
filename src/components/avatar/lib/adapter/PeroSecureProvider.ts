@@ -1,5 +1,6 @@
 import * as THREE from 'three'
 import { IModelProvider, ParsedModelData } from './IModelProvider'
+import { resolveAssetUrl } from '../../../../utils/assetUrl'
 
 /**
  * 安全模型提供者 (Rust Native)
@@ -29,7 +30,8 @@ export class PeroSecureProvider implements IModelProvider {
 
     try {
       // 1. 获取加密的二进制数据
-      const response = await fetch(modelUrl)
+      const url = resolveAssetUrl(modelUrl)
+      const response = await fetch(url)
       if (!response.ok) throw new Error(`Failed to load secure model: ${modelUrl}`)
       const arrayBuffer = await response.arrayBuffer()
 
@@ -52,8 +54,10 @@ export class PeroSecureProvider implements IModelProvider {
   }
 
   async getTexture(): Promise<THREE.Texture> {
-    const url = this.config.texture
-    if (!url) throw new Error('Texture URL not provided')
+    const originalUrl = this.config.texture
+    if (!originalUrl) throw new Error('Texture URL not provided')
+
+    const url = resolveAssetUrl(originalUrl)
 
     if (this.textureCache.has(url)) {
       return this.textureCache.get(url)!
@@ -81,7 +85,8 @@ export class PeroSecureProvider implements IModelProvider {
     if (this.config.animation && Array.isArray(this.config.animation)) {
       for (const path of this.config.animation) {
         try {
-          const res = await fetch(path)
+          const url = resolveAssetUrl(path)
+          const res = await fetch(url)
           const json = await res.json()
           if (json.animations) {
             Object.entries(json.animations).forEach(([key, value]) => {

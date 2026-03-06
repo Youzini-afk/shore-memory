@@ -43,7 +43,7 @@ export const paths = {
   exe: appExe,
   resources: isElectron ? process.resourcesPath : appPath, // CLI 的后备方案
   data: path.join(appUserData, 'data'),
-  logs: path.join(appUserData, 'logs')
+  logs: path.join(appUserData, 'data', 'logs')
 }
 
 /**

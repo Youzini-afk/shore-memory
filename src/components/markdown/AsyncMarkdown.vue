@@ -41,94 +41,114 @@ renderer.code = ({ text, lang }) => {
 marked.use({ renderer })
 
 const render = () => {
-  if (isRendered.value) return
+  try {
+    // 允许重复调用以支持内容更新
+    // if (isRendered.value) return
 
-  // 自定义渲染逻辑 (从 DashboardView 迁移)
-  let formatted = props.content || ''
+    // 自定义渲染逻辑 (从 DashboardView 迁移)
+    let formatted = props.content || ''
 
-  // 仅保留少数仍在使用的功能性 XML 标签 (如核心记忆)
-  const triggers = [{ tag: 'MEMORY', title: '核心记忆', icon: '💾' }]
+    if (!formatted.trim()) {
+      renderedContent.value = ''
+      isRendered.value = true
+      return
+    }
 
-  const replacements = []
+    // ... (rest of the logic remains the same, but let's make it cleaner)
+    // 仅保留少数仍在使用的功能性 XML 标签 (如核心记忆)
+    const triggers = [{ tag: 'MEMORY', title: '核心记忆', icon: '💾' }]
+    const replacements = []
 
-  // 1. 先提取触发器，替换为占位符
-  triggers.forEach(({ tag, title, icon }) => {
-    const regex = new RegExp(`<\\s*${tag}\\s*>([\\s\\S]*?)<\\s*/\\s*${tag}\\s*>`, 'gi')
-    formatted = formatted.replace(regex, (match, jsonStr) => {
-      try {
-        const cleanJson = jsonStr
-          .trim()
-          .replace(/&quot;/g, '"')
-          .replace(/&lt;/g, '<')
-          .replace(/&gt;/g, '>')
-          .replace(/&amp;/g, '&')
+    // 1. 先提取触发器，替换为占位符
+    triggers.forEach(({ tag, title, icon }) => {
+      const regex = new RegExp(`<\\s*${tag}\\s*>([\\s\\S]*?)<\\s*/\\s*${tag}\\s*>`, 'gi')
+      formatted = formatted.replace(regex, (match, jsonStr) => {
+        try {
+          const cleanJson = jsonStr
+            .trim()
+            .replace(/&quot;/g, '"')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&amp;/g, '&')
 
-        const data = JSON.parse(cleanJson)
-        let detailsHtml = ''
+          const data = JSON.parse(cleanJson)
+          let detailsHtml = ''
 
-        if (tag.toUpperCase() === 'MEMORY') {
-          const tagHtml = (data.tags || [])
-            .map((t) => `<span class="pero-tag">${t}</span>`)
-            .join('')
-          detailsHtml = `
-            <div class="pero-memory-content">${data.content || ''}</div>
-            <div class="pero-tag-cloud">${tagHtml}</div>
-          `
+          if (tag.toUpperCase() === 'MEMORY') {
+            const tagHtml = (data.tags || [])
+              .map((t) => `<span class="pero-tag">${t}</span>`)
+              .join('')
+            detailsHtml = `
+              <div class="pero-memory-content">${data.content || ''}</div>
+              <div class="pero-tag-cloud">${tagHtml}</div>
+            `
+          }
+
+          const placeholder = `PERO_TRIG_${replacements.length}_ID`
+          replacements.push({
+            placeholder,
+            html: `<div class="trigger-block ${tag.toLowerCase()}">
+              <details>
+                <summary class="trigger-header">
+                  <span class="trigger-icon">${icon}</span>
+                  <span class="trigger-title">${title}</span>
+                  <span class="expand-arrow">▶</span>
+                </summary>
+                <div class="trigger-body">${detailsHtml}</div>
+              </details>
+            </div>`
+          })
+          return placeholder
+        } catch {
+          return match
         }
-
-        const placeholder = `PERO_TRIG_${replacements.length}_ID`
-        replacements.push({
-          placeholder,
-          html: `<div class="trigger-block ${tag.toLowerCase()}">
-            <details>
-              <summary class="trigger-header">
-                <span class="trigger-icon">${icon}</span>
-                <span class="trigger-title">${title}</span>
-                <span class="expand-arrow">▶</span>
-              </summary>
-              <div class="trigger-body">${detailsHtml}</div>
-            </details>
-          </div>`
-        })
-        return placeholder
-      } catch {
-        return match
-      }
+      })
     })
-  })
 
-  // 2. 解析 Markdown
-  let html = marked.parse(formatted)
+    // 2. 解析 Markdown
+    let html = marked.parse(formatted)
 
-  // 3. 将占位符替换回 HTML
-  replacements.forEach(({ placeholder, html: replacementHtml }) => {
-    html = html.replace(placeholder, replacementHtml)
-  })
+    // 3. 将占位符替换回 HTML
+    replacements.forEach(({ placeholder, html: replacementHtml }) => {
+      html = html.replace(placeholder, replacementHtml)
+    })
 
-  // 4. 净化 (Sanitize)
-  let sanitized = dompurify.sanitize(html)
+    // 4. 净化 (Sanitize)
+    let sanitized = dompurify.sanitize(html)
 
-  // 降级处理：如果结果为空但源内容不为空，使用原始内容（包裹在 p 标签中）
-  if (!sanitized && formatted.trim().length > 0) {
-    // 原始内容的基本转义
-    const escaped = formatted
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#039;')
-    sanitized = `<p>${escaped}</p>`
+    // 降级处理：如果结果为空但源内容不为空，使用原始内容（包裹在 p 标签中）
+    if (!sanitized && formatted.trim().length > 0) {
+      const escaped = formatted
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;')
+      sanitized = `<p>${escaped}</p>`
+    }
+
+    renderedContent.value = sanitized
+    isRendered.value = true
+  } catch (err) {
+    console.error('渲染 Markdown 失败:', err)
+    renderedContent.value = `<div class="p-4 text-red-400 border border-red-500/30 bg-red-500/10 pixel-border-sm-dark">
+      <div class="font-bold mb-1">渲染失败</div>
+      <div class="text-xs opacity-80">${err.message}</div>
+    </div>`
+    isRendered.value = true
   }
-
-  renderedContent.value = sanitized
-  isRendered.value = true
 }
 
 onMounted(() => {
-  // 始终立即渲染以避免由 IntersectionObserver 延迟或 v-show 交互导致的“空白”问题
-  // 与内容不可见相比，50 个项目的性能影响是可以接受的
   render()
 })
+
+watch(
+  () => props.content,
+  () => {
+    render()
+  }
+)
 
 onUnmounted(() => {
   if (observer) observer.disconnect()
@@ -138,9 +158,7 @@ watch(
   () => props.content,
   () => {
     isRendered.value = false
-    if (container.value && observer) {
-      observer.observe(container.value)
-    }
+    render()
   }
 )
 </script>

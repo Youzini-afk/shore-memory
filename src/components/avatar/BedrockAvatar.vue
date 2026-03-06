@@ -1,9 +1,33 @@
 <template>
-  <div ref="container" class="bedrock-avatar-container">
-    <div ref="canvasContainer" class="canvas-container"></div>
-    <div v-if="loading" class="loading-overlay">正在加载 3D 模型...</div>
-    <div v-if="errorMsg" class="error-overlay">
-      {{ errorMsg }}
+  <div ref="container" class="bedrock-avatar-container relative group">
+    <div ref="canvasContainer" class="canvas-container w-full h-full"></div>
+
+    <!-- Loading Overlay -->
+    <div
+      v-if="loading"
+      class="absolute inset-0 flex flex-col items-center justify-center bg-moe-pink/5 backdrop-blur-sm z-10"
+    >
+      <div class="animate-bounce mb-2">
+        <PixelIcon name="loader" size="md" animation="spin" class="text-moe-pink" />
+      </div>
+      <div
+        class="pixel-font text-xs text-moe-pink font-bold bg-white/80 px-3 py-1 pixel-border-sm-moe"
+      >
+        正在召唤中...
+      </div>
+    </div>
+
+    <!-- Error Overlay -->
+    <div
+      v-if="errorMsg"
+      class="absolute inset-0 flex items-center justify-center bg-red-500/10 backdrop-blur-md z-20 p-4"
+    >
+      <div
+        class="bg-white/90 p-4 pixel-border-sm-dark text-red-500 text-xs font-bold pixel-font text-center max-w-full break-words shadow-lg"
+      >
+        <div class="mb-2 text-2xl">😵</div>
+        {{ errorMsg }}
+      </div>
     </div>
   </div>
 </template>
@@ -83,6 +107,46 @@ watch(
     updateClothing()
   },
   { deep: true }
+)
+
+watch(
+  () => props.manifestPath,
+  async (newPath) => {
+    if (newPath) {
+      loading.value = true
+      errorMsg.value = ''
+      try {
+        if (newPath.endsWith('.pero')) {
+          // .pero 容器格式处理
+          // 构造一个指向该容器的临时 Manifest
+          const manifest: IAvatarManifest = {
+            metadata: {
+              name: newPath.split('/').pop()?.replace('.pero', '') || 'Unknown',
+              version: '1.0.0'
+            },
+            resources: {
+              model: newPath,
+              texture: newPath,
+              animations: []
+            },
+            featureButtons: [],
+            parts: [],
+            retargetingMap: { mapping: {} }
+          }
+          await loadAvatar(manifest)
+        } else {
+          // 标准 JSON Manifest
+          const manifest = await ManifestLoader.fromJson(newPath)
+          await loadAvatar(manifest)
+        }
+      } catch (e) {
+        console.error('Failed to load new manifest path:', e)
+        errorMsg.value = `加载模型失败: ${e}`
+      } finally {
+        loading.value = false
+      }
+    }
+  }
 )
 
 // 暴露给父组件的方法
@@ -299,7 +363,8 @@ function initThree() {
   // 3. 渲染器
   const r = new THREE.WebGLRenderer({ alpha: true, antialias: true })
   r.setSize(container.value.clientWidth, container.value.clientHeight)
-  r.setPixelRatio(window.devicePixelRatio)
+  // 限制最大2倍像素比，平衡清晰度与性能
+  r.setPixelRatio(Math.min(window.devicePixelRatio, 2))
   r.shadowMap.enabled = true
   r.shadowMap.type = THREE.PCFSoftShadowMap
   canvasContainer.value.appendChild(r.domElement)
@@ -497,24 +562,50 @@ async function loadAvatar(manifest: IAvatarManifest) {
 }
 
 async function loadDefaultManifest() {
-  const isElectron = (window as any).electron !== undefined
-  const prefix = isElectron ? 'assets/' : '/assets/'
-
   if (props.manifest) {
     await loadAvatar(props.manifest)
     return
   }
 
   if (props.manifestPath) {
-    const manifest = await ManifestLoader.fromJson(props.manifestPath)
-    await loadAvatar(manifest)
+    loading.value = true
+    errorMsg.value = ''
+    try {
+      if (props.manifestPath.endsWith('.pero')) {
+        const manifest: IAvatarManifest = {
+          metadata: {
+            name: props.manifestPath.split('/').pop()?.replace('.pero', '') || 'Unknown',
+            version: '1.0.0'
+          },
+          resources: {
+            model: props.manifestPath,
+            texture: props.manifestPath,
+            animations: []
+          },
+          featureButtons: [],
+          parts: [],
+          retargetingMap: { mapping: {} }
+        }
+        await loadAvatar(manifest)
+      } else {
+        const manifest = await ManifestLoader.fromJson(props.manifestPath)
+        await loadAvatar(manifest)
+      }
+    } catch (e: any) {
+      console.error('Failed to load initial manifest path:', e)
+      errorMsg.value = `加载模型失败: ${e.message || e}`
+    } finally {
+      loading.value = false
+    }
     return
   }
+
+  const isElectron = (window as any).electron !== undefined
+  const prefix = isElectron ? 'assets/' : '/assets/'
 
   console.log('未指定 Manifest，使用默认配置（.pero 容器）')
 
   // 使用 .pero 容器格式
-  // 容器内包含所有资源（模型、纹理、动画、控制器等）
   const containerPath = `${prefix}3d/Rossi.pero`
   const defaultManifest: IAvatarManifest = {
     metadata: {
@@ -522,8 +613,6 @@ async function loadDefaultManifest() {
       version: '3.0.0'
     },
     resources: {
-      // 容器格式：model 和 texture 都指向同一个 .pero 文件
-      // loadAvatar 会检测到这是容器格式，使用 PeroContainerProvider
       model: containerPath,
       texture: containerPath,
       animations: []
@@ -844,6 +933,7 @@ function onResize() {
   camera.value.aspect = width / height
   camera.value.updateProjectionMatrix()
   renderer.value.setSize(width, height)
+  renderer.value.setPixelRatio(Math.min(window.devicePixelRatio, 2)) // 限制最大2倍以兼顾性能
 }
 
 function onMouseMove(event: MouseEvent) {

@@ -5,7 +5,8 @@
 /* Cleaned style.css */
 
 :root {
-  font-family: 'Inter', system-ui, Avenir, Helvetica, Arial, sans-serif;
+  /* 像素风全局配置 */
+  font-family: 'Zpix', 'DotGothic16', 'Courier New', Courier, monospace;
   line-height: 1.5;
   font-weight: 400;
 
@@ -13,56 +14,561 @@
   background-color: transparent;
 
   font-synthesis: none;
-  text-rendering: optimizeLegibility;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+  text-rendering: pixelated;
+  -webkit-font-smoothing: none;
+  -moz-osx-font-smoothing: unset;
+}
+
+/* 像素风通用边框 - 经典 3 层结构 (高光/主色/阴影) */
+.pixel-border-sm {
+  box-shadow:
+    -2px 0 0 0 #64748b,
+    2px 0 0 0 #64748b,
+    0 -2px 0 0 #64748b,
+    0 2px 0 0 #64748b,
+    inset -2px -2px 0 0 #cbd5e1,
+    inset 2px 2px 0 0 #f8fafc;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.pixel-border-sm:hover {
+  box-shadow:
+    -2px 0 0 0 #0ea5e9,
+    2px 0 0 0 #0ea5e9,
+    0 -2px 0 0 #0ea5e9,
+    0 2px 0 0 #0ea5e9,
+    inset -2px -2px 0 0 #7dd3fc,
+    inset 2px 2px 0 0 #f0f9ff;
+  transform: translateY(-1px);
+}
+
+.pixel-border-sm:active {
+  transform: translateY(1px);
+}
+
+.pixel-border-sky {
+  box-shadow:
+    -2px 0 0 0 #0369a1,
+    2px 0 0 0 #0369a1,
+    0 -2px 0 0 #0369a1,
+    0 2px 0 0 #0369a1,
+    inset -2px -2px 0 0 #0ea5e9,
+    inset 2px 2px 0 0 #bae6fd;
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.pixel-border-sky:hover {
+  box-shadow:
+    -2px 0 0 0 #0284c7,
+    2px 0 0 0 #0284c7,
+    0 -2px 0 0 #0284c7,
+    0 2px 0 0 #0284c7,
+    inset -2px -2px 0 0 #38bdf8,
+    inset 2px 2px 0 0 #e0f2fe;
+}
+
+.pixel-border-pink {
+  box-shadow:
+    -2px 0 0 0 #831843,
+    2px 0 0 0 #831843,
+    0 -2px 0 0 #831843,
+    0 2px 0 0 #831843,
+    inset -2px -2px 0 0 #db2777,
+    inset 2px 2px 0 0 #fbcfe8;
+  border: none;
+}
+
+.pixel-border-amber {
+  box-shadow:
+    -2px 0 0 0 #78350f,
+    2px 0 0 0 #78350f,
+    0 -2px 0 0 #78350f,
+    0 2px 0 0 #78350f,
+    inset -2px -2px 0 0 #d97706,
+    inset 2px 2px 0 0 #fde68a;
+  border: none;
+}
+
+.pixel-border-emerald {
+  box-shadow:
+    -2px 0 0 0 #064e3b,
+    2px 0 0 0 #064e3b,
+    0 -2px 0 0 #064e3b,
+    0 2px 0 0 #064e3b,
+    inset -2px -2px 0 0 #059669,
+    inset 2px 2px 0 0 #a7f3d0;
+  border: none;
+}
+
+.pixel-border-mint {
+  box-shadow:
+    -2px 0 0 0 #065f46,
+    2px 0 0 0 #065f46,
+    0 -2px 0 0 #065f46,
+    0 2px 0 0 #065f46,
+    inset -2px -2px 0 0 #10b981,
+    inset 2px 2px 0 0 #d1fae5;
+  border: none;
+}
+
+.pixel-border-yellow {
+  box-shadow:
+    -2px 0 0 0 #854d0e,
+    2px 0 0 0 #854d0e,
+    0 -2px 0 0 #854d0e,
+    0 2px 0 0 #854d0e,
+    inset -2px -2px 0 0 #eab308,
+    inset 2px 2px 0 0 #fef9c3;
+  border: none;
+}
+
+/* 像素网格叠加层 - 更加柔和且可爱的版本 */
+.pixel-grid-overlay {
+  position: relative;
+  overflow: hidden;
+}
+
+.pixel-grid-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(14, 165, 233, 0.05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(14, 165, 233, 0.05) 1px, transparent 1px);
+  background-size: 4px 4px;
+  pointer-events: none;
+  z-index: 0;
+  image-rendering: pixelated;
+}
+
+.pixel-grid-overlay::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center, transparent 0%, rgba(240, 242, 255, 0.15) 100%);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* 像素风动画 - 步进式 (Stepped) */
+@keyframes pixel-pulse {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(0.95);
+  }
+}
+
+.animate-pixel-pulse {
+  animation: pixel-pulse 2s steps(4) infinite;
+}
+
+/* Q弹悬停效果 - 优化版：幅度更小，更细腻 */
+@keyframes jelly {
+  0%,
+  100% {
+    transform: scale(1, 1);
+  }
+  25% {
+    transform: scale(0.98, 1.02);
+  }
+  50% {
+    transform: scale(1.02, 0.98);
+  }
+  75% {
+    transform: scale(0.99, 1.01);
+  }
+}
+
+.bouncy-hover:hover {
+  animation: jelly 0.4s steps(4);
+}
+
+/* 像素位移悬停 - 代替大幅度缩放 */
+.pixel-hover-lift:hover {
+  transform: translateY(-2px);
+}
+
+/* 按压反馈 - 优化版：从 2px 减小到 1px，更精致 */
+.press-effect:active {
+  transform: translate(1px, 1px);
+}
+
+/* 深色模式像素边框 - 用于工作模式 (专注模式) */
+.pixel-border-dark {
+  box-shadow:
+    -2px 0 0 0 #020617,
+    2px 0 0 0 #020617,
+    0 -2px 0 0 #020617,
+    0 2px 0 0 #020617,
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.4),
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.2);
+  border: none;
+  position: relative;
+}
+
+.pixel-border-sm-dark {
+  box-shadow:
+    -2px 0 0 0 #0f172a,
+    2px 0 0 0 #0f172a,
+    0 -2px 0 0 #0f172a,
+    0 2px 0 0 #0f172a,
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.2),
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.1);
+  border: none;
+  transition: all 0.3s ease;
+}
+
+.pixel-border-sm-dark:hover {
+  box-shadow:
+    -2px 0 0 0 #334155,
+    2px 0 0 0 #334155,
+    0 -2px 0 0 #334155,
+    0 2px 0 0 #334155,
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.3);
+}
+
+/* 通用像素边框 */
+.pixel-border {
+  box-shadow:
+    -2px 0 0 0 #0f172a,
+    2px 0 0 0 #0f172a,
+    0 -2px 0 0 #0f172a,
+    0 2px 0 0 #0f172a,
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.1),
+    inset 2px 2px 0 0 rgba(0, 0, 0, 0.05);
+  border: none;
+  position: relative;
+}
+
+/* 萌动链接 Moe Link Edition 样式系统 */
+.pixel-border-moe {
+  box-shadow:
+    -2px 0 0 0 #2d1b1e,
+    2px 0 0 0 #2d1b1e,
+    0 -2px 0 0 #2d1b1e,
+    0 2px 0 0 #2d1b1e,
+    inset -2px -2px 0 0 rgba(0, 0, 0, 0.1),
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.3);
+  border: none;
+  position: relative;
+}
+
+.pixel-card-moe {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(8px);
+  box-shadow:
+    -2px 0 0 0 #2d1b1e,
+    2px 0 0 0 #2d1b1e,
+    0 -2px 0 0 #2d1b1e,
+    0 2px 0 0 #2d1b1e,
+    inset -2px -2px 0 0 rgba(249, 168, 212, 0.2),
+    inset 2px 2px 0 0 rgba(255, 255, 255, 0.5);
+  border: none;
+  position: relative;
+}
+
+.pixel-btn-moe-pink {
+  background-color: #f9a8d4;
+  color: white;
+  box-shadow:
+    -2px 0 0 0 #2d1b1e,
+    2px 0 0 0 #2d1b1e,
+    0 -2px 0 0 #2d1b1e,
+    0 2px 0 0 #2d1b1e,
+    inset -2px -2px 0 0 #db2777,
+    inset 2px 2px 0 0 #fbcfe8;
+  border: none;
+  position: relative;
+  transition: all 0.1s steps(2);
+}
+
+.pixel-btn-moe-pink:hover {
+  background-color: #f472b6;
+  transform: translateY(-2px);
+}
+
+.pixel-btn-moe-pink:active {
+  transform: translate(1px, 1px);
+}
+
+.pixel-bg-moe {
+  background: linear-gradient(135deg, #a7d8f0 0%, #e8d5ff 100%);
+}
+
+/* 像素步进过渡 */
+.transition-pixel {
+  transition-timing-function: steps(4);
+}
+
+.pixel-border-indigo {
+  box-shadow:
+    -2px 0 0 0 #1e1b4b,
+    2px 0 0 0 #1e1b4b,
+    0 -2px 0 0 #1e1b4b,
+    0 2px 0 0 #1e1b4b,
+    inset -2px -2px 0 0 #4f46e5,
+    inset 2px 2px 0 0 #c7d2fe;
+  border: none;
+}
+
+/* 像素风卡片 */
+.pixel-card {
+  background: rgba(255, 255, 255, 0.9);
+  position: relative;
+  box-shadow:
+    -4px 0 0 0 #000,
+    4px 0 0 0 #000,
+    0 -4px 0 0 #000,
+    0 4px 0 0 #000;
+}
+
+/* 像素风按钮交互 */
+.pixel-btn-sky {
+  background-color: #38bdf8;
+  color: white;
+  position: relative;
+  box-shadow:
+    -2px 0 0 0 #0c4a6e,
+    2px 0 0 0 #0c4a6e,
+    0 -2px 0 0 #0c4a6e,
+    0 2px 0 0 #0c4a6e,
+    inset -2px -2px 0 0 #0284c7,
+    inset 2px 2px 0 0 #7dd3fc;
+  transition: transform 0.1s steps(2);
+}
+
+.pixel-btn-pink {
+  background-color: #f472b6;
+  color: white;
+  position: relative;
+  box-shadow:
+    -2px 0 0 0 #831843,
+    2px 0 0 0 #831843,
+    0 -2px 0 0 #831843,
+    0 2px 0 0 #831843,
+    inset -2px -2px 0 0 #db2777,
+    inset 2px 2px 0 0 #fbcfe8;
+  transition: transform 0.1s steps(2);
+}
+
+.pixel-btn-yellow {
+  background-color: #fbbf24;
+  color: white;
+  position: relative;
+  box-shadow:
+    -2px 0 0 0 #854d0e,
+    2px 0 0 0 #854d0e,
+    0 -2px 0 0 #854d0e,
+    0 2px 0 0 #854d0e,
+    inset -2px -2px 0 0 #eab308,
+    inset 2px 2px 0 0 #fef9c3;
+  transition: transform 0.1s steps(2);
+}
+
+.pixel-btn-red {
+  background-color: #ef4444;
+  color: white;
+  position: relative;
+  box-shadow:
+    -2px 0 0 0 #7f1d1d,
+    2px 0 0 0 #7f1d1d,
+    0 -2px 0 0 #7f1d1d,
+    0 2px 0 0 #7f1d1d,
+    inset -2px -2px 0 0 #dc2626,
+    inset 2px 2px 0 0 #fecaca;
+  transition: transform 0.1s steps(2);
+}
+
+.pixel-btn-sky:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    -2px 0 0 0 #0c4a6e,
+    2px 0 0 0 #0c4a6e,
+    0 -2px 0 0 #0c4a6e,
+    0 2px 0 0 #0c4a6e,
+    inset 2px 2px 0 0 #0284c7;
+}
+
+.pixel-btn-pink:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    -2px 0 0 0 #831843,
+    2px 0 0 0 #831843,
+    0 -2px 0 0 #831843,
+    0 2px 0 0 #831843,
+    inset 2px 2px 0 0 #db2777;
+}
+
+.pixel-btn-yellow:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    -2px 0 0 0 #854d0e,
+    2px 0 0 0 #854d0e,
+    0 -2px 0 0 #854d0e,
+    0 2px 0 0 #854d0e,
+    inset 2px 2px 0 0 #eab308;
+}
+
+.pixel-btn-red:active {
+  transform: translate(2px, 2px);
+  box-shadow:
+    -2px 0 0 0 #7f1d1d,
+    2px 0 0 0 #7f1d1d,
+    0 -2px 0 0 #7f1d1d,
+    0 2px 0 0 #7f1d1d,
+    inset 2px 2px 0 0 #dc2626;
+}
+
+/* 像素风格亚克力效果 */
+.pixel-glass {
+  background: rgba(255, 255, 255, 0.6);
+  backdrop-filter: blur(12px);
+  position: relative;
+  box-shadow:
+    -2px 0 0 0 rgba(255, 255, 255, 0.3),
+    2px 0 0 0 rgba(255, 255, 255, 0.3),
+    0 -2px 0 0 rgba(255, 255, 255, 0.3),
+    0 2px 0 0 rgba(255, 255, 255, 0.3);
+}
+
+/* 自定义滚动条 - 像素风 */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  box-shadow: inset 2px 0 0 0 #cbd5e1;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #38bdf8;
+  box-shadow:
+    inset -2px -2px 0 0 #0284c7,
+    inset 2px 2px 0 0 #7dd3fc;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #0ea5e9;
+}
+
+/* 像素风动画 - 步进式 (Stepped) */
+@keyframes pixel-bounce {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+@keyframes pixel-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-2px);
+  }
+}
+
+@keyframes pixel-shake {
+  0%,
+  100% {
+    transform: translateX(0);
+  }
+  25% {
+    transform: translateX(-2px);
+  }
+  75% {
+    transform: translateX(2px);
+  }
+}
+
+@keyframes pixel-bg-float {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: 32px 32px;
+  }
+}
+
+/* 像素星星闪烁 */
+@keyframes pixel-star-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 0.4;
+  }
+  50% {
+    transform: scale(1.2);
+    opacity: 0.8;
+  }
+}
+
+/* 像素气泡漂浮 */
+@keyframes pixel-bubble-float {
+  0% {
+    transform: translateY(0) translateX(0);
+  }
+  33% {
+    transform: translateY(-10px) translateX(5px);
+  }
+  66% {
+    transform: translateY(-20px) translateX(-5px);
+  }
+  100% {
+    transform: translateY(-30px) translateX(0);
+    opacity: 0;
+  }
+}
+
+.animate-pixel-star {
+  animation: pixel-star-pulse 1.5s steps(3) infinite;
+}
+
+.animate-pixel-bubble {
+  animation: pixel-bubble-float 4s steps(8) infinite;
+}
+
+.animate-pixel-bounce {
+  animation: pixel-bounce 0.6s steps(2) infinite;
+}
+
+.animate-pixel-float {
+  animation: pixel-float 2s steps(4) infinite;
+}
+
+.animate-pixel-shake {
+  animation: pixel-shake 0.3s steps(3) infinite;
+}
+
+.animate-pixel-bg-float {
+  animation: pixel-bg-float 20s linear infinite;
 }
 
 body {
   margin: 0;
   overflow: hidden;
   user-select: none;
-  background-color: transparent !important; /* 强制透明 */
+  background-color: transparent !important;
 }
 
 html {
-  background-color: transparent !important; /* 强制透明 */
+  background-color: transparent !important;
 }
 
 #app {
   width: 100vw;
   height: 100vh;
-}
-
-/* 玻璃拟态基础样式 - Modern Flat Glass */
-.glass-effect {
-  background: rgba(15, 23, 42, 0.4);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-}
-
-.dark .glass-effect {
-  background: rgba(0, 0, 0, 0.4);
-  border: 1px solid rgba(255, 255, 255, 0.03);
-}
-
-/* 自定义滚动条 */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.1);
-  border-radius: 3px;
-}
-
-::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.2);
 }

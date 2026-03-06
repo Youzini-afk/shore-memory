@@ -4,43 +4,45 @@
     @click="closeContextMenu"
   >
     <!-- 工具栏与搜索 -->
-    <div class="flex flex-col border-b border-white/5 bg-black/10">
+    <div class="flex flex-col border-b border-moe-pink/20 bg-moe-pink/5">
       <!-- 操作按钮 -->
       <div class="px-3 py-2 flex justify-end items-center gap-1">
         <button
-          class="p-1.5 hover:bg-white/10 rounded-lg hover:text-indigo-400 transition-colors"
+          class="p-1.5 hover:bg-moe-pink/10 pixel-border-sm-transparent hover:pixel-border-sm-moe text-slate-500 hover:text-moe-pink transition-all"
           title="新建文件"
           @click.stop="createFile(null)"
         >
-          <PlusIcon class="w-4 h-4" />
+          <PixelIcon name="plus" size="xs" />
         </button>
         <button
-          class="p-1.5 hover:bg-white/10 rounded-lg hover:text-indigo-400 transition-colors"
+          class="p-1.5 hover:bg-moe-pink/10 pixel-border-sm-transparent hover:pixel-border-sm-moe text-slate-500 hover:text-moe-pink transition-all"
           title="新建文件夹"
           @click.stop="createFolder(null)"
         >
-          <FolderPlusIcon class="w-4 h-4" />
+          <PixelIcon name="folder-plus" size="xs" />
         </button>
         <button
-          class="p-1.5 hover:bg-white/10 rounded-lg hover:text-indigo-400 transition-colors"
+          class="p-1.5 hover:bg-moe-pink/10 pixel-border-sm-transparent hover:pixel-border-sm-moe text-slate-500 hover:text-moe-pink transition-all"
           title="刷新"
           @click.stop="refresh"
         >
-          <RefreshCwIcon class="w-4 h-4" />
+          <PixelIcon name="refresh" size="xs" />
         </button>
       </div>
 
       <!-- 搜索输入框 -->
       <div class="px-3 pb-2">
         <div class="relative group">
-          <SearchIcon
-            class="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-indigo-400 transition-colors"
+          <PixelIcon
+            name="search"
+            size="xs"
+            class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 group-focus-within:text-moe-pink transition-colors"
           />
           <input
             v-model="searchQuery"
             type="text"
             placeholder="搜索文件..."
-            class="w-full bg-black/20 border border-white/5 rounded-lg py-1.5 pl-8 pr-2 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-indigo-500/50 focus:bg-black/30 transition-all"
+            class="w-full bg-white/10 pixel-border-sm-dark py-1.5 pl-8 pr-2 text-xs text-slate-300 placeholder-slate-600 focus:outline-none focus:border-moe-pink/50 focus:bg-black/20 transition-all"
           />
         </div>
       </div>
@@ -55,8 +57,8 @@
         v-if="loading"
         class="flex flex-col items-center justify-center h-20 gap-2 text-slate-600"
       >
-        <RefreshCwIcon class="w-4 h-4 animate-spin" />
-        <span class="text-xs">加载中...</span>
+        <PixelIcon name="refresh" size="sm" animation="spin" class="text-moe-pink" />
+        <span class="text-xs font-bold pixel-font">加载中...</span>
       </div>
       <div
         v-else-if="filteredFiles.length === 0"
@@ -104,12 +106,7 @@
 
 <script setup>
 import { ref, onMounted, reactive, computed } from 'vue'
-import {
-  Plus as PlusIcon,
-  FolderPlus as FolderPlusIcon,
-  RefreshCw as RefreshCwIcon,
-  Search as SearchIcon
-} from 'lucide-vue-next'
+import PixelIcon from '../ui/PixelIcon.vue'
 import FileTreeItem from './FileTreeItem.vue'
 import ContextMenu from '../ui/ContextMenu.vue'
 import CustomDialog from '../ui/CustomDialog.vue'
@@ -199,7 +196,7 @@ const handleDialogCancel = () => {
   dialog.visible = false
 }
 
-const API_BASE = 'http://127.0.0.1:9120/api/ide'
+const API_BASE = 'http://localhost:9120/api/ide'
 
 const fetchFiles = async (path = null) => {
   try {

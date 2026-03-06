@@ -10,7 +10,7 @@ let tray: Tray | null = null
 
 export function createTray() {
   // 根据平台确定图标
-  const iconName = process.platform === 'win32' ? 'icon.ico' : 'icon.png'
+  const iconName = 'Logo.png'
 
   // 图标搜索路径
   const paths = [
@@ -67,15 +67,15 @@ export function createTray() {
       { type: 'separator' },
       {
         label: '彻底退出',
-        click: () => {
-          stopBackend()
-          stopGateway()
+        click: async () => {
+          await stopBackend()
+          await stopGateway()
           app.quit()
         }
       }
     ])
 
-    tray.setToolTip('PeroCore')
+    tray.setToolTip('萌动链接：PeroperoChat！')
     tray.setContextMenu(contextMenu)
 
     tray.on('click', () => {

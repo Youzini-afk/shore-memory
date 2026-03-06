@@ -7,11 +7,10 @@ from interfaces.core import (
     IPreprocessorManager,
     IPromptManager,
 )
-# from interfaces.memory import IMemoryService
 
+# from interfaces.memory import IMemoryService
 # 导入默认实现类
 from services.core.prompt_service import PromptManager
-from services.memory.memory_service import MemoryService
 from services.postprocessor.manager import PostprocessorManager
 from services.preprocessor.manager import PreprocessorManager
 

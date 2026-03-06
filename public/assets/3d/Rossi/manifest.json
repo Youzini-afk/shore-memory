@@ -6,15 +6,15 @@
   },
   "featureButtons": [
     { "id": "dress", "label": "连衣裙", "group": "服装", "defaultValue": true },
-    { "id": "armour", "label": "盔甲", "group": "服装", "defaultValue": false },
-    { "id": "hat", "label": "帽子", "group": "配饰", "defaultValue": false },
+    { "id": "armour", "label": "盔甲", "group": "服装", "defaultValue": true },
+    { "id": "hat", "label": "帽子", "group": "配饰", "defaultValue": true },
     { "id": "underwear", "label": "内衣", "group": "服装", "defaultValue": true },
     { "id": "censored", "label": "和谐方块", "group": "其他", "defaultValue": false }
   ],
   "parts": [
     { "id": "dress", "meshes": ["Dress", "BreastDress"], "defaultVisible": true },
-    { "id": "armour", "meshes": ["Armour"], "defaultVisible": false },
-    { "id": "hat", "meshes": ["Hat"], "defaultVisible": false },
+    { "id": "armour", "meshes": ["Armour"], "defaultVisible": true },
+    { "id": "hat", "meshes": ["Hat"], "defaultVisible": true },
     { "id": "underwear", "meshes": ["Underwear", "underwear"], "defaultVisible": true },
     { "id": "censored", "meshes": ["Censored"], "defaultVisible": false },
     { "id": "embarrassed", "meshes": ["embarrassed"], "defaultVisible": false }
@@ -40,7 +40,7 @@
     "restPoseCorrection": {}
   },
   "resources": {
-    "model": "assets/3d/Rossi/models/Rossi.pero",
+    "model": "assets/3d/Rossi/models/main.json",
     "texture": "assets/3d/Rossi/textures/texture.png",
     "animations": [
       "assets/3d/Rossi/animations/main.animation.json",

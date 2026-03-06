@@ -617,9 +617,6 @@ class WeeklyReportPreprocessor(BasePreprocessor):
             context["variables"] = variables
             return context
 
-        session = context["session"]
-        memory_service = context["memory_service"]
-        user_message = context.get("user_message", "")
         agent_id = context.get("agent_id", "pero")
 
         weekly_report_context = ""
@@ -627,16 +624,17 @@ class WeeklyReportPreprocessor(BasePreprocessor):
         try:
             # [修改] 改为从文件系统读取最新周报 (不再使用数据库检索)
             import os
+
             from utils.workspace_utils import get_workspace_root
 
             workspace = get_workspace_root(agent_id)
             report_dir = os.path.join(workspace, "weekly_reports")
-            
+
             if os.path.exists(report_dir):
                 files = [f for f in os.listdir(report_dir) if f.endswith(".md")]
                 # 假设文件名格式为 YYYY-MM-DD.md，可以直接排序
                 files.sort(reverse=True)
-                
+
                 if files:
                     latest_file = files[0]
                     file_path = os.path.join(report_dir, latest_file)
@@ -646,12 +644,14 @@ class WeeklyReportPreprocessor(BasePreprocessor):
                         # 截断以防过长
                         if len(content) > 2000:
                             content = content[:2000] + "\n...(已截断)"
-                            
-                        weekly_report_context = f"【最新周报】({latest_file[:-3]})\n{content}"
+
+                        weekly_report_context = (
+                            f"【最新周报】({latest_file[:-3]})\n{content}"
+                        )
                         print(f"[WeeklyReport] 注入了来自 {latest_file} 的周报")
                     except Exception as e:
                         print(f"[WeeklyReport] 读取周报文件失败: {e}")
-            
+
         except Exception as e:
             print(f"[WeeklyReport] 检索周报失败: {e}")
 

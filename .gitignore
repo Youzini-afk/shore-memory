@@ -98,6 +98,10 @@ pero_workspace/
 
 # Packaging & Runtimes (Tauri zero-env)
 PeroLauncher/src-tauri/python/
+
+# Build tools & Native source (per request)
+tools/
+src/components/avatar/native/src/
 PeroLauncher/src-tauri/bin/*.exe
 PeroLauncher/src-tauri/bin/*.dll
 PeroLauncher/target/

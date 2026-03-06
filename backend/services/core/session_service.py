@@ -5,9 +5,14 @@ from sqlmodel import select
 
 try:
     from models import Config, ConversationLog
-    from services.memory.memory_service import MemoryService
+    from services.memory.memory_service import MemoryService  # noqa: F401
 except ImportError:
     from backend.models import Config, ConversationLog
+
+    try:
+        from services.memory.memory_service import MemoryService  # noqa: F401
+    except ImportError:
+        from backend.services.memory.memory_service import MemoryService  # noqa: F401
 
 # 用于保存会话引用的全局变量（由 AgentService 注入）
 # 这种方式有点不够优雅，但对于工具到服务的通信是有效的
@@ -193,23 +198,25 @@ async def exit_work_mode() -> str:
         # 4. 保存到文件 (不入库)
         try:
             import os
+
             from utils.workspace_utils import get_workspace_root
-            
+
             workspace = get_workspace_root(agent_id)
             log_dir = os.path.join(workspace, "work_logs")
             os.makedirs(log_dir, exist_ok=True)
-            
+
             from datetime import datetime
+
             now_str = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
             # 清理 task_name 以防非法字符
             safe_task_name = "".join([c if c.isalnum() else "_" for c in task_name])
             file_name = f"{now_str}_{safe_task_name}.md"
             file_path = os.path.join(log_dir, file_name)
-            
+
             with open(file_path, "w", encoding="utf-8") as f:
                 f.write(summary_content)
             print(f"[Session] 工作日志已保存: {file_path}")
-            
+
         except Exception as e:
             print(f"[Session] 保存工作日志失败: {e}")
 

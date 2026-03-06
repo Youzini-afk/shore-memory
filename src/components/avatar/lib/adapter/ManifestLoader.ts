@@ -1,5 +1,6 @@
 import { IAvatarManifest, FeatureButton, PartDefinition } from './IAvatarManifest'
 import { IRetargetingMap } from '../retargeting/RetargetingConfig'
+import { resolveAssetUrl } from '../../../../utils/assetUrl'
 
 /**
  * Manifest 加载器
@@ -11,7 +12,8 @@ export class ManifestLoader {
    * @param path JSON 文件路径
    */
   static async fromJson(path: string): Promise<IAvatarManifest> {
-    const response = await fetch(path)
+    const url = resolveAssetUrl(path)
+    const response = await fetch(url)
     if (!response.ok) {
       throw new Error(`加载 Manifest 失败: ${path}`)
     }
@@ -30,7 +32,8 @@ export class ManifestLoader {
     decryptor?: (data: ArrayBuffer) => Promise<IAvatarManifest>
   ): Promise<IAvatarManifest> {
     if (decryptor) {
-      const response = await fetch(path)
+      const url = resolveAssetUrl(path)
+      const response = await fetch(url)
       const data = await response.arrayBuffer()
       return decryptor(data)
     }

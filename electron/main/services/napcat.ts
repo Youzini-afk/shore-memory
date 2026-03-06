@@ -213,11 +213,26 @@ export async function startNapCat(window: WindowLike) {
   })
 }
 
-export function stopNapCat() {
-  if (napcatProcess) {
-    napcatProcess.kill()
-    napcatProcess = null
-  }
+export function stopNapCat(): Promise<void> {
+  return new Promise((resolve) => {
+    if (napcatProcess) {
+      napcatProcess.on('close', () => {
+        napcatProcess = null
+        resolve()
+      })
+      napcatProcess.kill()
+      // 如果进程没能立刻关闭，设置一个超时
+      setTimeout(() => {
+        if (napcatProcess) {
+          napcatProcess.kill('SIGKILL')
+          napcatProcess = null
+          resolve()
+        }
+      }, 2000)
+    } else {
+      resolve()
+    }
+  })
 }
 
 export function getNapCatLogs() {

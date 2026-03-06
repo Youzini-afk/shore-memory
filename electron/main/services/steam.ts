@@ -1,8 +1,10 @@
 import steamworks from 'steamworks.js'
 import { app } from 'electron'
+import path from 'path'
 import { getConfig, saveConfig } from './system.js'
 
 let client: any = null
+let isInitialized = false
 
 // 成就常量
 // 注意：请确保在 Steamworks 后台配置了对应的成就 ID
@@ -18,6 +20,8 @@ export const ACHIEVEMENTS = {
 // 'success': Steam 初始化成功
 // 'failed': Steam 初始化失败（在没有 Steam 的情况下继续运行）
 export function initSteam(): 'restarting' | 'success' | 'failed' {
+  if (isInitialized) return 'success'
+
   const appId = 4457100 // PeroCore Steam App ID
 
   // 处理生产环境下的 Steam 重启逻辑
@@ -42,6 +46,7 @@ export function initSteam(): 'restarting' | 'success' | 'failed' {
 
     // 初始化 Steamworks
     client = steamworks.init(appId)
+    isInitialized = true
 
     console.log('[Steam] ============================================')
     console.log('[Steam] 初始化成功')
@@ -56,6 +61,7 @@ export function initSteam(): 'restarting' | 'success' | 'failed' {
   } catch (error) {
     // 忽略特定错误
     if (String(error).includes('already initialized')) {
+      isInitialized = true
       return 'success'
     }
     console.warn('[Steam] ============================================')
@@ -126,5 +132,83 @@ function checkFirstEncounter() {
     }
   } catch (e) {
     console.warn('[Steam] 检查成就时出错:', e)
+  }
+}
+
+// ==========================================
+// Workshop (创意工坊)
+// ==========================================
+
+export function getSubscribedItems() {
+  if (!client) return []
+  try {
+    return client.workshop.getSubscribedItems()
+  } catch (e) {
+    console.error('[Steam] 获取已订阅物品失败:', e)
+    return []
+  }
+}
+
+export function getItemState(itemId: number) {
+  if (!client) return 0
+  try {
+    return client.workshop.state(itemId)
+  } catch (e) {
+    return 0
+  }
+}
+
+export function getItemInstallInfo(itemId: number) {
+  if (!client) return null
+  try {
+    return client.workshop.installInfo(itemId)
+  } catch (e) {
+    return null
+  }
+}
+
+export function subscribeToItem(itemId: number) {
+  if (!client) return
+  try {
+    client.workshop.subscribe(itemId)
+  } catch (e) {
+    console.error(`[Steam] 订阅物品失败 ${itemId}:`, e)
+  }
+}
+
+export function unsubscribeFromItem(itemId: number) {
+  if (!client) return
+  try {
+    client.workshop.unsubscribe(itemId)
+  } catch (e) {
+    console.error(`[Steam] 取消订阅物品失败 ${itemId}:`, e)
+  }
+}
+
+export function downloadItem(itemId: number, highPriority = false) {
+  if (!client) return
+  try {
+    client.workshop.download(itemId, highPriority)
+  } catch (e) {
+    console.error(`[Steam] 下载物品失败 ${itemId}:`, e)
+  }
+}
+
+export function getWorkshopInstallPath(): string | null {
+  if (!client) return null
+  try {
+    // 4457100 is PeroCore Steam App ID
+    // appInstallDir usually returns path to .../steamapps/common/PeroCore
+    const installDir = client.apps.appInstallDir(4457100)
+    if (!installDir) return null
+
+    // We assume the workshop content is in .../steamapps/workshop/content/4457100
+    // This assumes the standard Steam library folder structure
+    const steamAppsDir = path.dirname(path.dirname(installDir))
+    const workshopDir = path.join(steamAppsDir, 'workshop', 'content', '4457100')
+    return workshopDir
+  } catch (e) {
+    console.warn('[Steam] 获取 Workshop 安装路径失败:', e)
+    return null
   }
 }

@@ -44,7 +44,7 @@ class TestGatewayClient:
             envelope.ParseFromString(sent_bytes)
 
             assert envelope.target_id == "master"
-            assert envelope.hello.device_name == "PeroCore Backend"
+            assert envelope.hello.device_name == "萌动链接：PeroperoChat！ 后端服务"
             assert envelope.hello.token == gateway_client.token
 
     @pytest.mark.asyncio

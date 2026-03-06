@@ -5,6 +5,7 @@ import { getDiagnostics } from './diagnostics'
 import { WindowLike } from '../types'
 import { logger } from '../utils/logger'
 import { getGatewayToken } from './system'
+import { getWorkshopInstallPath } from './steam'
 import { appEvents } from '../events'
 
 let backendProcess: ChildProcess | null = null
@@ -34,6 +35,11 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
   // 配置路径
   const dbPath = path.join(dataDir, 'perocore.db')
   const configPath = path.join(dataDir, 'config.json')
+  const logDir = path.join(dataDir, 'logs')
+  const logFile = path.join(logDir, 'backend.log')
+
+  // 确保日志目录存在
+  await fs.ensureDir(logDir)
 
   // 初始配置复制（如果需要）
   if (!(await fs.pathExists(configPath))) {
@@ -46,6 +52,10 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     ? `${backendRoot}${path.delimiter}${process.env.PYTHONPATH}`
     : backendRoot
 
+  const workshopPath = getWorkshopInstallPath()
+
+  logger.info('Backend', `Workshop Path: ${workshopPath || 'Not Found (Steam not running?)'}`)
+
   const env = {
     ...process.env,
     PYTHONPATH: pythonPathEnv,
@@ -55,8 +65,10 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     PORT: '9120',
     ENABLE_SOCIAL_MODE: enableSocialMode.toString(),
     PERO_DATA_DIR: dataDir,
+    PERO_WORKSHOP_DIR: workshopPath || '',
     PERO_DATABASE_PATH: dbPath,
     PERO_CONFIG_PATH: configPath,
+    PERO_LOG_FILE: logFile,
     GATEWAY_TOKEN: getGatewayToken()
   }
 
@@ -228,29 +240,38 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
 
 import treeKill from 'tree-kill'
 
-export function stopBackend() {
-  if (backendProcess) {
-    logger.info('Backend', '正在停止后端...')
-    if (backendProcess.pid) {
-      // 强制使用 tree-kill 确保所有子进程都被杀死
-      try {
-        treeKill(backendProcess.pid, 'SIGKILL', (err) => {
-          if (err) {
-            logger.error('Backend', `杀死后端进程树时出错: ${err}`)
-            // 回退尝试
-            try {
-              process.kill(backendProcess!.pid!)
-            } catch {
-              // 忽略
+export function stopBackend(): Promise<void> {
+  return new Promise((resolve) => {
+    if (backendProcess) {
+      logger.info('Backend', '正在停止后端...')
+      if (backendProcess.pid) {
+        // 强制使用 tree-kill 确保所有子进程都被杀死
+        try {
+          treeKill(backendProcess.pid, 'SIGKILL', (err) => {
+            if (err) {
+              logger.error('Backend', `杀死后端进程树时出错: ${err}`)
+              // 回退尝试
+              try {
+                process.kill(backendProcess!.pid!)
+              } catch {
+                // 忽略
+              }
             }
-          }
-        })
-      } catch (e) {
-        logger.error('Backend', `Tree kill 异常: ${e}`)
+            backendProcess = null
+            resolve()
+          })
+        } catch (e) {
+          logger.error('Backend', `Tree kill 异常: ${e}`)
+          backendProcess = null
+          resolve()
+        }
+      } else {
+        backendProcess.kill()
+        backendProcess = null
+        resolve()
       }
     } else {
-      backendProcess.kill()
+      resolve()
     }
-    backendProcess = null
-  }
+  })
 }

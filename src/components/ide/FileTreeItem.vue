@@ -2,25 +2,35 @@
   <div>
     <div
       :class="[
-        'flex items-center py-1.5 cursor-pointer whitespace-nowrap transition-all duration-200 rounded-lg mx-1',
+        'flex items-center py-1.5 cursor-pointer whitespace-nowrap transition-all duration-200 pixel-border-sm-transparent mx-1',
         isSelected
-          ? 'bg-indigo-500/20 text-indigo-300 font-medium'
-          : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
+          ? 'bg-moe-pink/10 text-moe-pink font-bold pixel-border-sm-moe'
+          : 'text-slate-400 hover:bg-moe-sky/10 hover:text-slate-200 hover:pixel-border-sm-moe-light'
       ]"
       :style="{ paddingLeft: level * 12 + 8 + 'px' }"
       @click="toggle"
       @contextmenu.prevent.stop="$emit('contextmenu', { event: $event, item })"
     >
       <!-- 图标 -->
-      <span v-if="item.type === 'directory'" class="mr-2 flex-shrink-0 opacity-70">
-        <FolderOpenIcon v-if="isOpen" class="w-4 h-4 text-amber-400" />
-        <FolderIcon v-else class="w-4 h-4 text-amber-400/80" />
+      <span v-if="item.type === 'directory'" class="mr-2 flex-shrink-0 opacity-90">
+        <PixelIcon v-if="isOpen" name="folder-open" size="xs" class="text-moe-yellow" />
+        <PixelIcon v-else name="folder" size="xs" class="text-moe-yellow/80" />
       </span>
-      <span v-else class="mr-2 flex-shrink-0 opacity-70">
-        <FileCodeIcon v-if="item.name.endsWith('.py')" class="w-4 h-4 text-blue-400" />
-        <FileJsonIcon v-else-if="item.name.endsWith('.json')" class="w-4 h-4 text-yellow-400" />
-        <FileTextIcon v-else-if="item.name.endsWith('.md')" class="w-4 h-4 text-gray-400" />
-        <FileIcon v-else class="w-4 h-4 text-slate-500" />
+      <span v-else class="mr-2 flex-shrink-0 opacity-90">
+        <PixelIcon v-if="item.name.endsWith('.py')" name="code" size="xs" class="text-moe-sky" />
+        <PixelIcon
+          v-else-if="item.name.endsWith('.json')"
+          name="file"
+          size="xs"
+          class="text-moe-yellow"
+        />
+        <PixelIcon
+          v-else-if="item.name.endsWith('.md')"
+          name="book"
+          size="xs"
+          class="text-moe-pink"
+        />
+        <PixelIcon v-else name="file" size="xs" class="text-slate-500" />
       </span>
 
       <!-- 名称 -->
@@ -30,9 +40,9 @@
     <!-- 子项 -->
     <div
       v-if="isOpen && item.type === 'directory'"
-      class="mt-0.5 border-l border-white/5 ml-3 pl-1"
+      class="mt-0.5 border-l-2 border-moe-pink/10 ml-3 pl-1"
     >
-      <div v-if="loading" class="pl-4 py-1 text-[10px] text-slate-600 animate-pulse">扫描中...</div>
+      <div v-if="loading" class="pl-4 py-1 text-[10px] text-moe-pink animate-pulse">扫描中...</div>
       <FileTreeItem
         v-for="child in children"
         :key="child.path"
@@ -47,14 +57,7 @@
 
 <script setup>
 import { ref } from 'vue'
-import {
-  Folder as FolderIcon,
-  FolderOpen as FolderOpenIcon,
-  File as FileIcon,
-  FileCode as FileCodeIcon,
-  FileJson as FileJsonIcon,
-  FileText as FileTextIcon
-} from 'lucide-vue-next'
+import PixelIcon from '../ui/PixelIcon.vue'
 
 const props = defineProps({
   item: { type: Object, default: () => ({}) },

@@ -53,7 +53,8 @@ class TestScorerService:
         # 1. 移除系统注入标签
         text1 = "Start <FILE_RESULTS>data</FILE_RESULTS> End"
         assert (
-            await scorer._smart_clean_text(text1) == "Start [FILE_RESULTS Data Omitted] End"
+            await scorer._smart_clean_text(text1)
+            == "Start [FILE_RESULTS Data Omitted] End"
         )
 
         # 2. 移除 Thinking 块
@@ -65,7 +66,10 @@ class TestScorerService:
 
         # 3. 保留 NIT 协议
         text4 = "[[[NIT_CALL]]] action [[[NIT_END]]]"
-        assert await scorer._smart_clean_text(text4) == "[[[NIT_CALL]]] action [[[NIT_END]]]"
+        assert (
+            await scorer._smart_clean_text(text4)
+            == "[[[NIT_CALL]]] action [[[NIT_END]]]"
+        )
 
     @pytest.mark.asyncio
     async def test_get_scorer_config_secretary(self, session, scorer):

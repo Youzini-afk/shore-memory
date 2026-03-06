@@ -38,13 +38,28 @@ class VectorStoreService:
 
         env_data_dir = os.environ.get("PERO_DATA_DIR")
         if env_data_dir:
-            self.data_dir = os.path.join(env_data_dir, "rust_db")
+            self.data_dir = os.path.join(env_data_dir, "memory")
         else:
             base_dir = os.path.dirname(
                 os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
             )
             data_dir = os.path.join(base_dir, "data")
-            self.data_dir = os.path.join(data_dir, "rust_db")
+            self.data_dir = os.path.join(data_dir, "memory")
+
+        # [Migration] 简单迁移逻辑: rust_db -> memory
+        # 如果旧目录存在且新目录不存在，则进行重命名
+        try:
+            parent_dir = os.path.dirname(self.data_dir)
+            old_dir = os.path.join(parent_dir, "rust_db")
+            if os.path.exists(old_dir) and not os.path.exists(self.data_dir):
+                import shutil
+
+                # 确保父目录存在 (理论上 os.path.dirname(self.data_dir) 应该存在，或者是 data 目录)
+                # 但这里 rust_db 存在说明 data 目录肯定存在
+                shutil.move(old_dir, self.data_dir)
+                print(f"[VectorStore] 已将旧的 rust_db 迁移到 {self.data_dir}")
+        except Exception as e:
+            print(f"[VectorStore] 迁移 rust_db 失败: {e}")
 
         if not os.path.exists(self.data_dir):
             os.makedirs(self.data_dir, exist_ok=True)

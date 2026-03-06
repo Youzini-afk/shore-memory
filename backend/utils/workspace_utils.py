@@ -1,11 +1,45 @@
 import os
+import shutil
 
+from core.path_resolver import path_resolver
 from services.agent.agent_manager import get_agent_manager
 
-# 基础工作区目录 (PeroCore/pero_workspace)
-# 假设此文件位于 backend/utils/workspace_utils.py
-BASE_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-GLOBAL_WORKSPACE_ROOT = os.path.join(BASE_DIR, "pero_workspace")
+# 基础工作区目录 (统一迁移至 @data/workspace 目录下)
+# 之前的逻辑是位于项目根目录的 pero_workspace
+GLOBAL_WORKSPACE_ROOT = path_resolver.resolve("@data/workspace")
+
+
+def _migrate_workspace():
+    """
+    [迁移逻辑]
+    将旧版位于项目根目录下的 pero_workspace 迁移至新的 @data 目录下。
+    """
+    try:
+        # 探测旧目录 (backend/../../pero_workspace)
+        base_dir = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+        old_workspace_root = os.path.join(base_dir, "pero_workspace")
+
+        if (
+            os.path.exists(old_workspace_root)
+            and os.path.isdir(old_workspace_root)
+            and not os.path.exists(GLOBAL_WORKSPACE_ROOT)
+        ):
+            # 确保父目录存在
+            os.makedirs(os.path.dirname(GLOBAL_WORKSPACE_ROOT), exist_ok=True)
+
+            # 移动目录
+            shutil.move(old_workspace_root, GLOBAL_WORKSPACE_ROOT)
+            print(
+                f"[Workspace] 已将旧工作区从 {old_workspace_root} 迁移至 {GLOBAL_WORKSPACE_ROOT}"
+            )
+    except Exception as e:
+        print(f"[Workspace] 迁移工作区失败: {e}")
+
+
+# 执行迁移
+_migrate_workspace()
 
 
 def get_workspace_root(agent_id: str = None) -> str:

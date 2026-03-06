@@ -10,20 +10,11 @@ vi.mock('@/utils/ipcAdapter', () => ({
   invoke: vi.fn()
 }))
 
-// 模拟 Element Plus 组件
-const ElIcon = { template: '<span class="el-icon"><slot /></span>' }
-const ElCheckbox = {
-  template:
-    '<input type="checkbox" :checked="modelValue" @change="$emit(\'update:modelValue\', $event.target.checked)" />',
-  props: ['modelValue', 'label', 'size']
+// 模拟 PixelIcon 组件
+const PixelIcon = {
+  template: '<span class="pixel-icon" :class="name"><slot /></span>',
+  props: ['name', 'size']
 }
-const ElButton = {
-  template: '<button class="el-button" @click="$emit(\'click\')"><slot /></button>'
-}
-
-// 模拟图标组件
-const Monitor = { template: '<svg>Monitor</svg>' }
-const Delete = { template: '<svg>Delete</svg>' }
 
 describe('TerminalPanel.vue', () => {
   let wrapper: any
@@ -51,11 +42,7 @@ describe('TerminalPanel.vue', () => {
     return mount(TerminalPanel, {
       global: {
         components: {
-          'el-icon': ElIcon,
-          'el-checkbox': ElCheckbox,
-          'el-button': ElButton,
-          Monitor,
-          Delete
+          PixelIcon
         }
       }
     })
@@ -66,23 +53,26 @@ describe('TerminalPanel.vue', () => {
     await flushPromises()
 
     expect(wrapper.exists()).toBe(true)
-    expect(wrapper.find('.terminal-header').exists()).toBe(true)
-    expect(wrapper.find('.terminal-content').exists()).toBe(true)
+    // 检查是否包含标题文本
     expect(wrapper.text()).toContain('实时终端')
   })
 
   it('应该加载历史日志', async () => {
+    // 模拟后端返回的历史日志格式，通常包含 [INFO] 等标签
     const historyLogs = ['[INFO] System started', '[WARN] Low memory']
     ;(invoke as any).mockResolvedValue(historyLogs)
 
     wrapper = mountComponent()
-    await flushPromises() // 等待 onMounted 中的异步操作
+    // 等待 onMounted 中的异步操作
+    await flushPromises()
+    // 由于 addLog 有 100ms 延迟，需要推进时间
+    vi.advanceTimersByTime(200)
+    await nextTick()
 
-    // 检查是否渲染了日志
-    const logLines = wrapper.findAll('.log-line')
-    expect(logLines.length).toBe(2)
-    expect(logLines[0].text()).toContain('System started')
-    expect(logLines[1].text()).toContain('Low memory')
+    // 检查是否渲染了日志消息
+    const text = wrapper.text()
+    expect(text).toContain('System started')
+    expect(text).toContain('Low memory')
   })
 
   it('监听 backend-log 并添加日志', async () => {
@@ -96,38 +86,40 @@ describe('TerminalPanel.vue', () => {
     const callback = listeners['backend-log']
     callback({ payload: '[ERROR] Connection failed' })
 
-    // 触发定时器更新 (addLog 内部有 setTimeout)
+    // 触发定时器更新 (addLog 内部有 100ms setTimeout)
     vi.advanceTimersByTime(200)
     await nextTick()
 
-    const logLines = wrapper.findAll('.log-line')
-    expect(logLines.length).toBe(1)
-    expect(logLines[0].text()).toContain('Connection failed')
-    expect(logLines[0].classes()).toContain('error') // 检查类型推断是否正确
+    expect(wrapper.text()).toContain('Connection failed')
+    // 检查是否应用了错误样式类
+    const errorLog = wrapper.find('.text-red-400')
+    expect(errorLog.exists()).toBe(true)
   })
 
   it('点击清空按钮应该清空日志', async () => {
     // 预先加载一些日志
-    ;(invoke as any).mockResolvedValue(['Log 1', 'Log 2'])
+    ;(invoke as any).mockResolvedValue(['[INFO] Log 1', '[INFO] Log 2'])
 
     wrapper = mountComponent()
     await flushPromises()
+    vi.advanceTimersByTime(200)
+    await nextTick()
 
-    expect(wrapper.findAll('.log-line').length).toBe(2)
+    // 验证初始日志存在（通过搜索 [backend] 标签或消息内容）
+    expect(wrapper.text()).toContain('Log 1')
 
-    // 点击清空按钮
-    const clearBtn = wrapper.find('.el-button')
+    // 找到清空按钮并点击
+    const clearBtn = wrapper.find('button[title="清空"]')
     await clearBtn.trigger('click')
 
-    expect(wrapper.findAll('.log-line').length).toBe(0)
+    // 验证日志已被清空
+    expect(wrapper.text()).not.toContain('Log 1')
+    expect(wrapper.text()).toContain('等待系统日志...')
   })
 
   it('应该能拦截控制台日志 (Hook Console)', async () => {
     wrapper = mountComponent()
     await flushPromises()
-
-    // 监听 console.log
-    const consoleSpy = vi.spyOn(console, 'log')
 
     // 触发 console.log
     console.log('Frontend log message')
@@ -136,10 +128,8 @@ describe('TerminalPanel.vue', () => {
     vi.advanceTimersByTime(200)
     await nextTick()
 
-    const logLines = wrapper.findAll('.log-line')
-    const frontendLog = logLines.find((l: any) => l.text().includes('Frontend log message'))
-
-    expect(frontendLog).toBeDefined()
-    expect(frontendLog?.text()).toContain('[frontend]') // 检查来源标记
+    const text = wrapper.text()
+    expect(text).toContain('Frontend log message')
+    expect(text).toContain('[frontend]') // 检查来源标记
   })
 })

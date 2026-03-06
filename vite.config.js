@@ -20,14 +20,6 @@ export default defineConfig(({ command }) => ({
     }
   },
   optimizeDeps: {
-    include: [
-      'vue',
-      'vue-router',
-      'element-plus',
-      'echarts',
-      'marked',
-      'dompurify',
-      '@element-plus/icons-vue'
-    ]
+    include: ['vue', 'vue-router', 'echarts', 'marked', 'dompurify']
   }
 }))

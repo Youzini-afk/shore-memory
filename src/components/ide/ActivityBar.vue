@@ -1,49 +1,57 @@
 <template>
   <div
-    class="w-12 h-full bg-[#333333] flex flex-col items-center py-2 select-none z-20 border-r border-[#2b2b2b]"
+    class="w-12 h-full bg-slate-900 flex flex-col items-center py-2 select-none z-20 pixel-border-r-dark"
   >
     <!-- 资源管理器 -->
     <div
-      class="w-12 h-12 flex items-center justify-center cursor-pointer transition-colors relative mb-1"
-      :class="activeTab === 'explorer' ? 'text-white' : 'text-[#858585] hover:text-white'"
+      class="w-10 h-10 flex items-center justify-center cursor-pointer transition-all relative mb-2 group"
+      :class="
+        activeTab === 'explorer'
+          ? 'text-moe-pink bg-white/5 pixel-border-sm-moe'
+          : 'text-slate-500 hover:text-moe-sky hover:bg-white/5'
+      "
       title="Explorer (Ctrl+Shift+E)"
       @click="$emit('update:activeTab', 'explorer')"
     >
       <div
         v-if="activeTab === 'explorer'"
-        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white"
+        class="absolute left-0 top-1 bottom-1 w-1 bg-moe-pink rounded-r"
       ></div>
-      <FilesIcon class="w-6 h-6" />
+      <PixelIcon name="folder" size="sm" />
     </div>
 
     <!-- 搜索 -->
     <div
-      class="w-12 h-12 flex items-center justify-center cursor-pointer transition-colors relative mb-1"
-      :class="activeTab === 'search' ? 'text-white' : 'text-[#858585] hover:text-white'"
+      class="w-10 h-10 flex items-center justify-center cursor-pointer transition-all relative mb-2 group"
+      :class="
+        activeTab === 'search'
+          ? 'text-moe-pink bg-white/5 pixel-border-sm-moe'
+          : 'text-slate-500 hover:text-moe-sky hover:bg-white/5'
+      "
       title="Search (Ctrl+Shift+F)"
       @click="$emit('update:activeTab', 'search')"
     >
       <div
         v-if="activeTab === 'search'"
-        class="absolute left-0 top-0 bottom-0 w-0.5 bg-white"
+        class="absolute left-0 top-1 bottom-1 w-1 bg-moe-pink rounded-r"
       ></div>
-      <SearchIcon class="w-6 h-6" />
+      <PixelIcon name="search" size="sm" />
     </div>
 
     <div class="flex-1"></div>
 
     <!-- 设置 -->
     <div
-      class="w-12 h-12 flex items-center justify-center cursor-pointer transition-colors text-[#858585] hover:text-white mb-1"
+      class="w-10 h-10 flex items-center justify-center cursor-pointer transition-colors text-slate-500 hover:text-moe-sky mb-1 press-effect"
       title="Settings"
     >
-      <SettingsIcon class="w-6 h-6" />
+      <PixelIcon name="settings" size="sm" />
     </div>
   </div>
 </template>
 
 <script setup>
-import { Files as FilesIcon, Search as SearchIcon, Settings as SettingsIcon } from 'lucide-vue-next'
+// import { Files as FilesIcon, Search as SearchIcon, Settings as SettingsIcon } from 'lucide-vue-next'
 
 defineProps({
   activeTab: {

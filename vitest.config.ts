@@ -7,7 +7,12 @@ export default defineConfig({
   test: {
     globals: true,
     environment: 'jsdom',
-    include: ['src/**/*.test.ts', 'src/**/*.spec.ts', 'src/**/__tests__/*', 'electron/**/*.test.ts'],
+    include: [
+      'src/**/*.test.ts',
+      'src/**/*.spec.ts',
+      'src/**/__tests__/*',
+      'electron/**/*.test.ts'
+    ],
     alias: {
       '@': resolve(__dirname, './src'),
       '@main': resolve(__dirname, './electron/main')

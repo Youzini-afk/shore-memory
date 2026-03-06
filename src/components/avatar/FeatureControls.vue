@@ -63,9 +63,12 @@ const toggleState = (id: string) => {
   flex-direction: column;
   gap: 8px;
   padding: 8px;
-  background: rgba(0, 0, 0, 0.3);
-  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(4px);
+  border: 2px solid rgba(249, 168, 212, 0.3); /* moe-pink */
+  border-radius: 0; /* Pixel style */
   min-width: 120px;
+  box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1);
 }
 
 .feature-group {
@@ -75,11 +78,13 @@ const toggleState = (id: string) => {
 }
 
 .group-title {
-  font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  color: #2d1b1e; /* moe-cocoa */
+  font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 2px;
+  font-family: 'Press Start 2P', cursive, sans-serif; /* Fallback */
 }
 
 .button-list {
@@ -93,30 +98,28 @@ const toggleState = (id: string) => {
   align-items: center;
   gap: 4px;
   padding: 4px 8px;
-  border: none;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 12px;
+  border: 2px solid transparent;
+  border-radius: 0;
+  background: rgba(255, 255, 255, 0.5);
+  color: #2d1b1e;
+  font-size: 10px;
+  font-weight: bold;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.2s;
+  font-family: monospace;
 }
 
 .feature-btn:hover {
-  background: rgba(255, 255, 255, 0.2);
-  color: rgba(255, 255, 255, 0.9);
+  background: white;
+  transform: translateY(-1px);
+  box-shadow: 2px 2px 0 rgba(249, 168, 212, 0.2);
 }
 
 .feature-btn.active {
-  background: rgba(100, 180, 255, 0.4);
+  background: #f9a8d4; /* moe-pink */
   color: white;
-}
-
-.btn-icon {
-  font-size: 14px;
-}
-
-.btn-label {
-  white-space: nowrap;
+  border-color: #f472b6;
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.1);
+  transform: translateY(1px);
 }
 </style>

@@ -1,1095 +1,1887 @@
 <template>
-  <!-- 全局装饰元素 -->
   <div
-    class="fixed top-0 left-0 w-full h-1 bg-gradient-to-r from-emerald-500/0 via-emerald-500/40 to-emerald-500/0 z-50 pointer-events-none"
-  ></div>
-  <div
-    class="fixed -top-24 -right-24 w-96 h-96 bg-emerald-500/5 blur-[120px] rounded-full pointer-events-none"
-  ></div>
-  <div
-    class="fixed -bottom-24 -left-24 w-96 h-96 bg-blue-500/5 blur-[120px] rounded-full pointer-events-none"
+    class="fixed inset-0 bg-[url('https://www.transparenttextures.com/patterns/cubes.png')] opacity-[0.03] pointer-events-none z-0 animate-pixel-bg-float"
   ></div>
 
-  <CustomTitleBar v-if="isElectron()" :transparent="true" />
-
-  <div
-    class="flex h-screen w-screen overflow-hidden bg-slate-950/95 text-slate-200 font-sans select-text"
-    :class="{ 'pt-8': isElectron() }"
-  >
-    <!-- 侧边导航栏 -->
-    <aside
-      :class="[
-        'glass-effect border-r border-slate-800/30 flex flex-col transition-all duration-300 relative z-20 select-none backdrop-blur-md',
-        isSidebarCollapsed ? 'w-20' : 'w-64'
-      ]"
+  <!-- 像素装饰贴纸 -->
+  <div class="fixed inset-0 pointer-events-none z-10 overflow-hidden select-none">
+    <div
+      class="absolute top-[15%] right-[5%] text-pink-300/40 animate-pixel-float pixel-hover-lift"
+      style="animation-delay: 0.5s"
     >
-      <div class="p-6 mb-6 flex items-center justify-between">
-        <div v-if="!isSidebarCollapsed" class="flex items-center gap-3">
-          <div
-            class="w-8 h-8 rounded-xl bg-gradient-to-br from-emerald-400 to-cyan-500 flex items-center justify-center text-white shadow-lg shadow-emerald-500/20 ring-1 ring-white/20"
-          >
-            <Zap :size="18" fill="currentColor" />
-          </div>
-          <span
-            class="font-bold tracking-tight text-lg bg-clip-text text-transparent bg-gradient-to-r from-white to-slate-400"
-            >{{ AGENT_NAME.toUpperCase() }}</span
-          >
-        </div>
-        <button
-          class="p-2 hover:bg-white/5 rounded-lg text-slate-500 hover:text-emerald-400 transition-all duration-200 mx-auto active:scale-95"
-          @click="isSidebarCollapsed = !isSidebarCollapsed"
-        >
-          <Menu :size="20" />
-        </button>
-      </div>
+      <PixelIcon name="heart" class="w-8 h-8" />
+    </div>
+    <div
+      class="absolute bottom-[25%] left-[18%] text-amber-300/30 animate-pixel-bounce pixel-hover-lift"
+      style="animation-delay: 1.2s"
+    >
+      <PixelIcon name="star" class="w-6 h-6" />
+    </div>
+    <div
+      class="absolute top-[40%] left-[2%] text-indigo-300/20 animate-pixel-float pixel-hover-lift"
+      style="animation-delay: 2s"
+    >
+      <PixelIcon name="mood-happy" class="w-10 h-10" />
+    </div>
+    <div
+      class="absolute bottom-[10%] right-[12%] text-emerald-300/40 animate-pixel-bounce pixel-hover-lift"
+      style="animation-delay: 0.8s"
+    >
+      <PixelIcon name="heart" class="w-5 h-5" />
+    </div>
+    <div
+      class="absolute top-[8%] left-[25%] text-sky-300/30 animate-pixel-float pixel-hover-lift"
+      style="animation-delay: 1.5s"
+    >
+      <PixelIcon name="sparkle" class="w-7 h-7" />
+    </div>
+    <div
+      class="absolute bottom-[40%] right-[3%] text-amber-200/20 animate-pixel-bounce pixel-hover-lift"
+      style="animation-delay: 2.5s"
+    >
+      <PixelIcon name="star" class="w-9 h-9" />
+    </div>
+    <!-- 新增猫娘元素 -->
+    <div
+      class="absolute top-[60%] right-[8%] text-pink-200/30 animate-pixel-float pixel-hover-lift"
+      style="animation-delay: 3s"
+    >
+      <PixelIcon name="cat" class="w-12 h-12" />
+    </div>
+    <div
+      class="absolute top-[25%] left-[10%] text-sky-200/20 animate-pixel-bounce pixel-hover-lift"
+      style="animation-delay: 3.5s"
+    >
+      <PixelIcon name="cat" class="w-8 h-8" />
+    </div>
+    <div
+      class="absolute bottom-[15%] left-[5%] text-emerald-300/30 animate-pixel-float pixel-hover-lift"
+      style="animation-delay: 4s"
+    >
+      <PixelIcon name="circle" class="w-4 h-4" />
+    </div>
+    <div
+      class="absolute top-[5%] right-[20%] text-yellow-200/40 animate-pixel-bounce pixel-hover-lift"
+      style="animation-delay: 2.2s"
+    >
+      <PixelIcon name="sparkle" class="w-6 h-6" />
+    </div>
+    <div
+      class="absolute bottom-[5%] left-[30%] text-pink-300/20 animate-pixel-float pixel-hover-lift"
+      style="animation-delay: 1.5s"
+    >
+      <PixelIcon name="heart" class="w-6 h-6" />
+    </div>
+    <div
+      class="absolute top-[50%] left-[50%] -translate-x-1/2 -translate-y-1/2 text-sky-200/5 opacity-[0.05] pointer-events-none rotate-12"
+    >
+      <PixelIcon name="cat" class="w-[600px] h-[600px]" />
+    </div>
 
-      <nav class="flex-1 px-4 space-y-2">
-        <button
-          v-for="item in navItems"
-          :key="item.id"
-          :class="[
-            'w-full flex items-center gap-4 px-4 py-3.5 rounded-xl transition-all duration-300 group relative overflow-hidden',
-            activeTab === item.id
-              ? 'bg-emerald-500/10 text-emerald-400 ring-1 ring-emerald-500/20 shadow-[0_0_15px_rgba(16,185,129,0.1)]'
-              : 'text-slate-500 hover:bg-white/5 hover:text-slate-200'
-          ]"
-          @click="activeTab = item.id"
-        >
-          <div v-if="activeTab === item.id" class="absolute inset-0 bg-emerald-400/5 blur-sm"></div>
-          <component
-            :is="item.icon"
-            :size="20"
-            :class="
-              activeTab === item.id
-                ? 'text-emerald-400'
-                : 'group-hover:scale-110 transition-transform duration-300'
-            "
-          />
-          <span v-if="!isSidebarCollapsed" class="font-medium text-sm z-10">{{ item.name }}</span>
-          <div
-            v-if="activeTab === item.id && !isSidebarCollapsed"
-            class="ml-auto w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.8)] z-10"
-          ></div>
-        </button>
-      </nav>
-    </aside>
+    <!-- 动态背景装饰：星星与气泡 -->
+    <div
+      v-for="i in 12"
+      :key="'star-' + i"
+      class="absolute animate-pixel-star text-amber-200/30 pointer-events-none"
+      :style="{
+        top: Math.random() * 100 + '%',
+        left: Math.random() * 100 + '%',
+        animationDelay: Math.random() * 3 + 's'
+      }"
+    >
+      <PixelIcon
+        name="star"
+        :style="{ width: Math.random() * 12 + 8 + 'px', height: Math.random() * 12 + 8 + 'px' }"
+      />
+    </div>
+    <div
+      v-for="i in 15"
+      :key="'bubble-' + i"
+      class="absolute animate-pixel-bubble text-sky-200/20 pointer-events-none"
+      :style="{
+        bottom: '-20px',
+        left: Math.random() * 100 + '%',
+        animationDelay: Math.random() * 5 + 's'
+      }"
+    >
+      <PixelIcon
+        name="circle"
+        :style="{ width: Math.random() * 8 + 4 + 'px', height: Math.random() * 8 + 4 + 'px' }"
+      />
+    </div>
+  </div>
 
-    <!-- 主内容区 -->
-    <div class="flex-1 flex flex-col relative overflow-hidden bg-transparent">
-      <!-- 背景光晕 (更柔和) -->
-      <div
-        class="absolute top-[-10%] right-[-10%] w-[40%] h-[40%] bg-emerald-500/5 blur-[150px] rounded-full pointer-events-none"
-      ></div>
+  <div
+    class="h-screen w-screen overflow-hidden bg-sky-50 text-slate-800 font-sans select-text relative pixel-ui pixel-grid-overlay"
+  >
+    <CustomTitleBar v-if="isElectron()" :transparent="true" />
 
-      <!-- 顶部标题栏 -->
-      <header
-        class="h-20 flex items-center justify-between px-10 border-b border-slate-800/30 backdrop-blur-sm z-10 select-none"
+    <div
+      class="flex h-full w-full pixel-grid-overlay"
+      :style="{
+        zoom: scale,
+        paddingTop: isElectron() ? `${32 / scale}px` : '0px'
+      }"
+    >
+      <!-- 侧边导航栏 -->
+      <aside
+        :class="[
+          'bg-white pixel-border-sky flex flex-col transition-all duration-300 relative z-20 select-none',
+          isSidebarCollapsed ? 'w-20' : 'w-64'
+        ]"
       >
-        <div>
-          <h1 class="text-2xl font-bold text-white tracking-tight drop-shadow-sm">Pero Launcher</h1>
-          <p class="text-xs text-slate-500 mt-1 font-mono tracking-wider flex items-center gap-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            版本 0.1.0 • 系统就绪
-          </p>
+        <div class="p-6 mb-6 flex items-center justify-between">
+          <div v-if="!isSidebarCollapsed" class="flex items-center gap-3">
+            <div
+              class="w-8 h-8 pixel-border-sky bg-sky-500 flex items-center justify-center text-white pixel-hover-lift"
+            >
+              <PixelIcon name="cat" size="sm" />
+            </div>
+            <span
+              class="font-bold tracking-tight text-lg text-sky-600 group-hover:text-pink-500 transition-colors"
+              >{{ AGENT_NAME.toUpperCase() }}</span
+            >
+          </div>
+          <button
+            class="p-2 hover:bg-sky-50 text-slate-500 hover:text-sky-500 transition-all duration-200 mx-auto"
+            @click="isSidebarCollapsed = !isSidebarCollapsed"
+          >
+            <PixelIcon name="menu" size="md" />
+          </button>
         </div>
 
-        <div class="flex items-center gap-6">
-          <div
-            class="flex items-center gap-4 bg-slate-900/40 px-5 py-2.5 rounded-full border border-slate-700/30 backdrop-blur-md shadow-sm"
+        <nav class="flex-1 px-4 space-y-2">
+          <button
+            v-for="item in navItems"
+            :key="item.id"
+            :class="[
+              'w-full flex items-center gap-4 px-4 py-3.5 transition-all duration-300 group relative overflow-hidden pixel-hover-lift press-effect',
+              activeTab === item.id
+                ? item.id === 'home'
+                  ? 'bg-sky-500 text-white pixel-border-sky shadow-[4px_4px_0_0_#0ea5e940]'
+                  : item.id === 'agents'
+                    ? 'bg-emerald-500 text-white pixel-border-emerald shadow-[4px_4px_0_0_#10b98140]'
+                    : item.id === 'tools'
+                      ? 'bg-amber-500 text-white pixel-border-amber shadow-[4px_4px_0_0_#f59e0b40]'
+                      : 'bg-indigo-500 text-white pixel-border-indigo shadow-[4px_4px_0_0_#6366f140]'
+                : 'text-slate-500 hover:bg-sky-50 hover:text-sky-600'
+            ]"
+            @click="activeTab = item.id"
           >
-            <!-- Steam 用户状态 -->
+            <PixelIcon
+              :name="item.icon"
+              size="md"
+              :class="
+                activeTab === item.id
+                  ? 'text-white'
+                  : 'group-hover:scale-110 transition-transform duration-300'
+              "
+            />
+            <span v-if="!isSidebarCollapsed" class="font-bold text-sm z-10 tracking-wide">{{
+              item.name
+            }}</span>
             <div
-              v-if="steamUser"
-              class="flex items-center gap-2 border-r border-slate-700/50 pr-4 mr-1"
-              title="Steam 已连接"
+              v-if="activeTab === item.id && !isSidebarCollapsed"
+              class="ml-auto text-white/50 animate-pixel-float"
             >
-              <div
-                class="w-6 h-6 rounded bg-[#171a21] flex items-center justify-center text-[#66c0f4]"
-              >
-                <Gamepad2 :size="14" />
-              </div>
-              <div class="flex flex-col">
-                <span class="text-xs font-bold text-[#66c0f4] leading-none">{{
-                  steamUser.name
-                }}</span>
-                <span class="text-[9px] text-slate-500 font-mono leading-none mt-0.5">在线</span>
-              </div>
+              <PixelIcon name="heart" size="sm" />
             </div>
+          </button>
+        </nav>
 
-            <div class="flex items-center gap-2">
-              <div
-                :class="[
-                  'w-2 h-2 rounded-full shadow-[0_0_8px] transition-colors duration-500',
-                  getStatusColor(backendStatus)
-                ]"
-              ></div>
-              <span class="text-xs font-medium text-slate-300 uppercase tracking-tight"
-                >核心服务</span
-              >
-            </div>
-            <div class="w-px h-3 bg-slate-700/50"></div>
-            <div class="flex items-center gap-2">
-              <div
-                :class="[
-                  'w-2 h-2 rounded-full shadow-[0_0_8px] transition-colors duration-500',
-                  getStatusColor(napcatStatus)
-                ]"
-              ></div>
-              <span class="text-xs font-medium text-slate-300 uppercase tracking-tight"
-                >NapCat</span
-              >
+        <!-- 侧边栏底部：像素看板娘 -->
+        <div class="mt-auto p-4 flex flex-col items-center border-t-2 border-sky-100/50">
+          <div
+            class="w-12 h-12 pixel-border-sky flex items-center justify-center mb-2 group cursor-pointer transition-colors duration-300 relative"
+            :class="[
+              isRunning
+                ? 'bg-emerald-100 text-emerald-500 animate-pixel-bounce'
+                : 'bg-sky-100 text-sky-500 animate-pixel-float'
+            ]"
+          >
+            <PixelIcon name="cat" size="lg" />
+            <!-- 情绪气泡 -->
+            <div
+              class="absolute -top-6 -right-4 bg-white pixel-border-sm px-2 py-0.5 text-[8px] font-bold animate-pixel-float whitespace-nowrap"
+              :class="isRunning ? 'text-emerald-500' : 'text-sky-500'"
+            >
+              {{ isRunning ? '加油中！' : '在发呆...' }}
             </div>
           </div>
+          <div
+            v-if="!isSidebarCollapsed"
+            class="text-[10px] font-bold text-sky-400 font-mono tracking-widest uppercase flex items-center gap-1"
+          >
+            <PixelIcon name="sparkle" class="w-2 h-2 text-amber-400" />
+            Pero Mascot
+            <PixelIcon name="sparkle" class="w-2 h-2 text-amber-400" />
+          </div>
         </div>
-      </header>
+      </aside>
 
-      <!-- 内容区域 -->
-      <main class="flex-1 overflow-hidden p-8">
-        <div
-          v-if="activeTab === 'home'"
-          class="h-full flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar"
+      <!-- 主内容区 -->
+      <div class="flex-1 flex flex-col relative overflow-hidden bg-transparent">
+        <!-- 顶部标题栏 -->
+        <header
+          class="h-20 flex items-center justify-between px-10 border-b-2 border-sky-600 bg-white z-10 select-none"
         >
-          <!-- 状态卡片 -->
-          <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 shrink-0">
-            <div
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-emerald-500/30 transition-colors group"
-            >
-              <div class="flex items-start justify-between mb-4">
-                <div class="p-3 rounded-xl bg-blue-500/10 text-blue-400">
-                  <Cpu :size="20" />
-                </div>
-                <span
-                  class="text-xs font-mono text-slate-500 group-hover:text-blue-400 transition-colors"
-                  >CPU 负载</span
-                >
-              </div>
-              <div class="text-2xl font-bold">{{ cpuUsage.toFixed(1) }}%</div>
-              <div class="w-full bg-slate-800/50 h-1.5 rounded-full mt-4 overflow-hidden">
-                <div
-                  class="bg-blue-500 h-full rounded-full transition-all duration-500"
-                  :style="{ width: `${Math.min(cpuUsage, 100)}%` }"
-                ></div>
-              </div>
-            </div>
+          <div>
+            <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Pero Launcher</h1>
+            <p class="text-xs text-slate-400 mt-1 font-mono tracking-wider flex items-center gap-2">
+              <PixelIcon name="mood-happy" class="w-2.5 h-2.5 text-sky-500 animate-pixel-float" />
+              版本 0.1.0 • 系统就绪
+            </p>
+          </div>
 
-            <div
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-emerald-500/30 transition-colors group"
-            >
-              <div class="flex items-start justify-between mb-4">
-                <div class="p-3 rounded-xl bg-purple-500/10 text-purple-400">
-                  <Database :size="20" />
+          <div class="flex items-center gap-6">
+            <div class="flex items-center gap-4 bg-white px-5 py-2.5 pixel-border-sky">
+              <!-- Steam 用户状态 -->
+              <PTooltip v-if="steamUser" content="Steam 已连接" placement="bottom">
+                <div class="flex items-center gap-2 border-r-2 border-pink-100 pr-4 mr-1">
+                  <div
+                    class="w-6 h-6 bg-[#171a21] flex items-center justify-center text-[#66c0f4] pixel-border-sky pixel-hover-lift"
+                  >
+                    <PixelIcon name="gamepad" class="w-3.5 h-3.5" />
+                  </div>
+                  <div class="flex flex-col">
+                    <span class="text-xs font-bold text-pink-500 leading-none">{{
+                      steamUser.name
+                    }}</span>
+                    <span class="text-[9px] text-slate-400 font-mono leading-none mt-0.5"
+                      >在线</span
+                    >
+                  </div>
                 </div>
-                <span
-                  class="text-xs font-mono text-slate-500 group-hover:text-purple-400 transition-colors"
-                  >内存占用</span
-                >
-              </div>
-              <div class="text-2xl font-bold">{{ (memoryUsed / 1024 / 1024).toFixed(0) }}MB</div>
-              <div class="w-full bg-slate-800/50 h-1.5 rounded-full mt-4 overflow-hidden">
-                <div
-                  class="bg-purple-500 h-full rounded-full transition-all duration-500"
-                  :style="{ width: `${memoryTotal > 0 ? (memoryUsed / memoryTotal) * 100 : 0}%` }"
-                ></div>
-              </div>
-            </div>
+              </PTooltip>
 
-            <div
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-emerald-500/30 transition-colors group md:col-span-2 lg:col-span-1"
-            >
-              <div class="flex items-start justify-between mb-4">
-                <div class="p-3 rounded-xl bg-orange-500/10 text-orange-400">
-                  <Activity :size="20" />
-                </div>
-                <span
-                  class="text-xs font-mono text-slate-500 group-hover:text-orange-400 transition-colors"
-                  >运行状态</span
-                >
-              </div>
-              <div class="text-2xl font-bold">{{ isRunning ? '已运行' : '待命' }}</div>
-              <div class="flex gap-1.5 mt-4">
+              <div class="flex items-center gap-2 group cursor-help">
                 <div
-                  v-for="i in 8"
-                  :key="i"
                   :class="[
-                    'h-1.5 flex-1 rounded-full',
-                    i <= (isRunning ? 8 : 2) ? 'bg-orange-500' : 'bg-slate-800/50'
+                    'w-3 h-3 pixel-border-mint transition-colors duration-500 animate-pixel-float',
+                    getStatusColor(backendStatus)
                   ]"
                 ></div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 主要启动区域 -->
-          <div
-            class="flex-1 min-h-[300px] flex flex-col items-center justify-center gap-8 glass-effect rounded-3xl border border-slate-800/50 relative overflow-hidden"
-          >
-            <!-- 背景图案 -->
-            <div
-              class="absolute inset-0 opacity-[0.03] pointer-events-none"
-              style="
-                background-image: radial-gradient(#fff 1px, transparent 1px);
-                background-size: 24px 24px;
-              "
-            ></div>
-
-            <div class="relative">
-              <div
-                v-if="isStarting"
-                class="absolute inset-[-20px] rounded-full border-2 border-emerald-500/50 border-t-transparent animate-spin"
-              ></div>
-              <button
-                :disabled="isStarting || envStatus === 'error'"
-                :class="[
-                  'relative w-32 h-32 md:w-40 md:h-40 rounded-full flex flex-col items-center justify-center gap-2 transition-all duration-500 group',
-                  isRunning
-                    ? 'bg-rose-500/10 text-rose-500 border-2 border-rose-500/50 hover:bg-rose-500 hover:text-white hover:shadow-[0_0_40px_rgba(244,63,94,0.4)]'
-                    : envStatus === 'error'
-                      ? 'bg-slate-700 text-slate-500 border-2 border-slate-600 cursor-not-allowed opacity-80'
-                      : 'bg-emerald-500 text-white shadow-[0_0_40px_rgba(16,185,129,0.3)] hover:shadow-[0_0_60px_rgba(16,185,129,0.5)] hover:scale-105 active:scale-95'
-                ]"
-                @click="toggleLaunch"
-              >
-                <div v-if="envStatus === 'error'" class="flex flex-col items-center gap-1">
-                  <XCircle :size="32" class="opacity-50" />
-                  <span class="text-xs font-bold">环境缺失</span>
-                </div>
-                <template v-else>
-                  <Power :size="40" class="md:w-12 md:h-12" :stroke-width="2.5" />
-                  <span class="text-xs md:text-sm font-bold uppercase tracking-widest">{{
-                    isRunning ? '停止服务' : '启动 Pero'
-                  }}</span>
-                </template>
-              </button>
-
-              <button
-                v-if="isRunning"
-                class="absolute -right-20 top-1/2 -translate-y-1/2 p-3 rounded-full bg-slate-800/50 text-slate-400 hover:bg-rose-500 hover:text-white transition-all hover:scale-110 border border-slate-700 hover:border-rose-500/50 shadow-lg backdrop-blur-sm group/close"
-                title="关闭所有服务"
-                @click="stopServices"
-              >
-                <X :size="20" />
-              </button>
-            </div>
-
-            <div class="flex flex-col items-center gap-2 px-6">
-              <h3 class="text-lg md:text-xl font-medium text-center">
-                {{ isRunning ? AGENT_NAME + ' Core 正在运行' : '准备就绪' }}
-              </h3>
-              <p class="text-slate-500 text-xs md:text-sm max-w-md text-center">
-                {{
-                  isRunning
-                    ? '所有系统在线。角色窗口已激活。'
-                    : '点击上方按钮初始化所有后端服务及角色窗口。'
-                }}
-              </p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 角色标签页 -->
-        <div v-if="activeTab === 'agents'" class="h-full flex flex-col gap-6">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-bold tracking-tight">角色配置</h2>
-            <div class="flex items-center gap-3">
-              <button
-                :disabled="isLoadingAgents"
-                class="p-2 rounded-lg bg-slate-800/50 hover:bg-white/10 text-slate-400 hover:text-emerald-400 transition-colors disabled:opacity-50"
-                title="刷新列表"
-                @click="fetchAgents"
-              >
-                <div :class="{ 'animate-spin': isLoadingAgents }">
-                  <component :is="isLoadingAgents ? Sparkles : Search" :size="16" />
-                </div>
-              </button>
-              <div
-                class="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 uppercase tracking-widest"
-              >
-                {{ `Local: ${agentList.length}` }}
-              </div>
-            </div>
-          </div>
-
-          <div
-            v-if="agentList.length === 0"
-            class="flex-1 flex flex-col items-center justify-center text-slate-500 gap-4"
-          >
-            <div class="p-6 rounded-full bg-slate-800/50 border border-slate-700/50">
-              <Users :size="48" class="opacity-30" />
-            </div>
-            <div class="text-center">
-              <h3 class="text-lg font-medium text-slate-400 mb-1">未找到角色配置</h3>
-              <p class="text-sm opacity-60">请检查 backend/services/mdp/agents 目录</p>
-            </div>
-          </div>
-
-          <div
-            v-else
-            class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar"
-          >
-            <div
-              v-for="agent in agentList"
-              :key="agent.id"
-              class="glass-effect rounded-2xl p-5 border border-slate-800/50 transition-all duration-300 group relative overflow-hidden"
-              :class="
-                agent.is_enabled
-                  ? 'hover:border-emerald-500/30 hover:shadow-lg hover:shadow-emerald-500/10'
-                  : 'opacity-60 grayscale hover:opacity-80'
-              "
-            >
-              <!-- 背景渐变 -->
-              <div
-                v-if="agent.is_active"
-                class="absolute inset-0 bg-gradient-to-br from-emerald-500/10 to-transparent pointer-events-none"
-              ></div>
-
-              <div class="flex items-start justify-between mb-4 relative z-10">
-                <div class="flex items-center gap-4">
-                  <div
-                    class="w-12 h-12 rounded-2xl flex items-center justify-center text-white font-bold text-xl shadow-lg ring-1 ring-white/10"
-                    :class="
-                      agent.is_enabled
-                        ? 'bg-gradient-to-br from-emerald-400 to-cyan-500'
-                        : 'bg-slate-700'
-                    "
-                  >
-                    {{ agent.name ? agent.name[0].toUpperCase() : '?' }}
-                  </div>
-                  <div>
-                    <h3 class="font-bold text-lg leading-tight">{{ agent.name }}</h3>
-                    <span
-                      class="text-[10px] text-slate-500 font-mono bg-slate-800/50 px-1.5 py-0.5 rounded"
-                      >{{ agent.id }}</span
-                    >
-                  </div>
-                </div>
-                <div class="relative">
-                  <input
-                    :id="'check-' + agent.id"
-                    type="checkbox"
-                    :checked="agent.is_enabled"
-                    class="peer sr-only"
-                    @change="toggleAgentEnabled(agent)"
-                  />
-                  <label
-                    :for="'check-' + agent.id"
-                    class="block w-11 h-6 bg-slate-700/80 rounded-full cursor-pointer transition-colors peer-checked:bg-emerald-500 relative after:absolute after:top-1 after:left-1 after:w-4 after:h-4 after:bg-white after:rounded-full after:transition-transform peer-checked:after:translate-x-5 shadow-inner"
-                  >
-                  </label>
-                </div>
-              </div>
-
-              <p class="text-xs text-slate-400 leading-relaxed line-clamp-2 h-9 mb-4 relative z-10">
-                {{ agent.description || '暂无描述' }}
-              </p>
-
-              <div
-                class="flex items-center justify-between mt-auto pt-3 border-t border-white/5 relative z-10"
-              >
                 <span
-                  class="text-[10px] uppercase font-bold tracking-wider flex items-center gap-1.5"
-                  :class="
-                    agent.is_active
-                      ? 'text-emerald-400'
-                      : agent.is_enabled
-                        ? 'text-slate-400'
-                        : 'text-slate-600'
-                  "
+                  class="text-xs font-medium text-slate-500 uppercase tracking-tight group-hover:text-emerald-500 transition-colors"
+                  >核心服务</span
+                >
+              </div>
+              <div class="w-0.5 h-3 bg-sky-100"></div>
+              <div class="flex items-center gap-2 group cursor-help">
+                <div
+                  :class="[
+                    'w-3 h-3 pixel-border-pink transition-colors duration-500 animate-pixel-bounce',
+                    getStatusColor(napcatStatus)
+                  ]"
+                ></div>
+                <span
+                  class="text-xs font-medium text-slate-500 uppercase tracking-tight group-hover:text-pink-500 transition-colors"
+                  >NapCat</span
+                >
+              </div>
+            </div>
+          </div>
+        </header>
+
+        <!-- 内容区域 -->
+        <main class="flex-1 overflow-hidden p-8">
+          <div
+            v-if="activeTab === 'home'"
+            class="h-full flex flex-col gap-6 overflow-y-auto pr-2 custom-scrollbar"
+          >
+            <!-- 状态卡片 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 shrink-0">
+              <div
+                class="bg-white pixel-border-mint p-6 transition-all group pixel-hover-lift press-effect"
+              >
+                <div class="flex items-start justify-between mb-4">
+                  <div class="p-3 pixel-border-mint bg-emerald-500/10 text-emerald-500">
+                    <PixelIcon name="cpu" size="md" />
+                  </div>
+                  <span
+                    class="text-xs font-mono text-slate-400 group-hover:text-emerald-500 transition-colors"
+                    >CPU 负载</span
+                  >
+                </div>
+                <div class="text-2xl font-bold text-slate-700">{{ cpuUsage.toFixed(1) }}%</div>
+                <div
+                  class="w-full bg-emerald-50 h-4 pixel-border-mint mt-4 overflow-hidden relative group/bar"
                 >
                   <div
-                    class="w-1.5 h-1.5 rounded-full"
-                    :class="
-                      agent.is_active
-                        ? 'bg-emerald-400 shadow-[0_0_5px_currentColor]'
-                        : 'bg-slate-600'
-                    "
-                  ></div>
-                  {{ agent.is_active ? '当前活跃' : agent.is_enabled ? '就绪' : '已禁用' }}
-                </span>
+                    class="bg-emerald-400 h-full transition-all duration-500 shadow-[inset_-2px_-2px_0_0_#059669,inset_2px_2px_0_0_#a7f3d0] relative"
+                    :style="{ width: `${Math.min(cpuUsage, 100)}%` }"
+                  >
+                    <!-- 进度条上的微光 -->
+                    <div class="absolute inset-0 bg-white/20 animate-pixel-bg-float"></div>
+                  </div>
+                </div>
+              </div>
 
-                <!-- 仅在已启用但未活跃时显示“设为活跃” -->
-                <button
-                  v-if="agent.is_enabled && !agent.is_active"
-                  class="text-[10px] px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-emerald-500 hover:text-white transition-all font-medium border border-slate-700 hover:border-emerald-400"
-                  @click="setAsActive(agent)"
+              <div
+                class="bg-white pixel-border-pink p-6 transition-all group pixel-hover-lift press-effect"
+              >
+                <div class="flex items-start justify-between mb-4">
+                  <div class="p-3 pixel-border-pink bg-pink-500/10 text-pink-500">
+                    <PixelIcon name="database" size="md" />
+                  </div>
+                  <span
+                    class="text-xs font-mono text-slate-400 group-hover:text-pink-500 transition-colors"
+                    >内存占用</span
+                  >
+                </div>
+                <div class="text-2xl font-bold text-slate-700">
+                  {{ (memoryUsed / 1024 / 1024).toFixed(0) }}MB
+                </div>
+                <div
+                  class="w-full bg-pink-50 h-4 pixel-border-pink mt-4 overflow-hidden relative group/bar"
                 >
-                  设为活跃
+                  <div
+                    class="bg-pink-400 h-full transition-all duration-500 shadow-[inset_-2px_-2px_0_0_#db2777,inset_2px_2px_0_0_#fbcfe8] relative"
+                    :style="{ width: `${memoryTotal > 0 ? (memoryUsed / memoryTotal) * 100 : 0}%` }"
+                  >
+                    <!-- 进度条上的微光 -->
+                    <div class="absolute inset-0 bg-white/20 animate-pixel-bg-float"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                class="bg-white pixel-border-yellow p-6 transition-all group md:col-span-2 lg:col-span-1 pixel-hover-lift press-effect"
+              >
+                <div class="flex items-start justify-between mb-4">
+                  <div class="p-3 pixel-border-yellow bg-amber-500/10 text-amber-500">
+                    <PixelIcon name="activity" size="md" />
+                  </div>
+                  <span
+                    class="text-xs font-mono text-slate-400 group-hover:text-amber-500 transition-colors"
+                    >运行状态</span
+                  >
+                </div>
+                <div class="text-2xl font-bold text-slate-700">
+                  {{ isRunning ? '已运行' : '待命' }}
+                </div>
+                <div class="flex gap-2 mt-4">
+                  <div
+                    v-for="i in 8"
+                    :key="i"
+                    :class="[
+                      'h-4 flex-1 pixel-border-yellow transition-all duration-300 relative overflow-hidden',
+                      i <= (isRunning ? 8 : 2)
+                        ? 'bg-yellow-400 shadow-[inset_-2px_-2px_0_0_#eab308,inset_2px_2px_0_0_#fef9c3]'
+                        : 'bg-yellow-50'
+                    ]"
+                  >
+                    <!-- 进度条上的微光 -->
+                    <div
+                      v-if="i <= (isRunning ? 8 : 2)"
+                      class="absolute inset-0 bg-white/20 animate-pixel-bg-float"
+                    ></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 主要启动区域 -->
+            <div
+              class="flex-1 min-h-[300px] flex flex-col items-center justify-center gap-8 bg-white/40 pixel-border-sky relative overflow-hidden"
+            >
+              <!-- 背景图案 (像素点) - 更加可爱的颜色 -->
+              <div
+                class="absolute inset-0 opacity-[0.03] pointer-events-none"
+                style="
+                  background-image:
+                    linear-gradient(
+                      45deg,
+                      #f472b6 25%,
+                      transparent 25%,
+                      transparent 75%,
+                      #f472b6 75%,
+                      #f472b6
+                    ),
+                    linear-gradient(
+                      45deg,
+                      #fbbf24 25%,
+                      transparent 25%,
+                      transparent 75%,
+                      #fbbf24 75%,
+                      #fbbf24
+                    );
+                  background-size: 24px 24px;
+                  background-position:
+                    0 0,
+                    12px 12px;
+                "
+              ></div>
+
+              <!-- 内部小装饰 -->
+              <div class="absolute top-4 left-4 text-pink-400/20 animate-pixel-float">
+                <PixelIcon name="heart" class="w-6 h-6" />
+              </div>
+              <div class="absolute bottom-4 right-4 text-sky-400/20 animate-pixel-bounce">
+                <PixelIcon name="star" class="w-6 h-6" />
+              </div>
+
+              <div class="relative">
+                <div
+                  v-if="isStarting"
+                  class="absolute inset-[-24px] pixel-border-sky border-t-transparent animate-spin"
+                ></div>
+                <button
+                  :disabled="isStarting || envStatus === 'error'"
+                  :class="[
+                    'relative w-32 h-32 md:w-40 md:h-40 flex flex-col items-center justify-center gap-2 transition-all duration-300 group overflow-hidden pixel-hover-lift',
+                    isRunning
+                      ? 'pixel-btn-red text-white hover:animate-pixel-shake'
+                      : envStatus === 'error'
+                        ? 'bg-slate-300 text-slate-500 cursor-not-allowed opacity-80'
+                        : 'pixel-btn-sky text-white'
+                  ]"
+                  @click="toggleLaunch"
+                >
+                  <div v-if="envStatus === 'error'" class="flex flex-col items-center gap-1">
+                    <PixelIcon name="close" size="xl" />
+                    <span class="text-xs font-bold">环境缺失</span>
+                  </div>
+                  <template v-else>
+                    <PixelIcon name="power" class="md:w-12 md:h-12" />
+                    <span class="text-xs md:text-sm font-bold uppercase tracking-widest">{{
+                      isRunning ? '停止服务' : '启动 Pero'
+                    }}</span>
+                  </template>
                 </button>
               </div>
-            </div>
-          </div>
-        </div>
 
-        <!-- 插件标签页 -->
-        <div v-if="activeTab === 'plugins'" class="h-full flex flex-col gap-6">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-bold tracking-tight">插件管理</h2>
-            <div
-              class="px-3 py-1 rounded-full bg-purple-500/10 border border-purple-500/20 text-[10px] font-bold text-purple-500 uppercase tracking-widest"
-            >
-              总计: {{ plugins.length }}
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 gap-4 overflow-y-auto pr-2 custom-scrollbar">
-            <div
-              v-for="plugin in plugins"
-              :key="plugin.name"
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-purple-500/30 transition-all group"
-            >
-              <div class="flex justify-between items-start mb-2">
-                <div class="flex items-center gap-3">
-                  <div class="p-2 rounded-lg bg-slate-800 text-purple-400">
-                    <Plug :size="20" />
-                  </div>
-                  <div>
-                    <h3 class="font-bold text-base">{{ plugin.displayName || plugin.name }}</h3>
-                    <div class="flex items-center gap-2 text-xs text-slate-500 font-mono">
-                      <span class="bg-slate-800 px-1.5 py-0.5 rounded text-slate-400">{{
-                        plugin.version
-                      }}</span>
-                      <span>{{ plugin.pluginType }}</span>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  class="px-2 py-1 rounded text-[10px] font-bold uppercase tracking-wider"
-                  :class="
-                    plugin.valid
-                      ? 'bg-emerald-500/10 text-emerald-400'
-                      : 'bg-rose-500/10 text-rose-400'
-                  "
-                >
-                  {{ plugin.valid ? 'Active' : 'Invalid' }}
-                </div>
-              </div>
-              <p class="text-sm text-slate-400 leading-relaxed mb-4">{{ plugin.description }}</p>
-
-              <div v-if="plugin.capabilities?.invocationCommands?.length" class="space-y-2">
-                <p class="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                  Commands
+              <div class="flex flex-col items-center gap-2 px-6">
+                <h3 class="text-lg md:text-xl font-bold text-center text-slate-700">
+                  {{ isRunning ? AGENT_NAME + ' Core 正在运行' : '准备就绪' }}
+                </h3>
+                <p class="text-slate-400 text-xs md:text-sm max-w-md text-center">
+                  {{
+                    isRunning
+                      ? '所有系统在线。角色窗口已激活。'
+                      : '点击上方按钮初始化所有后端服务及角色窗口。'
+                  }}
                 </p>
-                <div class="flex flex-wrap gap-2">
-                  <span
-                    v-for="cmd in plugin.capabilities.invocationCommands"
-                    :key="cmd.commandIdentifier"
-                    class="px-2 py-1 rounded bg-slate-900/50 border border-slate-800 text-xs font-mono text-slate-300"
-                    :title="cmd.description"
-                  >
-                    {{ cmd.commandIdentifier }}
-                  </span>
-                </div>
               </div>
             </div>
-
-            <div
-              v-if="plugins.length === 0"
-              class="glass-effect rounded-2xl p-12 border border-slate-800/50 flex flex-col items-center justify-center text-slate-600 opacity-50"
-            >
-              <Plug :size="48" class="mb-4" />
-              <p>未检测到插件</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- 环境标签页 -->
-        <div v-if="activeTab === 'environment'" class="h-full flex flex-col gap-6">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-bold tracking-tight">环境检测</h2>
-            <div
-              class="flex items-center gap-2 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest"
-              :class="{
-                'bg-emerald-500/10 text-emerald-500 border border-emerald-500/20':
-                  envStatus === 'ok',
-                'bg-amber-500/10 text-amber-500 border border-amber-500/20':
-                  envStatus === 'warning',
-                'bg-rose-500/10 text-rose-500 border border-rose-500/20': envStatus === 'error',
-                'bg-slate-500/10 text-slate-500 border border-slate-500/20':
-                  envStatus === 'checking'
-              }"
-            >
-              <div
-                class="w-2 h-2 rounded-full animate-pulse"
-                :class="{
-                  'bg-emerald-500': envStatus === 'ok',
-                  'bg-amber-500': envStatus === 'warning',
-                  'bg-rose-500': envStatus === 'error',
-                  'bg-slate-500': envStatus === 'checking'
-                }"
-              ></div>
-              {{
-                envStatus === 'checking'
-                  ? '正在检测...'
-                  : envStatus === 'ok'
-                    ? '环境就绪'
-                    : envStatus === 'warning'
-                      ? '部分就绪'
-                      : '环境异常'
-              }}
-            </div>
           </div>
 
-          <div v-if="envReport" class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-6">
-            <!-- 关键组件 -->
-            <div class="space-y-4">
-              <h3
-                class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"
-              >
-                <Shield :size="14" /> 核心运行时 (必须)
-              </h3>
-
-              <div class="grid grid-cols-1 gap-3">
-                <!-- Python 环境 -->
+          <!-- 角色标签页 -->
+          <div v-if="activeTab === 'agents'" class="h-full flex flex-col gap-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
                 <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
+                  class="w-10 h-10 pixel-border-sky bg-sky-500 flex items-center justify-center text-white"
                 >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-yellow-500/10 text-yellow-500">
-                      <Code :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">Python 运行时</div>
-                      <div class="text-xs text-slate-500 font-mono mt-0.5">
-                        {{ envReport.python_exists ? `v${envReport.python_version}` : '未检测到' }}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span
-                      class="text-[10px] font-mono text-slate-600 hidden md:inline-block max-w-[150px] truncate"
-                      :title="envReport.python_path"
-                    >
-                      {{ envReport.python_path || '未找到路径' }}
-                    </span>
-                    <CheckCircle2
-                      v-if="envReport.python_exists"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <XCircle v-else :size="20" class="text-rose-500" />
-                  </div>
+                  <PixelIcon name="users" size="md" />
                 </div>
-
-                <!-- 后端脚本 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-blue-500/10 text-blue-500">
-                      <ScrollText :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">后端核心脚本</div>
-                      <div class="text-xs text-slate-500 mt-0.5">main.py 入口文件</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <CheckCircle2
-                      v-if="envReport.script_exists"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <XCircle v-else :size="20" class="text-rose-500" />
-                  </div>
-                </div>
-
-                <!-- VC++ 运行库 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-500">
-                      <Database :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">Visual C++ 运行库</div>
-                      <div class="text-xs text-slate-500 mt-0.5">VCRUNTIME140.dll</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <CheckCircle2
-                      v-if="envReport.vc_redist_installed"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <div v-else class="flex items-center gap-2">
-                      <a
-                        href="https://aka.ms/vs/17/release/vc_redist.x64.exe"
-                        target="_blank"
-                        class="text-xs text-blue-400 hover:underline"
-                        >下载安装</a
-                      >
-                      <XCircle :size="20" class="text-rose-500" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 数据目录 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-slate-700/30 text-slate-400">
-                      <FolderOpen :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">数据目录权限</div>
-                      <div class="text-xs text-slate-500 mt-0.5">读写访问检查</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <CheckCircle2
-                      v-if="envReport.data_dir_writable"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <XCircle v-else :size="20" class="text-rose-500" />
-                  </div>
+                <div>
+                  <h2 class="text-xl font-bold tracking-tight text-slate-800">角色配置</h2>
+                  <p class="text-[10px] text-slate-400 font-mono uppercase tracking-widest mt-0.5">
+                    Agent Configurations
+                  </p>
                 </div>
               </div>
-            </div>
-
-            <!-- 可选组件 -->
-            <div class="space-y-4">
-              <h3
-                class="text-xs font-bold text-slate-500 uppercase tracking-widest flex items-center gap-2"
-              >
-                <Sparkles :size="14" /> 功能组件 (可选)
-              </h3>
-
-              <div class="grid grid-cols-1 gap-3">
-                <!-- WebView2 组件 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-cyan-500/10 text-cyan-500">
-                      <LayoutGrid :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">Edge WebView2</div>
-                      <div class="text-xs text-slate-500 mt-0.5">UI 渲染引擎</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <CheckCircle2
-                      v-if="envReport.webview2_installed"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <AlertCircle
-                      v-else
-                      :size="20"
-                      class="text-amber-500"
-                      title="缺失可能导致界面无法显示"
-                    />
-                  </div>
-                </div>
-
-                <!-- Node.js 环境 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-green-500/10 text-green-500">
-                      <Terminal :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">Node.js 运行时</div>
-                      <div class="text-xs text-slate-500 font-mono mt-0.5">
-                        {{ envReport.node_exists ? `v${envReport.node_version}` : '未检测到' }}
-                      </div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span
-                      class="text-[10px] font-mono text-slate-600 hidden md:inline-block max-w-[150px] truncate"
-                      :title="envReport.node_path"
-                    >
-                      {{ envReport.node_path || 'PATH NOT FOUND' }}
-                    </span>
-                    <CheckCircle2
-                      v-if="envReport.node_exists"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <AlertCircle
-                      v-else
-                      :size="20"
-                      class="text-amber-500"
-                      title="NapCat 依赖此组件"
-                    />
-                  </div>
-                </div>
-
-                <!-- NapCat 组件 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-pink-500/10 text-pink-500">
-                      <MessageSquare :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">NapCat 适配器</div>
-                      <div class="text-xs text-slate-500 mt-0.5">QQ 协议支持</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <span
-                      v-if="!isSocialEnabled"
-                      class="text-[10px] uppercase font-bold text-slate-600 bg-slate-800 px-2 py-1 rounded"
-                      >已禁用</span
-                    >
-                    <CheckCircle2
-                      v-else-if="envReport.napcat_installed"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <div v-else class="flex items-center gap-2">
-                      <span class="text-xs text-amber-500">未安装</span>
-                      <AlertCircle :size="20" class="text-amber-500" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 9120 端口 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-orange-500/10 text-orange-500">
-                      <Activity :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">端口占用 (9120)</div>
-                      <div class="text-xs text-slate-500 mt-0.5">API 服务端口</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <CheckCircle2
-                      v-if="envReport.port_9120_free"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <div v-else class="flex items-center gap-2">
-                      <span class="text-xs text-rose-500 font-bold">已占用</span>
-                      <XCircle :size="20" class="text-rose-500" />
-                    </div>
-                  </div>
-                </div>
-
-                <!-- 记忆核心 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex items-center justify-between group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center gap-4">
-                    <div class="p-2.5 rounded-lg bg-purple-500/10 text-purple-500">
-                      <Cpu :size="20" />
-                    </div>
-                    <div>
-                      <div class="font-bold text-sm">Pero Memory Core</div>
-                      <div class="text-xs text-slate-500 mt-0.5">Rust 加速模块</div>
-                    </div>
-                  </div>
-                  <div class="flex items-center gap-3">
-                    <CheckCircle2
-                      v-if="envReport.core_available"
-                      :size="20"
-                      class="text-emerald-500"
-                    />
-                    <AlertCircle v-else :size="20" class="text-amber-500" title="性能将受限" />
-                  </div>
-                </div>
-
-                <!-- AI 模型组件 -->
-                <div
-                  class="glass-effect p-4 rounded-xl border border-slate-800/50 flex flex-col gap-3 group hover:border-slate-700 transition-colors"
-                >
-                  <div class="flex items-center justify-between">
-                    <div class="flex items-center gap-4">
-                      <div class="p-2.5 rounded-lg bg-indigo-500/10 text-indigo-500">
-                        <BrainCircuit :size="20" />
-                      </div>
-                      <div>
-                        <div class="font-bold text-sm">AI 模型组件</div>
-                        <div class="text-xs text-slate-500 mt-0.5">
-                          Embedding / Reranker / Whisper
-                        </div>
-                      </div>
-                    </div>
-                    <div class="flex items-center gap-3">
-                      <button
-                        v-if="!allModelsExist"
-                        :disabled="isDownloadingModels"
-                        class="px-3 py-1 rounded-lg bg-indigo-500/10 text-indigo-400 hover:bg-indigo-500 hover:text-white text-xs font-bold transition-all disabled:opacity-50 flex items-center gap-2"
-                        @click="downloadModels"
-                      >
-                        <Download v-if="!isDownloadingModels" :size="14" />
-                        <span
-                          v-else
-                          class="w-3 h-3 border-2 border-white/30 border-t-white rounded-full animate-spin"
-                        ></span>
-                        {{ isDownloadingModels ? '下载中...' : '一键下载' }}
-                      </button>
-                      <CheckCircle2 v-else :size="20" class="text-emerald-500" />
-                    </div>
-                  </div>
-
-                  <!-- 模型详细状态 -->
-                  <div class="grid grid-cols-3 gap-2 mt-2">
-                    <div class="flex items-center gap-2 text-xs bg-slate-800/50 p-2 rounded-lg">
-                      <div
-                        class="w-1.5 h-1.5 rounded-full"
-                        :class="envReport.embedding_model_exists ? 'bg-emerald-500' : 'bg-rose-500'"
-                      ></div>
-                      <span
-                        :class="
-                          envReport.embedding_model_exists ? 'text-slate-300' : 'text-slate-500'
-                        "
-                        >Embedding</span
-                      >
-                    </div>
-                    <div class="flex items-center gap-2 text-xs bg-slate-800/50 p-2 rounded-lg">
-                      <div
-                        class="w-1.5 h-1.5 rounded-full"
-                        :class="envReport.reranker_model_exists ? 'bg-emerald-500' : 'bg-rose-500'"
-                      ></div>
-                      <span
-                        :class="
-                          envReport.reranker_model_exists ? 'text-slate-300' : 'text-slate-500'
-                        "
-                        >Reranker</span
-                      >
-                    </div>
-                    <div class="flex items-center gap-2 text-xs bg-slate-800/50 p-2 rounded-lg">
-                      <div
-                        class="w-1.5 h-1.5 rounded-full"
-                        :class="envReport.whisper_model_exists ? 'bg-emerald-500' : 'bg-rose-500'"
-                      ></div>
-                      <span
-                        :class="
-                          envReport.whisper_model_exists ? 'text-slate-300' : 'text-slate-500'
-                        "
-                        >Whisper</span
-                      >
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <!-- 错误日志 -->
-            <div
-              v-if="envReport.errors && envReport.errors.length > 0"
-              class="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20"
-            >
-              <h3
-                class="text-xs font-bold text-rose-500 uppercase tracking-widest mb-2 flex items-center gap-2"
-              >
-                <AlertCircle :size="14" /> 错误详情
-              </h3>
-              <ul class="space-y-1">
-                <li
-                  v-for="(err, idx) in envReport.errors"
-                  :key="idx"
-                  class="text-xs text-rose-300 font-mono"
-                >
-                  • {{ err }}
-                </li>
-              </ul>
-            </div>
-          </div>
-
-          <div v-else class="flex-1 flex items-center justify-center">
-            <div class="flex flex-col items-center gap-4 text-slate-500">
-              <div
-                class="w-12 h-12 border-2 border-slate-700 border-t-emerald-500 rounded-full animate-spin"
-              ></div>
-              <span class="text-sm font-medium animate-pulse">正在全面检测运行环境...</span>
-            </div>
-          </div>
-        </div>
-
-        <!-- 工具标签页 -->
-        <div v-if="activeTab === 'tools'" class="h-full flex flex-col gap-6">
-          <div class="flex items-center justify-between">
-            <h2 class="text-xl font-bold tracking-tight">内置工具箱</h2>
-            <div
-              class="px-3 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[10px] font-bold text-emerald-500 uppercase tracking-widest"
-            >
-              本地环境
-            </div>
-          </div>
-
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-            <div
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-blue-500/30 transition-all group relative overflow-hidden"
-            >
-              <div
-                class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none"
-              >
-                <Search :size="64" />
-              </div>
-              <div class="relative z-10">
-                <div
-                  class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 flex items-center justify-center mb-4"
-                >
-                  <Search :size="24" />
-                </div>
-                <h3 class="text-lg font-bold mb-2">Everything 搜索</h3>
-                <p class="text-sm text-slate-500 mb-6 leading-relaxed">
-                  高性能本地文件索引工具。{{ APP_TITLE }} 使用此工具快速定位相关资源文件。
-                </p>
-                <div class="flex items-center justify-between">
-                  <span
-                    class="text-[10px] font-mono uppercase tracking-widest"
-                    :class="esStatus === 'INSTALLED' ? 'text-emerald-500' : 'text-slate-600'"
-                  >
-                    {{ esStatus === 'INSTALLED' ? '已集成' : '集成组件' }}
-                  </span>
+              <div class="flex items-center gap-3">
+                <PTooltip content="刷新列表">
                   <button
-                    :disabled="isInstallingES || esStatus === 'INSTALLED'"
-                    class="px-4 py-2 rounded-lg bg-slate-800 text-xs font-bold hover:bg-blue-600 hover:text-white transition-all disabled:opacity-50"
-                    @click="installES"
+                    :disabled="isLoadingAgents"
+                    class="p-2.5 bg-white pixel-border-sky text-slate-400 hover:text-sky-500 transition-all disabled:opacity-50"
+                    @click="fetchAgents"
                   >
-                    {{
-                      isInstallingES
-                        ? '安装中...'
-                        : esStatus === 'INSTALLED'
-                          ? '已安装'
-                          : '检查/安装'
-                    }}
+                    <div :class="{ 'animate-spin': isLoadingAgents }">
+                      <PixelIcon :name="isLoadingAgents ? 'sparkle' : 'search'" size="md" />
+                    </div>
+                  </button>
+                </PTooltip>
+                <div
+                  class="px-4 py-1.5 pixel-border-sky bg-sky-500/10 text-[10px] font-bold text-sky-500 uppercase tracking-widest"
+                >
+                  {{ `Local: ${agentList.length}` }}
+                </div>
+              </div>
+            </div>
+
+            <div
+              v-if="agentList.length === 0"
+              class="flex-1 flex flex-col items-center justify-center text-slate-400 gap-6 bg-white/30 pixel-border-sky m-2"
+            >
+              <div class="p-8 bg-white pixel-border-sky">
+                <PixelIcon name="users" class="w-16 h-16 text-sky-200" />
+              </div>
+              <div class="text-center">
+                <h3 class="text-xl font-bold text-slate-600 mb-2">这里空空如也哦~</h3>
+                <p class="text-sm text-slate-400 max-w-xs leading-relaxed">
+                  请检查
+                  <code class="bg-sky-50 px-1.5 py-0.5 pixel-border-sky text-sky-600 font-mono"
+                    >backend/services/mdp/agents</code
+                  >
+                  目录，看看是不是还没搬家过来？
+                </p>
+              </div>
+            </div>
+
+            <div
+              v-else
+              class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 overflow-y-auto pr-2 custom-scrollbar p-2"
+            >
+              <div
+                v-for="(agent, idx) in agentList"
+                :key="agent.id"
+                class="p-8 transition-all duration-300 group relative overflow-hidden flex flex-col pixel-hover-lift press-effect"
+                :class="[
+                  agent.is_active
+                    ? 'pixel-border-sky bg-sky-50/50 hover:bg-sky-100/50'
+                    : !agent.is_enabled
+                      ? 'bg-slate-50 pixel-border-sm opacity-60 grayscale hover:opacity-80'
+                      : idx % 4 === 0
+                        ? 'pixel-border-indigo bg-white hover:bg-indigo-50/50'
+                        : idx % 4 === 1
+                          ? 'pixel-border-pink bg-white hover:bg-pink-50/50'
+                          : idx % 4 === 2
+                            ? 'pixel-border-yellow bg-white hover:bg-yellow-50/50'
+                            : 'pixel-border-mint bg-white hover:bg-emerald-50/50'
+                ]"
+              >
+                <!-- 活跃指示器装饰 -->
+                <div
+                  v-if="agent.is_active"
+                  class="absolute -right-6 -top-6 w-20 h-20 bg-sky-500 pixel-border-sky rotate-45 flex items-end justify-center pb-2 text-white shadow-lg z-20"
+                >
+                  <PixelIcon name="star" class="w-4 h-4 animate-pixel-float" />
+                </div>
+
+                <div class="flex items-start justify-between mb-8 relative z-10">
+                  <div class="flex items-center gap-5">
+                    <div
+                      class="w-16 h-16 pixel-border-sky flex items-center justify-center text-white font-black text-2xl transition-all duration-300 relative group-hover:scale-110"
+                      :class="
+                        agent.is_active
+                          ? 'bg-sky-500'
+                          : agent.is_enabled
+                            ? 'bg-sky-400'
+                            : 'bg-slate-300'
+                      "
+                    >
+                      {{ agent.name ? agent.name[0].toUpperCase() : '?' }}
+                      <div
+                        v-if="agent.is_active"
+                        class="absolute -bottom-1 -right-1 w-6 h-6 bg-pink-500 pixel-border-sky flex items-center justify-center text-white"
+                      >
+                        <PixelIcon name="heart" class="w-3 h-3" />
+                      </div>
+                    </div>
+                    <div>
+                      <h3
+                        class="font-black text-xl leading-tight text-slate-700 group-hover:text-pink-500 transition-colors"
+                      >
+                        {{ agent.name }}
+                      </h3>
+                      <span
+                        class="text-[10px] text-sky-400 font-mono bg-sky-50 px-2 py-0.5 pixel-border-sky mt-1 inline-block"
+                        >{{ agent.id }}</span
+                      >
+                    </div>
+                  </div>
+                  <div class="relative pt-1 px-1">
+                    <input
+                      :id="'check-' + agent.id"
+                      type="checkbox"
+                      :checked="agent.is_enabled"
+                      class="peer sr-only"
+                      @change="toggleAgentEnabled(agent)"
+                    />
+                    <label
+                      :for="'check-' + agent.id"
+                      class="block w-14 h-7 bg-slate-200 pixel-border-sky cursor-pointer transition-all duration-300 peer-checked:bg-pink-500 relative"
+                    >
+                      <div
+                        class="absolute left-1.5 top-1.5 w-4 h-4 bg-white pixel-border-sm transition-transform duration-300 transition-pixel peer-checked:translate-x-7"
+                      ></div>
+                    </label>
+                  </div>
+                </div>
+
+                <p
+                  class="text-slate-500 text-xs leading-relaxed line-clamp-2 h-9 mb-6 relative z-10 px-1 font-medium"
+                >
+                  {{ agent.description || '这只 AI 角色还在完善它的自我介绍哦~' }}
+                </p>
+
+                <div
+                  class="flex items-center justify-between mt-auto pt-4 border-t border-sky-100/30 relative z-10"
+                >
+                  <span
+                    class="text-[10px] uppercase font-bold tracking-wider flex items-center gap-2"
+                    :class="
+                      agent.is_active
+                        ? 'text-pink-500'
+                        : agent.is_enabled
+                          ? 'text-slate-400'
+                          : 'text-slate-300'
+                    "
+                  >
+                    <div class="flex items-center gap-2">
+                      <PixelIcon
+                        name="heart"
+                        :class="
+                          agent.is_active
+                            ? 'text-pink-500 animate-pixel-bounce w-2.5 h-2.5'
+                            : 'text-slate-300 w-2.5 h-2.5'
+                        "
+                      />
+                      {{
+                        agent.is_active ? '正在活跃中' : agent.is_enabled ? '准备就绪' : '休息中'
+                      }}
+                    </div>
+                  </span>
+
+                  <!-- 仅在已启用但未活跃时显示“设为活跃” -->
+                  <button
+                    v-if="agent.is_enabled && !agent.is_active"
+                    class="text-[10px] px-5 py-2 pixel-btn-pink font-black uppercase tracking-widest"
+                    @click="setAsActive(agent)"
+                  >
+                    召唤它！
                   </button>
                 </div>
               </div>
             </div>
+          </div>
 
-            <!-- NapCat 社交适配器 -->
+          <!-- 插件标签页 -->
+          <div v-if="activeTab === 'plugins'" class="h-full flex flex-col gap-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div
+                  class="w-10 h-10 pixel-border-sky bg-indigo-500 flex items-center justify-center text-white"
+                >
+                  <PixelIcon name="plug" size="md" />
+                </div>
+                <div>
+                  <h2 class="text-xl font-bold tracking-tight text-slate-800">插件管理</h2>
+                  <p class="text-[10px] text-slate-400 font-mono uppercase tracking-widest mt-0.5">
+                    Plugin Ecosystem
+                  </p>
+                </div>
+              </div>
+              <div
+                class="px-4 py-1.5 pixel-border-sky bg-indigo-500/10 text-[10px] font-bold text-indigo-500 uppercase tracking-widest"
+              >
+                总计: {{ plugins.length }}
+              </div>
+            </div>
+
             <div
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 hover:border-pink-500/30 transition-all group relative overflow-hidden"
+              v-if="plugins.length > 0"
+              class="grid grid-cols-1 gap-6 overflow-y-auto pr-2 custom-scrollbar p-2"
             >
               <div
-                class="absolute top-0 right-0 p-4 opacity-10 group-hover:opacity-20 transition-opacity pointer-events-none"
+                v-for="(plugin, index) in plugins"
+                :key="plugin.name"
+                class="bg-white p-5 md:p-8 pb-7 md:pb-10 transition-all duration-300 group relative pixel-hover-lift press-effect min-w-0"
+                :class="[
+                  plugin.valid
+                    ? index % 4 === 0
+                      ? 'pixel-border-indigo hover:bg-indigo-50/50'
+                      : index % 4 === 1
+                        ? 'pixel-border-pink hover:bg-pink-50/50'
+                        : index % 4 === 2
+                          ? 'pixel-border-yellow hover:bg-yellow-50/50'
+                          : 'pixel-border-mint hover:bg-emerald-50/50'
+                    : 'pixel-border-sm grayscale opacity-60'
+                ]"
               >
-                <MessageSquare :size="64" />
-              </div>
-              <div class="relative z-10">
                 <div
-                  class="w-12 h-12 rounded-xl bg-pink-500/10 text-pink-400 flex items-center justify-center mb-4"
+                  class="flex flex-col sm:flex-row justify-between items-start gap-4 mb-2 relative z-10"
                 >
-                  <MessageSquare :size="24" />
-                </div>
-                <h3 class="text-lg font-bold mb-2">NapCat 社交集成</h3>
-                <p class="text-sm text-slate-500 mb-6 leading-relaxed">
-                  通过 NapCat 框架连接 QQ 协议。开启后
-                  {{ AGENT_NAME }} 将具备社交互动、自动回复及消息处理能力。
-                </p>
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-3">
+                  <div class="flex items-center gap-3 md:gap-5">
                     <div
-                      class="w-10 h-5 rounded-full relative cursor-pointer transition-colors"
-                      :class="isSocialEnabled ? 'bg-pink-600' : 'bg-slate-700'"
-                      @click="toggleSocialMode"
+                      class="p-3 md:p-5 pixel-border-sky bg-sky-50 text-sky-500 group-hover:scale-105 transition-all duration-300"
                     >
-                      <div
-                        class="absolute top-1 left-1 w-3 h-3 bg-white rounded-full transition-transform"
-                        :class="isSocialEnabled ? 'translate-x-5' : 'translate-x-0'"
-                      ></div>
+                      <PixelIcon name="plug" size="lg" class="md:w-7 md:h-7" />
                     </div>
-                    <span
-                      class="text-xs font-bold"
-                      :class="isSocialEnabled ? 'text-pink-400' : 'text-slate-500'"
-                    >
-                      {{ isSocialEnabled ? '已启用' : '已禁用' }}
+                    <div>
+                      <h3
+                        class="font-bold text-lg md:text-xl text-slate-700 group-hover:text-sky-600 transition-colors"
+                      >
+                        {{ plugin.displayName || plugin.name }}
+                      </h3>
+                      <div
+                        class="flex items-center gap-2 md:gap-3 text-[10px] md:text-xs text-slate-400 font-mono mt-1 md:mt-1.5"
+                      >
+                        <span
+                          class="bg-sky-50 px-2 py-0.5 md:px-3 md:py-1 pixel-border-sky text-sky-500 font-bold"
+                          >v{{ plugin.version }}</span
+                        >
+                        <span
+                          class="px-2 py-0.5 md:px-3 md:py-1 pixel-border-sky bg-slate-50 opacity-70"
+                          >{{ plugin.pluginType }}</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                  <div
+                    class="px-3 py-1.5 md:px-5 md:py-2 text-[9px] md:text-[10px] font-bold uppercase tracking-widest self-end sm:self-start"
+                    :class="
+                      plugin.valid
+                        ? 'pixel-border-emerald bg-emerald-50 text-emerald-500'
+                        : 'pixel-border-sm bg-rose-50 text-rose-500'
+                    "
+                  >
+                    <span class="flex items-center gap-2">
+                      <PixelIcon
+                        v-if="plugin.valid"
+                        name="mood-happy"
+                        class="w-3 h-3 text-emerald-500 animate-pixel-float"
+                      />
+                      <PixelIcon v-else name="close" class="w-3 h-3 text-rose-500" />
+                      {{ plugin.valid ? '正常运行' : '加载失败' }}
                     </span>
                   </div>
-                  <div v-if="isSocialEnabled" class="flex gap-2">
-                    <span
-                      v-if="napcatStatus === 'RUNNING'"
-                      class="px-2 py-1 rounded bg-emerald-500/10 text-emerald-500 text-[10px] font-bold"
-                      >运行中</span
+                </div>
+                <p
+                  class="text-sm text-slate-500 mt-5 leading-relaxed relative z-10 px-1 opacity-80 break-words"
+                >
+                  {{ plugin.description || '这个插件还没有写它的功能介绍哦~' }}
+                </p>
+
+                <!-- Commands -->
+                <div
+                  v-if="plugin.capabilities?.invocationCommands?.length"
+                  class="mt-8 pt-6 border-t-2 border-sky-100 relative z-10"
+                >
+                  <p
+                    class="text-[10px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2 mb-4 px-1"
+                  >
+                    <PixelIcon name="terminal" class="w-3 h-3 text-sky-400" /> 可用指令集
+                  </p>
+                  <div class="flex flex-wrap gap-2 md:gap-3 w-full min-w-0 pb-1 px-0.5">
+                    <PTooltip
+                      v-for="cmd in plugin.capabilities.invocationCommands"
+                      :key="cmd.commandIdentifier"
+                      :content="cmd.description"
+                      class="min-w-0"
                     >
-                    <span
-                      v-else
-                      class="px-2 py-1 rounded bg-slate-800 text-slate-500 text-[10px] font-bold"
-                      >已停止</span
-                    >
+                      <span
+                        class="px-3 py-1.5 md:px-5 md:py-2.5 bg-white pixel-border-sky text-[10px] md:text-xs font-mono text-sky-600 hover:bg-sky-500 hover:text-white transition-all cursor-help flex items-center gap-2 group/cmd max-w-full"
+                      >
+                        <span
+                          class="w-1.5 h-1.5 shrink-0 pixel-border-sky bg-sky-300 group-hover/cmd:bg-white transition-colors"
+                        ></span>
+                        <span class="truncate">{{ cmd.commandIdentifier }}</span>
+                      </span>
+                    </PTooltip>
                   </div>
                 </div>
               </div>
             </div>
 
-            <!-- 未来工具占位符 -->
             <div
-              class="glass-effect rounded-2xl p-6 border border-slate-800/50 border-dashed flex flex-col items-center justify-center text-slate-700 group hover:border-slate-700 transition-colors"
+              v-else
+              class="flex-1 flex flex-col items-center justify-center text-slate-400 gap-6 bg-white/30 pixel-border-sky m-2"
             >
-              <Plus :size="32" class="mb-2 opacity-20 group-hover:opacity-40 transition-opacity" />
-              <span class="text-sm font-medium">更多工具开发中</span>
+              <div class="p-8 bg-white pixel-border-sky">
+                <PixelIcon name="plug" class="w-16 h-16 text-indigo-200" />
+              </div>
+              <div class="text-center">
+                <h3 class="text-xl font-bold text-slate-600 mb-2">未检测到插件</h3>
+                <p class="text-sm text-slate-400 max-w-xs leading-relaxed">
+                  快去给你的 AI 角色装载一些有趣的技能包吧！
+                </p>
+              </div>
             </div>
           </div>
-        </div>
-      </main>
 
-      <!-- 底部 / 迷你状态 -->
-      <footer
-        class="h-10 px-10 flex items-center justify-between border-t border-slate-800/30 text-[10px] font-mono text-slate-600 select-none"
-      >
-        <div class="flex items-center gap-6">
-          <div class="flex items-center gap-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>
-            TAURI v2.0
-          </div>
-          <div class="flex items-center gap-2">
-            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
-            VITE + VUE 3
-          </div>
-        </div>
-        <div class="flex items-center gap-4">
-          <span class="flex items-center gap-1.5"> <ShieldCheck :size="12" /> 安全模式 </span>
-          <span>© 2026 PEROFAMILY</span>
-        </div>
-      </footer>
+          <!-- 环境标签页 -->
+          <div v-if="activeTab === 'environment'" class="h-full flex flex-col gap-6">
+            <div class="flex items-center justify-between">
+              <div class="flex items-center gap-3">
+                <div
+                  class="w-10 h-10 pixel-border-sky bg-emerald-500 flex items-center justify-center text-white"
+                >
+                  <PixelIcon name="activity" size="md" />
+                </div>
+                <div>
+                  <h2 class="text-xl font-bold tracking-tight text-slate-800">环境检测</h2>
+                  <p class="text-[10px] text-slate-400 font-mono uppercase tracking-widest mt-0.5">
+                    Environment Diagnostics
+                  </p>
+                </div>
+              </div>
+              <div
+                class="flex items-center gap-2 px-4 py-1.5 pixel-border-sky text-[10px] font-bold uppercase tracking-widest transition-all"
+                :class="{
+                  'bg-emerald-50 text-emerald-600': envStatus === 'ok',
+                  'bg-amber-50 text-amber-600': envStatus === 'warning',
+                  'bg-rose-50 text-rose-600': envStatus === 'error',
+                  'bg-sky-50 text-slate-500': envStatus === 'checking'
+                }"
+              >
+                <div
+                  class="w-2.5 h-2.5 pixel-border-sky"
+                  :class="{
+                    'bg-emerald-500': envStatus === 'ok',
+                    'bg-amber-500': envStatus === 'warning',
+                    'bg-rose-500': envStatus === 'error',
+                    'bg-sky-400': envStatus === 'checking'
+                  }"
+                ></div>
+                {{
+                  envStatus === 'checking'
+                    ? '正在检测...'
+                    : envStatus === 'ok'
+                      ? '环境就绪'
+                      : envStatus === 'warning'
+                        ? '部分就绪'
+                        : '环境异常'
+                }}
+              </div>
+            </div>
 
-      <!-- Global Download Progress Overlay -->
-      <div
-        v-if="downloadProgress.active"
-        class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-96 glass-effect p-4 rounded-xl border border-emerald-500/30 shadow-2xl flex flex-col gap-2 animate-bounce-in"
-      >
-        <div
-          class="flex justify-between items-center text-xs font-bold uppercase tracking-wider text-emerald-400"
+            <div v-if="envReport" class="flex-1 overflow-y-auto custom-scrollbar pr-2 space-y-8">
+              <!-- 关键组件 -->
+              <div class="space-y-6">
+                <div class="flex items-center justify-between px-3 mb-4">
+                  <h3
+                    class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2"
+                  >
+                    <PixelIcon name="shield" class="w-3 h-3 text-sky-400" /> 核心运行时 (必需组件)
+                  </h3>
+                  <div class="flex gap-1">
+                    <div
+                      v-for="i in 3"
+                      :key="i"
+                      class="w-1.5 h-1.5 bg-sky-200 pixel-border-sm"
+                    ></div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5 p-2">
+                  <!-- Python 环境 -->
+                  <div
+                    class="bg-white p-6 pixel-border-yellow flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-yellow bg-amber-50 text-amber-600 group-hover:scale-105 transition-all duration-300"
+                      >
+                        <PixelIcon name="code" size="lg" />
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-amber-600 transition-colors"
+                        >
+                          Python 运行时
+                        </div>
+                        <div
+                          class="text-xs text-slate-400 font-mono mt-1.5 flex items-center gap-2"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 bg-amber-400 pixel-border-yellow animate-pixel-float"
+                          ></span>
+                          {{
+                            envReport.python_exists
+                              ? `v${envReport.python_version}`
+                              : '未检测到环境'
+                          }}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- 装饰气泡 -->
+                    <div
+                      class="absolute -top-1 right-24 bg-white pixel-border-sm px-2 py-0.5 text-[8px] font-bold text-amber-500 animate-pixel-float opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Meow~
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <PTooltip :content="envReport.python_path || '未找到路径'">
+                        <span
+                          class="text-[10px] font-mono text-slate-400 hidden md:inline-block max-w-[150px] truncate bg-amber-50/50 px-3 py-1.5 pixel-border-yellow"
+                        >
+                          {{ envReport.python_path || 'PATH' }}
+                        </span>
+                      </PTooltip>
+                      <div
+                        class="p-2 bg-white pixel-border-yellow group-hover:scale-110 transition-transform"
+                      >
+                        <PixelIcon
+                          v-if="envReport.python_exists"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-float"
+                        />
+                        <PixelIcon v-else name="close" size="lg" class="text-rose-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 后端脚本 -->
+                  <div
+                    class="bg-white p-6 pixel-border-indigo flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-indigo bg-indigo-50 text-indigo-600 group-hover:scale-105 transition-all duration-300"
+                      >
+                        <PixelIcon name="file" size="lg" />
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-indigo-600 transition-colors"
+                        >
+                          后端核心脚本
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-indigo-400 pixel-border-indigo animate-pixel-bounce"
+                          ></span>
+                          main.py 入口文件检查
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <div
+                        class="p-2 bg-white pixel-border-indigo group-hover:scale-110 transition-transform"
+                      >
+                        <PixelIcon
+                          v-if="envReport.script_exists"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-bounce"
+                        />
+                        <PixelIcon v-else name="close" size="lg" class="text-rose-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- VC++ 运行库 -->
+                  <div
+                    class="bg-white p-6 pixel-border-pink flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-pink bg-pink-50 text-pink-600 group-hover:scale-105 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="database" size="lg" />
+                        <div class="absolute -top-1 -right-1 text-pink-300 animate-pixel-float">
+                          <PixelIcon name="heart" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-pink-600 transition-colors"
+                        >
+                          Visual C++ 运行库
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-pink-400 pixel-border-pink animate-pixel-float"
+                          ></span>
+                          VCRUNTIME140.dll
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <div v-if="!envReport.vc_redist_installed" class="flex items-center gap-3">
+                        <a
+                          href="https://aka.ms/vs/17/release/vc_redist.x64.exe"
+                          target="_blank"
+                          class="text-xs text-pink-500 hover:text-pink-600 font-bold bg-pink-50 px-4 py-2 pixel-border-pink transition-all pixel-hover-lift"
+                          >点击安装</a
+                        >
+                      </div>
+                      <div
+                        class="p-2 bg-white pixel-border-pink group-hover:scale-110 transition-transform"
+                      >
+                        <PixelIcon
+                          v-if="envReport.vc_redist_installed"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-float"
+                        />
+                        <PixelIcon v-else name="close" size="lg" class="text-rose-400" />
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 数据目录 -->
+                  <div
+                    class="bg-white p-6 pixel-border-mint flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-mint bg-emerald-50 text-emerald-600 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="folder" size="lg" />
+                        <div
+                          class="absolute -bottom-1 -left-1 text-emerald-300 animate-pixel-bounce"
+                        >
+                          <PixelIcon name="star" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-emerald-600 transition-colors"
+                        >
+                          数据目录权限
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-emerald-400 pixel-border-mint animate-pixel-bounce"
+                          ></span>
+                          读写访问权限检查
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <div class="p-2 bg-white pixel-border-mint transition-transform">
+                        <PixelIcon
+                          v-if="envReport.data_dir_writable"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-bounce"
+                        />
+                        <PixelIcon v-else name="close" size="lg" class="text-rose-400" />
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 可选组件 -->
+              <div class="space-y-6 pb-8">
+                <div class="flex items-center justify-between px-3 mb-4">
+                  <h3
+                    class="text-[10px] font-bold text-slate-400 uppercase tracking-[0.3em] flex items-center gap-2"
+                  >
+                    <PixelIcon name="sparkle" class="w-3 h-3 text-amber-400" /> 扩展功能组件 (可选)
+                  </h3>
+                  <div class="flex gap-1">
+                    <div
+                      v-for="i in 3"
+                      :key="i"
+                      class="w-1.5 h-1.5 bg-amber-200 pixel-border-sm"
+                    ></div>
+                  </div>
+                </div>
+
+                <div class="grid grid-cols-1 gap-5 p-2">
+                  <!-- WebView2 组件 -->
+                  <div
+                    class="bg-white p-6 pixel-border-mint flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-mint bg-emerald-50 text-emerald-600 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="layout" size="lg" />
+                        <div class="absolute -top-1 -left-1 text-emerald-400 animate-pixel-float">
+                          <PixelIcon name="mood-happy" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-emerald-600 transition-colors"
+                        >
+                          Edge WebView2
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-emerald-400 pixel-border-mint animate-pixel-float"
+                          ></span>
+                          UI 渲染引擎支持
+                        </div>
+                      </div>
+                    </div>
+                    <!-- 装饰气泡 -->
+                    <div
+                      class="absolute -top-1 right-24 bg-white pixel-border-sm px-2 py-0.5 text-[8px] font-bold text-emerald-500 animate-pixel-float opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Nice~
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <div class="p-2 bg-white pixel-border-mint transition-transform">
+                        <PixelIcon
+                          v-if="envReport.webview2_installed"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-bounce"
+                        />
+                        <PTooltip v-else content="缺失可能导致界面无法显示">
+                          <PixelIcon
+                            name="alert"
+                            size="lg"
+                            class="text-amber-400 animate-pixel-shake"
+                          />
+                        </PTooltip>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- Node.js 环境 -->
+                  <div
+                    class="bg-white p-6 pixel-border-yellow flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-yellow bg-amber-50 text-amber-600 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="terminal" size="lg" />
+                        <div
+                          class="absolute -bottom-1 -right-1 text-amber-400 animate-pixel-bounce"
+                        >
+                          <PixelIcon name="flash" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-amber-600 transition-colors"
+                        >
+                          Node.js 运行时
+                        </div>
+                        <div
+                          class="text-xs text-slate-400 font-mono mt-1.5 flex items-center gap-2"
+                        >
+                          <span
+                            class="w-1.5 h-1.5 bg-amber-400 pixel-border-yellow animate-pixel-bounce"
+                          ></span>
+                          {{
+                            envReport.node_exists ? `v${envReport.node_version}` : '未检测到环境'
+                          }}
+                        </div>
+                      </div>
+                    </div>
+                    <!-- 装饰气泡 -->
+                    <div
+                      class="absolute -top-1 right-24 bg-white pixel-border-sm px-2 py-0.5 text-[8px] font-bold text-amber-500 animate-pixel-bounce opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Power!
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <PTooltip :content="envReport.node_path || 'PATH NOT FOUND'">
+                        <span
+                          class="text-[10px] font-mono text-slate-400 hidden md:inline-block max-w-[150px] truncate bg-amber-50/50 px-3 py-1.5 pixel-border-yellow"
+                        >
+                          {{ envReport.node_path || 'PATH' }}
+                        </span>
+                      </PTooltip>
+                      <div class="p-2 bg-white pixel-border-yellow transition-transform">
+                        <PixelIcon
+                          v-if="envReport.node_exists"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-float"
+                        />
+                        <PTooltip v-else content="NapCat 依赖此组件">
+                          <PixelIcon
+                            name="alert"
+                            size="lg"
+                            class="text-amber-400 animate-pixel-shake"
+                          />
+                        </PTooltip>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- NapCat 组件 -->
+                  <div
+                    class="bg-white p-6 pixel-border-pink flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-pink bg-pink-50 text-pink-600 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="chat" size="lg" />
+                        <div class="absolute -top-1 -right-1 text-pink-300 animate-pixel-float">
+                          <PixelIcon name="cat" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-pink-600 transition-colors"
+                        >
+                          NapCat 适配器
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-pink-400 pixel-border-pink animate-pixel-float"
+                          ></span>
+                          QQ 协议支持组件
+                        </div>
+                      </div>
+                    </div>
+                    <!-- 装饰气泡 -->
+                    <div
+                      class="absolute -top-1 right-24 bg-white pixel-border-sm px-2 py-0.5 text-[8px] font-bold text-pink-500 animate-pixel-float opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      Social!
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <span
+                        v-if="!isSocialEnabled"
+                        class="text-[10px] uppercase font-bold text-slate-400 bg-pink-50/50 px-4 py-2 pixel-border-pink"
+                        >已禁用</span
+                      >
+                      <div v-else class="p-2 bg-white pixel-border-pink transition-transform">
+                        <PixelIcon
+                          v-if="envReport.napcat_installed"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-bounce"
+                        />
+                        <div v-else class="flex items-center gap-3">
+                          <span
+                            class="text-[10px] text-amber-500 font-bold uppercase tracking-wider"
+                            >未安装</span
+                          >
+                          <PixelIcon
+                            name="alert"
+                            size="lg"
+                            class="text-amber-400 animate-pixel-shake"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 9120 端口 -->
+                  <div
+                    class="bg-white p-6 pixel-border-yellow flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-yellow bg-amber-50 text-amber-600 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="activity" size="lg" />
+                        <div class="absolute -top-1 -right-1 text-amber-300 animate-pixel-float">
+                          <PixelIcon name="flash" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-amber-600 transition-colors"
+                        >
+                          API 服务端口 (9120)
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-amber-400 pixel-border-yellow animate-pixel-bounce"
+                          ></span>
+                          核心服务监听端口
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <div class="p-2 bg-white pixel-border-yellow transition-transform">
+                        <PixelIcon
+                          v-if="envReport.port_9120_free"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-float"
+                        />
+                        <div v-else class="flex items-center gap-3">
+                          <span class="text-[10px] text-rose-400 font-bold uppercase tracking-wider"
+                            >已占用</span
+                          >
+                          <PixelIcon
+                            name="close"
+                            size="lg"
+                            class="text-rose-400 animate-pixel-shake"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- 记忆核心 -->
+                  <div
+                    class="bg-white p-6 pixel-border-indigo flex items-center justify-between group transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+                  >
+                    <div class="flex items-center gap-6 relative z-10">
+                      <div
+                        class="p-5 pixel-border-indigo bg-indigo-50 text-indigo-600 transition-all duration-300 relative"
+                      >
+                        <PixelIcon name="cpu" size="lg" />
+                        <div
+                          class="absolute -bottom-1 -left-1 text-indigo-300 animate-pixel-bounce"
+                        >
+                          <PixelIcon name="star" class="w-3 h-3" />
+                        </div>
+                      </div>
+                      <div>
+                        <div
+                          class="font-bold text-xl text-slate-700 group-hover:text-indigo-600 transition-colors"
+                        >
+                          Pero Memory Core
+                        </div>
+                        <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
+                          <span
+                            class="w-1.5 h-1.5 bg-indigo-400 pixel-border-indigo animate-pixel-float"
+                          ></span>
+                          Rust 核心加速引擎
+                        </div>
+                      </div>
+                    </div>
+                    <div class="flex items-center gap-5 relative z-10">
+                      <div
+                        class="p-2 bg-white pixel-border-indigo group-hover:scale-110 transition-transform"
+                      >
+                        <PixelIcon
+                          v-if="envReport.core_available"
+                          name="check"
+                          size="lg"
+                          class="text-emerald-400 animate-pixel-bounce"
+                        />
+                        <PTooltip v-else content="核心组件缺失，性能将受限">
+                          <PixelIcon
+                            name="alert"
+                            size="lg"
+                            class="text-amber-400 animate-pixel-shake"
+                          />
+                        </PTooltip>
+                      </div>
+                    </div>
+                  </div>
+
+                  <!-- AI 模型组件 -->
+                  <div
+                    class="bg-white p-8 pixel-border-indigo flex flex-col gap-6 group transition-all duration-300 relative overflow-hidden pixel-hover-lift"
+                  >
+                    <!-- 背景装饰 -->
+                    <div
+                      class="absolute -bottom-4 -right-4 text-indigo-50/50 pointer-events-none rotate-12"
+                    >
+                      <PixelIcon name="brain" class="w-[120px] h-[120px]" />
+                    </div>
+
+                    <div class="flex items-center justify-between relative z-10">
+                      <div class="flex items-center gap-6">
+                        <div
+                          class="p-5 pixel-border-indigo bg-indigo-500 text-white group-hover:scale-105 transition-all duration-300 relative"
+                        >
+                          <PixelIcon name="brain" size="xl" />
+                          <div class="absolute -top-2 -right-2 text-amber-300 animate-pixel-float">
+                            <PixelIcon name="sparkle" class="w-4 h-4" />
+                          </div>
+                        </div>
+                        <div>
+                          <div
+                            class="font-bold text-2xl text-slate-700 group-hover:text-indigo-600 transition-colors"
+                          >
+                            AI 推理模型组件
+                          </div>
+                          <div class="text-xs text-slate-400 mt-2 flex items-center gap-2">
+                            <span
+                              class="w-1.5 h-1.5 bg-indigo-400 pixel-border-indigo animate-pixel-float"
+                            ></span>
+                            Embedding / Reranker / Whisper
+                          </div>
+                        </div>
+                      </div>
+                      <div class="flex items-center gap-4">
+                        <button
+                          v-if="!allModelsExist"
+                          :disabled="isDownloadingModels"
+                          class="px-8 py-3 pixel-btn-pink text-sm font-bold transition-all disabled:opacity-50 flex items-center gap-3 pixel-hover-lift press-effect"
+                          @click="downloadModels"
+                        >
+                          <PixelIcon
+                            v-if="!isDownloadingModels"
+                            name="download"
+                            class="w-[18px] h-[18px]"
+                          />
+                          <span
+                            v-else
+                            class="w-4 h-4 border-2 border-white/30 border-t-white animate-spin"
+                          ></span>
+                          {{ isDownloadingModels ? '正在极速部署...' : '一键极速部署' }}
+                        </button>
+                        <div
+                          v-else
+                          class="p-2 bg-white pixel-border-mint group-hover:scale-110 transition-transform"
+                        >
+                          <PixelIcon
+                            name="check"
+                            size="lg"
+                            class="text-emerald-400 animate-pixel-bounce"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <!-- 模型详细状态 -->
+                    <div class="grid grid-cols-3 gap-6 mt-2 relative z-10">
+                      <div
+                        class="flex flex-col items-center gap-3 text-[10px] bg-white p-4 pixel-border-mint hover:bg-emerald-50 transition-all group/model pixel-hover-lift"
+                      >
+                        <div
+                          class="w-2.5 h-2.5 pixel-border-mint mb-1 transition-transform"
+                          :class="
+                            envReport.embedding_model_exists
+                              ? 'bg-emerald-400 animate-pixel-float'
+                              : 'bg-rose-300'
+                          "
+                        ></div>
+                        <span
+                          class="font-bold tracking-[0.1em] transition-colors"
+                          :class="
+                            envReport.embedding_model_exists ? 'text-slate-600' : 'text-slate-400'
+                          "
+                          >EMBEDDING</span
+                        >
+                      </div>
+                      <div
+                        class="flex flex-col items-center gap-3 text-[10px] bg-white p-4 pixel-border-yellow hover:bg-amber-50 transition-all group/model pixel-hover-lift"
+                      >
+                        <div
+                          class="w-2.5 h-2.5 pixel-border-yellow mb-1 transition-transform"
+                          :class="
+                            envReport.reranker_model_exists
+                              ? 'bg-emerald-400 animate-pixel-bounce'
+                              : 'bg-rose-300'
+                          "
+                        ></div>
+                        <span
+                          class="font-bold tracking-[0.1em] transition-colors"
+                          :class="
+                            envReport.reranker_model_exists ? 'text-slate-600' : 'text-slate-400'
+                          "
+                          >RERANKER</span
+                        >
+                      </div>
+                      <div
+                        class="flex flex-col items-center gap-3 text-[10px] bg-white p-4 pixel-border-pink hover:bg-pink-50 transition-all group/model pixel-hover-lift"
+                      >
+                        <div
+                          class="w-2.5 h-2.5 pixel-border-pink mb-1 transition-transform"
+                          :class="
+                            envReport.whisper_model_exists
+                              ? 'bg-emerald-400 animate-pixel-float'
+                              : 'bg-rose-300'
+                          "
+                        ></div>
+                        <span
+                          class="font-bold tracking-[0.1em] transition-colors"
+                          :class="
+                            envReport.whisper_model_exists ? 'text-slate-600' : 'text-slate-400'
+                          "
+                          >WHISPER</span
+                        >
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 错误日志 -->
+              <div
+                v-if="envReport.errors && envReport.errors.length > 0"
+                class="p-8 bg-rose-50 pixel-border-pink relative overflow-hidden group"
+              >
+                <h3
+                  class="text-sm font-bold text-rose-500 uppercase tracking-[0.2em] mb-4 flex items-center gap-3 relative z-10"
+                >
+                  <div class="p-2 pixel-border-pink bg-rose-100 text-rose-500 animate-pixel-bounce">
+                    <PixelIcon name="alert" class="w-[18px] h-[18px]" />
+                  </div>
+                  运行环境异常详情
+                </h3>
+                <ul class="space-y-3 relative z-10">
+                  <li
+                    v-for="(err, idx) in envReport.errors"
+                    :key="idx"
+                    class="text-xs text-rose-600/80 font-medium bg-white p-3 pixel-border-pink flex items-start gap-3 hover:bg-rose-100/50 transition-all group/item"
+                  >
+                    <span
+                      class="mt-1.5 w-1.5 h-1.5 pixel-border-pink bg-rose-400 group-hover/item:scale-110 transition-transform animate-pixel-float"
+                    ></span>
+                    <span class="leading-relaxed">{{ err }}</span>
+                  </li>
+                </ul>
+              </div>
+            </div>
+
+            <div v-else class="flex-1 flex items-center justify-center">
+              <div class="flex flex-col items-center gap-4 text-slate-400">
+                <div class="w-12 h-12 pixel-border-sky border-t-sky-500 animate-spin"></div>
+                <span class="text-sm font-medium animate-pulse">正在全面检测运行环境...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 工具标签页 -->
+          <div v-if="activeTab === 'tools'" class="h-full flex flex-col gap-8 relative">
+            <div class="flex items-center justify-between relative z-10">
+              <div class="flex items-center gap-5">
+                <div
+                  class="w-14 h-14 pixel-border-sky bg-amber-500 flex items-center justify-center text-white"
+                >
+                  <PixelIcon name="layout" size="lg" />
+                </div>
+                <div>
+                  <h2
+                    class="text-3xl font-black tracking-tight text-slate-800 flex items-center gap-3"
+                  >
+                    内置工具箱
+                    <span
+                      class="text-xs font-bold bg-amber-100 text-amber-600 px-3 py-1 pixel-border-sky"
+                      >BETA</span
+                    >
+                  </h2>
+                  <p
+                    class="text-[11px] text-slate-400 font-mono uppercase tracking-[0.3em] mt-1 opacity-80"
+                  >
+                    Internal Utility Toolset
+                  </p>
+                </div>
+              </div>
+              <div
+                class="px-6 py-2.5 pixel-border-sky bg-white text-[10px] font-black text-sky-500 uppercase tracking-[0.2em]"
+              >
+                <span class="flex items-center gap-2">
+                  <span class="w-2 h-2 pixel-border-sky bg-sky-400"></span>
+                  本地环境已就绪
+                </span>
+              </div>
+            </div>
+
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-8 p-1 relative z-10">
+              <!-- Everything 搜索 -->
+              <div
+                class="bg-white p-10 pixel-border-sky hover:bg-sky-50/50 transition-all duration-300 group relative overflow-hidden pixel-hover-lift press-effect"
+              >
+                <!-- 背景装饰 -->
+                <div class="absolute -top-6 -left-6 text-sky-50/50 pointer-events-none -rotate-12">
+                  <PixelIcon name="search" class="w-[120px] h-[120px]" />
+                </div>
+                <div class="absolute top-2 right-2 text-sky-100/30 pointer-events-none">
+                  <PixelIcon name="cat" class="w-10 h-10" />
+                </div>
+                <div
+                  class="absolute bottom-0 right-0 p-10 opacity-[0.03] group-hover:opacity-10 transition-opacity pointer-events-none text-sky-500 scale-150"
+                >
+                  <PixelIcon name="search" class="w-[120px] h-[120px]" />
+                </div>
+
+                <div class="relative z-10">
+                  <div
+                    class="w-20 h-20 pixel-border-sky bg-sky-50 text-sky-500 flex items-center justify-center mb-8 transition-all duration-300 relative"
+                  >
+                    <PixelIcon name="search" size="2xl" />
+                    <PixelIcon
+                      name="star"
+                      class="absolute -top-2 -right-2 text-amber-400 animate-pixel-float w-4 h-4"
+                    />
+                  </div>
+                  <h3
+                    class="text-2xl font-black mb-3 text-slate-700 group-hover:text-sky-600 transition-colors tracking-tight"
+                  >
+                    Everything 搜索
+                  </h3>
+                  <p class="text-sm text-slate-500 mb-10 leading-relaxed opacity-80 font-medium">
+                    极致轻快的本地文件索引工具。{{ APP_TITLE }} 借助此工具实现秒级定位相关资源。
+                  </p>
+                  <div class="flex items-center justify-between mt-auto">
+                    <span
+                      class="text-[10px] font-black uppercase tracking-[0.2em] px-5 py-2 pixel-border-sky transition-all duration-300 flex items-center gap-2"
+                      :class="
+                        esStatus === 'INSTALLED'
+                          ? 'text-emerald-500 bg-white'
+                          : 'text-slate-400 bg-slate-50'
+                      "
+                    >
+                      <PixelIcon
+                        v-if="esStatus === 'INSTALLED'"
+                        name="heart"
+                        class="text-emerald-400 w-2.5 h-2.5"
+                      />
+                      {{ esStatus === 'INSTALLED' ? '已深度集成' : '· 集成组件' }}
+                    </span>
+                    <button
+                      :disabled="isInstallingES || esStatus === 'INSTALLED'"
+                      class="px-8 py-3 pixel-btn-sky text-xs font-black transition-all disabled:opacity-50 pixel-hover-lift press-effect"
+                      :class="esStatus === 'INSTALLED' ? 'bg-slate-100 text-slate-400' : ''"
+                      @click="installES"
+                    >
+                      {{
+                        isInstallingES
+                          ? '安装中...'
+                          : esStatus === 'INSTALLED'
+                            ? '已安装'
+                            : '检查/安装'
+                      }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- NapCat 社交适配器 -->
+              <div
+                class="bg-white p-10 pixel-border-pink hover:bg-pink-50/50 transition-all duration-300 group relative overflow-hidden pixel-hover-lift press-effect"
+              >
+                <!-- 背景装饰 -->
+                <div class="absolute -top-6 -left-6 text-pink-50/50 pointer-events-none -rotate-12">
+                  <PixelIcon name="chat" class="w-[120px] h-[120px]" />
+                </div>
+                <div
+                  class="absolute bottom-0 right-0 p-10 opacity-[0.03] group-hover:opacity-10 transition-opacity pointer-events-none text-pink-500 scale-150"
+                >
+                  <PixelIcon name="chat" class="w-[120px] h-[120px]" />
+                </div>
+
+                <div class="relative z-10">
+                  <div
+                    class="w-20 h-20 pixel-border-pink bg-pink-50 text-pink-500 flex items-center justify-center mb-8 transition-all duration-300 relative"
+                  >
+                    <PixelIcon name="chat" size="2xl" />
+                    <PixelIcon
+                      v-if="isSocialEnabled"
+                      name="mood-happy"
+                      class="absolute -top-2 -right-2 text-pink-400 animate-pixel-bounce w-4 h-4"
+                    />
+                  </div>
+                  <h3
+                    class="text-2xl font-black mb-3 text-slate-700 group-hover:text-pink-600 transition-colors tracking-tight"
+                  >
+                    NapCat 社交集成
+                  </h3>
+                  <p class="text-sm text-slate-500 mb-10 leading-relaxed opacity-80 font-medium">
+                    通过 NapCat 框架深度连接社交协议。开启后
+                    {{ AGENT_NAME }} 将具备跨平台的智能互动能力。
+                  </p>
+                  <div class="flex items-center justify-between mt-auto">
+                    <div class="flex items-center gap-5">
+                      <div
+                        class="w-14 h-7 bg-slate-200 pixel-border-sky cursor-pointer transition-all relative after:absolute after:top-1 after:left-1 after:w-5 after:h-5 after:bg-white after:pixel-border-sky after:transition-all pixel-hover-lift"
+                        :class="{
+                          'bg-pink-400 after:translate-x-6': isSocialEnabled
+                        }"
+                        @click="toggleSocialMode"
+                      >
+                        <PixelIcon
+                          v-if="isSocialEnabled"
+                          name="heart"
+                          class="absolute top-2 left-2 text-white animate-pixel-float z-20 pointer-events-none w-2 h-2"
+                        />
+                      </div>
+                      <span
+                        class="text-xs font-black transition-colors tracking-widest"
+                        :class="isSocialEnabled ? 'text-pink-500' : 'text-slate-400'"
+                      >
+                        {{ isSocialEnabled ? 'ENABLED' : 'DISABLED' }}
+                      </span>
+                    </div>
+                    <div v-if="isSocialEnabled" class="flex gap-3">
+                      <span
+                        v-if="napcatStatus === 'RUNNING'"
+                        class="px-5 py-2 pixel-border-sky bg-white text-emerald-500 text-[10px] font-black flex items-center gap-2"
+                      >
+                        <PixelIcon name="check" class="w-3 h-3" />
+                        正在运行
+                      </span>
+                      <span
+                        v-else
+                        class="px-5 py-2 pixel-border-sky bg-white text-slate-400 text-[10px] font-black flex items-center gap-2"
+                      >
+                        <div class="w-2 h-2 bg-slate-200 pixel-border-sm"></div>
+                        未启动
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 未来工具占位符 -->
+              <div
+                class="bg-white/40 p-10 pixel-border-yellow border-dashed flex flex-col items-center justify-center text-slate-400 group hover:border-yellow-300 hover:bg-white/60 transition-all duration-300 relative overflow-hidden pixel-hover-lift press-effect"
+              >
+                <div
+                  class="w-24 h-24 pixel-border-sky bg-white flex items-center justify-center mb-8 transition-all duration-300"
+                >
+                  <PixelIcon
+                    name="plus"
+                    class="text-sky-300 group-hover:text-sky-500 transition-colors w-12 h-12"
+                  />
+                </div>
+                <div class="text-center relative z-10">
+                  <div
+                    class="text-lg font-black text-slate-400 group-hover:text-sky-500 transition-colors"
+                  >
+                    探索更多可能
+                  </div>
+                  <div class="text-[10px] font-mono uppercase tracking-[0.3em] mt-2 opacity-60">
+                    Coming Soon
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </main>
+
+        <!-- 底部 / 迷你状态 -->
+        <footer
+          class="h-10 px-10 flex items-center justify-between border-t-2 border-sky-100 text-[10px] font-mono text-slate-400 select-none bg-white"
         >
-          <span class="flex items-center gap-2">
-            <div class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></div>
-            {{ downloadProgress.percent >= 0 ? '下载中...' : '下载中 (请稍候)...' }}
-          </span>
-          <span v-if="downloadProgress.percent >= 0">{{ downloadProgress.percent }}%</span>
-        </div>
+          <div class="flex items-center gap-6"></div>
+          <div class="flex items-center gap-4">
+            <span class="flex items-center gap-1.5">
+              <PixelIcon name="shield" class="w-3 h-3" /> 安全模式
+            </span>
+            <span>© 2026 PEROFAMILY</span>
+          </div>
+        </footer>
 
-        <!-- 进度条容器 -->
-        <div class="w-full bg-slate-800/50 h-1.5 rounded-full overflow-hidden relative">
-          <!-- 确定性进度条 -->
+        <!-- Global Download Progress Overlay -->
+        <div
+          v-if="downloadProgress.active"
+          class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-96 bg-white p-5 pixel-border-pink flex flex-col gap-3 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300"
+        >
           <div
-            v-if="downloadProgress.percent >= 0"
-            class="bg-gradient-to-r from-emerald-500 to-cyan-500 h-full rounded-full transition-all duration-300 relative overflow-hidden"
-            :style="{ width: `${downloadProgress.percent}%` }"
+            class="flex justify-between items-center text-xs font-black uppercase tracking-widest text-pink-500"
           >
-            <div class="absolute inset-0 bg-white/20 shimmer-effect w-full h-full"></div>
+            <span class="flex items-center gap-3">
+              <div class="p-1 pixel-border-pink bg-pink-100 text-pink-500 animate-pixel-float">
+                <PixelIcon name="cat" class="w-3.5 h-3.5" />
+              </div>
+              {{ downloadProgress.percent >= 0 ? '正在同步资源喵...' : '喵呜~ 资源同步中...' }}
+            </span>
+            <span v-if="downloadProgress.percent >= 0" class="font-mono"
+              >{{ downloadProgress.percent }}%</span
+            >
           </div>
 
-          <!-- 不确定性进度条 (Indeterminate) -->
-          <div v-else class="absolute inset-0 bg-emerald-500/20 h-full w-full overflow-hidden">
+          <!-- 进度条容器 -->
+          <div class="w-full bg-pink-50 h-3 pixel-border-pink overflow-hidden relative">
+            <!-- 确定性进度条 -->
             <div
-              class="indeterminate-bar bg-gradient-to-r from-emerald-500 to-cyan-500 h-full w-1/3 absolute top-0"
-            ></div>
+              v-if="downloadProgress.percent >= 0"
+              class="bg-pink-400 h-full transition-all duration-300 relative overflow-hidden"
+              :style="{ width: `${downloadProgress.percent}%` }"
+            >
+              <div class="absolute inset-0 bg-white/30 w-full h-full animate-pixel-pulse"></div>
+            </div>
+
+            <!-- 不确定性进度条 (Indeterminate) -->
+            <div v-else class="absolute inset-0 bg-pink-500/10 h-full w-full overflow-hidden">
+              <div class="indeterminate-bar bg-pink-400 h-full w-1/3 absolute top-0"></div>
+            </div>
           </div>
+
+          <!-- 状态日志显示区域 -->
+          <PTooltip :content="downloadProgress.status">
+            <div
+              class="mt-1 text-[10px] text-slate-400 font-mono truncate max-w-full opacity-60 flex items-center gap-2"
+            >
+              <div class="w-1.5 h-1.5 pixel-border-pink bg-pink-200"></div>
+              {{ downloadProgress.status }}
+            </div>
+          </PTooltip>
         </div>
 
-        <!-- 状态日志显示区域 -->
+        <!-- EULA 最终用户许可协议弹窗 -->
         <div
-          class="mt-1 text-[10px] text-slate-400 font-mono truncate max-w-full opacity-80"
-          :title="downloadProgress.status"
+          v-if="showEulaModal"
+          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-all duration-500 animate-in fade-in duration-300"
         >
-          {{ downloadProgress.status }}
+          <div
+            class="w-[540px] bg-white p-10 pixel-border-pink flex flex-col gap-8 relative overflow-hidden shadow-2xl scale-in-center animate-in zoom-in-95 duration-300"
+          >
+            <!-- 背景装饰 -->
+            <div class="absolute -top-10 -right-10 text-pink-50/50 pointer-events-none rotate-12">
+              <PixelIcon name="heart" class="w-40 h-40" />
+            </div>
+
+            <div class="flex items-center gap-6 relative z-10">
+              <div
+                class="w-16 h-16 pixel-border-pink bg-pink-500 flex items-center justify-center text-white animate-pixel-float shadow-lg"
+              >
+                <PixelIcon name="shield" size="xl" />
+              </div>
+              <div>
+                <h2
+                  class="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3"
+                >
+                  用户许可协议
+                  <span class="text-[10px] bg-pink-100 text-pink-500 px-2 py-1 pixel-border-pink"
+                    >REQUIRED</span
+                  >
+                </h2>
+                <p
+                  class="text-[11px] text-slate-400 mt-1.5 uppercase tracking-[0.3em] font-mono opacity-80"
+                >
+                  End User License Agreement
+                </p>
+              </div>
+            </div>
+
+            <div
+              class="max-h-[320px] overflow-y-auto pr-4 text-slate-600 text-sm leading-relaxed custom-scrollbar bg-pink-50/30 p-6 pixel-border-pink relative z-10"
+            >
+              <div class="space-y-5">
+                <p class="font-bold text-pink-600 flex items-center gap-2">
+                  <PixelIcon name="heart" class="w-3.5 h-3.5" />
+                  欢迎使用 萌动链接：PeroperoChat！ (以下简称“本软件”)。
+                </p>
+                <p>
+                  在使用本软件之前，请您务必仔细阅读并理解《最终用户许可协议》（以下简称“本协议”）。
+                </p>
+
+                <div class="space-y-4">
+                  <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                    <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                    1. 软件许可
+                  </h4>
+                  <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                    本软件授予您一项个人的、不可转让性、非排他性的许可，以在符合本协议条件的情况下使用本软件。
+                  </p>
+
+                  <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                    <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                    2. 使用限制
+                  </h4>
+                  <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                    您不得对本软件进行反向工程、反向编译或反汇编。您不得删除、修改或掩盖本软件中的任何版权声明或标签。
+                  </p>
+
+                  <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                    <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                    3. 隐私与数据
+                  </h4>
+                  <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                    本软件的部分功能可能需要连接互联网。我们尊重您的隐私，并承诺不会未经授权收集或分发您的个人信息。
+                  </p>
+                </div>
+
+                <p
+                  class="text-[11px] text-slate-400 pt-6 border-t-2 border-pink-100 flex items-center gap-2"
+                >
+                  <PixelIcon name="mood-happy" class="w-3.5 h-3.5" />
+                  点击“同意并继续”即表示您已阅读并同意上述所有条款喵~
+                </p>
+              </div>
+            </div>
+
+            <div class="flex gap-5 relative z-10">
+              <button
+                class="flex-1 px-8 py-4 pixel-border-pink bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all font-black text-xs tracking-widest pixel-hover-lift press-effect"
+                @click="handleDeclineEula"
+              >
+                拒绝并退出
+              </button>
+              <button
+                class="flex-[2] px-8 py-4 pixel-btn-pink text-white font-black text-sm tracking-[0.2em] shadow-lg flex items-center justify-center gap-3 pixel-hover-lift press-effect group"
+                @click="handleAcceptEula"
+              >
+                <PixelIcon name="check" size="md" />
+                同意并继续
+                <PixelIcon
+                  name="flash"
+                  class="group-hover:translate-x-1 transition-transform w-4 h-4"
+                />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -1100,36 +1892,19 @@
 import { ref, onMounted, onUnmounted, watch } from 'vue'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
+import PTooltip from '../components/ui/PTooltip.vue'
 import { invoke, listen, isElectron } from '@/utils/ipcAdapter'
-import {
-  Sparkles,
-  Home,
-  FolderOpen,
-  Cpu,
-  Database,
-  Activity,
-  Power,
-  ShieldCheck,
-  LayoutGrid,
-  ScrollText,
-  Shield,
-  Menu,
-  Zap,
-  X,
-  Gamepad2,
-  Plug,
-  Search,
-  Plus,
-  Code,
-  MessageSquare,
-  Users,
-  CheckCircle2,
-  XCircle,
-  AlertCircle,
-  Terminal,
-  BrainCircuit,
-  Download
-} from 'lucide-vue-next'
+import PixelIcon from '../components/ui/PixelIcon.vue'
+
+const scale = ref(1)
+const updateScale = () => {
+  const width = window.innerWidth
+  if (width < 1200) {
+    scale.value = width / 1200
+  } else {
+    scale.value = 1
+  }
+}
 
 const activeTab = ref('home')
 // console.debug("Stats update failed", e) -> removed
@@ -1154,6 +1929,7 @@ const plugins = ref([])
 const isInstallingES = ref(false)
 const appConfig = ref({})
 const isSocialEnabled = ref(true)
+const showEulaModal = ref(false) // 是否显示 EULA 弹窗
 const isDownloadingModels = ref(false)
 const allModelsExist = ref(false)
 const downloadProgress = ref({
@@ -1187,9 +1963,32 @@ const loadConfig = async () => {
     appConfig.value = config
     // 默认为 false
     isSocialEnabled.value = config.enable_social_mode === true
+
+    // 检查 EULA 状态
+    if (config.eula_accepted !== true) {
+      showEulaModal.value = true
+    }
   } catch (e) {
     console.error('加载配置失败:', e)
   }
+}
+
+const handleAcceptEula = async () => {
+  try {
+    const newConfig = { ...appConfig.value, eula_accepted: true }
+    const cleanConfig = JSON.parse(JSON.stringify(newConfig))
+    await invoke('save_config', { config: cleanConfig })
+    appConfig.value = newConfig
+    showEulaModal.value = false
+    addLog('[SYSTEM] 用户已同意 EULA 协议。')
+  } catch (e) {
+    console.error('保存 EULA 状态失败:', e)
+  }
+}
+
+const handleDeclineEula = () => {
+  // 直接关闭程序
+  invoke('quit_app')
 }
 
 const toggleSocialMode = async () => {
@@ -1223,6 +2022,10 @@ const toggleSocialMode = async () => {
 }
 
 onMounted(async () => {
+  // 初始化缩放
+  updateScale()
+  window.addEventListener('resize', updateScale)
+
   // 就绪时显示窗口以避免白屏
   setTimeout(async () => {
     try {
@@ -1322,14 +2125,15 @@ onMounted(async () => {
 
 onUnmounted(() => {
   if (statsInterval) clearInterval(statsInterval)
+  window.removeEventListener('resize', updateScale)
 })
 
 const navItems = [
-  { id: 'home', name: '控制面板', icon: Home },
-  { id: 'agents', name: '角色配置', icon: Users },
-  { id: 'plugins', name: '插件管理', icon: Plug },
-  { id: 'tools', name: '工具箱', icon: LayoutGrid },
-  { id: 'environment', name: '环境检测', icon: ShieldCheck }
+  { id: 'home', name: '控制面板', icon: 'home' },
+  { id: 'agents', name: '角色配置', icon: 'users' },
+  { id: 'plugins', name: '插件管理', icon: 'plug' },
+  { id: 'tools', name: '工具箱', icon: 'layout' },
+  { id: 'environment', name: '环境检测', icon: 'shield' }
 ]
 
 const getStatusColor = (status) => {
@@ -1341,7 +2145,7 @@ const getStatusColor = (status) => {
     case 'ERROR':
       return 'bg-rose-500 shadow-rose-500/50'
     default:
-      return 'bg-slate-700 shadow-transparent'
+      return 'bg-sky-400 shadow-sky-400/20'
   }
 }
 
@@ -1506,7 +2310,7 @@ const toggleLaunch = async () => {
 
       isStarting.value = false
       isRunning.value = true
-      addLog('[SYSTEM] PeroCore 系统在线。')
+      addLog('[SYSTEM] 萌动链接：PeroperoChat！ 系统在线。')
     } catch (e) {
       addLog(`[ERROR] Start failed: ${e}`)
       console.error('[ERROR] Start failed details:', e)
@@ -1638,8 +2442,7 @@ watch(activeTab, (val) => {
 </script>
 
 <style>
-/* 继承全局样式中的 glass-effect */
-
+/* 像素风进度条动画 */
 @keyframes shimmer {
   0% {
     transform: translateX(-100%);
@@ -1653,24 +2456,6 @@ watch(activeTab, (val) => {
   animation: shimmer 1.5s infinite linear;
 }
 
-@keyframes bounce-in {
-  0% {
-    transform: translate(-50%, 100%);
-    opacity: 0;
-  }
-  60% {
-    transform: translate(-50%, -10%);
-    opacity: 1;
-  }
-  100% {
-    transform: translate(-50%, 0);
-  }
-}
-
-.animate-bounce-in {
-  animation: bounce-in 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
-}
-
 @keyframes indeterminate {
   0% {
     left: -35%;
@@ -1681,6 +2466,20 @@ watch(activeTab, (val) => {
 }
 
 .indeterminate-bar {
-  animation: indeterminate 1.5s infinite cubic-bezier(0.65, 0.815, 0.735, 0.395);
+  animation: indeterminate 1.5s infinite linear;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #0ea5e9;
+  border: 1px solid #0369a1;
+}
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #38bdf8;
 }
 </style>

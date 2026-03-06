@@ -203,16 +203,23 @@ export async function startGateway(window: WindowLike) {
 
 import treeKill from 'tree-kill'
 
-export function stopGateway() {
-  if (gatewayProcess) {
-    logger.info('Gateway', '正在停止 Gateway...')
-    if (gatewayProcess.pid) {
-      treeKill(gatewayProcess.pid, 'SIGKILL', (err) => {
-        if (err) logger.error('Gateway', `杀死 Gateway 进程树时出错: ${err}`)
-      })
+export function stopGateway(): Promise<void> {
+  return new Promise((resolve) => {
+    if (gatewayProcess) {
+      logger.info('Gateway', '正在停止 Gateway...')
+      if (gatewayProcess.pid) {
+        treeKill(gatewayProcess.pid, 'SIGKILL', (err) => {
+          if (err) logger.error('Gateway', `杀死 Gateway 进程树时出错: ${err}`)
+          gatewayProcess = null
+          resolve()
+        })
+      } else {
+        gatewayProcess.kill()
+        gatewayProcess = null
+        resolve()
+      }
     } else {
-      gatewayProcess.kill()
+      resolve()
     }
-    gatewayProcess = null
-  }
+  })
 }

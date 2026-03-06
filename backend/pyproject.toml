@@ -1,7 +1,7 @@
 [project]
 name = "pero-backend"
 version = "0.7.0"
-description = "Backend service for PeroCore"
+description = "萌动链接：PeroperoChat！ 后端服务"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi~=0.128.0",

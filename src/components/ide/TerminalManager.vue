@@ -1,11 +1,11 @@
 <template>
   <div
-    class="flex flex-col border-t border-white/10 bg-[#1e293b]/95 backdrop-blur-xl shadow-2xl transition-all duration-200 z-40"
+    class="flex flex-col bg-slate-950/95 backdrop-blur-xl shadow-2xl transition-all duration-200 z-40 pixel-border-dark"
     :style="{ height: isCollapsed ? '40px' : height + 'px' }"
   >
     <!-- 标题栏 / 调整大小句柄 -->
     <div
-      class="h-10 flex items-center justify-between px-4 bg-slate-900/50 border-b border-white/5 select-none hover:bg-white/5 transition-colors group"
+      class="h-10 flex items-center justify-between px-4 bg-moe-pink/5 border-b border-slate-700/50 select-none hover:bg-white/5 transition-colors group"
       :class="{ 'cursor-ns-resize': !isCollapsed, 'cursor-pointer': isCollapsed }"
       @mousedown="handleMouseDown"
     >
@@ -13,16 +13,16 @@
         class="flex items-center gap-3 text-slate-400 cursor-pointer"
         @click.stop="toggleCollapse"
       >
-        <div class="p-1 rounded bg-slate-800 text-indigo-400">
-          <Terminal class="w-4 h-4" />
+        <div class="p-1 rounded bg-moe-pink/10 text-moe-pink">
+          <PixelIcon name="terminal" size="xs" />
         </div>
         <span
-          class="text-xs font-bold uppercase tracking-wider group-hover:text-slate-200 transition-colors"
+          class="text-xs font-bold uppercase tracking-wider group-hover:text-slate-200 transition-colors pixel-font"
           >内置终端管理器</span
         >
         <div
           v-if="terminals.length > 0"
-          class="px-2 py-0.5 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-mono border border-indigo-500/30"
+          class="px-2 py-0.5 rounded-full bg-moe-sky/20 text-moe-sky text-[10px] font-mono border border-moe-sky/30 pixel-border-sm"
         >
           {{ activeCount }} 运行中
         </div>
@@ -36,15 +36,15 @@
           title="终止当前进程"
           @click.stop="stopActiveTerminal"
         >
-          <Square class="w-3.5 h-3.5 fill-current" />
+          <PixelIcon name="square" size="xs" class="fill-current" />
         </button>
 
         <button
           class="p-1 hover:bg-white/10 rounded text-slate-500 hover:text-white transition-colors"
           @click.stop="toggleCollapse"
         >
-          <ChevronDown v-if="!isCollapsed" class="w-4 h-4" />
-          <ChevronUp v-else class="w-4 h-4" />
+          <PixelIcon v-if="!isCollapsed" name="chevron-down" size="xs" />
+          <PixelIcon v-else name="chevron-up" size="xs" />
         </button>
       </div>
     </div>
@@ -52,10 +52,10 @@
     <!-- 内容区域 -->
     <div v-show="!isCollapsed" class="flex-1 flex overflow-hidden">
       <!-- 侧边栏 -->
-      <div class="w-56 bg-slate-950/30 border-r border-white/5 flex flex-col">
+      <div class="w-56 bg-slate-900/50 border-r border-slate-800/50 flex flex-col">
         <!-- 侧边栏标题 -->
         <div
-          class="h-8 flex items-center px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-black/10"
+          class="h-8 flex items-center px-3 text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-black/20"
         >
           会话列表
         </div>
@@ -65,11 +65,11 @@
           <div
             v-for="term in terminals"
             :key="term.pid"
-            class="px-3 py-2.5 cursor-pointer rounded-lg border border-transparent transition-all group relative overflow-hidden"
+            class="px-3 py-2.5 cursor-pointer rounded-none border transition-all group relative overflow-hidden pixel-border-sm-transparent"
             :class="
               activePid === term.pid
-                ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-200'
-                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5'
+                ? 'bg-moe-pink/10 border-moe-pink/30 text-moe-pink pixel-border-sm-moe'
+                : 'text-slate-500 hover:text-slate-300 hover:bg-white/5 hover:border-white/10'
             "
             @click="activePid = term.pid"
           >
@@ -95,7 +95,7 @@
             <!-- 进度条背景 (可选用于任务进度) -->
             <div
               v-if="term.active"
-              class="absolute bottom-0 left-0 h-0.5 bg-indigo-500/50 animate-pulse w-full"
+              class="absolute bottom-0 left-0 h-0.5 bg-moe-sky/50 animate-pulse w-full"
             ></div>
           </div>
 
@@ -103,7 +103,7 @@
             v-if="terminals.length === 0"
             class="flex flex-col items-center justify-center py-8 text-slate-600 gap-2"
           >
-            <Terminal class="w-8 h-8 opacity-20" />
+            <PixelIcon name="terminal" size="xl" class="opacity-20" />
             <span class="text-xs italic">无活跃终端</span>
           </div>
         </div>
@@ -114,7 +114,7 @@
         <template v-if="activeTerminal">
           <!-- 视口头部 -->
           <div
-            class="h-8 flex items-center justify-between px-4 border-b border-white/5 bg-[#0f172a] sticky top-0 z-10"
+            class="h-8 flex items-center justify-between px-4 border-b border-slate-800/50 bg-[#0f172a] sticky top-0 z-10"
           >
             <div class="flex items-center gap-2 overflow-hidden">
               <span class="text-green-500 font-mono text-xs">$</span>
@@ -129,7 +129,7 @@
 
           <!-- 输出区域 -->
           <div ref="viewport" class="flex-1 overflow-y-auto p-4 font-mono text-xs custom-scrollbar">
-            <div class="whitespace-pre-wrap text-slate-300 leading-relaxed font-ligatures-none">
+            <div class="whitespace-pre-wrap text-slate-300 leading-none font-ligatures-none">
               {{ activeTerminal.output }}
             </div>
 
@@ -148,7 +148,7 @@
 
         <div v-else class="flex-1 flex flex-col items-center justify-center text-slate-600">
           <div class="w-16 h-16 rounded-full bg-slate-800/50 flex items-center justify-center mb-4">
-            <Terminal class="w-8 h-8 opacity-50" />
+            <PixelIcon name="terminal" size="xl" class="opacity-50" />
           </div>
           <span class="text-sm">准备就绪</span>
           <p class="text-xs text-slate-700 mt-2 max-w-[200px] text-center">
@@ -163,7 +163,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
 import { listen } from '@/utils/ipcAdapter'
-import { Terminal, ChevronDown, ChevronUp, Square } from 'lucide-vue-next'
+import PixelIcon from '../ui/PixelIcon.vue'
 
 const isCollapsed = ref(true) // 默认折叠
 const height = ref(300)

@@ -315,6 +315,8 @@ class MDPManager:
             return "{{Error Rendering: " + str(template_name) + "}}"
 
 
+from core.path_resolver import path_resolver  # noqa: E402
+
 # 全局单例实例
 _mdp_instance = None
 
@@ -322,8 +324,8 @@ _mdp_instance = None
 def get_mdp_manager() -> MDPManager:
     global _mdp_instance
     if _mdp_instance is None:
-        mdp_dir = os.path.join(os.path.dirname(__file__), "prompts")
-        _mdp_instance = MDPManager(mdp_dir)
+        mdp_dir = path_resolver.resolve("@app/backend/services/mdp/prompts")
+        _mdp_instance = MDPManager(str(mdp_dir))
     return _mdp_instance
 
 

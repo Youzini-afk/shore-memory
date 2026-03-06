@@ -4,6 +4,7 @@
     <BedrockAvatar
       ref="avatarRef"
       :is-dragging="isDragging"
+      :manifest-path="currentManifestPath || undefined"
       @pet="onPet"
       @hover-start="onHoverStart"
       @hover-end="onHoverEnd"
@@ -124,7 +125,32 @@
               <button class="close-mini-btn" @click="showAppearanceMenu = false">×</button>
             </div>
 
-            <div v-if="avatarRef && avatarRef.clothingState && avatarRef.featureButtons" class="menu-section">
+            <div class="menu-section">
+              <div class="menu-label">角色选择</div>
+              <div class="character-grid">
+                <button
+                  class="char-btn"
+                  :class="{ active: !currentManifestPath || currentManifestPath.includes('Rossi') }"
+                  @click="currentManifestPath = `${prefix}3d/Rossi.pero`"
+                >
+                  Rossi
+                </button>
+                <button
+                  class="char-btn"
+                  :class="{
+                    active: currentManifestPath && currentManifestPath.includes('新小莫莫酒狐')
+                  }"
+                  @click="currentManifestPath = `${prefix}3d/新小莫莫酒狐.pero`"
+                >
+                  新小莫莫酒狐
+                </button>
+              </div>
+            </div>
+
+            <div
+              v-if="avatarRef && avatarRef.clothingState && avatarRef.featureButtons"
+              class="menu-section"
+            >
               <div class="menu-label">服装部件</div>
               <label v-for="btn in avatarRef.featureButtons" :key="btn.id" class="voxel-checkbox">
                 <input
@@ -213,6 +239,11 @@ import { invoke, listen } from '@/utils/ipcAdapter'
 import { API_BASE } from '../config'
 import { gatewayClient } from '../api/gateway'
 
+const isElectron = window.electron !== undefined
+const prefix = isElectron ? 'assets/' : '/assets/'
+
+// 默认不传递 manifestPath，让 BedrockAvatar 使用其内部默认逻辑进行初次加载
+const currentManifestPath = ref('')
 const currentText = ref('主人，我在桌面等你很久啦！')
 const isBubbleExpanded = ref(false)
 const bubbleKey = ref(0)
@@ -1518,7 +1549,74 @@ const minimizeToTray = () => {
   align-items: center;
 }
 
-/* Minecraft/RPG Style Bubble */
+/* 角色选择网格 */
+.character-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.char-btn {
+  background: #4a4a4a;
+  border: 2px solid #000;
+  box-shadow:
+    inset -2px -2px #2a2a2a,
+    inset 2px 2px #6a6a6a;
+  color: #fff;
+  padding: 6px 4px;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.1s;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.char-btn:hover {
+  background: #5a5a5a;
+  transform: translateY(-1px);
+}
+
+.char-btn:active {
+  box-shadow:
+    inset 2px 2px #2a2a2a,
+    inset -2px -2px #6a6a6a;
+  transform: translateY(1px);
+}
+
+.char-btn.active {
+  background: #3a7a3a;
+  border-color: #2eeb2e;
+  box-shadow:
+    inset -2px -2px #1a4a1a,
+    inset 2px 2px #5aba5a;
+}
+
+/* 调整外观菜单高度以适应新内容 */
+.appearance-menu {
+  max-height: 80vh;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #555 #222;
+}
+
+.appearance-menu::-webkit-scrollbar {
+  width: 6px;
+}
+
+.appearance-menu::-webkit-scrollbar-track {
+  background: #222;
+}
+
+.appearance-menu::-webkit-scrollbar-thumb {
+  background: #555;
+  border: 1px solid #000;
+}
+
+/* 汉化已有注释 */
+/* 气泡样式 */
 .bubble {
   position: absolute;
   transform: translateX(-50%);

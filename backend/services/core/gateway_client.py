@@ -122,7 +122,7 @@ class GatewayClient:
         envelope.timestamp = int(time.time() * 1000)
 
         envelope.hello.token = self.token
-        envelope.hello.device_name = "PeroCore Backend"
+        envelope.hello.device_name = "萌动链接：PeroperoChat！ 后端服务"
         envelope.hello.client_version = "1.0.0"
         envelope.hello.platform = platform.system().lower()
 

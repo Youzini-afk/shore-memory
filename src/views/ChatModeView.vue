@@ -1,128 +1,180 @@
 <template>
-  <!-- 全局彩色背景层 -->
   <div
-    class="absolute inset-0 bg-gradient-to-br from-sky-200/20 via-sky-100/10 to-transparent pointer-events-none z-0"
-  ></div>
+    class="absolute inset-0 flex overflow-hidden pixel-bg-moe font-sans pixel-ui pixel-grid-overlay"
+  >
+    <!-- Ambient Light & Particles -->
+    <div
+      class="absolute inset-0 pointer-events-none transition-all duration-1000 z-0 opacity-40"
+      :style="ambientLightStyle"
+    ></div>
+    <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
+      <div
+        v-for="p in particles"
+        :key="p.id"
+        class="absolute animate-float-slow opacity-30"
+        :style="p.style"
+      >
+        <PixelIcon :name="p.icon" :size="p.size" class="text-moe-pink/40" />
+      </div>
+    </div>
 
-  <div class="h-full w-full flex overflow-hidden backdrop-blur-xl relative z-10">
-    <!-- 侧边栏 -->
-    <div class="w-64 flex flex-col border-r border-white/40 bg-white/40 backdrop-blur-md pt-8">
-      <!-- 搜索 -->
-      <div class="px-4 pb-4 pt-2">
-        <div class="relative">
+    <!-- Sidebar -->
+    <aside
+      class="w-64 flex flex-col h-full border-r-2 border-moe-cocoa/10 bg-white/40 backdrop-blur-md transition-all duration-300 z-20 relative"
+    >
+      <!-- Pixel Shadow Line -->
+      <div
+        class="absolute right-[-2px] top-0 bottom-0 w-[2px] bg-moe-cocoa/5 pointer-events-none"
+      ></div>
+
+      <!-- Search -->
+      <div class="px-4 pb-4 pt-2 flex-shrink-0">
+        <div class="relative group">
           <input
             type="text"
             placeholder="搜索助手..."
-            class="w-full bg-black/5 text-slate-700 text-xs rounded-lg pl-8 pr-3 py-2 focus:outline-none focus:bg-white/50 transition-colors placeholder-slate-500/50"
+            class="w-full bg-white/60 text-moe-cocoa text-xs pl-9 pr-3 py-2.5 focus:outline-none focus:bg-white transition-all pixel-border-moe border-moe-cocoa/20 focus:border-moe-pink/50 placeholder-moe-cocoa/40"
           />
-          <Search class="w-3.5 h-3.5 absolute left-2.5 top-2.5 text-slate-500/50" />
+          <PixelIcon
+            name="search"
+            size="xs"
+            class="absolute left-3 top-2.5 text-moe-cocoa/40 group-hover:text-moe-pink transition-colors"
+          />
         </div>
       </div>
 
-      <!-- 助手列表 -->
-      <div class="flex-1 overflow-y-auto custom-scrollbar px-2 space-y-1">
-        <div class="flex items-center justify-between px-2 py-1.5">
-          <div class="text-[10px] font-bold text-slate-500/70 uppercase tracking-widest">
-            Agents
-          </div>
-          <button
-            class="text-slate-400 hover:text-sky-500 transition-colors"
-            title="刷新"
-            @click="loadAgents"
+      <!-- Agent List -->
+      <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 space-y-2 pb-2">
+        <div class="flex items-center justify-between px-2 py-1.5 mb-1">
+          <div
+            class="text-[10px] font-bold text-moe-cocoa/50 uppercase tracking-widest flex items-center gap-1"
           >
-            <div
-              class="w-3 h-3 border-2 border-current border-t-transparent rounded-full"
-              :class="{ 'animate-spin': isLoading }"
-            ></div>
-          </button>
+            AGENTS <span class="w-1 h-1 bg-moe-pink animate-pulse"></span>
+          </div>
+          <PTooltip content="刷新列表" placement="top">
+            <button
+              class="p-1.5 bg-white pixel-border-moe hover:bg-moe-pink/10 text-moe-cocoa/40 hover:text-moe-pink transition-all press-effect"
+              @click="loadAgents"
+            >
+              <PixelIcon name="refresh" size="xs" :animation="isLoading ? 'spin' : ''" />
+            </button>
+          </PTooltip>
         </div>
 
-        <div v-if="errorMsg" class="px-2 py-2 text-xs text-red-500 bg-red-50 rounded">
+        <div v-if="errorMsg" class="px-3 py-2 text-xs text-moe-pink bg-white/80 pixel-border-moe">
           {{ errorMsg }}
         </div>
 
         <div
           v-if="agents.length === 0 && !isLoading && !errorMsg"
-          class="px-2 py-4 text-center text-xs text-slate-400"
+          class="px-2 py-8 text-center text-xs text-moe-cocoa/40 flex flex-col items-center gap-2"
         >
-          暂无助手 (No Agents)
+          <PixelIcon name="ghost" size="md" class="opacity-50" />
+          <span>暂无助手 (No Agents)</span>
         </div>
 
         <div
           v-for="agent in agents"
           :key="agent.id"
-          class="flex items-center gap-3 p-2 rounded-xl cursor-pointer transition-colors group"
-          :class="
+          class="flex items-center gap-3 p-2 transition-all duration-200 group cursor-pointer relative hover:translate-x-1"
+          :class="[
             activeAgentId === agent.id
-              ? 'bg-sky-500/10 border border-sky-500/20'
-              : 'hover:bg-white/30'
-          "
+              ? 'bg-white/80 pixel-border-moe'
+              : 'hover:bg-white/50 border border-transparent hover:border-moe-pink/20'
+          ]"
           @click="switchAgent(agent)"
         >
+          <!-- Active Indicator -->
+          <div
+            v-if="activeAgentId === agent.id"
+            class="absolute left-0 top-2 bottom-2 w-1 bg-moe-pink"
+          ></div>
+
           <div class="relative">
             <div
-              class="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shadow-md"
-              :class="
+              class="w-10 h-10 flex items-center justify-center text-white font-bold text-sm transition-transform duration-300 group-hover:scale-110 group-hover:rotate-6"
+              :class="[
                 activeAgentId === agent.id
-                  ? 'bg-gradient-to-br from-sky-400 to-blue-500'
-                  : 'bg-slate-400'
-              "
+                  ? 'bg-moe-pink pixel-border-moe shadow-sm'
+                  : 'bg-moe-sky pixel-border-moe'
+              ]"
             >
               {{ agent.name ? agent.name[0].toUpperCase() : '?' }}
             </div>
-            <div
-              v-if="activeAgentId === agent.id"
-              class="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 border-2 border-white rounded-full"
-            ></div>
+            <div v-if="activeAgentId === agent.id" class="absolute -bottom-1 -right-1">
+              <PixelIcon name="sparkle" size="xs" class="text-moe-yellow drop-shadow-sm" />
+            </div>
           </div>
+
           <div class="flex-1 min-w-0">
             <div class="flex items-center justify-between">
-              <span class="text-sm font-bold text-slate-800 truncate">{{ agent.name }}</span>
+              <span
+                class="text-sm font-bold truncate transition-colors"
+                :class="activeAgentId === agent.id ? 'text-moe-pink' : 'text-moe-cocoa/80'"
+                >{{ agent.name }}</span
+              >
             </div>
             <div
-              class="text-xs truncate"
-              :class="activeAgentId === agent.id ? 'text-sky-600' : 'text-slate-400'"
+              class="text-[10px] truncate font-mono"
+              :class="activeAgentId === agent.id ? 'text-moe-pink/60' : 'text-moe-cocoa/40'"
             >
-              {{ activeAgentId === agent.id ? 'Active' : 'Standby' }}
+              {{ activeAgentId === agent.id ? 'ONLINE' : 'STANDBY' }}
             </div>
           </div>
         </div>
       </div>
 
-      <!-- 底部操作 -->
-      <div class="p-4 border-t border-white/20 flex gap-2">
+      <!-- Bottom Actions -->
+      <div class="p-3 border-t-2 border-moe-cocoa/5 bg-white/20 relative flex-shrink-0">
+        <div class="absolute top-[-2px] left-3 right-3 h-[2px] bg-white/50"></div>
         <button
-          class="flex-1 py-2 rounded-lg bg-indigo-500/10 text-indigo-600 text-xs font-bold hover:bg-indigo-500/20 transition-colors flex items-center justify-center gap-2"
+          class="w-full flex items-center justify-center gap-2 px-3 py-2 pixel-btn-moe-pink group"
           @click="openStronghold"
         >
-          <Home class="w-4 h-4" />
-          据点 (群聊)
+          <PixelIcon name="users" size="sm" class="group-hover:scale-110 transition-transform" />
+          <span class="text-xs font-black tracking-widest">进入据点</span>
         </button>
       </div>
-    </div>
+    </aside>
 
-    <!-- 主聊天区域 -->
-    <div class="flex-1 flex flex-col relative z-10 pt-8">
-      <!-- 顶部标题栏 -->
+    <!-- Main Chat Area -->
+    <div class="flex-1 flex flex-col relative z-10 overflow-hidden">
+      <!-- Header -->
       <header
-        class="h-14 px-6 flex items-center justify-between border-b border-white/20 bg-white/20 backdrop-blur-sm"
+        class="h-14 px-6 flex items-center justify-between border-b-2 border-moe-cocoa/5 bg-white/30 backdrop-blur-md"
       >
         <div class="flex items-center gap-3">
-          <span class="text-lg font-bold text-slate-800"> 与 {{ activeAgentName }} 聊天中 </span>
+          <div class="p-1.5 bg-moe-pink/10 text-moe-pink">
+            <PixelIcon name="chat" size="sm" />
+          </div>
+          <span class="text-lg font-black text-moe-cocoa tracking-wide">
+            {{ activeAgentName }}
+          </span>
           <span
-            class="px-2 py-0.5 rounded-full text-[10px] font-bold border bg-emerald-500/10 text-emerald-600 border-emerald-500/20"
+            class="px-2 py-0.5 text-[10px] font-bold border bg-moe-pink/5 text-moe-pink border-moe-pink/20 pixel-border-moe"
           >
-            ONLINE
+            CONNECTED
           </span>
         </div>
-        <div class="flex items-center gap-4 text-slate-500">
-          <button class="hover:text-sky-600 transition-colors"><Bell class="w-4 h-4" /></button>
-          <button class="hover:text-sky-600 transition-colors"><Settings class="w-4 h-4" /></button>
+        <div class="flex items-center gap-3">
+          <PTooltip content="通知">
+            <button
+              class="p-2 hover:bg-white/50 text-moe-cocoa/40 hover:text-moe-pink transition-colors"
+            >
+              <PixelIcon name="info" size="sm" />
+            </button>
+          </PTooltip>
+          <PTooltip content="设置">
+            <button
+              class="p-2 hover:bg-white/50 text-moe-cocoa/40 hover:text-moe-pink transition-colors"
+            >
+              <PixelIcon name="settings" size="sm" />
+            </button>
+          </PTooltip>
         </div>
       </header>
 
-      <!-- 聊天组件 -->
-      <!-- 使用 key 强制在目标改变时重新挂载 -->
+      <!-- Chat Component -->
       <ChatInterface
         v-if="activeAgentId"
         :key="'direct-' + activeAgentId"
@@ -132,33 +184,64 @@
         :target-id="activeAgentId"
         :agent-name="activeAgentName"
       />
-      <div v-else class="flex-1 flex items-center justify-center text-slate-400">
+      <div v-else class="flex-1 flex flex-col items-center justify-center text-moe-cocoa/30 gap-4">
+        <div class="p-6 bg-white/30 pixel-border-moe animate-pulse">
+          <PixelIcon name="chat" size="3xl" class="text-moe-pink/20" />
+        </div>
         <div class="text-center">
-          <p>请选择一个助手开始聊天</p>
+          <p class="font-bold text-lg text-moe-cocoa/60">等待连接...</p>
+          <p class="text-xs mt-1">请从左侧选择一个助手开始聊天</p>
         </div>
       </div>
     </div>
   </div>
-
-  <!-- 移除模态框代码 -->
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted } from 'vue'
-import { Search, Bell, Settings, Home } from 'lucide-vue-next'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { invoke } from '@/utils/ipcAdapter'
 import ChatInterface from '../components/chat/ChatInterface.vue'
+import PixelIcon from '../components/ui/PixelIcon.vue'
+import PTooltip from '../components/ui/PTooltip.vue'
 
-const API_BASE = 'http://127.0.0.1:9120'
+const API_BASE = 'http://localhost:9120'
 
-// 状态
+// State
 const agents = ref([])
 const isLoading = ref(false)
 const errorMsg = ref('')
 const activeAgentId = ref(null)
 const activeAgentName = ref('Pero')
+const particles = ref([])
 
-// 获取数据
+// Ambient Light Logic
+const ambientLightStyle = computed(() => {
+  const color = { primary: 'rgba(125, 211, 252, 0.2)', secondary: 'rgba(153, 246, 228, 0.15)' }
+  return {
+    background: `radial-gradient(circle at 20% 30%, ${color.primary} 0%, transparent 70%),
+                radial-gradient(circle at 80% 70%, ${color.secondary} 0%, transparent 70%)`,
+    filter: 'blur(100px)',
+    opacity: 0.8
+  }
+})
+
+// Particles Logic
+const initParticles = () => {
+  particles.value = Array.from({ length: 8 }, (_, i) => ({
+    id: i,
+    style: {
+      top: `${Math.random() * 100}%`,
+      left: `${Math.random() * 100}%`,
+      animationDelay: `${Math.random() * 5}s`,
+      animationDuration: `${10 + Math.random() * 15}s`,
+      willChange: 'transform, opacity'
+    },
+    icon: i % 2 === 0 ? 'sparkle' : 'heart',
+    size: i % 3 === 0 ? 'sm' : 'xs'
+  }))
+}
+
+// Data Fetching
 const loadAgents = async () => {
   isLoading.value = true
   errorMsg.value = ''
@@ -185,7 +268,6 @@ const loadAgents = async () => {
   }
 }
 
-// 操作
 const switchAgent = async (agent) => {
   activeAgentId.value = agent.id
   activeAgentName.value = agent.name
@@ -211,6 +293,7 @@ const openStronghold = async () => {
 
 onMounted(() => {
   loadAgents()
+  initParticles()
   console.log('聊天模式已挂载')
   window.ipcRenderer.send('resize-window', { width: 400, height: 600 })
 })
@@ -228,10 +311,50 @@ onUnmounted(() => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(0, 0, 0, 0.1);
-  border-radius: 2px;
+  background: rgba(14, 165, 233, 0.2);
+  border-radius: 0;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
-  background: rgba(0, 0, 0, 0.2);
+  background: rgba(14, 165, 233, 0.4);
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.pixel-border-sky {
+  box-shadow:
+    inset 1px 1px 0px 0px #ffffff,
+    inset -1px -1px 0px 0px #bae6fd,
+    1px 1px 0px 0px #0ea5e9,
+    -1px -1px 0px 0px #ffffff,
+    1px -1px 0px 0px #0ea5e9,
+    -1px 1px 0px 0px #0ea5e9;
+}
+
+.pixel-border-pink {
+  box-shadow:
+    inset 1px 1px 0px 0px #ffffff,
+    inset -1px -1px 0px 0px #fbcfe8,
+    1px 1px 0px 0px #f43f5e,
+    -1px -1px 0px 0px #ffffff,
+    1px -1px 0px 0px #f43f5e,
+    -1px 1px 0px 0px #f43f5e;
+}
+
+.pixel-border-sm {
+  box-shadow:
+    1px 1px 0px 0px rgba(0, 0, 0, 0.1),
+    -1px -1px 0px 0px rgba(255, 255, 255, 0.8);
+}
+
+.press-effect:active {
+  transform: translateY(2px);
+  box-shadow: none !important;
+}
+
+.hover-pixel-bounce:hover {
+  transform: translateY(-2px);
 }
 </style>

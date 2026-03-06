@@ -321,20 +321,24 @@ class SocialMemoryService:
             date_str = datetime.now().strftime("%Y-%m-%d")
 
         # [修改] 优先检查文件
-        from utils.workspace_utils import get_workspace_root
         import os
+
+        from utils.workspace_utils import get_workspace_root
+
         agent_workspace = get_workspace_root(agent_id)
         report_dir = os.path.join(agent_workspace, "social_reports")
         os.makedirs(report_dir, exist_ok=True)
         file_path = os.path.join(report_dir, f"{date_str}.md")
-        
+
         if os.path.exists(file_path):
             print(f"[SocialMemory] 日报已存在: {file_path}")
             # 读取并返回模拟对象
             try:
                 with open(file_path, "r", encoding="utf-8") as f:
-                     content = f.read()
-                return SocialDailyReport(date_str=date_str, content=content, agent_id=agent_id)
+                    content = f.read()
+                return SocialDailyReport(
+                    date_str=date_str, content=content, agent_id=agent_id
+                )
             except Exception:
                 pass
 
@@ -435,7 +439,7 @@ class SocialMemoryService:
             )
             # session.add(report)
             # await session.commit()
-            
+
             print(f"[SocialMemory] 已生成 {date_str} 的日报 (仅文件)")
             return report
 

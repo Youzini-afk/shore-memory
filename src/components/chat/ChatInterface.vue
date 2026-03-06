@@ -1,7 +1,9 @@
 <template>
   <div
-    class="flex flex-col h-full transition-colors duration-300 relative"
-    :class="workMode ? 'bg-[#1e293b] text-slate-200' : 'bg-transparent text-slate-700'"
+    class="flex flex-col h-full transition-colors duration-300 relative pixel-ui"
+    :class="[
+      workMode ? 'bg-[#1e293b] text-slate-200 pixel-grid-overlay' : 'bg-transparent text-slate-700'
+    ]"
   >
     <!-- 指令执行遮罩 -->
     <Transition name="fade">
@@ -10,39 +12,69 @@
         class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6"
       >
         <div
-          class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transform transition-all animate-scale-in"
+          class="shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-scale-in"
+          :class="[
+            workMode
+              ? 'pixel-border-dark bg-slate-800'
+              : 'pixel-border-moe bg-white/90 backdrop-blur-md'
+          ]"
         >
           <!-- 标题栏 -->
           <div
-            class="px-6 py-4 bg-sky-50 dark:bg-sky-900/20 border-b border-sky-100 dark:border-sky-800/30 flex items-center gap-3"
+            class="px-6 py-4 border-b flex items-center gap-3 transition-colors"
+            :class="
+              workMode ? 'bg-sky-900/20 border-sky-800/30' : 'bg-moe-sky/10 border-moe-sky/20'
+            "
           >
             <div
-              class="p-2 bg-sky-100 dark:bg-sky-800/40 rounded-full text-sky-600 dark:text-sky-400 animate-spin-slow"
+              class="p-2 animate-spin-slow transition-colors"
+              :class="workMode ? 'bg-sky-800/40 text-sky-400' : 'bg-moe-sky/20 text-moe-sky'"
             >
-              <Terminal class="w-5 h-5" />
+              <PixelIcon name="terminal" size="sm" />
             </div>
             <div>
-              <h3 class="font-bold text-slate-800 dark:text-slate-100">正在执行指令...</h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400">请稍候，任务正在后台运行</p>
+              <h3
+                class="font-bold transition-colors"
+                :class="workMode ? 'text-slate-100' : 'text-moe-cocoa'"
+              >
+                正在执行指令...
+              </h3>
+              <p
+                class="text-xs transition-colors"
+                :class="workMode ? 'text-slate-400' : 'text-moe-cocoa/60'"
+              >
+                请稍候，任务正在后台运行
+              </p>
             </div>
           </div>
 
           <!-- 内容区域 -->
           <div class="p-6">
             <div
-              class="bg-slate-900 rounded-lg p-4 font-mono text-sm text-green-400 overflow-x-auto custom-scrollbar border border-slate-700 shadow-inner relative"
+              class="bg-slate-900 p-4 font-mono text-sm text-green-400 overflow-x-auto custom-scrollbar border shadow-inner relative transition-colors"
+              :class="workMode ? 'border-slate-700' : 'border-moe-cocoa/10'"
             >
               <span class="select-text">{{ activeCommand.command }}</span>
               <div class="absolute bottom-2 right-2 flex gap-1">
-                <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse"></div>
-                <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse delay-75"></div>
-                <div class="w-1.5 h-1.5 bg-green-500 rounded-full animate-pulse delay-150"></div>
+                <div class="w-1.5 h-1.5 bg-green-500 animate-pulse"></div>
+                <div class="w-1.5 h-1.5 bg-green-500 animate-pulse delay-75"></div>
+                <div class="w-1.5 h-1.5 bg-green-500 animate-pulse delay-150"></div>
               </div>
             </div>
             <div class="mt-4 flex items-center justify-between">
-              <p class="text-xs text-slate-500 dark:text-slate-400">PID: {{ activeCommand.pid }}</p>
+              <p
+                class="text-xs transition-colors"
+                :class="workMode ? 'text-slate-400' : 'text-moe-cocoa/50'"
+              >
+                PID: {{ activeCommand.pid }}
+              </p>
               <button
-                class="text-xs text-amber-500 hover:text-amber-600 font-medium underline underline-offset-2 transition-colors"
+                class="text-xs font-bold underline underline-offset-4 transition-all hover:scale-105"
+                :class="
+                  workMode
+                    ? 'text-amber-500 hover:text-amber-400'
+                    : 'text-moe-sky hover:text-moe-pink'
+                "
                 @click="skipCommandWait"
               >
                 跳过等待 (后台继续)
@@ -60,7 +92,12 @@
         class="absolute inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-6"
       >
         <div
-          class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-slate-200 dark:border-slate-700 transform transition-all animate-scale-in"
+          class="shadow-2xl w-full max-w-md overflow-hidden transform transition-all animate-scale-in"
+          :class="[
+            workMode
+              ? 'pixel-border-dark bg-slate-800'
+              : 'pixel-border-moe bg-white/90 backdrop-blur-md'
+          ]"
         >
           <!-- 标题栏 -->
           <div
@@ -68,23 +105,29 @@
             :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'header')"
           >
             <div
-              class="p-2 rounded-full transition-colors"
+              class="p-2 transition-colors"
               :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'icon')"
             >
-              <Terminal class="w-5 h-5" />
+              <PixelIcon name="terminal" size="sm" />
             </div>
             <div>
-              <h3 class="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+              <h3
+                class="font-bold flex items-center gap-2 transition-colors"
+                :class="workMode ? 'text-slate-100' : 'text-moe-cocoa'"
+              >
                 请求执行终端指令
                 <span
                   v-if="pendingConfirmation.riskInfo?.level > 0"
-                  class="px-2 py-0.5 text-white text-[10px] rounded-full uppercase tracking-wide font-bold"
+                  class="px-2 py-0.5 text-white text-[10px] uppercase tracking-wide font-bold pixel-border-sm"
                   :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'badge')"
                 >
                   {{ getRiskLabel(pendingConfirmation.riskInfo?.level) }}
                 </span>
               </h3>
-              <p class="text-xs text-slate-500 dark:text-slate-400">
+              <p
+                class="text-xs transition-colors"
+                :class="workMode ? 'text-slate-400' : 'text-moe-cocoa/60'"
+              >
                 {{ agentName }} 申请在您的系统中执行以下命令
               </p>
             </div>
@@ -93,7 +136,7 @@
           <!-- 内容区域 -->
           <div class="p-6">
             <div
-              class="bg-slate-900 rounded-lg p-4 font-mono text-sm overflow-x-auto custom-scrollbar border shadow-inner transition-colors"
+              class="bg-slate-900 p-4 font-mono text-sm overflow-x-auto custom-scrollbar border shadow-inner transition-colors"
               :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'content')"
             >
               <span
@@ -110,28 +153,32 @@
 
             <div
               v-if="pendingConfirmation.riskInfo?.level >= 2"
-              class="mt-4 p-3 rounded-lg flex gap-3 items-start"
+              class="mt-4 p-3 flex gap-3 items-start border transition-colors"
               :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'warning_box')"
             >
               <div
-                class="p-1 rounded shrink-0"
+                class="p-1.5 shrink-0 transition-colors"
                 :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'warning_icon')"
               >
-                <AlertTriangle class="w-4 h-4" />
+                <PixelIcon name="alert" size="xs" />
               </div>
               <div
-                class="text-xs"
+                class="text-xs transition-colors"
                 :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'warning_text')"
               >
                 <p class="font-bold mb-1">
                   系统警告：{{ pendingConfirmation.riskInfo?.reason || '敏感操作' }}
                 </p>
-                <p class="opacity-90">
+                <p class="opacity-90 leading-relaxed">
                   此指令包含可能修改系统关键配置或删除文件的操作。请务必确认指令来源和意图。
                 </p>
               </div>
             </div>
-            <p v-else class="mt-4 text-xs text-slate-500 dark:text-slate-400 text-center">
+            <p
+              v-else
+              class="mt-4 text-xs text-center transition-colors"
+              :class="workMode ? 'text-slate-400' : 'text-moe-cocoa/50'"
+            >
               说明:
               {{
                 pendingConfirmation.riskInfo?.reason ||
@@ -142,20 +189,31 @@
 
           <!-- 操作按钮 -->
           <div
-            class="px-6 py-4 bg-slate-50 dark:bg-slate-800/50 flex justify-end gap-3 border-t border-slate-100 dark:border-slate-700"
+            class="px-6 py-4 flex justify-end gap-3 border-t transition-colors"
+            :class="
+              workMode ? 'bg-slate-800/50 border-slate-700' : 'bg-white/50 border-moe-cocoa/5'
+            "
           >
             <button
-              class="px-4 py-2 rounded-lg text-sm font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              class="px-4 py-2 text-sm font-bold transition-all hover:scale-105 active:scale-95"
+              :class="
+                workMode
+                  ? 'text-slate-300 hover:text-white pixel-border-sm-dark'
+                  : 'text-moe-cocoa/60 hover:text-moe-pink pixel-border-moe'
+              "
               @click="respondConfirmation(false)"
             >
               拒绝执行
             </button>
             <button
-              class="px-4 py-2 rounded-lg text-sm font-medium text-white shadow-lg transition-all active:scale-95 flex items-center gap-2"
-              :class="getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'button')"
+              class="px-4 py-2 text-sm font-bold text-white shadow-lg transition-all hover:scale-105 active:scale-95 flex items-center gap-2"
+              :class="[
+                getRiskLevelColor(pendingConfirmation.riskInfo?.level, 'button'),
+                workMode ? 'pixel-border-sm-dark' : 'pixel-border-moe'
+              ]"
               @click="respondConfirmation(true)"
             >
-              <Check class="w-4 h-4" />
+              <PixelIcon name="check" size="xs" />
               <span>{{
                 pendingConfirmation.riskInfo?.level >= 3 ? '确认授权并执行' : '批准并执行'
               }}</span>
@@ -168,15 +226,15 @@
     <!-- 消息区域 -->
     <div
       ref="msgContainer"
-      class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col"
+      class="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar flex flex-col relative z-10"
     >
       <!-- 加载更多按钮 -->
       <div v-if="hasMore" class="flex justify-center py-4">
         <button
-          class="text-xs text-slate-400 hover:text-sky-500 transition-colors flex items-center gap-1"
+          class="text-xs text-moe-sky hover:text-moe-pink transition-colors flex items-center gap-1 font-bold"
           @click="loadMore"
         >
-          <Clock class="w-3 h-3" />
+          <PixelIcon name="clock" size="xs" />
           <span>查看更多历史记录</span>
         </button>
       </div>
@@ -193,41 +251,48 @@
               <div v-for="(img, iIdx) in msg.images" :key="iIdx" class="relative">
                 <img
                   :src="img"
-                  class="max-h-32 rounded-lg shadow-md border border-white/10 object-cover hover:scale-105 transition-transform cursor-pointer"
+                  class="max-h-32 shadow-md object-cover hover:scale-105 transition-transform cursor-pointer border-moe-cocoa/20"
+                  :class="workMode ? 'pixel-border-sm-dark' : 'pixel-border-moe'"
                   @click="window.open(img, '_blank')"
                 />
               </div>
             </div>
 
             <div
-              class="px-5 py-3 rounded-2xl rounded-tr-sm shadow-md text-sm leading-relaxed whitespace-pre-wrap font-sans transition-all backdrop-blur-xl border border-white/10 hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg hover:shadow-sky-500/30 relative hover:z-10 duration-300 ease-out"
-              :class="
+              class="px-5 py-3 shadow-md text-sm leading-relaxed whitespace-pre-wrap font-sans transition-all backdrop-blur-md hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-lg hover:shadow-moe-pink/30 relative hover:z-10 duration-300 ease-out"
+              :class="[
                 workMode
-                  ? 'bg-amber-600/90 text-white'
-                  : 'bg-gradient-to-br from-sky-500/60 to-blue-600/60 text-white shadow-sky-500/20'
-              "
+                  ? 'bg-amber-600/90 text-white border-amber-400 pixel-border-sm-dark'
+                  : 'bg-moe-pink text-white shadow-moe-pink/20 pixel-border-moe'
+              ]"
             >
+              <!-- 气泡尖角 -->
+              <div
+                v-if="!workMode"
+                class="absolute right-[-8px] top-4 w-2 h-2 bg-moe-pink"
+                style="clip-path: polygon(0 0, 0% 100%, 100% 50%)"
+              ></div>
               <template v-if="editingMsgId === msg.id">
                 <textarea
                   v-model="editingContent"
-                  class="w-full bg-transparent border-none outline-none resize-none text-white custom-scrollbar"
+                  class="w-full bg-transparent border-none outline-none resize-none text-white custom-scrollbar font-bold"
                   rows="3"
                   style="min-width: 200px"
                 ></textarea>
                 <div class="flex gap-2 justify-end mt-2 pt-2 border-t border-white/20">
                   <button
-                    class="p-1 hover:bg-white/20 rounded text-white"
+                    class="p-1 hover:bg-white/20 text-white transition-colors"
                     title="保存"
                     @click="saveEdit(msg)"
                   >
-                    <Check class="w-4 h-4" />
+                    <PixelIcon name="check" size="xs" />
                   </button>
                   <button
-                    class="p-1 hover:bg-white/20 rounded text-white"
+                    class="p-1 hover:bg-white/20 text-white transition-colors"
                     title="取消"
                     @click="cancelEdit"
                   >
-                    <X class="w-4 h-4" />
+                    <PixelIcon name="close" size="xs" />
                   </button>
                 </div>
               </template>
@@ -241,21 +306,21 @@
                 class="opacity-0 group-hover:opacity-100 transition-opacity flex gap-2"
               >
                 <button
-                  class="text-slate-400 hover:text-sky-500 transition-colors"
+                  class="text-moe-cocoa/30 hover:text-moe-pink transition-colors"
                   @click="startEdit(msg)"
                 >
-                  <Edit2 class="w-3 h-3" />
+                  <PixelIcon name="edit" size="xs" />
                 </button>
                 <button
-                  class="text-slate-400 hover:text-red-500 transition-colors"
+                  class="text-moe-cocoa/30 hover:text-red-500 transition-colors"
                   @click="deleteMessage(msg.id)"
                 >
-                  <Trash2 class="w-3 h-3" />
+                  <PixelIcon name="trash" size="xs" />
                 </button>
               </div>
               <div
-                class="text-[10px] text-right"
-                :class="workMode ? 'text-slate-500' : 'text-slate-400'"
+                class="text-[10px] text-right font-bold"
+                :class="workMode ? 'text-slate-500' : 'text-moe-cocoa/40'"
               >
                 {{ formatTime(msg.timestamp) }}
               </div>
@@ -270,12 +335,12 @@
         >
           <!-- 头像 -->
           <div
-            class="w-10 h-10 rounded-full flex-shrink-0 flex items-center justify-center text-white shadow-md transition-all overflow-hidden relative animate-float"
-            :class="
+            class="w-10 h-10 flex-shrink-0 flex items-center justify-center text-white shadow-md transition-all overflow-hidden relative animate-float"
+            :class="[
               workMode
-                ? 'bg-gradient-to-br from-indigo-400 to-purple-500'
-                : 'bg-gradient-to-br from-sky-400 to-blue-500 shadow-sky-500/20'
-            "
+                ? 'bg-gradient-to-br from-indigo-400 to-purple-500 pixel-border-sm-dark'
+                : 'bg-gradient-to-br from-moe-purple to-moe-pink shadow-moe-purple/20 pixel-border-moe'
+            ]"
           >
             <span class="text-sm font-bold">{{
               msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user'
@@ -284,7 +349,7 @@
             }}</span>
             <!-- 在线状态点 -->
             <div
-              class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white rounded-full"
+              class="absolute bottom-0 right-0 w-2.5 h-2.5 bg-emerald-500 border-2 border-white"
             ></div>
           </div>
 
@@ -295,14 +360,16 @@
             >
               <span
                 class="text-xs font-bold"
-                :class="workMode ? 'text-indigo-300' : 'text-slate-500'"
+                :class="workMode ? 'text-indigo-300' : 'text-moe-purple'"
                 >{{
                   msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user'
                     ? msg.senderId
                     : AGENT_NAME
                 }}</span
               >
-              <span class="text-[10px] text-slate-400">{{ formatTime(msg.timestamp) }}</span>
+              <span class="text-[10px] text-moe-cocoa/30 font-bold">{{
+                formatTime(msg.timestamp)
+              }}</span>
 
               <!-- 操作按钮 -->
               <div v-if="!editingMsgId" class="flex gap-2 ml-2">
@@ -310,64 +377,70 @@
                   class="transition-colors"
                   :class="[
                     playingMsgId === msg.id
-                      ? 'text-sky-500 animate-pulse'
-                      : 'text-slate-400 hover:text-sky-500',
+                      ? 'text-moe-pink animate-pulse'
+                      : 'text-moe-cocoa/30 hover:text-moe-pink',
                     isLoadingAudio && playingMsgId === msg.id ? 'cursor-wait' : ''
                   ]"
                   :title="playingMsgId === msg.id ? '停止播放' : '播放语音'"
                   @click="playMessage(msg)"
                 >
-                  <component :is="playingMsgId === msg.id ? Square : Volume2" class="w-3 h-3" />
+                  <PixelIcon :name="playingMsgId === msg.id ? 'square' : 'volume'" size="xs" />
                 </button>
                 <button
-                  class="text-slate-400 hover:text-sky-500 transition-colors"
+                  class="text-moe-cocoa/30 hover:text-moe-pink transition-colors"
                   @click="startEdit(msg)"
                 >
-                  <Edit2 class="w-3 h-3" />
+                  <PixelIcon name="edit" size="xs" />
                 </button>
                 <button
-                  class="text-slate-400 hover:text-red-500 transition-colors"
+                  class="text-moe-cocoa/30 hover:text-red-500 transition-colors"
                   @click="deleteMessage(msg.id)"
                 >
-                  <Trash2 class="w-3 h-3" />
+                  <PixelIcon name="trash" size="xs" />
                 </button>
               </div>
             </div>
 
             <div
-              class="p-4 rounded-2xl rounded-tl-sm shadow-sm text-sm leading-relaxed font-sans border transition-all flex flex-col gap-3 backdrop-blur-xl hover:scale-[1.02] hover:-translate-y-[2px] hover:shadow-xl relative hover:z-10 duration-300 ease-out"
-              :class="
+              class="p-4 text-sm leading-relaxed font-sans transition-all flex flex-col gap-3 backdrop-blur-md hover:scale-[1.01] hover:-translate-y-[1px] hover:shadow-xl relative hover:z-10 duration-300 ease-out"
+              :class="[
                 workMode
-                  ? 'bg-[#1e293b]/90 text-slate-200 border-slate-700/50'
-                  : 'bg-white/30 text-slate-700 border-white/20 shadow-lg shadow-sky-100/30'
-              "
+                  ? 'bg-[#1e293b]/90 text-slate-200 border-slate-600 pixel-border-sm-dark'
+                  : 'bg-[#fffcf9]/95 text-moe-cocoa/90 border-moe-cocoa/5 shadow-lg shadow-moe-purple/5 pixel-border-moe'
+              ]"
             >
+              <!-- 气泡尖角 -->
+              <div
+                v-if="!workMode"
+                class="absolute left-[-8px] top-4 w-2 h-2 bg-white/90"
+                style="clip-path: polygon(100% 0, 100% 100%, 0 50%)"
+              ></div>
               <template v-if="editingMsgId === msg.id">
                 <textarea
                   v-model="editingContent"
-                  class="w-full bg-transparent border-none outline-none resize-none custom-scrollbar"
-                  :class="workMode ? 'text-slate-200' : 'text-slate-700'"
+                  class="w-full bg-transparent border-none outline-none resize-none custom-scrollbar font-bold"
+                  :class="workMode ? 'text-slate-200' : 'text-moe-cocoa'"
                   rows="10"
                 ></textarea>
                 <div
                   class="flex gap-2 justify-end mt-2 pt-2 border-t"
-                  :class="workMode ? 'border-slate-700' : 'border-slate-200'"
+                  :class="workMode ? 'border-slate-700' : 'border-moe-cocoa/10'"
                 >
                   <button
-                    class="p-1 hover:bg-black/10 rounded"
-                    :class="workMode ? 'text-slate-300' : 'text-slate-600'"
+                    class="p-1 hover:bg-black/10 transition-colors"
+                    :class="workMode ? 'text-slate-300' : 'text-moe-cocoa'"
                     title="保存"
                     @click="saveEdit(msg)"
                   >
-                    <Check class="w-4 h-4" />
+                    <PixelIcon name="check" size="xs" />
                   </button>
                   <button
-                    class="p-1 hover:bg-black/10 rounded"
-                    :class="workMode ? 'text-slate-300' : 'text-slate-600'"
+                    class="p-1 hover:bg-black/10 transition-colors"
+                    :class="workMode ? 'text-slate-300' : 'text-moe-cocoa'"
                     title="取消"
                     @click="cancelEdit"
                   >
-                    <X class="w-4 h-4" />
+                    <PixelIcon name="close" size="xs" />
                   </button>
                 </div>
               </template>
@@ -381,14 +454,10 @@
                   "
                 >
                   <div class="flex items-center gap-2 h-6 px-1">
-                    <span class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce"></span>
-                    <span
-                      class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-100"
-                    ></span>
-                    <span
-                      class="w-1.5 h-1.5 bg-slate-400 rounded-full animate-bounce delay-200"
-                    ></span>
-                    <span class="text-xs text-slate-400 ml-2 font-medium"
+                    <span class="w-1.5 h-1.5 bg-moe-pink animate-bounce"></span>
+                    <span class="w-1.5 h-1.5 bg-moe-pink animate-bounce delay-100"></span>
+                    <span class="w-1.5 h-1.5 bg-moe-pink animate-bounce delay-200"></span>
+                    <span class="text-xs text-moe-pink ml-2 font-bold"
                       >{{ agentName }} 正在思考...</span
                     >
                   </div>
@@ -397,24 +466,24 @@
                   <!-- 思考过程块 -->
                   <div
                     v-if="segment.type === 'thinking'"
-                    class="rounded-lg overflow-hidden border my-1 transition-all duration-300"
-                    :class="
+                    class="my-1 transition-all duration-300"
+                    :class="[
                       workMode
-                        ? 'bg-slate-800/50 border-slate-700'
-                        : 'bg-slate-50/50 border-slate-200/60'
-                    "
+                        ? 'bg-slate-800/50 border-slate-600 pixel-border-sm-dark'
+                        : 'bg-moe-sky/5 border-moe-sky/20 pixel-border-moe'
+                    ]"
                   >
                     <div
                       class="px-3 py-1.5 flex items-center justify-between cursor-pointer select-none border-b transition-colors"
                       :class="
                         workMode
-                          ? 'text-sky-400 border-slate-700 hover:bg-slate-700/50'
-                          : 'text-slate-500 bg-slate-100/30 border-slate-200/60 hover:bg-slate-100/50'
+                          ? 'text-sky-400 border-slate-600 hover:bg-slate-700/50'
+                          : 'text-sky-700 bg-sky-50 border-sky-100 hover:bg-sky-100'
                       "
                       @click="toggleCollapse(idx, sIdx)"
                     >
                       <div class="flex items-center gap-2 text-xs font-bold">
-                        <Brain class="w-3.5 h-3.5" />
+                        <PixelIcon name="brain" size="xs" />
                         <span>思考过程</span>
                       </div>
                       <span
@@ -425,7 +494,8 @@
                     </div>
                     <div
                       v-show="!isCollapsed(idx, sIdx)"
-                      class="p-3 text-xs italic opacity-80 whitespace-pre-wrap font-mono leading-relaxed text-slate-500"
+                      class="p-3 text-xs whitespace-pre-wrap font-mono leading-relaxed transition-colors"
+                      :class="[workMode ? 'text-sky-300 opacity-80' : 'text-sky-700 font-bold']"
                     >
                       {{ segment.content }}
                     </div>
@@ -434,24 +504,24 @@
                   <!-- 独白块 -->
                   <div
                     v-else-if="segment.type === 'monologue'"
-                    class="rounded-lg overflow-hidden border relative my-1 transition-all duration-300"
-                    :class="
+                    class="relative my-1 transition-all duration-300"
+                    :class="[
                       workMode
-                        ? 'bg-pink-900/10 border-pink-500/20'
-                        : 'bg-pink-50/30 border-pink-100/60'
-                    "
+                        ? 'bg-pink-900/10 border-pink-700/50 pixel-border-sm-dark'
+                        : 'bg-moe-pink/5 border-moe-pink/20 pixel-border-moe'
+                    ]"
                   >
                     <div
                       class="px-3 py-1.5 flex items-center justify-between cursor-pointer select-none border-b transition-colors"
                       :class="[
                         workMode
-                          ? 'text-pink-400 border-pink-500/10 hover:bg-pink-900/20'
-                          : 'text-pink-400 bg-pink-50/30 border-pink-100/60 hover:bg-pink-50/60'
+                          ? 'text-pink-400 border-pink-700/50 hover:bg-pink-900/20'
+                          : 'text-moe-pink bg-pink-50 border-pink-100 hover:bg-pink-100'
                       ]"
                       @click="toggleCollapse(idx, sIdx)"
                     >
                       <div class="flex items-center gap-2 text-xs font-bold">
-                        <MessageSquareQuote class="w-3.5 h-3.5" />
+                        <PixelIcon name="quote" size="xs" />
                         <span>内心独白</span>
                       </div>
                       <span
@@ -462,7 +532,8 @@
                     </div>
                     <div
                       v-show="!isCollapsed(idx, sIdx)"
-                      class="px-3 py-3 text-xs opacity-90 whitespace-pre-wrap leading-relaxed text-slate-600"
+                      class="px-3 py-3 text-xs whitespace-pre-wrap leading-relaxed transition-colors"
+                      :class="[workMode ? 'text-pink-300 opacity-80' : 'text-moe-cocoa font-bold']"
                     >
                       {{ segment.content }}
                     </div>
@@ -471,20 +542,23 @@
                   <!-- 工具调用块 (NIT) -->
                   <div
                     v-else-if="segment.type === 'tool'"
-                    class="rounded-xl overflow-hidden border shadow-sm my-2"
-                    :class="workMode ? 'border-blue-500/30' : 'border-blue-100/60'"
+                    class="shadow-sm my-2"
+                    :class="[
+                      workMode ? 'pixel-border-sm-dark' : 'pixel-border-moe',
+                      workMode ? 'border-blue-700/50' : 'border-moe-sky/30'
+                    ]"
                   >
                     <div
                       class="px-3 py-2 text-xs font-bold text-white flex items-center justify-between cursor-pointer"
                       :class="
                         workMode
                           ? 'bg-blue-600/80'
-                          : 'bg-gradient-to-r from-blue-500/80 to-sky-500/80 backdrop-blur-sm'
+                          : 'bg-gradient-to-r from-moe-sky to-blue-400 backdrop-blur-sm'
                       "
                       @click="toggleCollapse(idx, sIdx)"
                     >
                       <div class="flex items-center gap-2">
-                        <Terminal class="w-3.5 h-3.5" />
+                        <PixelIcon name="terminal" size="xs" />
                         <span>NIT: {{ segment.name }}</span>
                       </div>
                       <div class="flex items-center gap-2">
@@ -500,7 +574,7 @@
                       v-show="!isCollapsed(idx, sIdx)"
                       class="p-3 text-xs font-mono overflow-x-auto custom-scrollbar whitespace-pre"
                       :class="
-                        workMode ? 'bg-[#0f172a]/80 text-blue-100' : 'bg-slate-50/50 text-slate-600'
+                        workMode ? 'bg-[#0f172a]/80 text-blue-100' : 'bg-moe-sky/5 text-moe-cocoa'
                       "
                     >
                       {{ segment.content }}
@@ -510,8 +584,8 @@
                   <!-- 普通文本 -->
                   <div
                     v-else
-                    class="min-h-[1.5em]"
-                    :class="workMode ? 'text-slate-100' : 'text-slate-700'"
+                    class="min-h-[1.5em] font-bold"
+                    :class="workMode ? 'text-slate-100' : 'text-moe-cocoa'"
                   >
                     <AsyncMarkdown v-if="segment.content" :content="segment.content" />
                   </div>
@@ -528,38 +602,38 @@
           <!-- 占位符 -->
           <div class="w-full max-w-2xl">
             <div
-              class="rounded-2xl overflow-hidden shadow-lg transition-all duration-300 border hover:shadow-xl hover:scale-[1.01] hover:-translate-y-[2px]"
-              :class="
+              class="shadow-lg transition-all duration-300 hover:shadow-xl hover:scale-[1.005]"
+              :class="[
+                workMode ? 'pixel-border-dark' : 'pixel-border-moe',
                 workMode
-                  ? 'bg-[#0f172a] border-slate-700/50'
-                  : 'bg-white/40 backdrop-blur-md border-white/30 shadow-sky-200/30'
-              "
+                  ? 'bg-[#0f172a] border-slate-600'
+                  : 'bg-[#fffcf9]/90 backdrop-blur-md border-moe-cocoa/5 shadow-moe-sky/10'
+              ]"
             >
-              <!-- Header -->
               <!-- 头部 -->
               <div
                 class="px-4 py-3 flex items-center justify-between cursor-pointer transition-colors"
-                :class="workMode ? 'hover:bg-slate-800/50' : 'hover:bg-white/40'"
+                :class="workMode ? 'hover:bg-slate-800/50' : 'hover:bg-moe-sky/5'"
                 @click="msg.isCollapsed = !msg.isCollapsed"
               >
                 <div class="flex items-center gap-2">
                   <div class="relative">
                     <div
-                      class="w-2 h-2 rounded-full"
+                      class="w-2 h-2"
                       :class="[
-                        workMode ? 'bg-sky-400' : 'bg-sky-500',
+                        workMode ? 'bg-sky-400' : 'bg-moe-sky',
                         { 'animate-pulse': msg.isThinking }
                       ]"
                     ></div>
                     <div
                       v-if="msg.isThinking"
-                      class="absolute inset-0 w-2 h-2 rounded-full animate-ping opacity-75"
-                      :class="workMode ? 'bg-sky-400' : 'bg-sky-500'"
+                      class="absolute inset-0 w-2 h-2 animate-ping opacity-75"
+                      :class="workMode ? 'bg-sky-400' : 'bg-moe-sky'"
                     ></div>
                   </div>
                   <span
                     class="text-xs font-bold tracking-wide"
-                    :class="workMode ? 'text-sky-400' : 'text-sky-600'"
+                    :class="workMode ? 'text-sky-400' : 'text-moe-sky'"
                   >
                     {{ msg.isThinking ? 'PERO 正在思考...' : '思考过程' }}
                   </span>
@@ -567,14 +641,14 @@
                 <div class="flex items-center gap-2">
                   <span
                     v-if="msg.steps.length > 0"
-                    class="text-[10px] font-mono"
-                    :class="workMode ? 'text-slate-500' : 'text-slate-500'"
+                    class="text-[10px] font-mono font-bold"
+                    :class="workMode ? 'text-slate-500' : 'text-moe-cocoa/40'"
                     >{{ msg.steps.length }} 步</span
                   >
                   <span
                     class="transition-transform duration-200"
                     :class="[
-                      workMode ? 'text-slate-500' : 'text-slate-400',
+                      workMode ? 'text-slate-500' : 'text-moe-cocoa/30',
                       { 'rotate-180': !msg.isCollapsed }
                     ]"
                     >▼</span
@@ -589,7 +663,7 @@
                 :class="
                   workMode
                     ? 'bg-[#020617]/50 border-t border-slate-800/50'
-                    : 'bg-white/30 border-t border-white/20'
+                    : 'bg-white/50 border-t border-moe-cocoa/5'
                 "
               >
                 <div class="p-4 space-y-3">
@@ -598,42 +672,42 @@
                     :key="sIdx"
                     class="relative pl-4 border-l-2"
                     :class="{
-                      'border-sky-500/50': step.type === 'thinking',
+                      'border-moe-sky/50': step.type === 'thinking',
                       'border-emerald-500/50': step.type === 'action',
                       'border-red-500/50': step.type === 'error',
-                      'border-amber-500/50': step.type === 'reflection'
+                      'border-moe-purple/50': step.type === 'reflection'
                     }"
                   >
                     <div
-                      class="absolute -left-[5px] top-0 w-2 h-2 rounded-full"
+                      class="absolute -left-[5px] top-0 w-2 h-2"
                       :class="{
-                        'bg-sky-500': step.type === 'thinking',
+                        'bg-moe-sky': step.type === 'thinking',
                         'bg-emerald-500': step.type === 'action',
                         'bg-red-500': step.type === 'error',
-                        'bg-amber-500': step.type === 'reflection'
+                        'bg-moe-purple': step.type === 'reflection'
                       }"
                     ></div>
                     <div
                       class="text-[10px] font-bold uppercase tracking-wider mb-1 opacity-70"
                       :class="[
-                        workMode ? '' : 'font-semibold',
+                        workMode ? '' : 'font-bold',
                         {
                           'text-sky-400': step.type === 'thinking' && workMode,
-                          'text-sky-700': step.type === 'thinking' && !workMode,
+                          'text-moe-sky': step.type === 'thinking' && !workMode,
                           'text-emerald-400': step.type === 'action' && workMode,
-                          'text-emerald-700': step.type === 'action' && !workMode,
+                          'text-emerald-500': step.type === 'action' && !workMode,
                           'text-red-400': step.type === 'error' && workMode,
-                          'text-red-700': step.type === 'error' && !workMode,
-                          'text-amber-400': step.type === 'reflection' && workMode,
-                          'text-amber-700': step.type === 'reflection' && !workMode
+                          'text-red-500': step.type === 'error' && !workMode,
+                          'text-purple-400': step.type === 'reflection' && workMode,
+                          'text-moe-purple': step.type === 'reflection' && !workMode
                         }
                       ]"
                     >
                       {{ step.type }}
                     </div>
                     <div
-                      class="text-xs font-mono whitespace-pre-wrap leading-relaxed opacity-90"
-                      :class="workMode ? 'text-slate-300' : 'text-slate-700'"
+                      class="text-xs font-mono whitespace-pre-wrap leading-relaxed"
+                      :class="workMode ? 'text-slate-300 opacity-80' : 'text-moe-cocoa font-bold'"
                     >
                       {{ step.content }}
                     </div>
@@ -643,38 +717,40 @@
                 <!-- 操作 -->
                 <div
                   v-if="msg.isThinking"
-                  class="px-4 py-2 flex gap-2 border-t"
+                  class="px-4 py-2 flex gap-2 border-t transition-colors"
                   :class="
-                    workMode ? 'bg-slate-900/50 border-slate-800/50' : 'bg-white/40 border-white/20'
+                    workMode
+                      ? 'bg-slate-900/50 border-slate-800/50'
+                      : 'bg-white/60 border-moe-cocoa/5'
                   "
                 >
                   <button
-                    class="px-3 py-1 text-xs rounded-md border transition-all font-medium flex items-center gap-1"
+                    class="px-3 py-1 text-xs border transition-all font-bold flex items-center gap-1 hover:scale-105 active:scale-95"
                     :class="
                       workMode
-                        ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20'
-                        : 'bg-red-100 text-red-600 hover:bg-red-200 border-red-200'
+                        ? 'bg-red-500/10 text-red-400 hover:bg-red-500/20 border-red-500/20 pixel-border-sm-dark'
+                        : 'bg-red-50 text-red-500 hover:bg-red-100 border-red-200 pixel-border-moe shadow-sm shadow-red-500/10'
                     "
                     @click="injectInstruction('stop')"
                   >
                     <span
-                      class="w-1.5 h-1.5 rounded-sm"
-                      :class="workMode ? 'bg-red-500' : 'bg-red-600'"
+                      class="w-1.5 h-1.5"
+                      :class="workMode ? 'bg-red-500' : 'bg-red-500'"
                     ></span>
                     停止
                   </button>
                   <button
-                    class="px-3 py-1 text-xs rounded-md border transition-all font-medium flex items-center gap-1"
+                    class="px-3 py-1 text-xs border transition-all font-bold flex items-center gap-1 hover:scale-105 active:scale-95"
                     :class="
                       workMode
-                        ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border-amber-500/20'
-                        : 'bg-amber-100 text-amber-600 hover:bg-amber-200 border-amber-200'
+                        ? 'bg-amber-500/10 text-amber-400 hover:bg-amber-500/20 border-amber-500/20 pixel-border-sm-dark'
+                        : 'bg-moe-yellow/10 text-moe-yellow hover:bg-moe-yellow/20 border-moe-yellow/20 pixel-border-moe shadow-sm shadow-moe-yellow/10'
                     "
                     @click="togglePause"
                   >
                     <span
-                      class="w-1.5 h-1.5 rounded-full"
-                      :class="workMode ? 'bg-amber-500' : 'bg-amber-600'"
+                      class="w-1.5 h-1.5"
+                      :class="workMode ? 'bg-amber-500' : 'bg-moe-yellow'"
                     ></span>
                     {{ msg.isPaused ? '继续' : '暂停' }}
                   </button>
@@ -689,28 +765,39 @@
     <!-- 输入区域 -->
     <div class="p-6 pt-0 bg-transparent flex-shrink-0 relative z-20">
       <div
-        class="rounded-2xl shadow-xl border transition-all flex flex-col overflow-hidden"
-        :class="
+        class="shadow-xl transition-all flex flex-col"
+        :class="[
+          workMode ? 'pixel-border-dark' : 'pixel-border-moe',
           workMode
-            ? 'bg-[#0f172a] border-slate-700/50 focus-within:border-amber-500/50 focus-within:shadow-amber-500/10'
-            : 'bg-white/60 border-sky-200/50 focus-within:border-sky-400/50 focus-within:shadow-sky-400/20 backdrop-blur-md'
-        "
+            ? 'bg-[#0f172a] border-slate-600 focus-within:border-amber-500 focus-within:shadow-amber-500/10'
+            : 'bg-[#fffcf9]/90 border-moe-cocoa/5 focus-within:border-moe-pink/30 focus-within:shadow-moe-pink/5 backdrop-blur-md'
+        ]"
       >
         <!-- 待发送图片预览 (移入输入框内部容器) -->
         <div
           v-if="pendingImages.length > 0"
-          class="px-4 pt-4 pb-2 flex gap-2 overflow-x-auto custom-scrollbar border-b border-white/10"
+          class="px-4 pt-4 pb-2 flex gap-2 overflow-x-auto custom-scrollbar border-b border-moe-cocoa/5"
         >
           <div v-for="(img, idx) in pendingImages" :key="idx" class="relative group flex-shrink-0">
             <img
               :src="img.url"
-              class="h-16 w-16 object-cover rounded-lg shadow-sm border border-white/10"
+              class="h-16 w-16 object-cover shadow-sm transition-all hover:scale-105 active:scale-95"
+              :class="
+                workMode
+                  ? 'border-slate-600 pixel-border-sm-dark'
+                  : 'border-moe-cocoa/10 pixel-border-moe'
+              "
             />
             <button
-              class="absolute -top-1.5 -right-1.5 bg-white rounded-full shadow-md hover:scale-110 transition-transform text-slate-500 hover:text-red-500"
+              class="absolute -top-1.5 -right-1.5 shadow-md transition-all hover:scale-110 active:scale-95 flex items-center justify-center"
+              :class="
+                workMode
+                  ? 'bg-slate-800 text-slate-400 hover:text-red-400 pixel-border-sm-dark'
+                  : 'bg-white text-moe-cocoa/40 hover:text-red-500 pixel-border-moe'
+              "
               @click="removePendingImage(idx)"
             >
-              <XCircle class="w-4 h-4 fill-current" />
+              <PixelIcon name="close" size="xs" />
             </button>
           </div>
         </div>
@@ -718,11 +805,11 @@
         <!-- 文本输入区 -->
         <textarea
           v-model="input"
-          class="w-full bg-transparent text-sm p-4 focus:outline-none resize-none min-h-[56px] max-h-48 custom-scrollbar font-sans border-none"
+          class="w-full bg-transparent text-sm p-4 focus:outline-none resize-none min-h-[56px] max-h-48 custom-scrollbar font-sans border-none font-bold"
           :class="[
             workMode
               ? 'text-slate-200 placeholder-slate-500'
-              : 'text-slate-800 placeholder-slate-400',
+              : 'text-moe-cocoa placeholder-moe-cocoa/40',
             disabled ? 'opacity-50 cursor-not-allowed' : ''
           ]"
           :placeholder="disabled ? '工作区初始化中...' : `问 ${agentName} 任何问题...`"
@@ -734,7 +821,9 @@
         <!-- 底部工具栏 (图标外置到输入框内部底部) -->
         <div
           class="px-3 py-2 flex items-center justify-between border-t transition-colors"
-          :class="workMode ? 'border-slate-700/50 bg-slate-900/30' : 'border-white/20 bg-white/30'"
+          :class="
+            workMode ? 'border-slate-700/50 bg-slate-900/30' : 'border-moe-cocoa/5 bg-white/40'
+          "
         >
           <div class="flex items-center gap-2">
             <!-- 图片上传按钮 -->
@@ -748,56 +837,46 @@
             />
             <button
               :disabled="isInputLocked || disabled || !isVisionEnabled"
-              class="h-9 w-9 rounded-xl transition-all flex items-center justify-center group relative border"
+              class="h-9 w-9 transition-all flex items-center justify-center group relative"
               :class="
                 workMode
                   ? !isVisionEnabled
-                    ? 'opacity-30 cursor-not-allowed text-slate-500 border-transparent'
-                    : 'text-amber-500 border-amber-500/20 hover:bg-amber-500/10 hover:border-amber-500/40'
+                    ? 'opacity-30 cursor-not-allowed text-slate-500 pixel-border-sm-dark'
+                    : 'text-amber-500 hover:bg-amber-500/10 pixel-border-sm-dark'
                   : !isVisionEnabled
-                    ? 'opacity-30 cursor-not-allowed text-slate-400 border-transparent'
-                    : 'text-sky-600 border-sky-200 bg-sky-50/50 hover:bg-sky-100 hover:border-sky-300'
+                    ? 'opacity-30 cursor-not-allowed text-moe-cocoa/20 border-transparent pixel-border-moe'
+                    : 'text-moe-sky border-moe-sky/20 bg-moe-sky/5 hover:bg-moe-sky/10 hover:border-moe-sky/30 pixel-border-moe'
               "
               :title="!isVisionEnabled ? '当前模型不支持视觉功能 (请在设置中开启)' : '上传图片'"
               @click="triggerUpload"
             >
-              <ImageIcon class="w-4.5 h-4.5" />
+              <PixelIcon name="image" size="sm" />
             </button>
           </div>
 
           <!-- 发送按钮 -->
           <button
             :disabled="isInputLocked || (!input.trim() && pendingImages.length === 0) || disabled"
-            class="h-9 px-4 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 text-xs font-bold border"
+            class="h-9 px-4 transition-all shadow-sm flex items-center justify-center gap-2 text-xs font-bold"
             :class="
               workMode
-                ? 'bg-amber-500 border-amber-600 hover:bg-amber-600 text-white shadow-amber-500/20 disabled:bg-slate-700 disabled:border-transparent disabled:text-slate-500 disabled:shadow-none'
-                : 'bg-sky-500 border-sky-600 hover:bg-sky-600 text-white shadow-sky-500/20 disabled:bg-slate-200 disabled:border-transparent disabled:text-slate-400 disabled:shadow-none'
+                ? 'bg-amber-500 hover:bg-amber-600 text-white shadow-amber-500/20 disabled:bg-slate-700 disabled:text-slate-500 disabled:shadow-none pixel-border-sm-dark'
+                : 'bg-moe-pink hover:bg-pink-400 text-white shadow-moe-pink/20 disabled:bg-slate-200 disabled:border-transparent disabled:text-slate-400 disabled:shadow-none pixel-border-moe'
             "
             @click="sendMessage"
           >
             <span v-if="!isSending">发送</span>
             <div
               v-else
-              class="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin"
+              class="w-3.5 h-3.5 border-2 border-white/30 border-t-white animate-spin"
             ></div>
-            <svg
-              v-if="!isSending"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              class="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform"
-            >
-              <path
-                d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z"
-              />
-            </svg>
+            <PixelIcon v-if="!isSending" name="send" size="xs" />
           </button>
         </div>
       </div>
       <div
         class="text-center mt-3 text-[9px] font-bold tracking-widest opacity-30 uppercase"
-        :class="workMode ? 'text-slate-500' : 'text-slate-400'"
+        :class="workMode ? 'text-slate-500' : 'text-moe-cocoa'"
       >
         {{ AGENT_NAME }} AI AGENT · POWERED BY RE-ACT ENGINE
       </div>
@@ -805,6 +884,7 @@
 
     <CustomDialog
       v-model:visible="deleteDialogVisible"
+      :work-mode="workMode"
       type="confirm"
       title="删除消息"
       :message="deleteDialogMessage"
@@ -816,27 +896,13 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted, computed } from 'vue'
 import { listen, emit } from '@/utils/ipcAdapter'
-import {
-  Brain,
-  MessageSquareQuote,
-  Terminal,
-  Square,
-  Clock,
-  Edit2,
-  Trash2,
-  Check,
-  X,
-  Volume2,
-  AlertTriangle,
-  Image as ImageIcon,
-  XCircle
-} from 'lucide-vue-next'
+import PixelIcon from '../ui/PixelIcon.vue'
 import AsyncMarkdown from '../markdown/AsyncMarkdown.vue'
 import CustomDialog from '../ui/CustomDialog.vue'
 import { AGENT_NAME, AGENT_AVATAR_TEXT } from '../../config'
 import { gatewayClient } from '../../api/gateway'
 
-const API_BASE = 'http://127.0.0.1:9120'
+const API_BASE = 'http://localhost:9120'
 
 const props = defineProps({
   workMode: Boolean,
@@ -871,62 +937,93 @@ const getRiskLevelColor = (level, type) => {
   const colors = {
     // Level 0: 安全 (绿色)
     0: {
-      header: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-100 dark:border-emerald-800/30',
-      icon: 'bg-emerald-100 dark:bg-emerald-800/40 text-emerald-600 dark:text-emerald-400',
+      header: props.workMode
+        ? 'bg-emerald-900/20 border-emerald-800/30'
+        : 'bg-emerald-50 border-emerald-100',
+      icon: props.workMode
+        ? 'bg-emerald-800/40 text-emerald-400'
+        : 'bg-emerald-100 text-emerald-600',
       badge: 'bg-emerald-500',
-      content:
-        'text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-900/10',
-      warning_box:
-        'bg-emerald-50 dark:bg-emerald-900/10 border-emerald-100 dark:border-emerald-900/30',
-      warning_icon: 'bg-emerald-100 dark:bg-emerald-800/50 text-emerald-600 dark:text-emerald-400',
-      warning_text: 'text-emerald-600 dark:text-emerald-400',
+      content: props.workMode
+        ? 'text-emerald-400 border-emerald-800 bg-emerald-900/10'
+        : 'text-emerald-600 border-emerald-200 bg-emerald-50',
+      warning_box: props.workMode
+        ? 'bg-emerald-900/10 border-emerald-900/30'
+        : 'bg-emerald-50 border-emerald-100',
+      warning_icon: props.workMode
+        ? 'bg-emerald-800/50 text-emerald-400'
+        : 'bg-emerald-100 text-emerald-600',
+      warning_text: props.workMode ? 'text-emerald-400' : 'text-emerald-600',
       button: 'bg-emerald-500 hover:bg-emerald-600 shadow-emerald-500/30'
     },
     // Level 1: 注意 (蓝色/青色)
     1: {
-      header: 'bg-sky-50 dark:bg-sky-900/20 border-sky-100 dark:border-sky-800/30',
-      icon: 'bg-sky-100 dark:bg-sky-800/40 text-sky-600 dark:text-sky-400',
-      badge: 'bg-sky-500',
-      content:
-        'text-sky-600 dark:text-sky-400 border-sky-200 dark:border-sky-800 bg-sky-50 dark:bg-sky-900/10',
-      warning_box: 'bg-sky-50 dark:bg-sky-900/10 border-sky-100 dark:border-sky-900/30',
-      warning_icon: 'bg-sky-100 dark:bg-sky-800/50 text-sky-600 dark:text-sky-400',
-      warning_text: 'text-sky-600 dark:text-sky-400',
-      button: 'bg-sky-500 hover:bg-sky-600 shadow-sky-500/30'
+      header: props.workMode
+        ? 'bg-sky-900/20 border-sky-800/30'
+        : 'bg-moe-sky/10 border-moe-sky/20',
+      icon: props.workMode ? 'bg-sky-800/40 text-sky-400' : 'bg-moe-sky/20 text-moe-sky',
+      badge: 'bg-moe-sky',
+      content: props.workMode
+        ? 'text-sky-400 border-sky-800 bg-sky-900/10'
+        : 'text-moe-sky border-moe-sky/20 bg-moe-sky/5',
+      warning_box: props.workMode
+        ? 'bg-sky-900/10 border-sky-900/30'
+        : 'bg-moe-sky/5 border-moe-sky/10',
+      warning_icon: props.workMode ? 'bg-sky-800/50 text-sky-400' : 'bg-moe-sky/10 text-moe-sky',
+      warning_text: props.workMode ? 'text-sky-400' : 'text-moe-sky',
+      button: 'bg-moe-sky hover:bg-sky-400 shadow-moe-sky/30'
     },
     // Level 2: 低风险 (琥珀色/黄色)
     2: {
-      header: 'bg-amber-50 dark:bg-amber-900/20 border-amber-100 dark:border-amber-800/30',
-      icon: 'bg-amber-100 dark:bg-amber-800/40 text-amber-600 dark:text-amber-400',
-      badge: 'bg-amber-500',
-      content:
-        'text-amber-600 dark:text-amber-400 border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10',
-      warning_box: 'bg-amber-50 dark:bg-amber-900/10 border-amber-100 dark:border-amber-900/30',
-      warning_icon: 'bg-amber-100 dark:bg-amber-800/50 text-amber-600 dark:text-amber-400',
-      warning_text: 'text-amber-600 dark:text-amber-400',
-      button: 'bg-amber-500 hover:bg-amber-600 shadow-amber-500/30'
+      header: props.workMode
+        ? 'bg-amber-900/20 border-amber-800/30'
+        : 'bg-moe-yellow/10 border-moe-yellow/20',
+      icon: props.workMode ? 'bg-amber-800/40 text-amber-400' : 'bg-moe-yellow/20 text-moe-yellow',
+      badge: 'bg-moe-yellow text-moe-cocoa',
+      content: props.workMode
+        ? 'text-amber-400 border-amber-800 bg-amber-900/10'
+        : 'text-moe-yellow border-moe-yellow/20 bg-moe-yellow/5',
+      warning_box: props.workMode
+        ? 'bg-amber-900/10 border-amber-900/30'
+        : 'bg-moe-yellow/5 border-moe-yellow/10',
+      warning_icon: props.workMode
+        ? 'bg-amber-800/50 text-amber-400'
+        : 'bg-moe-yellow/10 text-moe-yellow',
+      warning_text: props.workMode ? 'text-amber-400' : 'text-moe-yellow',
+      button: 'bg-moe-yellow hover:bg-yellow-400 text-moe-cocoa shadow-moe-yellow/30'
     },
     // Level 3: 中风险 (橙色)
     3: {
-      header: 'bg-orange-50 dark:bg-orange-900/20 border-orange-100 dark:border-orange-800/30',
-      icon: 'bg-orange-100 dark:bg-orange-800/40 text-orange-600 dark:text-orange-400',
+      header: props.workMode
+        ? 'bg-orange-900/20 border-orange-800/30'
+        : 'bg-orange-50 border-orange-100',
+      icon: props.workMode ? 'bg-orange-800/40 text-orange-400' : 'bg-orange-100 text-orange-600',
       badge: 'bg-orange-500',
-      content:
-        'text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/10',
-      warning_box: 'bg-orange-50 dark:bg-orange-900/10 border-orange-100 dark:border-orange-900/30',
-      warning_icon: 'bg-orange-100 dark:bg-orange-800/50 text-orange-600 dark:text-orange-400',
-      warning_text: 'text-orange-600 dark:text-orange-400',
+      content: props.workMode
+        ? 'text-orange-400 border-orange-800 bg-orange-900/10'
+        : 'text-orange-600 border-orange-200 bg-orange-50',
+      warning_box: props.workMode
+        ? 'bg-orange-900/10 border-orange-900/30'
+        : 'bg-orange-50 border-orange-100',
+      warning_icon: props.workMode
+        ? 'bg-orange-800/50 text-orange-400'
+        : 'bg-orange-100 text-orange-600',
+      warning_text: props.workMode ? 'text-orange-400' : 'text-orange-600',
       button: 'bg-orange-500 hover:bg-orange-600 shadow-orange-500/30'
     },
     // Level 4: 高风险 (红色)
     4: {
-      header: 'bg-red-50 dark:bg-red-900/20 border-red-100 dark:border-red-800/30',
-      icon: 'bg-red-100 dark:bg-red-800/40 text-red-600 dark:text-red-400 animate-pulse',
+      header: props.workMode ? 'bg-red-900/20 border-red-800/30' : 'bg-red-50 border-red-100',
+      icon: props.workMode
+        ? 'bg-red-800/40 text-red-400 animate-pulse'
+        : 'bg-red-100 text-red-600 animate-pulse',
       badge: 'bg-red-500',
-      content: 'text-red-300 border-red-900/50 bg-red-950/20',
-      warning_box: 'bg-red-50 dark:bg-red-900/10 border-red-100 dark:border-red-900/30',
-      warning_icon: 'bg-red-100 dark:bg-red-800/50 text-red-600 dark:text-red-400',
-      warning_text: 'text-red-600 dark:text-red-400',
+      content: props.workMode
+        ? 'text-red-300 border-red-900/50 bg-red-950/20'
+        : 'text-red-600 border-red-200 bg-red-50',
+      warning_box: props.workMode ? 'bg-red-900/10 border-red-900/30' : 'bg-red-50 border-red-100',
+      warning_icon: props.workMode ? 'bg-red-800/50 text-red-400' : 'bg-red-100 text-red-600',
+      warning_text: props.workMode ? 'text-red-400' : 'text-red-600',
       button: 'bg-red-500 hover:bg-red-600 shadow-red-500/30'
     }
   }
@@ -1034,7 +1131,7 @@ const highlightCommand = (command, highlight) => {
     const regex = new RegExp(`(${highlight})`, 'gi')
     return command.replace(
       regex,
-      '<span class="bg-red-500/30 text-red-200 font-bold px-1 rounded">$1</span>'
+      '<span class="bg-red-500/30 text-red-200 font-bold px-1">$1</span>'
     )
   } catch {
     return command
@@ -1615,6 +1712,7 @@ const fetchHistory = async (append = false) => {
     } else {
       let url = `${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`
       // Pass agent_id for direct mode (targetId acts as agentId)
+      // 直接模式传递 agent_id (targetId 作为 agentId)
       if (props.targetId) {
         url += `&agent_id=${props.targetId}`
       }
@@ -1645,6 +1743,7 @@ const fetchHistory = async (append = false) => {
           }
 
           // Group Chat Compatibility
+          // 群聊兼容性
           let role = log.role
           if (props.mode === 'group') {
             role = log.sender_id === 'user' ? 'user' : 'assistant'
@@ -1653,7 +1752,7 @@ const fetchHistory = async (append = false) => {
           return {
             id: log.id,
             role: role,
-            content: log.raw_content || log.content, // Prioritize raw_content for NIT tool display
+            content: log.raw_content || log.content, // Prioritize raw_content for NIT tool display (优先使用原始内容以显示 NIT 工具)
             timestamp: log.timestamp,
             images: images,
             senderId: log.sender_id,

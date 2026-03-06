@@ -103,6 +103,16 @@ class ModelManager:
 
     def get_model_path(self, model_key: str) -> str:
         """获取模型的本地存储路径"""
+        # [AssetRegistry Integration]
+        # 如果资产注册表中存在该模型，直接返回其路径
+        from core.asset_registry import get_asset_registry
+
+        registry = get_asset_registry()
+        asset = registry.get_asset(model_key)
+
+        if asset and asset.type == "model":
+            return asset.path
+
         if model_key not in self.models:
             raise ValueError(f"Unknown model key: {model_key}")
 
@@ -114,7 +124,22 @@ class ModelManager:
 
     def check_model_exists(self, model_key: str) -> bool:
         """检查模型是否已下载且完整"""
+        # [AssetRegistry Integration]
+        from core.asset_registry import get_asset_registry
+
+        registry = get_asset_registry()
+        asset = registry.get_asset(model_key)
+
+        if asset and asset.type == "model":
+            # 对于注册表中的资产，我们假设它只要存在就是完整的
+            # 或者可以添加更严格的检查
+            return os.path.exists(asset.path)
+
         try:
+            # HuggingFace Cache Check logic
+            if model_key not in self.models:
+                return False
+
             path = self.get_model_path(model_key)
 
             # 检查快照目录
@@ -151,12 +176,27 @@ class ModelManager:
             return False
 
     def get_actual_model_path(self, model_key: str) -> Optional[str]:
-        """获取模型实际加载路径（指向具体的 snapshot 目录）"""
+        """获取模型实际加载路径（指向具体的 snapshot 目录 或 注册表路径）"""
+        # [AssetRegistry Integration]
+        from core.asset_registry import get_asset_registry
+
+        registry = get_asset_registry()
+        asset = registry.get_asset(model_key)
+
+        if asset and asset.type == "model":
+            if os.path.exists(asset.path):
+                return asset.path
+            return None
+
         if not self.check_model_exists(model_key):
             return None
 
         path = self.get_model_path(model_key)
         snapshots_dir = os.path.join(path, "snapshots")
+
+        if not os.path.exists(snapshots_dir):
+            return None
+
         snapshots = os.listdir(snapshots_dir)
         if not snapshots:
             return None
@@ -165,6 +205,17 @@ class ModelManager:
 
     def download_model(self, model_key: str, force: bool = False) -> str:
         """下载模型"""
+        # [AssetRegistry Integration]
+        # 如果在注册表中，直接返回路径 (不执行下载，因为假定它是本地/手动管理的)
+        from core.asset_registry import get_asset_registry
+
+        registry = get_asset_registry()
+        asset = registry.get_asset(model_key)
+
+        if asset and asset.type == "model":
+            logger.info(f"Model {model_key} found in AssetRegistry at {asset.path}")
+            return asset.path
+
         if model_key not in self.models:
             raise ValueError(f"Unknown model key: {model_key}")
 

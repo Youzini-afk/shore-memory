@@ -8,15 +8,27 @@
         :class="notification.type"
       >
         <div class="icon">
-          <span v-if="notification.type === 'error'">⚠️</span>
-          <span v-else-if="notification.type === 'success'">✅</span>
-          <span v-else>ℹ️</span>
+          <PixelIcon
+            v-if="notification.type === 'error'"
+            name="alert"
+            size="md"
+            animation="pulse"
+          />
+          <PixelIcon
+            v-else-if="notification.type === 'success'"
+            name="check"
+            size="md"
+            animation="bounce"
+          />
+          <PixelIcon v-else name="info" size="md" />
         </div>
         <div class="content">
           <div v-if="notification.title" class="title">{{ notification.title }}</div>
           <div class="message">{{ notification.message }}</div>
         </div>
-        <button class="close-btn" @click="remove(notification.id)">×</button>
+        <button class="close-btn" @click="remove(notification.id)">
+          <PixelIcon name="close" size="xs" />
+        </button>
       </div>
     </TransitionGroup>
   </div>
@@ -25,6 +37,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { listen } from '@/utils/ipcAdapter'
+import PixelIcon from './PixelIcon.vue'
 
 const notifications = ref([])
 let nextId = 0

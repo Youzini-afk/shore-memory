@@ -1,7 +1,16 @@
-import { app, BrowserWindow, shell, ipcMain, screen, Notification } from 'electron'
+import { app, BrowserWindow, shell, ipcMain, screen, Notification, protocol } from 'electron'
 import { release } from 'os'
 import { join } from 'path'
-import { getSteamUser } from './services/steam.js'
+import {
+  getSteamUser,
+  initSteam,
+  getSubscribedItems,
+  getItemState,
+  subscribeToItem,
+  unsubscribeFromItem,
+  downloadItem,
+  getItemInstallInfo
+} from './services/steam.js'
 
 import { startBackend, stopBackend, getBackendLogs } from './services/python.js'
 import { startGateway, stopGateway } from './services/gateway.js'
@@ -22,6 +31,7 @@ import {
   installNapCat
 } from './services/napcat.js'
 import { checkEsInstalled, installEs } from './services/everything.js'
+import { scanLocalModels } from './services/models.js'
 import { setupUpdater } from './services/updater.js'
 import { windowManager } from './windows/manager.js'
 import { createTray } from './services/tray.js'
@@ -35,6 +45,22 @@ import fs from 'fs-extra'
 
 // @ts-ignore
 const native = require('../../src/components/avatar/native')
+
+import { registerAssetProtocol } from './services/assets.js'
+
+// 注册自定义协议的特权方案 (必须在 app ready 之前)
+protocol.registerSchemesAsPrivileged([
+  {
+    scheme: 'asset',
+    privileges: {
+      secure: true,
+      standard: true,
+      supportFetchAPI: true,
+      corsEnabled: true,
+      stream: true
+    }
+  }
+])
 
 // GUI 模式（原始逻辑）
 
@@ -54,7 +80,7 @@ app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
 
 // 为 Windows 10+ 通知设置应用程序名称
 if (process.platform === 'win32') {
-  app.setName('PeroCore')
+  app.setName('萌动链接：PeroperoChat！')
   app.setAppUserModelId(app.getName())
 }
 
@@ -64,6 +90,14 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
+
+// 尝试初始化 Steam
+// 如果是通过直接运行 exe 启动的，initSteam 会检测是否需要重启并通过 Steam 启动
+const steamStatus = initSteam()
+if (steamStatus === 'restarting') {
+  app.quit()
+  process.exit(0)
+}
 
 const createWindow = async () => {
   const win = windowManager.createLauncherWindow()
@@ -91,6 +125,34 @@ const createWindow = async () => {
 // 注册全局 IPC 处理程序
 ipcMain.handle('steam-get-user', () => {
   return getSteamUser()
+})
+
+ipcMain.handle('steam-workshop-get-subscribed', () => {
+  return getSubscribedItems()
+})
+
+ipcMain.handle('steam-workshop-get-state', (_, itemId) => {
+  return getItemState(itemId)
+})
+
+ipcMain.handle('steam-workshop-subscribe', (_, itemId) => {
+  subscribeToItem(itemId)
+})
+
+ipcMain.handle('steam-workshop-unsubscribe', (_, itemId) => {
+  unsubscribeFromItem(itemId)
+})
+
+ipcMain.handle('steam-workshop-download', (_, { itemId, highPriority }) => {
+  downloadItem(itemId, highPriority)
+})
+
+ipcMain.handle('steam-workshop-install-info', (_, itemId) => {
+  return getItemInstallInfo(itemId)
+})
+
+ipcMain.handle('scan-local-models', async () => {
+  return await scanLocalModels()
 })
 
 // 注册 Native 模块处理程序
@@ -125,27 +187,52 @@ ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
   }
 })
 
-app.whenReady().then(createWindow)
+app.whenReady().then(() => {
+  registerAssetProtocol()
+  createWindow()
+})
 
 // 监听服务崩溃事件并进行联动停止
-appEvents.on('gateway-crashed', () => {
+appEvents.on('gateway-crashed', async () => {
   logger.error('Main', 'Gateway 崩溃，正在停止 Backend...')
-  stopBackend()
+  await stopBackend()
 })
 
-appEvents.on('backend-crashed', () => {
+appEvents.on('backend-crashed', async () => {
   logger.error('Main', 'Backend 崩溃，正在停止 Gateway...')
-  stopGateway()
+  await stopGateway()
 })
+
+let isQuitting = false
 
 app.on('window-all-closed', () => {
   // 什么都不做，保持应用在托盘中运行
   if (process.platform === 'darwin') return
 })
 
-app.on('before-quit', () => {
-  stopBackend() // 确保后端被杀死
-  stopGateway() // 确保网关被杀死
+app.on('before-quit', async (event) => {
+  if (isQuitting) return
+
+  event.preventDefault()
+  isQuitting = true
+
+  logger.info('Main', '正在执行退出前清理...')
+  try {
+    // 1. 先关闭所有窗口
+    BrowserWindow.getAllWindows().forEach((win) => {
+      if (!win.isDestroyed()) {
+        win.destroy() // 强制销毁所有窗口
+      }
+    })
+
+    // 2. 停止所有后台服务
+    await Promise.all([stopBackend(), stopGateway(), stopNapCat()])
+    logger.info('Main', '后台服务已成功停止')
+  } catch (e) {
+    logger.error('Main', `停止后台服务时出错: ${e}`)
+  }
+
+  app.quit()
 })
 
 app.on('second-instance', () => {
@@ -271,8 +358,8 @@ ipcMain.handle('start_gateway', async (event) => {
 })
 
 ipcMain.handle('stop_backend', async () => {
-  stopBackend()
-  stopGateway()
+  await stopBackend()
+  await stopGateway()
 })
 
 ipcMain.handle('quit_app', () => {
@@ -618,9 +705,26 @@ ipcMain.handle('window-maximize', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender)
   if (window?.isMaximized()) {
     window.unmaximize()
+    return false
   } else {
     window?.maximize()
+    return true
   }
+})
+ipcMain.handle('window-toggle-maximize', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  if (window?.isMaximized()) {
+    window.unmaximize()
+    return false
+  } else {
+    window?.maximize()
+    return true
+  }
+})
+ipcMain.handle('window-unmaximize', (event) => {
+  const window = BrowserWindow.fromWebContents(event.sender)
+  window?.unmaximize()
+  return false
 })
 ipcMain.handle('window-close', (event) => {
   const window = BrowserWindow.fromWebContents(event.sender)

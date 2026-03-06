@@ -26,6 +26,7 @@ const editorRef = shallowRef()
 
 const editorOptions = {
   automaticLayout: true,
+  readOnly: false,
   minimap: { enabled: true, renderCharacters: false },
   fontSize: 15,
   fontFamily: "'Comic Shanns', 'Comic Sans MS', 'Cascadia Code', 'Fira Code', monospace",
@@ -44,8 +45,9 @@ const editorOptions = {
 watch(
   () => props.initialContent,
   (newVal) => {
-    if (newVal !== code.value) {
-      code.value = newVal || ''
+    // 只有当内容发生实质性变化（不是由当前编辑器引起的变更）时才更新
+    if (newVal !== undefined && newVal !== code.value) {
+      code.value = newVal
     }
   }
 )

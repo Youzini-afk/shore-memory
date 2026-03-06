@@ -8,12 +8,16 @@
       @toggle-mode="toggleMode"
     />
 
-    <!-- 视图容器 -->
+    <!-- 视图容器 (满屏或排除标题栏) -->
     <div
       :class="[
-        'absolute left-0 right-0 bottom-0 bg-[#1e293b] overflow-hidden',
-        isElectron() ? 'top-8' : 'top-0'
+        'absolute left-0 right-0 bottom-0 overflow-hidden pixel-ui pixel-grid-overlay transition-colors duration-500',
+        isWorkMode ? 'bg-[#1e293b]' : 'bg-[#fffcf9]'
       ]"
+      :style="{
+        top: isElectron() ? '32px' : '0',
+        height: isElectron() ? 'calc(100% - 32px)' : '100%'
+      }"
     >
       <Transition name="fade-slide">
         <KeepAlive>

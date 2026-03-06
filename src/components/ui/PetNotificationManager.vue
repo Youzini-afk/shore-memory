@@ -8,11 +8,19 @@
         :class="notification.type"
       >
         <div class="pet-notif-header">
-          <span v-if="notification.type === 'error'" class="pet-notif-icon">🛑</span>
-          <span v-else-if="notification.type === 'success'" class="pet-notif-icon">🟢</span>
-          <span v-else class="pet-notif-icon">🔵</span>
+          <span v-if="notification.type === 'error'" class="pet-notif-icon">
+            <PixelIcon name="alert" size="sm" animation="pulse" class="text-rose-500" />
+          </span>
+          <span v-else-if="notification.type === 'success'" class="pet-notif-icon">
+            <PixelIcon name="check" size="sm" animation="bounce" class="text-emerald-500" />
+          </span>
+          <span v-else class="pet-notif-icon">
+            <PixelIcon name="info" size="sm" class="text-sky-500" />
+          </span>
           <span class="pet-notif-title">{{ notification.title }}</span>
-          <button class="pet-notif-close" @click="remove(notification.id)">×</button>
+          <button class="pet-notif-close" @click="remove(notification.id)">
+            <PixelIcon name="close" size="xs" />
+          </button>
         </div>
         <div class="pet-notif-body">
           {{ notification.message }}
@@ -31,6 +39,7 @@
 <script setup>
 import { ref, onMounted, onUnmounted } from 'vue'
 import { listen } from '@/utils/ipcAdapter'
+import PixelIcon from './PixelIcon.vue'
 
 const notifications = ref([])
 let nextId = 0

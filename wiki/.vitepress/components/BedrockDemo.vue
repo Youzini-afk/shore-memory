@@ -59,11 +59,12 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js'
 // 由于 vitepress 构建机制，直接引用 src 下的 ts 文件可能会有问题，最好是构建好的 lib 或者简单的内联
 // 为了保证演示的稳定性，我们将使用一个简化的内联加载逻辑，或者尝试直接 import
 
-// 尝试直接导入 (需要 vitepress 配置 alias，默认可能没有 @ 指向 src)
-// 我们先尝试相对路径导入，假设目录结构允许
-// 注意：Vitepress 在 SSR 时可能会有问题，需要 client-only
-import { BedrockLoader } from '../../../src/components/avatar/lib/BedrockLoader'
-import { AnimationManager } from '../../../src/components/avatar/lib/AnimationManager'
+import { AvatarRenderer } from '../../../src/components/avatar/lib/AvatarRenderer'
+import { AnimationEngine } from '../../../src/components/avatar/lib/animation/AnimationEngine'
+import { AnimationLibrary } from '../../../src/components/avatar/lib/animation/AnimationLibrary'
+import { RetargetingManager } from '../../../src/components/avatar/lib/retargeting/RetargetingManager'
+import { WikiModelProvider } from './WikiModelProvider'
+import { StandardBones } from '../../../src/components/avatar/lib/retargeting/RetargetingConfig'
 
 const container = ref<HTMLElement | null>(null)
 const canvasContainer = ref<HTMLElement | null>(null)
@@ -85,14 +86,23 @@ const scene = shallowRef<THREE.Scene | null>(null)
 const camera = shallowRef<THREE.PerspectiveCamera | null>(null)
 const renderer = shallowRef<THREE.WebGLRenderer | null>(null)
 const controls = shallowRef<OrbitControls | null>(null)
-const animManager = new AnimationManager()
-const loader = new BedrockLoader()
-let characterModel: THREE.Object3D | null = null
+
+// 渲染架构对象
+const retargetingManager = new RetargetingManager()
+const animationEngine = new AnimationEngine(retargetingManager)
+const avatarRenderer = new AvatarRenderer()
+const animationLibrary = new AnimationLibrary()
+
+let characterModel: THREE.Group | null = null
 let animationFrameId: number
+let lastTime = 0
 
 const playAnimation = () => {
   if (selectedAnim.value) {
-    animManager.playDebug(selectedAnim.value)
+    const animData = animationLibrary.get(selectedAnim.value)
+    if (animData) {
+      animationEngine.play(animData, 0.2, true)
+    }
   }
 }
 
@@ -140,7 +150,7 @@ onUnmounted(() => {
   if (renderer.value) {
     renderer.value.dispose()
   }
-  animManager.stop()
+  animationEngine.stop()
 })
 
 function initThree() {
@@ -205,9 +215,6 @@ function initThree() {
 
 async function loadModel() {
   try {
-    // 使用实际项目中的资源路径，注意在 vitepress 中需要正确处理静态资源
-    // 我们假设这些资源在 public/assets 下可用
-    // 为了演示，我们需要确保 public/assets/3d 存在
     const config = {
       name: 'Rossi',
       model: withBase('/assets/3d/Rossi/models/main.json'),
@@ -218,26 +225,38 @@ async function loadModel() {
         withBase('/assets/3d/Rossi/animations/carryon.animation.json'),
         withBase('/assets/3d/Rossi/animations/extra.animation.json'),
         withBase('/assets/3d/Rossi/animations/tlm.animation.json')
-      ],
-      animation_controllers: withBase('/assets/3d/Rossi/controller/controller.json')
+      ]
     }
 
-    const rootGroup = await loader.load(config, animManager)
+    const provider = new WikiModelProvider(config)
+    const rootGroup = await avatarRenderer.build(provider)
     characterModel = rootGroup
     scene.value?.add(rootGroup)
 
-    animList.value = Object.keys(animManager.animations).sort()
+    // 加载动画
+    const animations = await provider.getAnimations()
+    animations.forEach((clip, name) => {
+      animationLibrary.add(name, clip)
+    })
+    animList.value = animationLibrary.getNames().sort()
 
-    // Auto play idle
+    // 绑定重定向
+    retargetingManager.init(rootGroup, { mapping: {} })
+
+    // 自动播放 idle
     const idleAnim =
       animList.value.find((n) => n === 'idle') || animList.value.find((n) => n === 'tac:idle')
     if (idleAnim) {
-      animManager.playDebug(idleAnim)
-      selectedAnim.value = idleAnim
+      const animData = animationLibrary.get(idleAnim)
+      if (animData) {
+        animationEngine.play(animData)
+        selectedAnim.value = idleAnim
+      }
     }
 
     updateClothing()
     loading.value = false
+    lastTime = performance.now()
   } catch (e: any) {
     console.error(e)
     errorMsg.value = 'Failed to load model. Please ensure assets are in public/assets.'
@@ -248,7 +267,13 @@ async function loadModel() {
 function animate() {
   animationFrameId = requestAnimationFrame(animate)
   if (controls.value) controls.value.update()
-  animManager.update()
+
+  const now = performance.now()
+  const dt = (now - lastTime) / 1000
+  lastTime = now
+
+  animationEngine.update(dt)
+
   if (renderer.value && scene.value && camera.value) {
     renderer.value.render(scene.value, camera.value)
   }

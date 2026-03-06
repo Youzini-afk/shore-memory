@@ -1,65 +1,102 @@
 <template>
-  <div class="terminal-panel">
-    <div class="terminal-header">
-      <div class="title">
-        <el-icon><ChatDotSquare /></el-icon> NapCat 交互终端
+  <div
+    class="flex flex-col h-full bg-slate-950 text-slate-300 font-mono text-sm overflow-hidden relative group/terminal pixel-border-dark"
+  >
+    <!-- CRT Scanline Effect -->
+    <div
+      class="absolute inset-0 pointer-events-none z-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))]"
+      style="
+        background-size:
+          100% 3px,
+          3px 100%;
+      "
+    ></div>
+
+    <div
+      class="flex items-center justify-between px-4 py-2 bg-slate-900 border-b-2 border-slate-800 shrink-0 relative z-20"
+    >
+      <div class="flex items-center gap-2 font-bold text-slate-200">
+        <div class="animate-pulse">
+          <PixelIcon name="terminal" size="sm" class="text-moe-pink" />
+        </div>
+        <span class="tracking-wider pixel-font">NapCat 交互终端</span>
       </div>
-      <div class="actions">
-        <el-button size="small" circle title="清空" @click="clearLogs">
-          <el-icon><Delete /></el-icon>
-        </el-button>
+      <div class="flex items-center gap-2">
+        <button
+          class="p-1.5 hover:bg-white/10 text-slate-400 hover:text-red-400 transition-colors group active:scale-90 pixel-border-sm-transparent hover:pixel-border-sm-dark"
+          title="清空"
+          @click="clearLogs"
+        >
+          <PixelIcon name="trash" size="xs" class="group-hover:shake" />
+        </button>
       </div>
     </div>
 
-    <div ref="logContainer" class="terminal-content">
+    <div ref="logContainer" class="flex-1 overflow-y-auto p-4 custom-scrollbar relative z-0">
       <!-- 下载进度条 -->
-      <div v-if="downloadProgress.active" class="download-progress-bar">
-        <div class="progress-info">
-          <span>{{ downloadProgress.status }}</span>
-          <span>{{ downloadProgress.percent }}%</span>
+      <div v-if="downloadProgress.active" class="mb-4 bg-slate-800 p-3 pixel-border-moe">
+        <div class="flex justify-between text-xs mb-2 font-bold font-mono">
+          <span class="text-moe-pink flex items-center gap-2">
+            <PixelIcon name="download" size="xs" animation="bounce" />
+            {{ downloadProgress.status }}
+          </span>
+          <span class="text-moe-sky">{{ downloadProgress.percent }}%</span>
         </div>
-        <el-progress
-          :percentage="downloadProgress.percent"
-          :status="
-            downloadProgress.error ? 'exception' : downloadProgress.completed ? 'success' : ''
-          "
-          :stroke-width="12"
-          :text-inside="true"
-          striped
-          striped-flow
-        />
+        <div class="w-full bg-slate-900 h-3 p-0.5 border border-slate-700">
+          <div
+            class="h-full transition-all duration-300 bg-moe-pink"
+            :class="downloadProgress.error ? 'bg-red-500' : 'bg-moe-pink'"
+            :style="{ width: `${downloadProgress.percent}%` }"
+          ></div>
+        </div>
       </div>
 
-      <div v-for="log in logs" :key="log.id" class="log-line">
-        <span class="timestamp">[{{ log.time }}]</span>
+      <div
+        v-for="log in logs"
+        :key="log.id"
+        class="break-all whitespace-pre-wrap leading-none font-mono text-[13px] hover:bg-white/5 transition-colors px-1"
+      >
+        <span class="text-slate-500 mr-2 opacity-70">[{{ log.time }}]</span>
         <span class="message" v-html="ansiToHtml(log.content)"></span>
       </div>
-      <div v-if="logs.length === 0" class="empty-state">
-        <el-icon class="empty-icon"><Monitor /></el-icon>
-        <span>等待 NapCat 进程输出...</span>
+      <div
+        v-if="logs.length === 0"
+        class="flex flex-col items-center justify-center h-full text-slate-600 gap-3 opacity-50"
+      >
+        <PixelIcon name="terminal" size="xl" class="text-moe-pink/50" />
+        <span class="text-xs tracking-widest uppercase pixel-font">等待 NapCat 进程输出...</span>
       </div>
     </div>
 
-    <div class="terminal-input-area">
-      <div class="input-prefix">
-        <el-icon><ArrowRight /></el-icon>
+    <div class="p-3 bg-slate-900 border-t-2 border-slate-800 shrink-0 relative z-20">
+      <div
+        class="flex items-center gap-2 bg-slate-950 border-2 border-slate-800 px-3 py-2 focus-within:border-moe-pink/50 transition-colors group/input"
+      >
+        <PixelIcon
+          name="chevron-right"
+          size="xs"
+          class="text-moe-pink shrink-0 group-focus-within/input:animate-pulse"
+        />
+        <input
+          v-model="inputValue"
+          class="flex-1 bg-transparent border-none outline-none text-moe-pink placeholder-slate-600 font-mono"
+          placeholder="输入指令并回车..."
+          spellcheck="false"
+          @keyup.enter="sendCommand"
+        />
+        <span v-if="inputValue" class="text-[10px] text-moe-pink/50 animate-pulse pixel-font"
+          >PRESS ENTER</span
+        >
       </div>
-      <input
-        v-model="inputValue"
-        class="terminal-input"
-        placeholder="输入指令并回车..."
-        spellcheck="false"
-        @keyup.enter="sendCommand"
-      />
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, nextTick, watch, onMounted, onUnmounted } from 'vue'
-import { ChatDotSquare, Delete, Monitor, ArrowRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import PixelIcon from '../ui/PixelIcon.vue'
 import { listen, invoke } from '@/utils/ipcAdapter'
+
 // 状态
 const logs = ref([])
 const inputValue = ref('')
@@ -106,7 +143,12 @@ const sendCommand = async () => {
     inputValue.value = ''
   } catch (e) {
     console.error(`[错误] 发送指令失败: ${e}`)
-    ElMessage.error(`发送指令失败: ${e}`)
+    // 简易错误提示
+    logs.value.push({
+      time: new Date().toLocaleTimeString(),
+      content: `[Error] 发送指令失败: ${e}`,
+      id: Date.now() + Math.random()
+    })
   }
 }
 

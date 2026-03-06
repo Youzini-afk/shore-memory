@@ -48,7 +48,7 @@ describe('ContextMenu.vue', () => {
     })
 
     await wrapper.findAll('button')[0].trigger('click')
-    
+
     expect(defaultProps.items[0].action).toHaveBeenCalled()
     expect(wrapper.emitted('close')).toBeTruthy()
   })
@@ -59,7 +59,7 @@ describe('ContextMenu.vue', () => {
     })
 
     await wrapper.findAll('button')[1].trigger('click') // Item 2 is disabled
-    
+
     expect(defaultProps.items[1].action).not.toHaveBeenCalled()
     expect(wrapper.emitted('close')).toBeFalsy()
   })
@@ -88,7 +88,7 @@ describe('ContextMenu.vue', () => {
     // 或者直接在 window 上触发
     const event = new KeyboardEvent('keydown', { key: 'Escape' })
     window.dispatchEvent(event)
-    
+
     expect(wrapper.emitted('close')).toBeTruthy()
 
     wrapper.unmount()

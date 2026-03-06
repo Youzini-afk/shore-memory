@@ -19,7 +19,11 @@
 
 <br/><br/>
 
-<!-- 徽章导航 -->
+<!-- 徽标导航 -->
+<a href="https://store.steampowered.com/app/4457100">
+  <img src="https://img.shields.io/badge/Steam-PeroperoChat-171a21?style=for-the-badge&logo=steam&logoColor=white" alt="Steam">
+</a>
+&nbsp;
 <a href="#-technical-architecture">
   <img src="https://img.shields.io/badge/Architecture-Electron_Vue3-4FC08D?style=for-the-badge&logo=vue.js&logoColor=white" alt="Arch">
 </a>
@@ -46,7 +50,17 @@
 
 ---
 
-<br/><br/>
+<br/>
+
+<div align="center">
+
+<h2>PeroCore 是 <a href="https://store.steampowered.com/app/4457100" style="text-decoration: none; color: #FF69B4;"><b>萌动链接：PeroperoChat</b></a> 应用的构建核心</h2>
+
+</div>
+
+<br/>
+
+---
 
 <div align="center">
 
@@ -72,14 +86,14 @@
 <summary><b>Quick Navigation</b></summary>
 <br/>
 
-| Section | Description                                 |                Link                 |
-| :-----: | :------------------------------------------ | :---------------------------------: |
-|   📖    | **Wiki** - 项目官方中文文档 (Documentation) | [Visit](https://www.perofamily.top) |
-|   🌟    | **Philosophy** - 核心理念：有温度的伙伴     |        [Jump](#-philosophy)         |
-|   🏗️    | **Architecture** - 核心架构与模块详解       |  [Jump](#-technical-architecture)   |
-|   💬    | **Social Mode** - 社交模式与群聊分身        |        [Jump](#-social-mode)        |
-|   🐳    | **Server Mode** - Docker 容器化部署         |        [Jump](#-server-mode)        |
-|   🚀    | **Quick Start** - 一键启动指南              |        [Jump](#-quick-start)        |
+| Section | Description                             |                Link                 |
+| :-----: | :-------------------------------------- | :---------------------------------: |
+|   📖    | **Wiki** - 项目官方中文文档             | [Visit](https://www.perofamily.top) |
+|   🌟    | **Philosophy** - 核心理念：有温度的伙伴 |        [Jump](#-philosophy)         |
+|   🏗️    | **Architecture** - 核心架构与模块详解   |  [Jump](#-technical-architecture)   |
+|   💬    | **Social Mode** - 社交模式与群聊分身    |        [Jump](#-social-mode)        |
+|   🐳    | **Server Mode** - Docker 容器化部署     |        [Jump](#-server-mode)        |
+|   🚀    | **Quick Start** - 一键启动指南          |        [Jump](#-quick-start)        |
 
 </details>
 

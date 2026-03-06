@@ -41,6 +41,7 @@ class ConfigManager:
             "enable_social_mode": False,  # 默认关闭以确保安全
             "tts_enabled": True,
             "content_moderation_enabled": False,  # 默认关闭内容审核
+            "eula_accepted": False,  # 最终用户许可协议接受状态
             # [Memory] 默认记忆配置 (JSON 结构)
             "memory_config": json.dumps(
                 {

@@ -152,25 +152,15 @@ class TestSessionService:
         )
         await session.commit()
 
-        # 3. 模拟 MemoryService.save_memory
-        with patch(
-            "services.core.session_service.MemoryService.save_memory",
-            new_callable=AsyncMock,
-        ) as mock_save:
-            with patch.dict(sys.modules, modules_to_patch):
-                result = await exit_work_mode()
+        # 3. 模拟退出工作模式
+        with patch.dict(sys.modules, modules_to_patch):
+            result = await exit_work_mode()
 
-            assert "已退出工作模式" in result
-            assert "Test Task" in result or "已恢复" in result
+        assert "已退出工作模式" in result
+        assert "Test Task" in result or "已恢复" in result
 
-            # 验证已调用总结生成
-            mock_scorer.generate_work_log_summary.assert_called_once()
-
-            # 验证已保存记忆
-            mock_save.assert_called_once()
-            call_kwargs = mock_save.call_args[1]
-            assert call_kwargs["content"] == "Work summary"
-            assert "Test Task" in call_kwargs["tags"]
+        # 验证已调用总结生成
+        mock_scorer.generate_work_log_summary.assert_called_once()
 
     @pytest.mark.asyncio
     async def test_exit_work_mode_not_in_work(self, session):

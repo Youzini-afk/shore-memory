@@ -202,7 +202,6 @@ class SocialService:
             from sqlmodel import select
 
             from .database import get_social_db_session
-            from .models_db import SocialDailyReport
 
             # A. 检查文件 (只检查文件，不查数据库)
             # 定位 workspace
