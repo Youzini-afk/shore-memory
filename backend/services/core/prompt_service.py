@@ -423,7 +423,8 @@ class PromptManager:
                         )
                         if tools_desc:
                             variables["available_tools_desc"] = tools_desc
-                            logger.warning(
+                            # 降低日志级别：这是一个预期的回退行为，无需作为 INFO/WARNING 刷屏
+                            logger.debug(
                                 "[PromptManager] dynamic_tools 缺失，已从 Dispatcher 获取核心工具作为回退"
                             )
                         else:

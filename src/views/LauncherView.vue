@@ -1580,7 +1580,7 @@
                     Everything 搜索
                   </h3>
                   <p class="text-sm text-slate-500 mb-10 leading-relaxed opacity-80 font-medium">
-                    极致轻快的本地文件索引工具。{{ APP_TITLE }} 借助此工具实现秒级定位相关资源。
+                    极致轻快的本地文件索引工具，秒级定位相关资源。
                   </p>
                   <div class="flex items-center justify-between mt-auto">
                     <span
@@ -1647,8 +1647,7 @@
                     NapCat 社交集成
                   </h3>
                   <p class="text-sm text-slate-500 mb-10 leading-relaxed opacity-80 font-medium">
-                    通过 NapCat 框架深度连接社交协议。开启后
-                    {{ AGENT_NAME }} 将具备跨平台的智能互动能力。
+                    通过 NapCat 框架深度连接社交协议。开启后应用将具备跨平台的智能互动能力。
                   </p>
                   <div class="flex items-center justify-between mt-auto">
                     <div class="flex items-center gap-5">

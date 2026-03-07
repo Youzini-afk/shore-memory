@@ -24,24 +24,39 @@ export function initSteam(): 'restarting' | 'success' | 'failed' {
 
   const appId = 4457100 // PeroCore Steam App ID
 
-  // 处理生产环境下的 Steam 重启逻辑
-  // 如果应用不是通过 Steam 启动的，这将触发重启并返回 true
-  if (app.isPackaged && steamworks.restartAppIfNecessary(appId)) {
-    return 'restarting'
+  // 1. 检查是否显式禁用了 Steam
+  if (process.env.PERO_DISABLE_STEAM || process.env.IS_DOCKER || process.env.DOCKER_ENV) {
+    console.log('[Steam] Steam 已被禁用 (环境变量)')
+    return 'failed'
+  }
+
+  // 2. 检查是否在生产环境中运行
+  if (app.isPackaged) {
+    // 智能检测是否为 Steam 构建：
+    // - 检查安装路径中是否包含 'steamapps' (标准的 Steam 库路径)
+    // - 检查是否存在 steam_appid.txt (开发环境或手动调试)
+    const exePath = app.getPath('exe').toLowerCase()
+    const isSteamLibraryPath = exePath.includes('steamapps')
+    const hasAppIdFile =
+      require('fs').existsSync(path.join(path.dirname(app.getPath('exe')), 'steam_appid.txt')) ||
+      require('fs').existsSync(path.join(process.cwd(), 'steam_appid.txt'))
+
+    // 如果不是在 Steam 库中，且没有 steam_appid.txt，我们推断这是一个非 Steam 版本（如 GitHub Release）
+    // 此时我们绝对不应该触发 restartAppIfNecessary，否则会强行启动 Steam 并导致应用退出
+    if (!isSteamLibraryPath && !hasAppIdFile) {
+      console.log('[Steam] 检测为非 Steam 环境启动，跳过强制重启逻辑')
+    } else {
+      // 只有在确认为 Steam 环境时，才执行重启检查
+      if (steamworks.restartAppIfNecessary(appId)) {
+        console.log('[Steam] 应用未通过 Steam 启动，正在请求 Steam 重启...')
+        return 'restarting'
+      }
+    }
   }
 
   try {
-    // 检查是否在 Docker 环境中运行
-    if (process.env.DOCKER_ENV || process.env.IS_DOCKER) {
-      console.log('[Steam] 检测到 Docker 环境，跳过 Steam 初始化。')
-      return 'failed'
-    }
-
     // 为 Electron 启用 Steam 覆盖层 (Overlay)
     // 必须在应用 ready 之前调用
-    // 注意：Overlay 通常只会在第一个创建的窗口或者被标记为主窗口的上下文中生效
-    // 在我们的架构中，我们希望它主要在 DashboardView 或 LauncherView 生效
-    // Pet3DView 作为一个透明悬浮窗，如果被注入 Overlay 可能会有渲染问题
     steamworks.electronEnableSteamOverlay()
 
     // 初始化 Steamworks
@@ -66,7 +81,7 @@ export function initSteam(): 'restarting' | 'success' | 'failed' {
     }
     console.warn('[Steam] ============================================')
     console.warn('[Steam] 初始化失败:', error)
-    console.warn('[Steam] Steam 是否正在运行？steam_appid.txt 是否存在？')
+    console.warn('[Steam] Steam 是否正在运行？或当前用户未拥有此 AppID')
     console.warn('[Steam] ============================================')
     return 'failed'
   }

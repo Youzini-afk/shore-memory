@@ -103,11 +103,11 @@ onUnmounted(() => {
 <style scoped>
 .pet-notification-container {
   position: fixed;
-  bottom: 20px;
-  right: 20px;
+  top: 20px; /* 从 bottom 改为 top 喵~ 🌸 */
+  left: 20px; /* 从 right 改为 left 喵~ 🌸 */
   z-index: 10000;
   display: flex;
-  flex-direction: column-reverse; /* 新消息在底部，向上堆叠 */
+  flex-direction: column; /* 新消息在顶部，向下堆叠 */
   gap: 10px;
   pointer-events: none;
   width: 300px;
@@ -128,7 +128,7 @@ onUnmounted(() => {
   /* 增加轻微文字阴影以柔化边缘，使其看起来不那么刺眼 */
   text-shadow: 0 0 0.2px rgba(255, 255, 255, 0.1);
   transition: all 0.3s ease;
-  transform-origin: bottom right;
+  transform-origin: top left; /* 动画起点改为左上角 */
 }
 
 .pet-notification-item.error {
@@ -225,10 +225,10 @@ onUnmounted(() => {
 }
 .pet-list-enter-from {
   opacity: 0;
-  transform: translateX(30px) scale(0.9);
+  transform: translateX(-30px) scale(0.9);
 }
 .pet-list-leave-to {
   opacity: 0;
-  transform: translateX(30px);
+  transform: translateX(-30px);
 }
 </style>

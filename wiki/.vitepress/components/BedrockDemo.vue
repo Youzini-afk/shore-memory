@@ -313,14 +313,12 @@ function onResize() {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  background: var(--vp-c-bg-soft);
-  backdrop-filter: blur(4px);
+  background: var(--moe-cloud-white);
   padding: 20px;
-  border-radius: 8px;
+  border: 2px solid var(--moe-cocoa-brown);
+  box-shadow: 4px 4px 0 var(--moe-cocoa-brown);
   font-weight: bold;
-  color: var(--vp-c-text-1);
-  border: 1px solid var(--vp-c-divider);
-  box-shadow: var(--vp-shadow-3);
+  color: var(--moe-cocoa-brown);
   z-index: 10;
 }
 
@@ -333,15 +331,13 @@ function onResize() {
   bottom: 20px;
   left: 20px;
   right: 20px;
-  background: var(--vp-c-bg-soft);
-  backdrop-filter: blur(8px);
+  background: var(--moe-cloud-white);
   padding: 15px;
-  border-radius: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  box-shadow: var(--vp-shadow-3);
-  border: 1px solid var(--vp-c-divider);
+  border: 2px solid var(--moe-cocoa-brown);
+  box-shadow: 4px 4px 0 var(--moe-sakura-pink);
 }
 
 .control-group {
@@ -351,23 +347,23 @@ function onResize() {
 }
 
 .label {
-  font-weight: 600;
+  font-weight: 900;
   font-size: 0.9em;
-  color: var(--vp-c-text-1);
+  color: var(--moe-cocoa-brown);
   min-width: 80px;
 }
 
 select {
   padding: 4px 8px;
-  border-radius: 4px;
-  border: 1px solid var(--vp-c-divider);
-  background: var(--vp-c-bg);
-  color: var(--vp-c-text-1);
+  border: 2px solid var(--moe-cocoa-brown);
+  background: var(--moe-vanilla-yellow);
+  color: var(--moe-cocoa-brown);
+  font-family: 'DotGothic16', sans-serif;
   outline: none;
 }
 
 select:focus {
-  border-color: var(--vp-c-brand-1);
+  border-color: var(--moe-sakura-pink-dark);
 }
 
 .checkbox-group {
@@ -381,19 +377,17 @@ select:focus {
   gap: 4px;
   font-size: 0.9em;
   cursor: pointer;
-  color: var(--vp-c-text-2);
-}
-
-.checkbox-group label:hover {
-  color: var(--vp-c-text-1);
+  color: var(--moe-cocoa-brown);
+  font-weight: bold;
 }
 
 .demo-instructions {
   padding: 10px 15px;
-  background: var(--vp-c-bg-soft);
-  border-top: 1px solid var(--vp-c-divider);
+  background: var(--moe-cloud-white);
+  border: 2px solid var(--moe-cocoa-brown);
+  border-top: none;
   font-size: 0.85em;
-  color: var(--vp-c-text-2);
+  color: var(--moe-cocoa-brown);
   text-align: center;
   display: flex;
   flex-direction: column;

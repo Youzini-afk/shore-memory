@@ -21,6 +21,17 @@ console.log('[App] App.vue 已初始化')
 onMounted(() => {
   // 启动网关连接
   gatewayClient.connect()
+
+  // 监听网关广播的系统错误并转发给通知系统 🌸
+  gatewayClient.on('action:system_error', (payload) => {
+    console.warn('[Gateway] 收到系统错误广播:', payload)
+    if (window.$notify) {
+      const msg = payload.message || payload.payload || JSON.stringify(payload)
+      const title = payload.title || '系统提示'
+      const type = payload.type || 'error'
+      window.$notify(msg, type, title, 10000)
+    }
+  })
 })
 
 // 全局 JS 错误捕获

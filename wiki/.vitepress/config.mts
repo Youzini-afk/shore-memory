@@ -8,8 +8,20 @@ export default defineConfig({
   title: 'Perofamily Wiki',
   description: 'Documentation for PeroCore - The AI Desktop Companion',
   // base: '/PeroCore/', // Deploy to GitHub Pages: https://YoKONCy.github.io/PeroCore/
-  head: [['link', { rel: 'icon', href: '/Logo.png' }]],
-  appearance: true, // Enable dark mode toggle
+  head: [
+    ['link', { rel: 'icon', href: '/Logo.png' }],
+    // 引入更柔和的像素字体与平滑回退字体
+    ['link', { rel: 'preconnect', href: 'https://fonts.googleapis.com' }],
+    ['link', { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' }],
+    [
+      'link',
+      {
+        rel: 'stylesheet',
+        href: 'https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=Ma+Shan+Zheng&display=swap'
+      }
+    ]
+  ],
+  appearance: false, // 禁用深色模式切换，统一使用全天候萌动色 🌸
   markdown: {
     config: (md) => {
       md.use(mathjax3)

@@ -87,6 +87,13 @@
           >
             {{ voiceModeIcon }}
           </button>
+          <button
+            class="tool-btn"
+            :title="displayMode === 'bubble' ? '切换到歌词模式' : '切换到气泡模式'"
+            @click.stop="toggleDisplayMode"
+          >
+            {{ displayMode === 'bubble' ? '🎤' : '🫧' }}
+          </button>
           <button class="tool-btn" title="聊天" @click.stop="openChatWindow">💬</button>
           <button class="tool-btn" title="面板" @click.stop="openDashboard">⚙️</button>
           <button class="tool-btn" title="最小化到托盘" @click.stop="minimizeToTray">➖</button>
@@ -182,7 +189,7 @@
         <!-- 移除了 mode="out-in" 以允许快速点击时立即替换 -->
         <transition name="bubble-fade">
           <div
-            v-if="currentText || isThinking"
+            v-if="displayMode === 'bubble' && (currentText || isThinking)"
             :key="bubbleKey"
             class="bubble"
             :class="{ expanded: isBubbleExpanded }"
@@ -225,6 +232,14 @@
       </div>
     </div>
 
+    <!-- 歌词模式覆盖层 -->
+    <LyricOverlay
+      v-if="displayMode === 'lyric'"
+      :text="filteredLyricText"
+      :is-thinking="isThinking"
+      :thinking-message="thinkingMessage"
+    />
+
     <!-- 文件搜索模态框 -->
     <FileSearchModal v-model:visible="showFileModal" :files="foundFiles" />
   </div>
@@ -235,6 +250,7 @@ import { ref, onMounted, onUnmounted, computed, watch, nextTick } from 'vue'
 import BedrockAvatar from '../components/avatar/BedrockAvatar.vue'
 import PetNotificationManager from '@/components/ui/PetNotificationManager.vue'
 import FileSearchModal from '../components/modals/FileSearchModal.vue'
+import LyricOverlay from '../components/chat/LyricOverlay.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
 import { API_BASE } from '../config'
 import { gatewayClient } from '../api/gateway'
@@ -275,6 +291,7 @@ const moodText = ref(localStorage.getItem('ppc.mood') || '开心')
 const vibeText = ref(localStorage.getItem('ppc.vibe') || '轻松')
 const mindText = ref(localStorage.getItem('ppc.mind') || '发呆')
 const isWorkMode = ref(false)
+const displayMode = ref(localStorage.getItem('ppc.display_mode') || 'bubble') // bubble | lyric
 const voiceMode = ref(parseInt(localStorage.getItem('ppc.voice_mode') || '0'))
 const isThinking = ref(false)
 const isPTTRecording = ref(false) // PTT 状态
@@ -345,6 +362,13 @@ const parsedBubbleContent = computed(() => {
   }
 
   return segments.filter((s) => s.type === 'text' || s.type === 'action')
+})
+
+const filteredLyricText = computed(() => {
+  return parsedBubbleContent.value
+    .map((s) => (s.type === 'action' ? `*${s.content}*` : s.content))
+    .join(' ')
+    .trim()
 })
 
 const checkOverflow = () => {
@@ -1308,6 +1332,20 @@ onUnmounted(() => {
   window.removeEventListener('mousedown', onMouseDown)
   window.removeEventListener('resize', updateScale)
 })
+
+const toggleDisplayMode = () => {
+  displayMode.value = displayMode.value === 'bubble' ? 'lyric' : 'bubble'
+  localStorage.setItem('ppc.display_mode', displayMode.value)
+
+  // 在气泡中显示提示
+  if (displayMode.value === 'lyric') {
+    currentText.value = '切换到: 悬浮歌词模式'
+  } else {
+    currentText.value = '切换到: 经典气泡模式'
+  }
+  isBubbleExpanded.value = false
+  bubbleKey.value++
+}
 
 const toggleUI = () => {
   showInput.value = !showInput.value

@@ -32,5 +32,34 @@ features:
 ---
 
 <style>
-/* Local style overrides for homepage if needed */
+/* 🌸 首页萌动特效增强 🌸 */
+:deep(.VPHero) {
+  padding-top: 80px;
+  padding-bottom: 80px;
+}
+
+:deep(.VPHero .name) {
+  letter-spacing: -4px;
+}
+
+:deep(.VPHero .text) {
+  font-family: 'ZCOOL KuaiLe', sans-serif;
+  letter-spacing: 2px;
+  color: var(--moe-cocoa-brown) !important;
+  opacity: 0.8;
+}
+
+:deep(.VPFeature) {
+  padding: 32px !important;
+}
+
+:deep(.VPFeature .title) {
+  font-weight: 900 !important;
+  color: var(--moe-cocoa-brown) !important;
+}
+
+/* 隐藏深色模式相关的残留样式 */
+:deep(.VPNav), :deep(.VPSidebar) {
+  transition: none !important;
+}
 </style>
