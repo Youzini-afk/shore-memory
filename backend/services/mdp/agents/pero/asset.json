@@ -1,0 +1,14 @@
+{
+  "asset_id": "com.perocore.persona.pero",
+  "type": "persona",
+  "source": "official",
+  "display_name": "Pero",
+  "version": "1.0.0",
+  "description": "看板娘Pero! 核心桌宠角色",
+  "author": "PeroCore",
+  "config": {
+    "agent_id": "pero",
+    "personas": ["work", "social", "group"],
+    "social_enabled": true
+  }
+}

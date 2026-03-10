@@ -1,12 +1,15 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.animefinder",
+  "type": "plugin",
+  "source": "official",
   "name": "AnimeFinder",
-  "displayName": "番剧识别 (AnimeFinder)",
+  "display_name": "番剧识别 (AnimeFinder)",
   "version": "1.0.1",
   "description": "番剧识别。通过截图查找动漫出处。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "anime_finder.py",
+  "tags": ["plugins"],
   "capabilities": {
     "invocationCommands": [
       {

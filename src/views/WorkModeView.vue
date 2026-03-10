@@ -243,7 +243,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onActivated, onErrorCaptured, reactive, computed } from 'vue'
+import { ref, onMounted, onActivated, onErrorCaptured, reactive, computed, watch } from 'vue'
 import FileExplorer from '../components/ide/FileExplorer.vue'
 import CodeEditor from '../components/ide/CodeEditor.vue'
 import ChatInterface from '../components/chat/ChatInterface.vue'
@@ -251,14 +251,17 @@ import CustomDialog from '../components/ui/CustomDialog.vue'
 import TerminalManager from '../components/ide/TerminalManager.vue'
 import PixelIcon from '../components/ui/PixelIcon.vue'
 
-defineProps({
+const props = defineProps({
   isReady: {
     type: Boolean,
     default: false
   }
 })
 
-const emit = defineEmits(['exit'])
+// 动态获取后端基础 URL 喵~ 🌸
+const API_BASE = window.location.protocol + '//' + (window.location.hostname || 'localhost') + ':9120'
+
+const emit = defineEmits(['exit', 'start-work'])
 
 // 对话框状态
 const dialog = reactive({
@@ -298,13 +301,30 @@ onErrorCaptured((err) => {
 })
 
 // 状态
-const internalReady = ref(false)
+const internalReady = ref(false) // 初始不就绪
 const agentName = ref('Pero')
 const agentId = ref('pero')
 
+// 监听父组件就绪状态，只有后端完成 work_mode/enter 后才真正开始加载
+watch(() => props.isReady, (newVal) => {
+  if (newVal && !internalReady.value) {
+    initWorkMode()
+  }
+}, { immediate: true })
+
+const initWorkMode = async () => {
+  try {
+    await fetchActiveAgent()
+    internalReady.value = true
+  } catch (e) {
+    console.error('[WorkMode] 初始化失败:', e)
+    error.value = '工作环境初始化失败，请检查网络连接或后端状态喵~'
+  }
+}
+
 const fetchActiveAgent = async () => {
   try {
-    const res = await fetch('http://localhost:9120/api/agents')
+    const res = await fetch(`${API_BASE}/api/agents`)
     if (res.ok) {
       const agents = await res.json()
       const active = agents.find((a) => a.is_active)
@@ -315,6 +335,7 @@ const fetchActiveAgent = async () => {
     }
   } catch (e) {
     console.error(e)
+    throw e // 向上传递错误以触发 UI 提示
   }
 }
 
@@ -324,9 +345,10 @@ const dirtyFiles = ref(new Set())
 
 onMounted(() => {
   console.log('WorkModeView Mounted')
-  fetchActiveAgent()
-  // 立即就绪，以便更平滑的过渡，因为父级处理重叠
-  internalReady.value = true
+  // 如果父组件已经就绪，直接初始化
+  if (props.isReady) {
+    initWorkMode()
+  }
 })
 
 onActivated(() => {
@@ -335,8 +357,9 @@ onActivated(() => {
 })
 
 // 文件处理
+// 文件选择逻辑优化
 const onFileSelected = async (fileNode) => {
-  if (fileNode.type === 'directory') return // 忽略目录点击
+  if (fileNode.type === 'directory') return
 
   const existing = openFiles.value.find((f) => f.path === fileNode.path)
   if (existing) {
@@ -345,19 +368,26 @@ const onFileSelected = async (fileNode) => {
   }
 
   try {
-    const res = await fetch('http://localhost:9120/api/ide/file/read', {
+    const res = await fetch(`${API_BASE}/api/ide/file/read`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: fileNode.path })
     })
-    if (!res.ok) throw new Error('读取文件失败')
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || '读取文件失败')
+    }
+    
     const data = await res.json()
-
     const newFile = { ...fileNode, content: data.content }
     openFiles.value.push(newFile)
     currentFile.value = newFile
   } catch (e) {
-    console.error(e)
+    console.error('[WorkMode] 文件读取错误:', e)
+    if (window.$notify) {
+      window.$notify(e.message, 'error', '文件读取失败')
+    }
   }
 }
 

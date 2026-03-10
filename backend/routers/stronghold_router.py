@@ -79,11 +79,15 @@ async def get_room_agents(room_id: str, session: AsyncSession = Depends(get_sess
 
 @router.get("/agents/status", response_model=List[Dict[str, Any]])
 async def get_all_agents_status(session: AsyncSession = Depends(get_session)):
-    """获取所有启用的 Agent 及其当前位置"""
+    """获取所有已启用的 Agent 及其当前位置"""
     service = StrongholdService(session)
-    # 修正：应该获取所有非系统角色，而不仅仅是 active 的
+    # 修正：仅获取 is_active=True (即在 LauncherView 中启用的) 且非系统角色
     active_agents = (
-        await session.exec(select(AgentProfile).where(AgentProfile.role != "system"))
+        await session.exec(
+            select(AgentProfile).where(
+                AgentProfile.role != "system", AgentProfile.is_active == True
+            )
+        )
     ).all()
 
     result = []

@@ -1,7 +1,9 @@
 {
-  "manifestVersion": "1.0.0",
+  "asset_id": "com.perocore.plugin.tasklifecycle",
+  "type": "plugin",
+  "source": "official",
   "name": "TaskLifecycle",
-  "displayName": "任务生命周期 (TaskLifecycle)",
+  "display_name": "任务生命周期 (TaskLifecycle)",
   "version": "1.1.1",
   "description": "管理任务的结束与角色状态更新，包括3D模型交互台词。",
   "author": "PeroCore",

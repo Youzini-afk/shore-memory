@@ -138,12 +138,15 @@ class AssetRegistry:
             try:
                 with open(description_path, "r", encoding="utf-8") as f:
                     raw = json.load(f)
-                    # 插件描述文件
-                    if "name" in raw and "entryPoint" in raw:
+                    # 如果已有 asset_id，直接使用新格式
+                    if "asset_id" in raw:
+                        data = raw
+                    # 插件描述文件 (旧版兼容)
+                    elif "name" in raw and "entryPoint" in raw:
                         data = {
                             "asset_id": f"com.perocore.plugin.{raw['name'].lower()}",
                             "type": "plugin",
-                            "display_name": raw["name"],
+                            "display_name": raw.get("displayName", raw["name"]),
                             "version": raw.get("version", "1.0.0"),
                             "config": raw,
                         }
@@ -154,15 +157,17 @@ class AssetRegistry:
                 return None
 
         if data and "asset_id" in data:
+            # 优先使用 display_name，兼容旧版 displayName
+            display_name = data.get("display_name") or data.get("displayName", data["asset_id"])
             return AssetMetadata(
                 asset_id=data["asset_id"],
                 type=data.get("type", "unknown"),
                 source=source,
-                display_name=data.get("display_name", data["asset_id"]),
+                display_name=display_name,
                 version=data.get("version", "1.0.0"),
                 path=str(dir_path),  # 记录目录路径
                 workshop_id=data.get("workshop_id"),
-                config=data.get("config", {}),
+                config=data,  # 存储完整数据，便于其他模块访问
             )
         return None
 
@@ -238,7 +243,11 @@ class AssetRegistry:
         tools_root = path_resolver.resolve("@app/backend/nit_core/tools")
         self._scan_directory_recursive(tools_root, "official", depth=4)
 
-        # 3. 模组: @app/backend/mods
+        # 3. 人设: @app/backend/services/mdp/agents
+        persona_root = path_resolver.resolve("@app/backend/services/mdp/agents")
+        self._scan_directory_recursive(persona_root, "official", depth=2)
+
+        # 4. 模组: @app/backend/mods
         mod_root = path_resolver.resolve("@app/backend/mods")
         self._scan_directory_recursive(mod_root, "official")
 

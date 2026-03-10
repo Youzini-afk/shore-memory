@@ -227,3 +227,113 @@ export function getWorkshopInstallPath(): string | null {
     return null
   }
 }
+
+// ==========================================
+// Cloud Sync (云同步)
+// ==========================================
+
+/**
+ * 检查 Steam 云是否为当前账户启用
+ */
+export function isCloudEnabledForAccount(): boolean {
+  if (!client) return false
+  try {
+    return client.cloud.isEnabledForAccount()
+  } catch (e) {
+    console.error('[Steam] 检查云同步账户状态失败:', e)
+    return false
+  }
+}
+
+/**
+ * 检查 Steam 云是否为当前应用启用
+ */
+export function isCloudEnabledForApp(): boolean {
+  if (!client) return false
+  try {
+    return client.cloud.isEnabledForApp()
+  } catch (e) {
+    console.error('[Steam] 检查云同步应用状态失败:', e)
+    return false
+  }
+}
+
+/**
+ * 读取云存储中的文件
+ * @param name 文件名 (相对路径)
+ * @returns 文件内容字符串，如果文件不存在则返回 null
+ */
+export function readCloudFile(name: string): string | null {
+  if (!client) return null
+  try {
+    if (!client.cloud.fileExists(name)) {
+      return null
+    }
+    return client.cloud.readFile(name)
+  } catch (e) {
+    console.error(`[Steam] 读取云文件失败 ${name}:`, e)
+    return null
+  }
+}
+
+/**
+ * 写入文件到云存储
+ * @param name 文件名 (相对路径)
+ * @param content 文件内容字符串
+ * @returns 是否写入成功
+ */
+export function writeCloudFile(name: string, content: string): boolean {
+  if (!client) return false
+  try {
+    const success = client.cloud.writeFile(name, content)
+    if (success) {
+      console.log(`[Steam] 云文件写入成功: ${name}`)
+    }
+    return success
+  } catch (e) {
+    console.error(`[Steam] 写入云文件失败 ${name}:`, e)
+    return false
+  }
+}
+
+/**
+ * 删除云存储中的文件
+ * @param name 文件名 (相对路径)
+ * @returns 是否删除成功
+ */
+export function deleteCloudFile(name: string): boolean {
+  if (!client) return false
+  try {
+    return client.cloud.deleteFile(name)
+  } catch (e) {
+    console.error(`[Steam] 删除云文件失败 ${name}:`, e)
+    return false
+  }
+}
+
+/**
+ * 检查云存储中是否存在文件
+ * @param name 文件名 (相对路径)
+ */
+export function cloudFileExists(name: string): boolean {
+  if (!client) return false
+  try {
+    return client.cloud.fileExists(name)
+  } catch (e) {
+    return false
+  }
+}
+
+/**
+ * 列出云存储中的所有文件
+ */
+export function listCloudFiles(): Array<{ name: string; size: bigint }> {
+  if (!client) return []
+  try {
+    const files = client.cloud.listFiles()
+    return files.map((f: any) => ({ name: f.name, size: f.size }))
+  } catch (e) {
+    console.error('[Steam] 列出云文件失败:', e)
+    return []
+  }
+}

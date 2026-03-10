@@ -1,12 +1,15 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.bilibilifetch",
+  "type": "plugin",
+  "source": "official",
   "name": "BilibiliFetch",
-  "displayName": "B站助手 (BilibiliFetch)",
+  "display_name": "B站助手 (BilibiliFetch)",
   "version": "1.0.1",
   "description": "B站助手。获取视频信息与字幕。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "bilibili_fetch.py",
+  "tags": ["plugins"],
   "capabilities": {
     "invocationCommands": [
       {

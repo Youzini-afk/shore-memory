@@ -1,12 +1,15 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.workspaceops",
+  "type": "plugin",
+  "source": "official",
   "name": "WorkspaceOps",
-  "displayName": "工作台管理 (WorkspaceOps)",
+  "display_name": "工作台管理 (WorkspaceOps)",
   "version": "1.0.1",
   "description": "工作区管理。在专注模式下管理笔记与长期记忆。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "workspace_ops.py",
+  "tags": ["work"],
   "capabilities": {
     "invocationCommands": [
       {

@@ -136,22 +136,21 @@
               <div class="menu-label">角色选择</div>
               <div class="character-grid">
                 <button
+                  v-for="model in availableModels"
+                  :key="model.asset_id"
                   class="char-btn"
-                  :class="{ active: !currentManifestPath || currentManifestPath.includes('Rossi') }"
-                  @click="currentManifestPath = `${prefix}3d/Rossi.pero`"
+                  :class="{ active: isModelActive(model) }"
+                  :title="
+                    model.source === 'workshop' ? `Workshop: ${model.workshop_id}` : model.source
+                  "
+                  @click="selectModel(model)"
                 >
-                  Rossi
-                </button>
-                <button
-                  class="char-btn"
-                  :class="{
-                    active: currentManifestPath && currentManifestPath.includes('新小莫莫酒狐')
-                  }"
-                  @click="currentManifestPath = `${prefix}3d/新小莫莫酒狐.pero`"
-                >
-                  新小莫莫酒狐
+                  {{ model.display_name }}
+                  <span v-if="model.source === 'workshop'" class="workshop-badge">W</span>
+                  <span v-else-if="model.source === 'local'" class="local-badge">L</span>
                 </button>
               </div>
+              <div v-if="availableModels.length === 0" class="no-models-hint">加载中...</div>
             </div>
 
             <div
@@ -258,6 +257,10 @@ import { gatewayClient } from '../api/gateway'
 const isElectron = window.electron !== undefined
 const prefix = isElectron ? 'assets/' : '/assets/'
 
+// 可用模型列表
+const availableModels = ref([])
+const currentModel = ref(null)
+
 // 默认不传递 manifestPath，让 BedrockAvatar 使用其内部默认逻辑进行初次加载
 const currentManifestPath = ref('')
 const currentText = ref('主人，我在桌面等你很久啦！')
@@ -267,6 +270,35 @@ const bubbleTop = ref('15%')
 const bubbleLeft = ref('50%')
 const avatarRef = ref(null)
 let bubbleTimer = null
+
+// 模型选择相关函数
+const isModelActive = (model) => {
+  if (!currentManifestPath.value && model.asset_id.includes('rossi')) {
+    return true
+  }
+  return (
+    currentManifestPath.value &&
+    (currentManifestPath.value === model.path ||
+      currentManifestPath.value.includes(model.display_name))
+  )
+}
+
+const selectModel = async (model) => {
+  currentModel.value = model
+  // 使用绝对路径
+  if (isElectron) {
+    try {
+      const loadPath = await invoke('get-model-load-path', model)
+      currentManifestPath.value = loadPath
+      console.log(`[Pet3DView] 选择模型: ${model.display_name}, 路径: ${loadPath}`)
+    } catch (e) {
+      console.warn('[Pet3DView] 获取模型路径失败:', e)
+      currentManifestPath.value = model.path
+    }
+  } else {
+    currentManifestPath.value = model.path
+  }
+}
 
 // 调试 refs
 
@@ -1016,6 +1048,17 @@ onMounted(async () => {
   fetchActiveAgent()
   loadLocalTexts()
 
+  // 扫描可用的 3D 模型
+  if (isElectron) {
+    try {
+      const models = await invoke('scan-3d-models')
+      availableModels.value = models || []
+      console.log(`[Pet3DView] 扫描到 ${models.length} 个模型`)
+    } catch (e) {
+      console.warn('[Pet3DView] 扫描模型失败:', e)
+    }
+  }
+
   // 初始获取 Pet 状态 (与后端同步)
   const fetchPetState = async () => {
     try {
@@ -1630,6 +1673,35 @@ const minimizeToTray = () => {
   box-shadow:
     inset -2px -2px #1a4a1a,
     inset 2px 2px #5aba5a;
+}
+
+.workshop-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  background: #4a90d9;
+  color: white;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.local-badge {
+  display: inline-block;
+  margin-left: 4px;
+  padding: 0 4px;
+  font-size: 10px;
+  background: #d94a4a;
+  color: white;
+  border-radius: 3px;
+  vertical-align: middle;
+}
+
+.no-models-hint {
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+  padding: 8px;
 }
 
 /* 调整外观菜单高度以适应新内容 */

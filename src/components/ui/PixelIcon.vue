@@ -223,8 +223,8 @@ const icons = {
   // 收件箱 (📥)
   inbox: 'M2 3h12v10H2V3zm2 2v4h2v2h4V9h2V5H4zm0 6v2h8v-2H4z',
 
-  // 勾选/完成 (✔️)
-  check: 'M3 8h2v2h2v2h2v-2h2v-2h2V6h2v2h-2v2h-2v2H7v-2H5V8H3z',
+  // 勾选/完成 (✔️) - 优化为更标准的像素勾勾 🌸
+  check: 'M2 9h2v2h2v2h2v-2h2v-2h2v-2h2v-2h-2v2h-2v2h-2v2H6v-2H4v-2H2v2z',
 
   // 关闭/删除 (✖️)
   close: 'M3 3h2v2h2v2h2V5h2V3h2v2h-2v2h-2v2h2v2h2v2h-2v-2h-2v-2H7v2H5v2H3v-2h2V9H3V7h2V5H3V3z',

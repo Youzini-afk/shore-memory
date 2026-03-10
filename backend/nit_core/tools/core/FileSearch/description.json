@@ -1,7 +1,9 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.filesearch",
+  "type": "plugin",
+  "source": "official",
   "name": "FileSearch",
-  "displayName": "文件检索 (FileSearch)",
+  "display_name": "文件检索 (FileSearch)",
   "version": "1.0.1",
   "description": "文件快搜。快速查找文件或浏览目录。",
   "author": "PeroCore",

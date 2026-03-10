@@ -1,6 +1,8 @@
-from typing import Any, Dict, List
+import os
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -17,6 +19,7 @@ class AgentInfo(BaseModel):
     description: str
     is_active: bool
     is_enabled: bool
+    avatar: Optional[str] = None
 
 
 class EnabledAgentsRequest(BaseModel):
@@ -78,6 +81,17 @@ async def set_active_agent(request: ActiveAgentRequest):
         )
 
     return {"status": "ok", "active_agent": request.agent_id}
+
+
+@router.get("/{agent_id}/avatar")
+async def get_agent_avatar(agent_id: str):
+    """获取指定代理的头像。"""
+    manager = get_agent_manager()
+    agent = manager.get_agent(agent_id)
+    if not agent or not agent.avatar_path or not os.path.exists(agent.avatar_path):
+        raise HTTPException(status_code=404, detail="Avatar not found")
+
+    return FileResponse(agent.avatar_path)
 
 
 @router.post("/preview_prompt")

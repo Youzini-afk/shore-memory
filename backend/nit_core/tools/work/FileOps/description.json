@@ -1,12 +1,15 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.fileops",
+  "type": "plugin",
+  "source": "official",
   "name": "FileOps",
-  "displayName": "深度文件操作 (FileOps)",
+  "display_name": "深度文件操作 (FileOps)",
   "version": "1.0.1",
   "description": "深度文件操作工具，支持读写、编辑、代码检查和智能Diff。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "file_ops.py",
+  "tags": ["work"],
   "capabilities": {
     "invocationCommands": [
       {

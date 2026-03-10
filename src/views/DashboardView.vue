@@ -18,6 +18,7 @@
     <div class="flex h-screen overflow-hidden relative z-10" :class="{ 'pt-8': isElectron() }">
       <!-- Sidebar -->
       <aside
+        id="dashboard-sidebar"
         class="w-64 flex flex-col border-r-2 border-sky-100/50 glass-effect transition-all duration-300 z-20 relative"
       >
         <!-- Pixel Shadow Line on Right -->
@@ -82,6 +83,7 @@
             <div class="space-y-1.5">
               <button
                 v-for="item in group.items"
+                :id="'menu-item-' + item.id"
                 :key="item.id"
                 :class="[
                   'w-full flex items-center gap-3 px-3 py-2.5 text-sm font-bold transition-all duration-300 group press-effect relative overflow-hidden rounded-xl hover-pixel-bounce',
@@ -315,6 +317,20 @@
                       <span class="text-xs font-normal text-slate-400 font-mono">Status</span>
                     </span>
                     <div class="flex items-center gap-4">
+                      <!-- Mobile Connect Button -->
+                      <PButton
+                        variant="secondary"
+                        size="sm"
+                        class="!bg-sky-50 !text-sky-600 !border-sky-100 hover:!bg-sky-100"
+                        :loading="isLoadingConnection"
+                        @click="fetchConnectionInfo"
+                      >
+                        <template #icon>
+                          <PixelIcon name="globe" size="xs" />
+                        </template>
+                        手机连接
+                      </PButton>
+
                       <!-- NapCat Status -->
                       <PTooltip
                         v-if="!napCatStatus.disabled"
@@ -536,6 +552,7 @@
               <!-- NIT Status -->
               <PCard
                 v-if="nitStatus"
+                id="nit-status-card"
                 pixel
                 class="hover:pixel-border-pink transition-all group/nit"
               >
@@ -1126,7 +1143,14 @@
                           :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
                         >
                           <span class="text-sky-600 font-bold flex items-center gap-2">
+                            <img
+                              v-if="activeAgent?.avatarUrl"
+                              :src="activeAgent.avatarUrl"
+                              class="w-6 h-6 rounded-lg object-cover"
+                              alt="Avatar"
+                            />
                             <span
+                              v-else
                               class="text-xs opacity-0 group-hover/btn:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0"
                               ><PixelIcon name="paw" size="xs"
                             /></span>
@@ -1160,7 +1184,13 @@
                             <span
                               class="group-hover/item:translate-x-1.5 transition-transform flex items-center gap-2"
                             >
-                              <span v-if="agent.id === activeAgent?.id" class="text-xs"
+                              <img
+                                v-if="agent.avatarUrl"
+                                :src="agent.avatarUrl"
+                                class="w-6 h-6 rounded-lg object-cover"
+                                alt="Avatar"
+                              />
+                              <span v-else-if="agent.id === activeAgent?.id" class="text-xs"
                                 ><PixelIcon name="paw" size="xs"
                               /></span>
                               {{ agent.name }}
@@ -1616,7 +1646,14 @@
                           :class="isSwitchingAgent ? 'opacity-50 cursor-not-allowed' : ''"
                         >
                           <span class="text-purple-600 font-bold flex items-center gap-2">
+                            <img
+                              v-if="activeAgent?.avatarUrl"
+                              :src="activeAgent.avatarUrl"
+                              class="w-6 h-6 rounded-lg object-cover"
+                              alt="Avatar"
+                            />
                             <span
+                              v-else
                               class="text-xs opacity-0 group-hover/mbtn:opacity-100 transition-all duration-300 -translate-x-2 group-hover:translate-x-0"
                               ><PixelIcon name="paw" size="xs" animation="bounce"
                             /></span>
@@ -1646,7 +1683,13 @@
                             <span
                               class="group-hover/mitem:translate-x-1.5 transition-transform flex items-center gap-2"
                             >
-                              <span v-if="agent.id === activeAgent?.id" class="text-xs"
+                              <img
+                                v-if="agent.avatarUrl"
+                                :src="agent.avatarUrl"
+                                class="w-6 h-6 rounded-lg object-cover"
+                                alt="Avatar"
+                              />
+                              <span v-else-if="agent.id === activeAgent?.id" class="text-xs"
                                 ><PixelIcon name="paw" size="xs"
                               /></span>
                               {{ agent.name }}
@@ -3637,11 +3680,50 @@
         </div>
       </template>
     </PModal>
+    <!-- 7. 手机连接二维码 -->
+    <PModal
+      v-model="showQrModal"
+      title="连接手机端"
+      size="sm"
+      :show-confirm="false"
+      cancel-text="关闭"
+    >
+      <div class="flex flex-col items-center gap-6 py-4">
+        <div class="p-4 bg-white pixel-border-sky shadow-xl">
+          <QrcodeVue :value="qrValue" :size="200" level="H" render-as="svg" />
+        </div>
+        <div class="text-center space-y-2">
+          <p class="text-sm font-bold text-slate-700">请使用 PeroperoChat PE版 扫码连接</p>
+          <p class="text-xs text-slate-400 leading-relaxed px-4">
+            确保您的手机与电脑处于同一局域网（WiFi）下。<br />
+            连接后即可实现远程遥控与同步。
+          </p>
+        </div>
+        <div class="w-full bg-sky-50 p-3 pixel-border-sm space-y-2">
+          <div class="flex justify-between text-[10px] font-bold">
+            <span class="text-slate-400">SERVER IP</span>
+            <span class="text-sky-600">{{ connectionInfo?.ip }}</span>
+          </div>
+          <div class="flex justify-between text-[10px] font-bold">
+            <span class="text-slate-400">PORT</span>
+            <span class="text-sky-600">{{ connectionInfo?.port }}</span>
+          </div>
+        </div>
+      </div>
+    </PModal>
+
+    <!-- 引导图层喵~ 🎭 -->
+    <OnboardingOverlay
+      v-model:is-visible="showOnboarding"
+      :custom-steps="dashboardGuideSteps"
+      @finish="handleOnboardingFinish"
+    />
   </div>
 </template>
 
 <script setup>
 import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch } from 'vue'
+import QrcodeVue from 'qrcode.vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { listen, invoke, isElectron } from '@/utils/ipcAdapter'
 import VoiceConfigPanel from '../components/settings/VoiceConfigPanel.vue'
@@ -3665,6 +3747,100 @@ import TerminalPanel from '../components/terminal/TerminalPanel.vue'
 import NapCatTerminal from '../components/terminal/NapCatTerminal.vue'
 import logoImg from '../assets/logo.png'
 import { gatewayClient } from '../api/gateway'
+import OnboardingOverlay from '../components/onboarding/OnboardingOverlay.vue'
+
+const showOnboarding = ref(false)
+const appConfig = ref({})
+
+// Dashboard 强引导脚本喵~ 📜
+const dashboardGuideSteps = [
+  {
+    id: 'dash_intro',
+    speaker: 'Pero',
+    text: '欢迎来到指挥中心喵！这里是掌控 Pero 所有能力的地方哦~',
+    expression: 'normal'
+  },
+  {
+    id: 'dash_sidebar',
+    speaker: 'Pero',
+    text: '左边是功能导航栏，不管是看日记、改设定还是装脑子（模型），都在这里切换喵！',
+    expression: 'none',
+    focusSelector: '#dashboard-sidebar'
+  },
+  {
+    id: 'dash_overview',
+    speaker: 'Pero',
+    text: '首先是【总览】页，这里能看到 Pero 的身体状况和今天的活动记录喵~',
+    expression: 'none',
+    focusSelector: '#menu-item-overview'
+  },
+  {
+    id: 'dash_user_profile',
+    speaker: 'Pero',
+    text: '接下来请点击【用户设定】，告诉 Pero 主人希望怎么被称呼，以及 Pero 该用什么语气说话喵！',
+    expression: 'none',
+    focusSelector: '#menu-item-user_settings',
+    nextAction: 'wait_click'
+  },
+  {
+    id: 'dash_user_profile_done',
+    speaker: 'Pero',
+    text: '填好后记得保存哦！这样 Pero 才能记住主人的喜好喵~',
+    expression: 'normal'
+  },
+  {
+    id: 'dash_models',
+    speaker: 'Pero',
+    text: '然后是重头戏！请点击【模型配置】，给 Pero 装上聪明的 AI 大脑喵！',
+    expression: 'none',
+    focusSelector: '#menu-item-model_config',
+    nextAction: 'wait_click'
+  },
+  {
+    id: 'dash_models_explain',
+    speaker: 'Pero',
+    text: '这里有聊天、记忆、语音等不同功能的模型，虽然有点复杂，但只要把它们都配置好，Pero 就变聪明啦！',
+    expression: 'normal'
+  },
+  {
+    id: 'dash_explore',
+    speaker: 'Pero',
+    text: '剩下的功能（比如语音功能、MCP 扩展）主人可以慢慢探索喵~',
+    expression: 'normal'
+  },
+  {
+    id: 'dash_confirm',
+    speaker: 'Pero',
+    text: '那么，主人现在对这里大概了解了吗？准备好正式启动了吗喵？',
+    expression: 'normal',
+    choices: [
+      { label: '了解了，启动！', value: 'launch' },
+      { label: '再让我看看...', value: 'stay' }
+    ]
+  }
+]
+
+const handleOnboardingFinish = async (choice) => {
+  if (choice === 'launch') {
+    try {
+      const config = await invoke('get_config')
+      config.onboarding_completed = true
+      await invoke('save_config', { config })
+
+      // 启动 Pet Window
+      await invoke('open_pet_window')
+      // 关闭 Dashboard
+      await invoke('close_dashboard')
+    } catch (e) {
+      console.error('启动失败:', e)
+    }
+  } else {
+    // 用户选择留在 Dashboard
+    const config = await invoke('get_config')
+    config.onboarding_completed = true
+    await invoke('save_config', { config })
+  }
+}
 
 const menuGroups = [
   {
@@ -3890,6 +4066,34 @@ const handleCancel = () => {
 const appVersion = ref('0.5.4')
 const updateStatus = ref({ type: 'idle' })
 const isCheckingUpdate = ref(false)
+
+// --- Connection QR Code ---
+const showQrModal = ref(false)
+const connectionInfo = ref(null)
+const isLoadingConnection = ref(false)
+
+const fetchConnectionInfo = async () => {
+  isLoadingConnection.value = true
+  try {
+    const res = await fetch(`${API_BASE}/connection/info`)
+    if (res.ok) {
+      connectionInfo.value = await res.json()
+      showQrModal.value = true
+    } else {
+      window.$notify('获取连接信息失败', 'error')
+    }
+  } catch {
+    window.$notify('无法连接到后端服务', 'error')
+  } finally {
+    isLoadingConnection.value = false
+  }
+}
+
+const qrValue = computed(() => {
+  if (!connectionInfo.value) return ''
+  // 协议格式：perolink://{ip}:{port}#{token}
+  return `perolink://${connectionInfo.value.ip}:${connectionInfo.value.port}#${connectionInfo.value.token}`
+})
 
 const checkForUpdates = async () => {
   if (isCheckingUpdate.value) return
@@ -4390,8 +4594,15 @@ const fetchAgents = async () => {
     const res = await fetchWithTimeout(`${API_BASE}/agents`, {}, 2000)
     if (res.ok) {
       const agents = await res.json()
-      availableAgents.value = agents
-      const active = agents.find((a) => a.is_active)
+      availableAgents.value = agents.map((a) => ({
+        ...a,
+        avatarUrl: a.avatar
+          ? a.avatar.startsWith('http')
+            ? a.avatar
+            : `${API_BASE.replace('/api', '')}${a.avatar}`
+          : null
+      }))
+      const active = availableAgents.value.find((a) => a.is_active)
       if (active) {
         activeAgent.value = active
       }
@@ -6172,6 +6383,21 @@ const handleLogUpdate = (data) => {
 
 onMounted(async () => {
   waitForBackend()
+
+  // [引导逻辑] 加载配置并决定是否开启引导喵~ 🌸
+  try {
+    const config = await invoke('get_config')
+    appConfig.value = config
+    console.log('[DEBUG] Dashboard 挂载，检查引导阶段:', config.onboarding_completed)
+    // 只有在未彻底完成（true）时，才开启 Dashboard 引导喵~ 🌸
+    // 逻辑：如果是 false 或 launcher_done，都应该显示引导（如果是 false 说明跳过了 Launcher）
+    if (config.onboarding_completed !== true) {
+      console.log('[DEBUG] Dashboard 引导开启！')
+      showOnboarding.value = true
+    }
+  } catch (e) {
+    console.error('加载配置失败:', e)
+  }
 
   // Listen for auto-update messages
   await listenSafe('update-message', handleUpdateMessage)

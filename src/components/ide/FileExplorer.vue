@@ -114,6 +114,7 @@ import CustomDialog from '../ui/CustomDialog.vue'
 const emit = defineEmits(['file-selected'])
 const files = ref([])
 const loading = ref(true)
+const error = ref(null)
 const searchQuery = ref('')
 
 // 递归搜索函数
@@ -196,25 +197,37 @@ const handleDialogCancel = () => {
   dialog.visible = false
 }
 
-const API_BASE = 'http://localhost:9120/api/ide'
+// 动态获取后端基础 URL 喵~ 🌸
+const BACKEND_HOST = (window.location.hostname || 'localhost')
+const API_BASE = window.location.protocol + '//' + BACKEND_HOST + ':9120/api/ide'
 
 const fetchFiles = async (path = null) => {
   try {
     const url = path ? `${API_BASE}/files?path=${encodeURIComponent(path)}` : `${API_BASE}/files`
-
     const res = await fetch(url)
-    if (!res.ok) throw new Error('Failed')
+    
+    if (!res.ok) {
+      const errData = await res.json().catch(() => ({}))
+      throw new Error(errData.detail || '无法获取文件列表')
+    }
+    
     return await res.json()
   } catch (e) {
-    console.error(e)
-    return []
+    console.error('[FileExplorer] 获取文件列表失败:', e)
+    throw e
   }
 }
 
 const refresh = async () => {
   loading.value = true
+  error.value = null
   try {
     files.value = await fetchFiles()
+  } catch (e) {
+    error.value = e.message
+    if (window.$notify) {
+      window.$notify(e.message, 'error', '资源管理器异常')
+    }
   } finally {
     loading.value = false
   }

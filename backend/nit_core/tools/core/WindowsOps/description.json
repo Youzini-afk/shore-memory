@@ -1,7 +1,9 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.windowsops",
+  "type": "plugin",
+  "source": "official",
   "name": "WindowsOps",
-  "displayName": "系统操作 (WindowsOps)",
+  "display_name": "系统操作 (WindowsOps)",
   "version": "1.0.1",
   "description": "系统控制。执行打开应用、窗口切换、鼠标模拟、系统状态获取等操作。",
   "author": "PeroCore",

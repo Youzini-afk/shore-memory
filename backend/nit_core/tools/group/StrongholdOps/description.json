@@ -1,12 +1,15 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.strongholdops",
+  "type": "plugin",
+  "source": "official",
   "name": "StrongholdOps",
-  "displayName": "据点交互 (StrongholdOps)",
+  "display_name": "据点交互 (StrongholdOps)",
   "version": "1.0.1",
   "description": "据点交互工具。用于角色在据点内的移动和呼叫管家。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "stronghold_ops.py",
+  "tags": ["group"],
   "capabilities": {
     "invocationCommands": [
       {

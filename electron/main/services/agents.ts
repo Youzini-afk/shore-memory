@@ -59,11 +59,24 @@ export async function scanLocalAgents() {
             const isEnabled = globalConfig.enabled_agents.includes(id)
             const isActive = globalConfig.active_agent === id
 
+            // 扫描头像
+            let avatar = ''
+            const avatarFiles = ['avatar.png', 'avatar.jpg', 'avatar.jpeg', 'avatar.svg', 'icon.png']
+            for (const name of avatarFiles) {
+              const avatarPath = path.join(agentDir, name)
+              if (await fs.pathExists(avatarPath)) {
+                // 如果是开发环境，使用 file:// 协议或者通过后端接口
+                // 这里统一使用后端接口，前端会自动处理后端未启动的情况
+                avatar = `/api/agents/${id}/avatar`
+                break
+              }
+            }
+
             agents.push({
               id: id,
               name: config.name || id,
               description: config.description || '',
-              avatar: config.avatar || '',
+              avatar: avatar || config.avatar || '',
               path: agentDir,
               is_enabled: isEnabled,
               is_active: isActive,

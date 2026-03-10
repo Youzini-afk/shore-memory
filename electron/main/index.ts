@@ -32,6 +32,8 @@ import {
 } from './services/napcat.js'
 import { checkEsInstalled, installEs } from './services/everything.js'
 import { scanLocalModels } from './services/models.js'
+import { scan3DModels, getModelLoadPath, AssetInfo } from './services/assets.js'
+import { SyncResult } from './services/cloudSync.js'
 import { setupUpdater } from './services/updater.js'
 import { windowManager } from './windows/manager.js'
 import { createTray } from './services/tray.js'
@@ -55,15 +57,25 @@ try {
     // 生产环境：尝试从 resources/native 加载
     // 在 Electron 中，resources 路径为 process.resourcesPath
     const nativePath = path.join(process.resourcesPath, 'native')
-    if (fs.existsSync(nativePath)) {
+    const nativeFile = path.join(nativePath, 'pero-render-core.win32-x64-msvc.node')
+
+    if (fs.existsSync(nativeFile)) {
+      native = require(nativeFile)
+      logger.info('Main', `Native 核心加载成功 (生产环境): ${nativeFile}`)
+    } else if (fs.existsSync(nativePath)) {
       native = require(nativePath)
-      logger.info('Main', `Native 核心加载成功 (生产环境): ${nativePath}`)
+      logger.info('Main', `Native 核心加载成功 (生产环境目录): ${nativePath}`)
     } else {
       // 回退方案：尝试相对于 appRoot
       const fallbackPath = path.join(app.getAppPath(), '..', 'native')
-      if (fs.existsSync(fallbackPath)) {
+      const fallbackFile = path.join(fallbackPath, 'pero-render-core.win32-x64-msvc.node')
+
+      if (fs.existsSync(fallbackFile)) {
+        native = require(fallbackFile)
+        logger.info('Main', `Native 核心加载成功 (生产环境回退文件): ${fallbackFile}`)
+      } else if (fs.existsSync(fallbackPath)) {
         native = require(fallbackPath)
-        logger.info('Main', `Native 核心加载成功 (生产环境回退): ${fallbackPath}`)
+        logger.info('Main', `Native 核心加载成功 (生产环境回退目录): ${fallbackPath}`)
       } else {
         logger.error('Main', 'Native 核心在生产环境路径中未找到')
         // 关键失败：如果不在这里报错，后面调用 native 会崩溃
@@ -181,8 +193,43 @@ ipcMain.handle('steam-workshop-install-info', (_, itemId) => {
   return getItemInstallInfo(itemId)
 })
 
+// Steam Cloud 云同步
+ipcMain.handle('steam-cloud-get-status', () => {
+  const { cloudSyncService } = require('./services/cloudSync.js')
+  return cloudSyncService.getStatus()
+})
+
+ipcMain.handle('steam-cloud-upload', async () => {
+  const { cloudSyncService } = require('./services/cloudSync.js')
+  return await cloudSyncService.uploadToCloud()
+})
+
+ipcMain.handle('steam-cloud-download', async () => {
+  const { cloudSyncService } = require('./services/cloudSync.js')
+  return await cloudSyncService.downloadFromCloud()
+})
+
+ipcMain.handle('steam-cloud-sync', async () => {
+  const { cloudSyncService } = require('./services/cloudSync.js')
+  return await cloudSyncService.sync()
+})
+
+ipcMain.handle('steam-cloud-clear', async () => {
+  const { cloudSyncService } = require('./services/cloudSync.js')
+  return await cloudSyncService.clearCloudData()
+})
+
 ipcMain.handle('scan-local-models', async () => {
   return await scanLocalModels()
+})
+
+// 3D 模型资产扫描 (包括 Workshop)
+ipcMain.handle('scan-3d-models', async () => {
+  return await scan3DModels()
+})
+
+ipcMain.handle('get-model-load-path', async (_, model: AssetInfo) => {
+  return getModelLoadPath(model)
 })
 
 // 注册 Native 模块处理程序
@@ -210,16 +257,42 @@ ipcMain.handle(
 // 加载 .pero 容器（tar 格式打包的文件夹）
 ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
   try {
+    if (!native) {
+      throw new Error('Native 渲染核心尚未加载')
+    }
+    if (typeof native.loadPeroContainer !== 'function') {
+      logger.error('Native', 'Native 模块中缺失 loadPeroContainer 函数')
+      throw new Error('渲染核心功能不完整')
+    }
     return native.loadPeroContainer(buffer)
-  } catch (e) {
-    logger.error('Native', `Failed to load pero container: ${e}`)
+  } catch (e: any) {
+    logger.error('Native', `Failed to load pero container: ${e.message || e}`)
     throw e
   }
 })
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   registerAssetProtocol()
   createWindow()
+
+  // 启动时自动从云端同步数据
+  try {
+    const { cloudSyncService } = require('./services/cloudSync.js')
+    const status = cloudSyncService.getStatus()
+    if (status.enabled) {
+      logger.info('Main', 'Steam 云同步已启用，正在检查云端数据...')
+      // 异步下载，不阻塞启动
+      cloudSyncService.downloadFromCloud().then((result: SyncResult) => {
+        if (result.success) {
+          logger.info('Main', `云同步完成: 下载 ${result.downloaded.length} 个文件`)
+        } else {
+          logger.warn('Main', `云同步部分失败: ${result.errors.join(', ')}`)
+        }
+      })
+    }
+  } catch (e) {
+    logger.warn('Main', `云同步检查失败: ${e}`)
+  }
 })
 
 // 监听服务崩溃事件并进行联动停止
@@ -258,6 +331,23 @@ app.on('before-quit', async (event) => {
     // 2. 停止所有后台服务
     await Promise.all([stopBackend(), stopGateway(), stopNapCat()])
     logger.info('Main', '后台服务已成功停止')
+
+    // 3. 退出前上传数据到云端
+    try {
+      const { cloudSyncService } = require('./services/cloudSync.js')
+      const status = cloudSyncService.getStatus()
+      if (status.enabled) {
+        logger.info('Main', '正在上传数据到 Steam 云...')
+        const result: SyncResult = await cloudSyncService.uploadToCloud()
+        if (result.success) {
+          logger.info('Main', `云同步上传完成: ${result.uploaded.length} 个文件`)
+        } else {
+          logger.warn('Main', `云同步上传部分失败: ${result.errors.join(', ')}`)
+        }
+      }
+    } catch (e) {
+      logger.warn('Main', `退出时云同步失败: ${e}`)
+    }
   } catch (e) {
     logger.error('Main', `停止后台服务时出错: ${e}`)
   }
@@ -652,6 +742,10 @@ ipcMain.handle('open_dashboard_window', () => {
 
 ipcMain.handle('open_dashboard', () => {
   windowManager.createDashboardWindow()
+})
+
+ipcMain.handle('close_launcher', () => {
+  windowManager.closeLauncherWindow()
 })
 
 ipcMain.handle('open_ide_window', () => {

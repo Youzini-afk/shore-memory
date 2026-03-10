@@ -114,6 +114,9 @@
   <div
     class="h-screen w-screen overflow-hidden bg-sky-50 text-slate-800 font-sans select-text relative pixel-ui pixel-grid-overlay"
   >
+    <!-- 引导图层喵~ 🎭 -->
+    <OnboardingOverlay v-model:is-visible="showOnboarding" @finish="handleOnboardingFinish" />
+
     <CustomTitleBar v-if="isElectron()" :transparent="true" />
 
     <div
@@ -125,6 +128,7 @@
     >
       <!-- 侧边导航栏 -->
       <aside
+        id="nav-sidebar"
         :class="[
           'bg-white pixel-border-sky flex flex-col transition-all duration-300 relative z-20 select-none',
           isSidebarCollapsed ? 'w-20' : 'w-64'
@@ -133,13 +137,19 @@
         <div class="p-6 mb-6 flex items-center justify-between">
           <div v-if="!isSidebarCollapsed" class="flex items-center gap-3">
             <div
-              class="w-8 h-8 pixel-border-sky bg-sky-500 flex items-center justify-center text-white pixel-hover-lift"
+              class="w-8 h-8 pixel-border-sky bg-sky-500 flex items-center justify-center text-white pixel-hover-lift overflow-hidden"
             >
-              <PixelIcon name="cat" size="sm" />
+              <img
+                v-if="activeAgent?.avatarUrl"
+                :src="activeAgent.avatarUrl"
+                class="w-full h-full object-cover"
+                alt="Logo"
+              />
+              <PixelIcon v-else name="cat" size="sm" />
             </div>
             <span
               class="font-bold tracking-tight text-lg text-sky-600 group-hover:text-pink-500 transition-colors"
-              >{{ AGENT_NAME.toUpperCase() }}</span
+              >{{ (activeAgent?.name || AGENT_NAME).toUpperCase() }}</span
             >
           </div>
           <button
@@ -153,6 +163,7 @@
         <nav class="flex-1 px-4 space-y-2">
           <button
             v-for="item in navItems"
+            :id="'nav-' + item.id"
             :key="item.id"
             :class="[
               'w-full flex items-center gap-4 px-4 py-3.5 transition-all duration-300 group relative overflow-hidden pixel-hover-lift press-effect',
@@ -199,7 +210,13 @@
                 : 'bg-sky-100 text-sky-500 animate-pixel-float'
             ]"
           >
-            <PixelIcon name="cat" size="lg" />
+            <img
+              v-if="activeAgent?.avatarUrl"
+              :src="activeAgent.avatarUrl"
+              class="w-10 h-10 object-cover pixel-border-sm"
+              alt="Mascot"
+            />
+            <PixelIcon v-else name="cat" size="lg" />
             <!-- 情绪气泡 -->
             <div
               class="absolute -top-6 -right-4 bg-white pixel-border-sm px-2 py-0.5 text-[8px] font-bold animate-pixel-float whitespace-nowrap"
@@ -427,6 +444,7 @@
                   class="absolute inset-[-24px] pixel-border-sky border-t-transparent animate-spin"
                 ></div>
                 <button
+                  id="btn-launch-pero"
                   :disabled="isStarting || envStatus === 'error'"
                   :class="[
                     'relative w-32 h-32 md:w-40 md:h-40 flex flex-col items-center justify-center gap-2 transition-all duration-300 group overflow-hidden pixel-hover-lift',
@@ -554,7 +572,7 @@
                 <div class="flex items-start justify-between mb-8 relative z-10">
                   <div class="flex items-center gap-5">
                     <div
-                      class="w-16 h-16 pixel-border-sky flex items-center justify-center text-white font-black text-2xl transition-all duration-300 relative group-hover:scale-110"
+                      class="w-16 h-16 pixel-border-sky flex items-center justify-center text-white font-black text-2xl transition-all duration-300 relative group-hover:scale-110 overflow-hidden"
                       :class="
                         agent.is_active
                           ? 'bg-sky-500'
@@ -563,7 +581,15 @@
                             : 'bg-slate-300'
                       "
                     >
-                      {{ agent.name ? agent.name[0].toUpperCase() : '?' }}
+                      <img
+                        v-if="agent.avatarUrl"
+                        :src="agent.avatarUrl"
+                        class="w-full h-full object-cover"
+                        alt="Avatar"
+                      />
+                      <template v-else>
+                        {{ agent.name ? agent.name[0].toUpperCase() : '?' }}
+                      </template>
                       <div
                         v-if="agent.is_active"
                         class="absolute -bottom-1 -right-1 w-6 h-6 bg-pink-500 pixel-border-sky flex items-center justify-center text-white"
@@ -1888,12 +1914,13 @@
 </template>
 
 <script setup>
-import { ref, onMounted, onUnmounted, watch } from 'vue'
+import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
 import { AGENT_NAME, APP_TITLE } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import PTooltip from '../components/ui/PTooltip.vue'
 import { invoke, listen, isElectron } from '@/utils/ipcAdapter'
 import PixelIcon from '../components/ui/PixelIcon.vue'
+import OnboardingOverlay from '../components/onboarding/OnboardingOverlay.vue'
 
 const scale = ref(1)
 const updateScale = () => {
@@ -1929,6 +1956,7 @@ const isInstallingES = ref(false)
 const appConfig = ref({})
 const isSocialEnabled = ref(true)
 const showEulaModal = ref(false) // 是否显示 EULA 弹窗
+const showOnboarding = ref(false) // 是否显示引导图层喵~ 🎭
 const isDownloadingModels = ref(false)
 const allModelsExist = ref(false)
 const downloadProgress = ref({
@@ -1938,6 +1966,19 @@ const downloadProgress = ref({
   error: false,
   completed: false
 })
+
+const handleOnboardingFinish = async () => {
+  try {
+    // 第一阶段引导结束，标记为 'launcher_done' 喵~ 🌸
+    const newConfig = { ...appConfig.value, onboarding_completed: 'launcher_done' }
+    const cleanConfig = JSON.parse(JSON.stringify(newConfig))
+    await invoke('save_config', { config: cleanConfig })
+    appConfig.value = newConfig
+    addLog('[SYSTEM] 第一阶段引导已完成，请点击启动以进入指挥中心进行高级配置。')
+  } catch (e) {
+    console.error('保存引导状态失败:', e)
+  }
+}
 
 const cpuUsage = ref(0)
 const memoryUsed = ref(0)
@@ -1966,6 +2007,9 @@ const loadConfig = async () => {
     // 检查 EULA 状态
     if (config.eula_accepted !== true) {
       showEulaModal.value = true
+    } else if (config.onboarding_completed === false) {
+      // 只有新用户且接受了 EULA 后，才自动开启第一阶段引导喵~ 🌸
+      showOnboarding.value = true
     }
   } catch (e) {
     console.error('加载配置失败:', e)
@@ -1980,6 +2024,11 @@ const handleAcceptEula = async () => {
     appConfig.value = newConfig
     showEulaModal.value = false
     addLog('[SYSTEM] 用户已同意 EULA 协议。')
+
+    // 如果还没完成引导，则在接受 EULA 后立即开启引导喵~ 🌸
+    if (!newConfig.onboarding_completed) {
+      showOnboarding.value = true
+    }
   } catch (e) {
     console.error('保存 EULA 状态失败:', e)
   }
@@ -2035,6 +2084,12 @@ onMounted(async () => {
   }, 200)
 
   await loadConfig()
+  console.log('[DEBUG] Launcher 挂载，加载到的配置:', appConfig.value)
+
+  // 如果检测到引导未完成，立即强制开启 Launcher 引导喵~ 🌸
+  if (appConfig.value.onboarding_completed === false) {
+    showOnboarding.value = true
+  }
 
   // 监听器: es-log
   await listen('es-log', (event) => addLog(`[ES] ${event.payload}`))
@@ -2304,8 +2359,17 @@ const toggleLaunch = async () => {
 
       // 3. Open Pet Window
       // 3. 打开角色窗口
-      await invoke('open_pet_window')
-      addLog('[SYSTEM] 角色窗口已激活。')
+      // [引导逻辑] 如果是初次引导（状态不是 true），则打开 Dashboard 而不是 Pet Window 喵~ 🚀
+      console.log('[DEBUG] 准备启动，检查引导状态:', appConfig.value.onboarding_completed)
+      if (appConfig.value.onboarding_completed !== true) {
+        addLog('[SYSTEM] 检测到初次运行，正在重定向至 Dashboard 进行高级配置...')
+        await invoke('open_dashboard')
+        // 关闭当前 Launcher 窗口
+        await invoke('close_launcher')
+      } else {
+        await invoke('open_pet_window')
+        addLog('[SYSTEM] 角色窗口已激活。')
+      }
 
       isStarting.value = false
       isRunning.value = true
@@ -2383,6 +2447,7 @@ const downloadModels = async () => {
 
 // --- Agent Logic ---
 const agentList = ref([])
+const activeAgent = computed(() => agentList.value.find((a) => a.is_active))
 const isLoadingAgents = ref(false)
 
 const fetchAgents = async () => {
@@ -2390,7 +2455,10 @@ const fetchAgents = async () => {
   try {
     // 使用 Tauri 本地命令替代 fetch API
     const agents = await invoke('scan_local_agents')
-    agentList.value = agents
+    agentList.value = agents.map((agent) => ({
+      ...agent,
+      avatarUrl: agent.avatar ? `http://localhost:9120${agent.avatar}` : null
+    }))
   } catch (e) {
     console.error('Failed to fetch agents via Rust', e)
     addLog(`[ERROR] Failed to fetch agents: ${e}`)

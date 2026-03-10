@@ -227,6 +227,11 @@ async def lifespan(app: FastAPI):
     await companion_service.start()
     screenshot_manager.start_background_task()
 
+    # [优化] 预热 OCR 模型喵~ 🌸
+    from nit_core.tools.core.ScreenVision.screen_ocr import warm_up as warm_up_ocr
+
+    asyncio.create_task(asyncio.to_thread(warm_up_ocr))
+
     # [优化] 禁用了激进的预热以提高启动性能并减少卡顿
     # 异步预热 Embedding 模型
     # asyncio.create_task(asyncio.to_thread(embedding_service.warm_up))
@@ -824,6 +829,8 @@ app = FastAPI(
     description="AI Agent powered backend for Pero",
     lifespan=lifespan,
 )
+from routers.connection_router import router as connection_router
+
 app.include_router(ide_router)
 app.include_router(memory_router)
 app.include_router(history_router)
@@ -836,6 +843,7 @@ app.include_router(agent_router)
 app.include_router(asset_router)
 app.include_router(group_chat_router)
 app.include_router(stronghold_router)
+app.include_router(connection_router)
 
 # [Plugin] Social Adapter Router
 from nit_core.plugins.social_adapter.social_router import router as social_router

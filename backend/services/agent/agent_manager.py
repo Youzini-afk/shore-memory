@@ -24,6 +24,7 @@ class AgentProfile:
     social_binding: Dict[str, Any] = field(default_factory=dict)
     config_path: str = ""
     prompt_path: str = ""
+    avatar_path: Optional[str] = None
     tool_policies: Dict[str, Any] = field(default_factory=dict)
     use_stickers: bool = False
 
@@ -186,6 +187,21 @@ class AgentManager:
         social_binding = config.get("social", {})
         use_stickers = social_binding.get("use_stickers", False)
 
+        # 扫描头像文件
+        avatar_path = None
+        possible_avatar_names = [
+            "avatar.png",
+            "avatar.jpg",
+            "avatar.jpeg",
+            "avatar.svg",
+            "icon.png",
+        ]
+        for name in possible_avatar_names:
+            full_path = os.path.join(agent_dir, name)
+            if os.path.exists(full_path):
+                avatar_path = full_path
+                break
+
         return AgentProfile(
             id=agent_id,
             name=config.get("name", agent_id.capitalize()),
@@ -198,6 +214,7 @@ class AgentManager:
             social_binding=config.get("social", {}),  # 更新为读取 'social' 块
             config_path=config_path,
             prompt_path=prompt_path,
+            avatar_path=avatar_path,
             tool_policies=config.get("tool_policies", {}),
             use_stickers=use_stickers,
         )
@@ -350,6 +367,7 @@ class AgentManager:
                 "description": p.description,
                 "is_active": p.id == self.active_agent_id,
                 "is_enabled": p.id in self.enabled_agents,
+                "avatar": f"/api/agents/{p.id}/avatar" if p.avatar_path else None,
             }
             for p in self.agents.values()
         ]

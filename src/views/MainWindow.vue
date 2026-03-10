@@ -57,6 +57,10 @@ const showErrorDialog = ref(false)
 const isSessionReady = ref(false)
 const errorMessage = ref('')
 
+// 动态获取后端基础 URL 喵~ 🌸
+const BACKEND_HOST = (window.location.hostname || 'localhost')
+const API_BASE = window.location.protocol + '//' + BACKEND_HOST + ':9120'
+
 // 在 Electron 中，窗口管理通过 IPC 由主进程处理
 // 主进程 (windows/manager.ts) 应该处理 'close' 事件以隐藏窗口
 onMounted(async () => {
@@ -70,7 +74,6 @@ const toggleMode = async () => {
   // 检查我们是否试图进入工作模式
   if (!isWorkMode.value) {
     try {
-      const API_BASE = 'http://localhost:9120'
       const configRes = await fetch(`${API_BASE}/api/config/lightweight_mode`)
       if (configRes.ok) {
         const config = await configRes.json()
@@ -96,7 +99,6 @@ watch(isWorkMode, async (newVal) => {
     // 进入工作模式
     isSessionReady.value = false
     try {
-      const API_BASE = 'http://localhost:9120'
       const res = await fetch(`${API_BASE}/api/ide/work_mode/enter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -120,8 +122,11 @@ watch(isWorkMode, async (newVal) => {
         isSessionReady.value = true
       }, 500)
     } catch (e) {
-      console.error('[工作模式] 进入会话失败:', e)
-      // 理想情况下应该在 WorkModeView 中显示错误，但现在先让它渲染
+      console.error('[IDE] 进入工作模式失败:', e)
+      if (window.$notify) {
+        window.$notify('进入工作模式失败，部分功能可能受限喵~', 'warning', '工作模式异常')
+      }
+      // 即使失败也标记就绪，以便显示 UI
       isSessionReady.value = true
     }
   } else {
@@ -131,7 +136,6 @@ watch(isWorkMode, async (newVal) => {
 })
 
 const handleWorkExit = async (save) => {
-  const API_BASE = 'http://localhost:9120'
   try {
     if (save) {
       console.log('工作会话正在完成...')

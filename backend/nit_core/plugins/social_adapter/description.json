@@ -1,6 +1,9 @@
 {
+  "asset_id": "com.perocore.plugin.socialadapter",
+  "type": "plugin",
+  "source": "official",
   "name": "SocialAdapter",
-  "displayName": "社交助手 (SocialAdapter)",
+  "display_name": "社交助手 (SocialAdapter)",
   "version": "1.1.0",
   "description": "提供与 OneBot (QQ) 社交平台交互的能力，包括消息发送、群管理、好友管理以及记忆读取。",
   "author": "PeroCore",

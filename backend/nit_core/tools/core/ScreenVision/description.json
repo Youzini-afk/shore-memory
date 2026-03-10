@@ -1,7 +1,9 @@
 {
-  "manifestVersion": "1.0.1",
+  "asset_id": "com.perocore.plugin.screenvision",
+  "type": "plugin",
+  "source": "official",
   "name": "ScreenVision",
-  "displayName": "视觉感知 (ScreenVision)",
+  "display_name": "视觉感知 (ScreenVision)",
   "version": "1.0.1",
   "description": "视觉感知。查看屏幕内容或识别文字。",
   "author": "PeroCore",

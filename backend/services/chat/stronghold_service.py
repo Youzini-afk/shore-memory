@@ -65,7 +65,7 @@ class StrongholdService:
         # 获取所有配置中的 Agent
         all_config_agents = am.agents  # dict[id, AgentProfile]
 
-        for agent_id in all_config_agents:
+        for agent_id, agent_profile in all_config_agents.items():
             # 检查数据库中是否存在
             db_agent = (
                 await self.session.exec(
@@ -74,20 +74,29 @@ class StrongholdService:
             ).first()
 
             is_active = agent_id in am.enabled_agents
+            # 这里的 avatar URL 应该与前端使用的 API 一致
+            avatar_url = f"/api/agents/{agent_id}/avatar" if agent_profile.avatar_path else "pero.png"
 
             if not db_agent:
                 print(f"[Stronghold] 正在初始化数据库中的新 Agent: {agent_id}")
                 new_agent = AgentProfile(
                     name=agent_id,
-                    avatar="pero.png",  # 默认头像
+                    avatar=avatar_url,
                     role="assistant",
                     is_active=is_active,
                 )
                 self.session.add(new_agent)
             else:
-                # 同步激活状态
+                # 同步激活状态和头像
+                changed = False
                 if db_agent.is_active != is_active:
                     db_agent.is_active = is_active
+                    changed = True
+                if db_agent.avatar != avatar_url:
+                    db_agent.avatar = avatar_url
+                    changed = True
+                
+                if changed:
                     self.session.add(db_agent)
 
         await self.session.commit()

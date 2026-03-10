@@ -1,12 +1,15 @@
 {
-  "manifestVersion": "1.0.0",
+  "asset_id": "com.perocore.plugin.terminalexecutor",
+  "type": "plugin",
+  "source": "official",
   "name": "TerminalExecutor",
-  "displayName": "终端指令 (TerminalExecutor)",
+  "display_name": "终端指令 (TerminalExecutor)",
   "version": "1.0.0",
   "description": "安全地执行终端指令。执行前会请求用户确认。",
   "author": "PeroCore",
   "pluginType": "python-module",
   "entryPoint": "terminal_executor.py",
+  "tags": ["work"],
   "capabilities": {
     "invocationCommands": [
       {

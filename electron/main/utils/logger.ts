@@ -11,6 +11,7 @@ export type LogSource =
   | 'ModelDownload'
   | 'Native'
   | 'AssetProtocol'
+  | 'Assets'
 
 class Logger {
   private static instance: Logger

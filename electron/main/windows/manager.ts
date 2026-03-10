@@ -128,7 +128,17 @@ export class WindowManager {
       return { action: 'deny' }
     })
 
+    this.launcherWin.on('closed', () => {
+      this.launcherWin = null
+    })
+
     return this.launcherWin
+  }
+
+  public closeLauncherWindow() {
+    if (this.launcherWin && !this.launcherWin.isDestroyed()) {
+      this.launcherWin.close()
+    }
   }
 
   public createStrongholdWindow(): BrowserWindow {

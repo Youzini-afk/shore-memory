@@ -32,17 +32,17 @@
 
 为了确保资产加载的统一性，我们将对以下类型的资源进行联邦化管理。**注意：** 此处的“模型”指 Bedrock 3D 渲染资源（如 Rossi 形象），而非 AI 语言模型权重。
 
-| 资产类型 (Type)        | 物理位置 (Physical Path)    | 说明                                       |
-| :--------------------- | :-------------------------- | :----------------------------------------- |
-| **3D 模型 (model_3d)** | `public/assets/3d/`         | Bedrock 3D 模型文件夹 (含 `manifest.json`) |
-| **人设 (persona)**     | `backend/services/mdp/`     | 包含提示词组件、Agent 专属配置等           |
-| **插件 (plugin)**      | `backend/nit_core/plugins/` | 具有独立功能的 Python 插件                 |
-| **模组 (mod)**         | `backend/mods/`             | 用户自定义的功能扩展                       |
-| **接口 (interface)**   | `backend/interfaces/`       | 系统核心接口定义与扩展                     |
+| 资产类型 (Type)        | 物理位置 (Physical Path)        | 说明                                       |
+| :--------------------- | :------------------------------ | :----------------------------------------- |
+| **3D 模型 (model_3d)** | `public/assets/3d/`             | Bedrock 3D 模型文件夹 (含 `manifest.json`) |
+| **人设 (persona)**     | `backend/services/mdp/(xxx...)` | 包含提示词组件、Agent 专属配置等           |
+| **插件 (plugin)**      | `backend/nit_core/plugins/`     | 具有独立功能的 Python 插件                 |
+| **模组 (mod)**         | `backend/mods/`                 | 用户自定义的功能扩展                       |
+| **接口 (interface)**   | `backend/interfaces/`           | 系统核心接口定义与扩展                     |
 
 ### 3.2 统一资产定义 (`asset.json`)
 
-所有资产（无论是内置、本地还是创意工坊下载）均需在根目录包含一个 `asset.json`（或在现有 `manifest.json` 中嵌入元数据）：
+所有资产（无论是内置、本地还是创意工坊下载）均需在根目录包含一个 `manifest.json`（如果是 Bedrock 模型，则在现有 `manifest.json` 中嵌入元数据）：
 
 ```json
 {

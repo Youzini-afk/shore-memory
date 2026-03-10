@@ -22,6 +22,22 @@ except ImportError:
 _reader = None
 
 
+def warm_up():
+    """预热 OCR 模型，如果不存在则自动下载"""
+    global _reader
+    if _is_server_mode() or not easyocr:
+        return
+
+    if _reader is None:
+        try:
+            print("[OCR] 正在初始化/预下载 OCR 模型 (ch_sim, en)...")
+            # gpu=False 确保在没有显卡的环境也能跑，虽然慢一点但稳定
+            _reader = easyocr.Reader(["ch_sim", "en"], gpu=False)
+            print("[OCR] 模型初始化完成喵~")
+        except Exception as e:
+            print(f"[OCR] 初始化失败: {e}")
+
+
 def _is_server_mode():
     return os.environ.get("PERO_ENV") == "server" or platform.system() != "Windows"
 
@@ -87,8 +103,7 @@ def screen_ocr(return_detail=False):
     try:
         # 懒加载 reader
         if _reader is None:
-            # gpu=False 确保在没有显卡的环境也能跑，虽然慢一点但稳定
-            _reader = easyocr.Reader(["ch_sim", "en"], gpu=False)
+            warm_up()
 
         # 截图
         screenshot = pyautogui.screenshot()

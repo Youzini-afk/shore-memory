@@ -342,7 +342,13 @@
                 : 'bg-gradient-to-br from-moe-purple to-moe-pink shadow-moe-purple/20 pixel-border-moe'
             ]"
           >
-            <span class="text-sm font-bold">{{
+            <img
+              v-if="agentAvatars[msg.senderId] || agentAvatars[props.targetId]"
+              :src="agentAvatars[msg.senderId] || agentAvatars[props.targetId]"
+              class="w-full h-full object-cover"
+              alt="Avatar"
+            />
+            <span v-else class="text-sm font-bold">{{
               msg.senderId && msg.senderId !== 'pero' && msg.senderId !== 'user'
                 ? msg.senderId[0].toUpperCase()
                 : AGENT_AVATAR_TEXT
@@ -1250,6 +1256,23 @@ const playMessage = async (msg) => {
 const emitEvent = defineEmits(['mode-change'])
 
 const messages = ref([])
+const agentAvatars = ref({}) // agentId -> avatarUrl
+
+const fetchAgentAvatars = async () => {
+  try {
+    const res = await fetch(`${API_BASE}/api/agents`)
+    if (res.ok) {
+      const agents = await res.json()
+      agents.forEach((agent) => {
+        if (agent.avatar) {
+          agentAvatars.value[agent.id] = `${API_BASE.replace('/api', '')}${agent.avatar}`
+        }
+      })
+    }
+  } catch (e) {
+    console.error('获取助手头像失败:', e)
+  }
+}
 const offset = ref(0)
 const hasMore = ref(true)
 const input = ref('')
@@ -1840,6 +1863,7 @@ let unlistenDelete = null
 let visionCheckInterval = null
 
 onMounted(async () => {
+  await fetchAgentAvatars()
   gatewayClient.on('action:voice_update', handleVoiceUpdate)
   gatewayClient.on('action:text_stream', handleTextStream)
   // [修复] 监听 text_response

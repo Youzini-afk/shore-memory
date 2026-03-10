@@ -41,14 +41,26 @@ export function getBackendLogs(): string[] {
 
 export function getConfig(): any {
   const configPath = path.join(paths.userData, 'data/config.json')
+  let config: any = {}
+
   if (fs.existsSync(configPath)) {
     try {
-      return fs.readJsonSync(configPath)
+      config = fs.readJsonSync(configPath)
     } catch {
-      return {}
+      config = {}
     }
   }
-  return {}
+
+  // [引导逻辑] 确保默认值存在喵~ 🌸
+  // 引导状态：false (新用户) -> 'launcher_done' (Launcher引导结束) -> true (全部引导结束)
+  if (config.onboarding_completed === undefined) {
+    config.onboarding_completed = false
+  }
+  if (config.eula_accepted === undefined) {
+    config.eula_accepted = false
+  }
+
+  return config
 }
 
 export function saveConfig(config: any) {

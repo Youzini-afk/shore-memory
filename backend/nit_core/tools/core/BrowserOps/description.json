@@ -1,7 +1,9 @@
 {
-  "manifestVersion": "1.0.0",
+  "asset_id": "com.perocore.plugin.browserops",
+  "type": "plugin",
+  "source": "official",
   "name": "BrowserOps",
-  "displayName": "网络感知 (BrowserOps)",
+  "display_name": "网络感知 (BrowserOps)",
   "version": "1.2.1",
   "description": "互联网访问能力。支持无头模式(文本速读)与视觉模式(交互浏览)。",
   "author": "PeroCore",

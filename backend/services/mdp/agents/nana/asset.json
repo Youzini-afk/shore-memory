@@ -1,0 +1,14 @@
+{
+  "asset_id": "com.perocore.persona.nana",
+  "type": "persona",
+  "source": "official",
+  "display_name": "Nana",
+  "version": "1.0.0",
+  "description": "雌小鬼Nana! 傲娇可爱的副角色",
+  "author": "PeroCore",
+  "config": {
+    "agent_id": "nana",
+    "personas": ["work", "social"],
+    "social_enabled": false
+  }
+}
