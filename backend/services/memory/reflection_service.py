@@ -223,7 +223,7 @@ class ReflectionService:
 
             embedding_json = "[]"
             try:
-                vec = embedding_service.encode_one(summary_text)
+                vec = await embedding_service.encode_one(summary_text)
                 embedding_json = json.dumps(vec)
             except Exception:
                 pass
@@ -762,7 +762,7 @@ class ReflectionService:
                                 if m.tags
                                 else m.content
                             )
-                            new_vec = embedding_service.encode_one(enriched)
+                            new_vec = await embedding_service.encode_one(enriched)
 
                             if new_vec:
                                 metadata_dict = {
@@ -864,7 +864,7 @@ class ReflectionService:
                                 from services.core.vector_service import vector_service
 
                                 enriched = f"{m.tags} {m.tags} {m.content}"
-                                new_vec = embedding_service.encode_one(enriched)
+                                new_vec = await embedding_service.encode_one(enriched)
                                 if new_vec:
                                     vector_service.add_memory(
                                         memory_id=m.id,
@@ -976,7 +976,9 @@ class ReflectionService:
                         from services.core.vector_service import vector_service
 
                         # 生成向量
-                        content_vec = embedding_service.encode_one(new_mem.content)
+                        content_vec = await embedding_service.encode_one(
+                            new_mem.content
+                        )
                         if content_vec:
                             # 如果有 tags，增强向量权重
                             final_vec = content_vec
@@ -984,7 +986,7 @@ class ReflectionService:
                                 enriched = (
                                     f"{new_mem.tags} {new_mem.tags} {new_mem.content}"
                                 )
-                                final_vec = embedding_service.encode_one(enriched)
+                                final_vec = await embedding_service.encode_one(enriched)
 
                             # 写入 VectorDB
                             vector_service.add_memory(
@@ -1500,7 +1502,7 @@ class ReflectionService:
                         from services.core.embedding_service import embedding_service
                         from services.core.vector_service import vector_service
 
-                        vec = embedding_service.encode_one(
+                        vec = await embedding_service.encode_one(
                             f"{name} {entity.get('type', '')}"
                         )
                         if vec:
@@ -1673,7 +1675,7 @@ class ReflectionService:
                                 if mem.tags
                                 else mem.content
                             )
-                            vec = embedding_service.encode_one(enriched)
+                            vec = await embedding_service.encode_one(enriched)
                             if vec:
                                 vector_service.add_memory(
                                     memory_id=mem.id,
@@ -1717,7 +1719,7 @@ class ReflectionService:
                                 if new_mem.tags
                                 else new_mem.content
                             )
-                            vec = embedding_service.encode_one(enriched)
+                            vec = await embedding_service.encode_one(enriched)
                             if vec:
                                 vector_service.add_memory(
                                     memory_id=new_mem.id,

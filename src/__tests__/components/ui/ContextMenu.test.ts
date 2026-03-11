@@ -27,7 +27,7 @@ describe('ContextMenu.vue', () => {
 
     // 检查项目数量 (3个按钮，1个分隔符)
     expect(wrapper.findAll('button').length).toBe(3)
-    expect(wrapper.findAll('.bg-\\[\\#454545\\]').length).toBe(1) // separator
+    expect(wrapper.findAll('.bg-moe-pink\\/10').length).toBe(1) // separator
 
     // 检查标签
     expect(wrapper.text()).toContain('Item 1')

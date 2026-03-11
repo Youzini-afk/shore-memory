@@ -129,7 +129,7 @@ class ThinkingChainService:
             return {"chain_name": chain_name, "steps": [], "error": "未找到思维链"}
 
         chain_steps = self.chains[chain_name]
-        query_embedding = self.embedding_service.encode_one(query)
+        query_embedding = await self.embedding_service.encode_one(query)
 
         results = {"chain_name": chain_name, "steps": []}
 
@@ -284,7 +284,7 @@ class ThinkingChainService:
             top_contents = sorted(all_weekly_contents, key=len, reverse=True)[:3]
             combined_query = " ".join(top_contents)[:1000]  # 限制长度
 
-            query_vec = self.embedding_service.encode_one(combined_query)
+            query_vec = await self.embedding_service.encode_one(combined_query)
 
             # 使用过滤器搜索：timestamp < one_week_ago
             hist_filter = {"timestamp": {"$lt": one_week_ago}}

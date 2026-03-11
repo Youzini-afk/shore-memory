@@ -663,8 +663,18 @@
                     <PSwitch
                       v-model="isAuraVisionEnabled"
                       :loading="isTogglingAuraVision"
+                      :disabled="embeddingProvider === 'api'"
                       @update:model-value="toggleAuraVision"
                     />
+                  </div>
+                  <div
+                    v-if="embeddingProvider === 'api'"
+                    class="mt-3 p-2 bg-amber-50 rounded-xl border border-amber-100 flex items-center gap-2"
+                  >
+                    <PixelIcon name="alert" size="xs" class="text-amber-500" />
+                    <span class="text-[10px] text-amber-700"
+                      >由于在线 API 向量维度不匹配，AuraVision 暂不可用喵~ 🌸</span
+                    >
                   </div>
                 </PCard>
 
@@ -2342,7 +2352,7 @@
               key="model_config"
               class="h-full flex flex-col overflow-hidden"
             >
-              <!-- Toolbar -->
+              <!-- Toolbar & Tabs -->
               <div class="p-6 pb-0 flex-none">
                 <PCard
                   glass
@@ -2355,9 +2365,6 @@
                   <div
                     class="absolute -right-20 -top-20 w-40 h-40 bg-sky-400/10 blur-[60px] rounded-full pointer-events-none group-hover/mtoolbar:bg-sky-400/20 transition-all duration-1000"
                   ></div>
-                  <div
-                    class="absolute -left-10 -bottom-10 w-32 h-32 bg-sky-400/5 blur-[50px] rounded-full pointer-events-none group-hover/mtoolbar:bg-sky-400/15 transition-all duration-1000 delay-150"
-                  ></div>
 
                   <div class="flex flex-wrap items-center justify-between gap-5 relative z-10">
                     <div class="flex items-center gap-4">
@@ -2367,21 +2374,47 @@
                         <PixelIcon name="settings" size="md" animation="spin" />
                       </div>
                       <div>
-                        <h3 class="text-xl font-bold text-slate-800 flex items-center gap-2">
-                          模型配置
+                        <div class="flex items-center gap-3 mb-1">
+                          <button
+                            class="text-xl font-bold transition-all"
+                            :class="
+                              currentModelTab === 'llm'
+                                ? 'text-slate-800 scale-105'
+                                : 'text-slate-400 hover:text-slate-600'
+                            "
+                            @click="currentModelTab = 'llm'"
+                          >
+                            模型配置
+                          </button>
+                          <span class="text-slate-200 text-xl">/</span>
+                          <button
+                            class="text-xl font-bold transition-all"
+                            :class="
+                              currentModelTab === 'vector'
+                                ? 'text-slate-800 scale-105'
+                                : 'text-slate-400 hover:text-slate-600'
+                            "
+                            @click="currentModelTab = 'vector'"
+                          >
+                            向量模型
+                          </button>
                           <span
                             class="text-xs font-normal text-slate-400 tracking-widest uppercase ml-1 opacity-50 group-hover/mtoolbar:opacity-100 transition-opacity"
-                            ># Models</span
+                            ># {{ currentModelTab.toUpperCase() }}</span
                           >
-                        </h3>
+                        </div>
                         <p class="text-xs text-slate-500 flex items-center gap-1.5 mt-0.5">
-                          配置 Pero 的大脑，支持多模型协作
+                          {{
+                            currentModelTab === 'llm'
+                              ? '配置 Pero 的大脑，支持多模型协作'
+                              : '配置记忆系统的 Embedding 与 Reranker 模型'
+                          }}
                           <span class="group-hover/mtoolbar:animate-pulse">✨ 🐾</span>
                         </p>
                       </div>
                     </div>
 
-                    <div class="flex items-center gap-3">
+                    <div v-if="currentModelTab === 'llm'" class="flex items-center gap-3">
                       <PButton
                         variant="secondary"
                         class="!rounded-2xl shadow-lg shadow-sky-200/20 hover:scale-105 active:scale-95 transition-all px-5 border-sky-100 hover:border-sky-300 hover-pixel-bounce"
@@ -2403,12 +2436,36 @@
                         </div>
                       </PButton>
                     </div>
+                    <div v-else class="flex items-center gap-3">
+                      <PButton
+                        variant="secondary"
+                        class="!rounded-2xl shadow-lg shadow-sky-200/20 hover:scale-105 active:scale-95 transition-all px-5 border-sky-100 hover:border-sky-300"
+                        :loading="isReindexing"
+                        @click="triggerReindex"
+                      >
+                        <div class="flex items-center gap-1.5">
+                          <PixelIcon name="refresh" size="xs" />
+                          全量重索引 <span class="ml-1 opacity-60">Reindex</span>
+                        </div>
+                      </PButton>
+                      <PButton
+                        variant="primary"
+                        class="!rounded-2xl shadow-lg shadow-sky-400/20 hover:scale-105 active:scale-95 transition-all px-8"
+                        :loading="isSaving"
+                        @click="saveVectorConfig"
+                      >
+                        保存配置 <span class="ml-1 opacity-80">Save</span>
+                      </PButton>
+                    </div>
                   </div>
                 </PCard>
               </div>
 
-              <!-- Models Grid -->
-              <div class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+              <!-- Models Grid (LLM Tab) -->
+              <div
+                v-if="currentModelTab === 'llm'"
+                class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar"
+              >
                 <div
                   class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8"
                 >
@@ -2613,6 +2670,234 @@
                         </PTooltip>
                       </div>
                     </PCard>
+                  </div>
+                </div>
+              </div>
+
+              <!-- Vector Models Config (Vector Tab) -->
+              <div v-else class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
+                <div class="max-w-4xl mx-auto space-y-8 pb-12">
+                  <!-- Embedding Section -->
+                  <PCard pixel class="!p-8 !overflow-visible">
+                    <div class="flex items-center gap-4 mb-8">
+                      <div class="p-3 bg-sky-100 rounded-2xl text-sky-600">
+                        <PixelIcon name="brain" size="md" />
+                      </div>
+                      <div>
+                        <h4 class="text-lg font-bold text-slate-800">Embedding 嵌入模型</h4>
+                        <p class="text-sm text-slate-500">
+                          将记忆文本转换为数学向量，是 RAG 检索的核心
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <div class="space-y-2 relative z-50">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >模型来源 Provider</label
+                        >
+                        <PSelect
+                          v-model="embeddingProvider"
+                          :options="[
+                            { label: '本地内置 (MiniLM-384)', value: 'local' },
+                            { label: '在线 API (OpenAI 兼容)', value: 'api' }
+                          ]"
+                          @change="handleEmbeddingProviderChange"
+                        />
+                      </div>
+
+                      <div class="space-y-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >向量维度 Dimension</label
+                        >
+                        <PInputNumber
+                          v-model="embeddingDimension"
+                          :min="1"
+                          :max="4096"
+                          :disabled="embeddingProvider === 'local'"
+                        />
+                        <p
+                          v-if="embeddingProvider === 'local'"
+                          class="text-[10px] text-slate-400 mt-1 italic"
+                        >
+                          * 本地模型固定为 384 维
+                        </p>
+                      </div>
+
+                      <div v-if="embeddingProvider === 'api'" class="space-y-2 md:col-span-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between"
+                        >
+                          <span>模型 ID Model ID</span>
+                          <button
+                            class="text-sky-500 hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
+                            :disabled="isFetchingEmbeddingModels"
+                            @click="fetchRemoteVectorModels('embedding')"
+                          >
+                            <PixelIcon
+                              :name="isFetchingEmbeddingModels ? 'refresh' : 'search'"
+                              size="xs"
+                              :animation="isFetchingEmbeddingModels ? 'spin' : ''"
+                            />
+                            {{ isFetchingEmbeddingModels ? '获取中...' : '查询模型' }}
+                          </button>
+                        </label>
+                        <PInput
+                          v-model="embeddingModelId"
+                          placeholder="例如: text-embedding-3-small"
+                        />
+                        <!-- 可选模型列表 🐈 -->
+                        <div
+                          v-if="availableEmbeddingModels.length > 0"
+                          class="flex flex-wrap gap-2 mt-2 max-h-[100px] overflow-y-auto custom-scrollbar p-1"
+                        >
+                          <button
+                            v-for="m in availableEmbeddingModels"
+                            :key="m"
+                            class="px-3 py-1 text-[10px] rounded-full border border-sky-100 bg-sky-50 text-sky-600 hover:bg-sky-500 hover:text-white transition-all active:scale-90"
+                            :class="{
+                              '!bg-sky-500 !text-white !border-sky-500': embeddingModelId === m
+                            }"
+                            @click="embeddingModelId = m"
+                          >
+                            {{ m }}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div v-if="embeddingProvider === 'api'" class="space-y-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >API Base URL (可选)</label
+                        >
+                        <PInput v-model="embeddingApiBase" placeholder="留空则使用全局配置" />
+                      </div>
+
+                      <div v-if="embeddingProvider === 'api'" class="space-y-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >API Key (可选)</label
+                        >
+                        <PInput
+                          v-model="embeddingApiKey"
+                          type="password"
+                          placeholder="留空则使用全局配置"
+                        />
+                      </div>
+                    </div>
+                  </PCard>
+
+                  <!-- Reranker Section -->
+                  <PCard pixel class="!p-8 !overflow-visible">
+                    <div class="flex items-center gap-4 mb-8">
+                      <div class="p-3 bg-amber-100 rounded-2xl text-amber-600">
+                        <PixelIcon name="sparkle" size="md" />
+                      </div>
+                      <div>
+                        <h4 class="text-lg font-bold text-slate-800">Reranker 重排序模型</h4>
+                        <p class="text-sm text-slate-500">
+                          对初步检索的结果进行精排，大幅提升回答准确度
+                        </p>
+                      </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
+                      <div class="space-y-2 relative z-40">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >模型来源 Provider</label
+                        >
+                        <PSelect
+                          v-model="rerankerProvider"
+                          :options="[
+                            { label: '本地内置 (BGE-M3)', value: 'local' },
+                            { label: '在线 API (SiliconFlow等)', value: 'api' }
+                          ]"
+                        />
+                      </div>
+
+                      <div v-if="rerankerProvider === 'api'" class="space-y-2 md:col-span-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between"
+                        >
+                          <span>模型 ID Model ID</span>
+                          <button
+                            class="text-sky-500 hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
+                            :disabled="isFetchingRerankerModels"
+                            @click="fetchRemoteVectorModels('reranker')"
+                          >
+                            <PixelIcon
+                              :name="isFetchingRerankerModels ? 'refresh' : 'search'"
+                              size="xs"
+                              :animation="isFetchingRerankerModels ? 'spin' : ''"
+                            />
+                            {{ isFetchingRerankerModels ? '获取中...' : '查询模型' }}
+                          </button>
+                        </label>
+                        <PInput
+                          v-model="rerankerModelId"
+                          placeholder="例如: BAAI/bge-reranker-v2-m3"
+                        />
+                        <!-- 可选模型列表 🐈 -->
+                        <div
+                          v-if="availableRerankerModels.length > 0"
+                          class="flex flex-wrap gap-2 mt-2 max-h-[100px] overflow-y-auto custom-scrollbar p-1"
+                        >
+                          <button
+                            v-for="m in availableRerankerModels"
+                            :key="m"
+                            class="px-3 py-1 text-[10px] rounded-full border border-sky-100 bg-sky-50 text-sky-600 hover:bg-sky-500 hover:text-white transition-all active:scale-90"
+                            :class="{
+                              '!bg-sky-500 !text-white !border-sky-500': rerankerModelId === m
+                            }"
+                            @click="rerankerModelId = m"
+                          >
+                            {{ m }}
+                          </button>
+                        </div>
+                      </div>
+
+                      <div v-if="rerankerProvider === 'api'" class="space-y-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >API Base URL (可选)</label
+                        >
+                        <PInput v-model="rerankerApiBase" placeholder="留空则使用全局配置" />
+                      </div>
+
+                      <div v-if="rerankerProvider === 'api'" class="space-y-2">
+                        <label
+                          class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                          >API Key (可选)</label
+                        >
+                        <PInput
+                          v-model="rerankerApiKey"
+                          type="password"
+                          placeholder="留空则使用全局配置"
+                        />
+                      </div>
+                    </div>
+                  </PCard>
+
+                  <!-- Help Alert -->
+                  <div
+                    class="bg-amber-50 border-2 border-amber-100 p-5 rounded-[1.5rem] flex gap-4"
+                  >
+                    <div class="text-amber-500 mt-1">
+                      <PixelIcon name="alert" size="sm" />
+                    </div>
+                    <div class="text-xs text-amber-700 leading-relaxed">
+                      <p class="font-bold mb-1 italic">喵娘的温馨提示：</p>
+                      <ul class="list-disc ml-4 space-y-1">
+                        <li>切换向量模型后，原有的记忆将保存在旧索引中，互不干扰喵~</li>
+                        <li>
+                          如果您希望在新模型下也能搜索到旧记忆，请点击上方的“全量重索引”按钮喵！
+                        </li>
+                        <li>使用 API 模式时，请确保在“全局服务商”中正确配置了 Key 和 Base URL。</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -3715,7 +4000,7 @@
     <!-- 引导图层喵~ 🎭 -->
     <OnboardingOverlay
       v-model:is-visible="showOnboarding"
-      :custom-steps="dashboardGuideSteps"
+      type="dashboard"
       @finish="handleOnboardingFinish"
     />
   </div>
@@ -3749,76 +4034,168 @@ import logoImg from '../assets/logo.png'
 import { gatewayClient } from '../api/gateway'
 import OnboardingOverlay from '../components/onboarding/OnboardingOverlay.vue'
 
+const currentModelTab = ref('llm') // 'llm' or 'vector'
+const embeddingProvider = ref('local')
+const embeddingModelId = ref('')
+const embeddingApiBase = ref('')
+const embeddingApiKey = ref('')
+const rerankerProvider = ref('local')
+const rerankerModelId = ref('')
+const rerankerApiBase = ref('')
+const rerankerApiKey = ref('')
+const embeddingDimension = ref('384')
+
+const isReindexing = ref(false)
+const availableEmbeddingModels = ref([])
+const isFetchingEmbeddingModels = ref(false)
+const availableRerankerModels = ref([])
+const isFetchingRerankerModels = ref(false)
+
+const fetchRemoteVectorModels = async (type) => {
+  const isEmb = type === 'embedding'
+  const provider = isEmb ? embeddingProvider.value : rerankerProvider.value
+  if (provider === 'local') return
+
+  const apiBase =
+    (isEmb ? embeddingApiBase.value : rerankerApiBase.value) ||
+    globalConfig.value.global_llm_api_base
+  const apiKey =
+    (isEmb ? embeddingApiKey.value : rerankerApiKey.value) || globalConfig.value.global_llm_api_key
+
+  if (!apiKey) {
+    window.$notify('请先配置 API Key 喵~ 🔑', 'warning')
+    return
+  }
+
+  if (isEmb) isFetchingEmbeddingModels.value = true
+  else isFetchingRerankerModels.value = true
+
+  try {
+    const res = await fetch(`${API_BASE}/models/remote`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        api_key: apiKey,
+        api_base: apiBase,
+        provider: 'openai'
+      })
+    })
+
+    if (res.ok) {
+      const data = await res.json()
+      const models = data.models || []
+      if (isEmb) availableEmbeddingModels.value = models
+      else availableRerankerModels.value = models
+
+      if (models.length === 0) {
+        window.$notify('未获取到模型列表，请检查配置喵~ 😿', 'warning')
+      } else {
+        window.$notify(`已获取 ${models.length} 个可用模型喵！✨`, 'success')
+      }
+    } else {
+      throw new Error('获取失败')
+    }
+  } catch (e) {
+    window.$notify('获取远程模型失败: ' + e.message, 'error')
+  } finally {
+    if (isEmb) isFetchingEmbeddingModels.value = false
+    else isFetchingRerankerModels.value = false
+  }
+}
+
+// [视觉逻辑] 监听向量模型切换，如果是在线 API 模式，则禁用 AuraVision (固定 384 维) 喵~ 🌸
+watch(embeddingProvider, (newVal) => {
+  if (newVal === 'api' && isAuraVisionEnabled.value) {
+    toggleAuraVision(false)
+  }
+})
+
+const handleEmbeddingProviderChange = (val) => {
+  if (val === 'local') {
+    embeddingDimension.value = '384'
+  } else {
+    embeddingDimension.value = '1536'
+  }
+}
+
+const saveVectorConfig = async () => {
+  if (isSaving.value) return
+
+  // 检查是否需要重索引
+  const needsReindex = memories.value.length > 0
+
+  if (needsReindex) {
+    const { action } = await openConfirm(
+      '模型切换确认',
+      '<div class="text-slate-600 mb-2">检测到您正在切换向量模型，且当前已有存储的记忆。</div>' +
+        '<div class="text-amber-600 font-bold">由于不同模型的向量维度不兼容，必须重建索引才能继续使用记忆系统。</div>' +
+        '<div class="text-[11px] text-slate-400 mt-2">（此操作将在后台重新生成所有记忆的向量，期间搜索功能可能暂时受限）</div>',
+      {
+        confirmText: '重建索引并保存',
+        cancelText: '取消切换'
+      }
+    )
+
+    if (action !== 'confirm') return
+  }
+
+  try {
+    isSaving.value = true
+    await fetchWithTimeout(
+      `${API_BASE}/configs`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          embedding_provider: embeddingProvider.value,
+          embedding_model_id: embeddingModelId.value,
+          embedding_api_base: embeddingApiBase.value,
+          embedding_api_key: embeddingApiKey.value,
+          reranker_provider: rerankerProvider.value,
+          reranker_model_id: rerankerModelId.value,
+          reranker_api_base: rerankerApiBase.value,
+          reranker_api_key: rerankerApiKey.value,
+          embedding_dimension: embeddingDimension.value,
+          global_llm_api_key: globalConfig.value.global_llm_api_key,
+          global_llm_api_base: globalConfig.value.global_llm_api_base
+        })
+      },
+      5000
+    )
+
+    window.$notify('向量模型配置已更新', 'success')
+
+    if (needsReindex) {
+      triggerReindex()
+    }
+
+    await fetchConfig()
+  } catch (e) {
+    window.$notify('保存失败: ' + e.message, 'error')
+  } finally {
+    isSaving.value = false
+  }
+}
+
+const triggerReindex = async () => {
+  if (isReindexing.value) return
+  try {
+    isReindexing.value = true
+    const res = await fetch(`${API_BASE}/memory/reindex`, { method: 'POST' })
+    if (res.ok) {
+      window.$notify('重索引任务已在后台启动喵~ ✨', 'success')
+    } else {
+      throw new Error('启动失败')
+    }
+  } catch (e) {
+    window.$notify('重索引失败: ' + e.message, 'error')
+  } finally {
+    isReindexing.value = false
+  }
+}
+
 const showOnboarding = ref(false)
 const appConfig = ref({})
-
-// Dashboard 强引导脚本喵~ 📜
-const dashboardGuideSteps = [
-  {
-    id: 'dash_intro',
-    speaker: 'Pero',
-    text: '欢迎来到指挥中心喵！这里是掌控 Pero 所有能力的地方哦~',
-    expression: 'normal'
-  },
-  {
-    id: 'dash_sidebar',
-    speaker: 'Pero',
-    text: '左边是功能导航栏，不管是看日记、改设定还是装脑子（模型），都在这里切换喵！',
-    expression: 'none',
-    focusSelector: '#dashboard-sidebar'
-  },
-  {
-    id: 'dash_overview',
-    speaker: 'Pero',
-    text: '首先是【总览】页，这里能看到 Pero 的身体状况和今天的活动记录喵~',
-    expression: 'none',
-    focusSelector: '#menu-item-overview'
-  },
-  {
-    id: 'dash_user_profile',
-    speaker: 'Pero',
-    text: '接下来请点击【用户设定】，告诉 Pero 主人希望怎么被称呼，以及 Pero 该用什么语气说话喵！',
-    expression: 'none',
-    focusSelector: '#menu-item-user_settings',
-    nextAction: 'wait_click'
-  },
-  {
-    id: 'dash_user_profile_done',
-    speaker: 'Pero',
-    text: '填好后记得保存哦！这样 Pero 才能记住主人的喜好喵~',
-    expression: 'normal'
-  },
-  {
-    id: 'dash_models',
-    speaker: 'Pero',
-    text: '然后是重头戏！请点击【模型配置】，给 Pero 装上聪明的 AI 大脑喵！',
-    expression: 'none',
-    focusSelector: '#menu-item-model_config',
-    nextAction: 'wait_click'
-  },
-  {
-    id: 'dash_models_explain',
-    speaker: 'Pero',
-    text: '这里有聊天、记忆、语音等不同功能的模型，虽然有点复杂，但只要把它们都配置好，Pero 就变聪明啦！',
-    expression: 'normal'
-  },
-  {
-    id: 'dash_explore',
-    speaker: 'Pero',
-    text: '剩下的功能（比如语音功能、MCP 扩展）主人可以慢慢探索喵~',
-    expression: 'normal'
-  },
-  {
-    id: 'dash_confirm',
-    speaker: 'Pero',
-    text: '那么，主人现在对这里大概了解了吗？准备好正式启动了吗喵？',
-    expression: 'normal',
-    choices: [
-      { label: '了解了，启动！', value: 'launch' },
-      { label: '再让我看看...', value: 'stay' }
-    ]
-  }
-]
 
 const handleOnboardingFinish = async (choice) => {
   if (choice === 'launch') {
@@ -3834,8 +4211,15 @@ const handleOnboardingFinish = async (choice) => {
     } catch (e) {
       console.error('启动失败:', e)
     }
+  } else if (choice === 'stay') {
+    // 用户选择“再让我看看”，重走一遍引导喵~ 🔄
+    showOnboarding.value = false
+    // 延迟一小会儿再开启，确保组件感知到状态变化并重置
+    setTimeout(() => {
+      showOnboarding.value = true
+    }, 500)
   } else {
-    // 用户选择留在 Dashboard
+    // 其他情况（比如中途退出），也标记为完成
     const config = await invoke('get_config')
     config.onboarding_completed = true
     await invoke('save_config', { config })
@@ -4063,7 +4447,7 @@ const handleCancel = () => {
 }
 
 // --- Auto Updater ---
-const appVersion = ref('0.5.4')
+const appVersion = ref('0.8.0')
 const updateStatus = ref({ type: 'idle' })
 const isCheckingUpdate = ref(false)
 
@@ -5521,6 +5905,17 @@ const fetchConfig = async () => {
     secretaryModelId.value = data.scorer_model_id ? parseInt(data.scorer_model_id) : null
     reflectionModelId.value = data.reflection_model_id ? parseInt(data.reflection_model_id) : null
     auxModelId.value = data.aux_model_id ? parseInt(data.aux_model_id) : null
+
+    // 加载向量模型配置
+    embeddingProvider.value = data.embedding_provider || 'local'
+    embeddingModelId.value = data.embedding_model_id || ''
+    embeddingApiBase.value = data.embedding_api_base || ''
+    embeddingApiKey.value = data.embedding_api_key || ''
+    rerankerProvider.value = data.reranker_provider || 'local'
+    rerankerModelId.value = data.reranker_model_id || ''
+    rerankerApiBase.value = data.reranker_api_base || ''
+    rerankerApiKey.value = data.reranker_api_key || ''
+    embeddingDimension.value = data.embedding_dimension || '384'
 
     // 加载用户设定
     userSettings.value.owner_name = data.owner_name || '主人'

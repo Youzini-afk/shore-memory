@@ -87,24 +87,38 @@ class VectorStoreService:
         self._lazy_loaded = False
         self.deleted_ids: Dict[str, set] = {}  # agent_id -> 已删除的 memory_id 集合
 
-    def _get_agent_index_path(self, agent_id: str) -> str:
-        """获取指定 Agent 的索引文件路径"""
-        agent_dir = os.path.join(self.data_dir, "agents", agent_id)
+    def _get_agent_index_path(self, agent_id: str, model_key: str = None) -> str:
+        """
+        根据 Agent ID 和模型 Key 获取对应的向量索引路径喵~ 📂
+        """
+        if model_key is None:
+            model_key = embedding_service.get_model_key()
+
+        agent_dir = os.path.join(self.data_dir, "agents", agent_id, model_key)
         if not os.path.exists(agent_dir):
             os.makedirs(agent_dir, exist_ok=True)
         return os.path.join(agent_dir, "memory.index")
 
     def _get_index(self, agent_id: str) -> Optional[SemanticVectorIndex]:
-        """获取或加载指定 Agent 的索引实例"""
+        """
+        获取向量索引实例，支持多模型并发加载喵~ 🧩
+        """
         if not RUST_AVAILABLE:
             return None
 
-        if agent_id not in self.indices:
+        model_key = embedding_service.get_model_key()
+        cache_key = f"{agent_id}_{model_key}"
+
+        if cache_key not in self.indices:
             path = self._get_agent_index_path(agent_id)
+
+            # 确保维度已加载
+            self._ensure_loaded()
+
             if os.path.exists(path):
                 try:
                     index = SemanticVectorIndex.load_index(path, self.dimension)
-                    self.indices[agent_id] = index
+                    self.indices[cache_key] = index
                 except Exception as e:
                     print(f"[VectorStore] 加载 {agent_id} 的索引失败: {e}")
                     # 备份并重建
@@ -114,11 +128,16 @@ class VectorStoreService:
                         shutil.copy2(path, path + f".bak.{int(time.time())}")
                     except Exception:
                         pass
-                    self.indices[agent_id] = SemanticVectorIndex(self.dimension, 10000)
+                    self.indices[cache_key] = SemanticVectorIndex(self.dimension, 10000)
             else:
-                self.indices[agent_id] = SemanticVectorIndex(self.dimension, 10000)
+                self.indices[cache_key] = SemanticVectorIndex(self.dimension, 10000)
 
-        return self.indices[agent_id]
+            print(
+                f"[VectorStore] 已加载索引: {agent_id} (模型: {model_key}, 维度: {self.dimension})",
+                flush=True,
+            )
+
+        return self.indices[cache_key]
 
     def _ensure_loaded(self):
         if not RUST_AVAILABLE:
@@ -126,12 +145,11 @@ class VectorStoreService:
         if self._lazy_loaded:
             return
 
-        # 如果可能，从 embedding service 检测维度
+        # 从 embedding service 获取维度喵~ 📏
         try:
-            dummy_vec = embedding_service.encode_one("test")
-            self.dimension = len(dummy_vec)
+            self.dimension = embedding_service.get_dimension()
         except Exception as e:
-            print(f"[VectorStore] 检测维度失败: {e}。使用默认值 384。")
+            print(f"[VectorStore] 获取维度失败: {e}。使用默认值 384。")
             self.dimension = 384
 
         # 加载标签索引 (全局)
@@ -184,12 +202,18 @@ class VectorStoreService:
         self._lazy_loaded = True
 
     def save(self):
+        """保存所有加载的索引到磁盘喵~ 💾"""
         if not RUST_AVAILABLE or not self._lazy_loaded:
             return
         try:
             # 保存所有已加载的 Agent 索引
-            for agent_id, index in self.indices.items():
-                path = self._get_agent_index_path(agent_id)
+            # 由于 cache_key 是 {agent_id}_{model_key}，我们需要解析出 agent_id 以获取路径
+            for cache_key, index in self.indices.items():
+                parts = cache_key.rsplit("_", 1)
+                agent_id = parts[0]
+                model_key = parts[1] if len(parts) > 1 else None
+
+                path = self._get_agent_index_path(agent_id, model_key)
 
                 # [优化] 保存前应用物理删除
                 pending_deletions = self.deleted_ids.get(agent_id, set())
@@ -220,7 +244,7 @@ class VectorStoreService:
                             new_index = SemanticVectorIndex.load_index(
                                 temp_path, self.dimension
                             )
-                            self.indices[agent_id] = new_index
+                            self.indices[cache_key] = new_index
 
                             # 清除待删除列表
                             self.deleted_ids[agent_id] = set()

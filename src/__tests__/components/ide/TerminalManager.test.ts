@@ -3,7 +3,16 @@ import { mount } from '@vue/test-utils'
 import TerminalManager from '@/components/ide/TerminalManager.vue'
 import * as IPCAdapter from '@/utils/ipcAdapter'
 
-// Mock Lucide icons
+// Mock PixelIcon
+vi.mock('@/components/ui/PixelIcon.vue', () => ({
+  default: {
+    name: 'PixelIcon',
+    props: ['name', 'size', 'animation'],
+    template: '<span :class="\'icon-\' + name" />'
+  }
+}))
+
+// Mock Lucide icons (if any are still used elsewhere)
 vi.mock('lucide-vue-next', () => ({
   Terminal: { template: '<span class="icon-terminal" />' },
   ChevronDown: { template: '<span class="icon-chevron-down" />' },

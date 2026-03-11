@@ -115,7 +115,11 @@
     class="h-screen w-screen overflow-hidden bg-sky-50 text-slate-800 font-sans select-text relative pixel-ui pixel-grid-overlay"
   >
     <!-- 引导图层喵~ 🎭 -->
-    <OnboardingOverlay v-model:is-visible="showOnboarding" @finish="handleOnboardingFinish" />
+    <OnboardingOverlay
+      v-model:is-visible="showOnboarding"
+      type="launcher"
+      @finish="handleOnboardingFinish"
+    />
 
     <CustomTitleBar v-if="isElectron()" :transparent="true" />
 
@@ -246,7 +250,7 @@
             <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Pero Launcher</h1>
             <p class="text-xs text-slate-400 mt-1 font-mono tracking-wider flex items-center gap-2">
               <PixelIcon name="mood-happy" class="w-2.5 h-2.5 text-sky-500 animate-pixel-float" />
-              版本 0.1.0 • 系统就绪
+              版本 0.8.0 • 系统就绪
             </p>
           </div>
 

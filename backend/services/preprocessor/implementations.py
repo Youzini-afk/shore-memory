@@ -499,13 +499,15 @@ class RAGPreprocessor(BasePreprocessor):
                     weights = []
 
                     if last_user:
-                        embeddings.append(embedding_service.encode_one(last_user))
+                        embeddings.append(await embedding_service.encode_one(last_user))
                         weights.append(0.5)
                     if last_assistant:
-                        embeddings.append(embedding_service.encode_one(last_assistant))
+                        embeddings.append(
+                            await embedding_service.encode_one(last_assistant)
+                        )
                         weights.append(0.35)
                     if last_tool:
-                        embeddings.append(embedding_service.encode_one(last_tool))
+                        embeddings.append(await embedding_service.encode_one(last_tool))
                         weights.append(0.15)
 
                     if embeddings:

@@ -163,7 +163,7 @@ class MemoryService:
 
         # 2. 创建新记忆
         # 生成 Embedding (用于写入向量数据库)
-        embedding_vec = embedding_service.encode_one(content)
+        embedding_vec = await embedding_service.encode_one(content)
 
         if not embedding_vec:
             print(f"[MemoryService] 警告: 记忆内容嵌入生成失败: {content[:30]}...")
@@ -198,13 +198,13 @@ class MemoryService:
                 final_embedding = embedding_vec
                 if tags:
                     enriched_text = f"{tags} {tags} {content}"
-                    final_embedding = embedding_service.encode_one(enriched_text)
+                    final_embedding = await embedding_service.encode_one(enriched_text)
 
                     # [特性] 标签记忆索引 - 独立索引标签
                     tag_list = [t.strip() for t in tags.split(",") if t.strip()]
                     if tag_list:
                         try:
-                            tag_embeddings = embedding_service.encode(tag_list)
+                            tag_embeddings = await embedding_service.encode(tag_list)
                             for i, tag_name in enumerate(tag_list):
                                 vector_service.add_tag(tag_name, tag_embeddings[i])
                         except Exception as tag_e:
@@ -243,7 +243,7 @@ class MemoryService:
             )
             try:
                 # 强制重新加载模型并编码
-                retry_vec = embedding_service.encode_one(content)
+                retry_vec = await embedding_service.encode_one(content)
                 if retry_vec:
                     # 更新 SQL
                     memory.embedding_json = json.dumps(retry_vec)
@@ -600,7 +600,7 @@ class MemoryService:
 
         try:
             # 1. 向量搜索获取锚点
-            query_vec = embedding_service.encode_one(text)
+            query_vec = await embedding_service.encode_one(text)
             if not query_vec:
                 return []
 
@@ -713,7 +713,7 @@ class MemoryService:
 
         # --- 2. 向量检索 ---
         if query_vec is None:
-            query_vec = embedding_service.encode_one(text)
+            query_vec = await embedding_service.encode_one(text)
 
         if not query_vec:
             return []

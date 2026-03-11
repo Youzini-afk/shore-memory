@@ -147,7 +147,7 @@ class SocialMemoryService:
             try:
                 from services.core.embedding_service import embedding_service
 
-                vec = embedding_service.encode_one(content)
+                vec = await embedding_service.encode_one(content)
             except Exception as e:
                 print(f"[SocialMemory] 警告: 生成 Embedding 失败: {e}")
 
@@ -248,7 +248,7 @@ class SocialMemoryService:
                 try:
                     from services.core.embedding_service import embedding_service
 
-                    query_vec = embedding_service.encode_one(query)
+                    query_vec = await embedding_service.encode_one(query)
                 except Exception:
                     pass
 

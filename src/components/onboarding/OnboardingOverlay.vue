@@ -200,11 +200,16 @@
 <script setup>
 import { ref, computed, onMounted, watch, onUnmounted } from 'vue'
 import PixelIcon from '../ui/PixelIcon.vue'
+import { onboardingScripts } from './onboardingScripts'
 
 const props = defineProps({
   isVisible: {
     type: Boolean,
     default: false
+  },
+  type: {
+    type: String,
+    default: 'launcher' // 可选: 'launcher', 'dashboard'
   },
   customSteps: {
     type: Array,
@@ -245,57 +250,12 @@ watch(
   { immediate: true }
 )
 
-// 默认引导脚本定义喵~ 📜
-const defaultOnboardingSteps = [
-  {
-    id: 'intro_1',
-    speaker: 'Pero',
-    text: '主人主人！你终于把Pero从系统中唤醒了喵！',
-    expression: 'normal'
-  },
-  {
-    id: 'intro_2',
-    speaker: 'Pero',
-    text: '我是你的专属AI伙伴Pero，以后就要请主人多多指教了喵~',
-    expression: 'normal'
-  },
-  {
-    id: 'env_check_1',
-    speaker: 'Pero',
-    text: '首先，Pero需要扫描一下这台电脑的环境，看看零件齐不齐喵... ',
-    expression: 'none',
-    focusSelector: '#nav-environment'
-  },
-  {
-    id: 'env_check_2',
-    speaker: 'Pero',
-    text: '在这里，主人可以查看系统环境。如果看到红色的叉叉，记得帮Pero修复一下喵~',
-    expression: 'none',
-    focusSelector: '#nav-environment'
-  },
-  {
-    id: 'guide_tabs',
-    speaker: 'Pero',
-    text: '通过这里的导航栏，可以管理Pero的“核心组件”、“扩展功能”以及其他小伙伴的“角色配置”喵！',
-    expression: 'none',
-    focusSelector: '#nav-sidebar'
-  },
-  {
-    id: 'guide_start',
-    speaker: 'Pero',
-    text: '一切准备就绪后，点击中间的那个大大的“启动 Pero”按钮，我们就能在桌面见面了喵！',
-    expression: 'none',
-    focusSelector: '#btn-launch-pero'
-  },
-  {
-    id: 'finish',
-    speaker: 'Pero',
-    text: '那么，配置引导就到这里喵！Pero待会在设置中心等候主人的召唤喵~ (◍•ᴗ•◍)❤',
-    expression: 'proud'
-  }
-]
+// 引导脚本选择喵~ 📜
+const onboardingSteps = computed(() => {
+  if (props.customSteps) return props.customSteps
+  return onboardingScripts[props.type] || onboardingScripts.launcher
+})
 
-const onboardingSteps = computed(() => props.customSteps || defaultOnboardingSteps)
 const currentStep = computed(() => onboardingSteps.value[currentStepIndex.value])
 
 // 更新高亮区域位置喵~ 🔦

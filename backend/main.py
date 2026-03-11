@@ -224,6 +224,14 @@ async def lifespan(app: FastAPI):
     print("=" * 50)
 
     await seed_voice_configs()
+
+    # [引导逻辑] 初始化 Embedding Service 配置喵~ 🧠
+    try:
+        await embedding_service.refresh_config()
+        print("🧠 EmbeddingService: [就绪]")
+    except Exception as e:
+        print(f"🧠 EmbeddingService: [失败] ({e})")
+
     await companion_service.start()
     screenshot_manager.start_background_task()
 
@@ -1407,12 +1415,40 @@ async def update_config(
     for key, value in configs.items():
         config_obj = await session.get(Config, key)
         if config_obj:
-            config_obj.value = value
+            config_obj.value = str(value)
         else:
-            config_obj = Config(key=key, value=value)
+            config_obj = Config(key=key, value=str(value))
             session.add(config_obj)
+
     await session.commit()
+
+    # [引导逻辑] 更新配置后，立即刷新 Embedding Service 状态喵~ 🔄
+    try:
+        from services.core.embedding_service import embedding_service
+
+        await embedding_service.refresh_config(session)
+    except Exception as e:
+        print(f"[Config] 刷新 Embedding Service 失败: {e}")
+
     return {"status": "success"}
+
+
+@app.post("/api/memory/reindex")
+async def trigger_reindex(
+    agent_id: str = "pero", session: AsyncSession = Depends(get_session)
+):  # noqa: B008
+    """
+    手动触发记忆重索引喵~ 🔄
+    用于切换 Embedding 模型后重新生成向量。
+    """
+    try:
+        from services.core.reindex_service import ReindexService
+
+        # 异步执行，不阻塞 API
+        asyncio.create_task(ReindexService.reindex_all_memories(session, agent_id))
+        return {"status": "success", "message": "重索引任务已在后台启动喵~ ✨"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"启动重索引失败: {str(e)}")
 
 
 @app.get("/api/models", response_model=List[AIModelConfig])
