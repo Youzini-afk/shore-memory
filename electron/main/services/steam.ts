@@ -1,7 +1,13 @@
-import steamworks from 'steamworks.js'
 import { app } from 'electron'
 import path from 'path'
 import { getConfig, saveConfig } from './system.js'
+
+let steamworks: any = null
+try {
+  steamworks = require('steamworks.js')
+} catch (e) {
+  console.error('[Steam] 无法加载 steamworks.js 模块 (可能缺少 steam_api64.dll):', e)
+}
 
 let client: any = null
 let isInitialized = false
@@ -21,6 +27,7 @@ export const ACHIEVEMENTS = {
 // 'failed': Steam 初始化失败（在没有 Steam 的情况下继续运行）
 export function initSteam(): 'restarting' | 'success' | 'failed' {
   if (isInitialized) return 'success'
+  if (!steamworks) return 'failed'
 
   const appId = 4457100 // PeroCore Steam App ID
 

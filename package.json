@@ -136,7 +136,8 @@
       "src/components/avatar/native/*.node"
     ],
     "asarUnpack": [
-      "**/*.node"
+      "**/*.node",
+      "node_modules/steamworks.js"
     ],
     "extraResources": [
       {

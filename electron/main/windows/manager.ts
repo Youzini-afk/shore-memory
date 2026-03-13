@@ -115,8 +115,18 @@ export class WindowManager {
 
     this.launcherWin.on('ready-to-show', () => {
       logger.info('Main', '窗口 ready-to-show 事件已触发')
-      this.launcherWin?.show()
+      if (this.launcherWin) {
+        this.launcherWin.show()
+      }
     })
+
+    // 兜底方案：如果 5 秒内 ready-to-show 没触发，强制显示并记录警告
+    setTimeout(() => {
+      if (this.launcherWin && !this.launcherWin.isVisible() && !this.launcherWin.isDestroyed()) {
+        logger.warn('Main', 'ready-to-show 超时，正在强制显示窗口')
+        this.launcherWin.show()
+      }
+    }, 5000)
 
     this.launcherWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
       logger.error('Main', `Failed to load: ${errorDescription} (${errorCode})`)

@@ -99,6 +99,9 @@ pero_workspace/
 # Packaging & Runtimes (Tauri zero-env)
 PeroLauncher/src-tauri/python/
 
+# Sub-projects
+tools/pero-encryptor/
+
 # Build tools & Native source (per request)
 tools/
 src/components/avatar/native/src/

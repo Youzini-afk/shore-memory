@@ -44,15 +44,30 @@ function log(message, type = 'info') {
   console.log(`${colors.bright}[${timestamp}] ${color}${message}${colors.reset}`)
 }
 
-async function downloadFile(url, dest) {
+async function downloadFile(url, dest, maxRedirects = 5) {
   return new Promise((resolve, reject) => {
-    const file = fs.createWriteStream(dest)
     https
-      .get(url, (response) => {
+      .get(url, { maxRedirects: 0 }, (response) => {
+        // 处理重定向 (301, 302, 303, 307, 308)
+        if ([301, 302, 303, 307, 308].includes(response.statusCode)) {
+          if (maxRedirects <= 0) {
+            reject(new Error('重定向次数过多'))
+            return
+          }
+          const location = response.headers.location
+          log(`检测到重定向：${response.statusCode} -> ${location}`, 'info')
+          downloadFile(location, dest, maxRedirects - 1)
+            .then(resolve)
+            .catch(reject)
+          return
+        }
+
         if (response.statusCode !== 200) {
           reject(new Error(`Failed to download: ${response.statusCode}`))
           return
         }
+
+        const file = fs.createWriteStream(dest)
         response.pipe(file)
         file.on('finish', () => {
           file.close()

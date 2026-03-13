@@ -1,6 +1,17 @@
 import { app, BrowserWindow, shell, ipcMain, screen, Notification, protocol } from 'electron'
 import { release } from 'os'
 import { join } from 'path'
+import { logger } from './utils/logger'
+
+// 捕获未处理的异常以防止静默崩溃
+process.on('uncaughtException', (error) => {
+  logger.error('Main', `未捕获的异常 (Uncaught Exception): ${error.message}\n${error.stack}`)
+})
+
+process.on('unhandledRejection', (reason) => {
+  logger.error('Main', `未处理的 Promise 拒绝 (Unhandled Rejection): ${reason}`)
+})
+
 import {
   getSteamUser,
   initSteam,
@@ -39,7 +50,6 @@ import { windowManager } from './windows/manager.js'
 import { createTray } from './services/tray.js'
 import { registerShortcuts } from './services/shortcuts.js'
 import axios from 'axios'
-import { logger } from './utils/logger'
 import { spawn } from 'child_process'
 import path from 'path'
 import { isDev, paths } from './utils/env'
@@ -77,9 +87,9 @@ try {
         native = require(fallbackPath)
         logger.info('Main', `Native 核心加载成功 (生产环境回退目录): ${fallbackPath}`)
       } else {
-        logger.error('Main', 'Native 核心在生产环境路径中未找到')
+        logger.warn('Main', 'Native 核心在生产环境路径中未找到')
         // 关键失败：如果不在这里报错，后面调用 native 会崩溃
-        throw new Error('渲染核心组件缺失')
+        // throw new Error('渲染核心组件缺失')
       }
     }
   }
@@ -135,33 +145,42 @@ process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 
 // 尝试初始化 Steam
 // 如果是通过直接运行 exe 启动的，initSteam 会检测是否需要重启并通过 Steam 启动
-const steamStatus = initSteam()
-if (steamStatus === 'restarting') {
-  app.quit()
-  process.exit(0)
+try {
+  const steamStatus = initSteam()
+  if (steamStatus === 'restarting') {
+    logger.info('Main', '正在通过 Steam 重启应用...')
+    app.quit()
+    process.exit(0)
+  }
+} catch (e) {
+  logger.error('Main', `Steam 初始化发生异常: ${e}`)
 }
 
 const createWindow = async () => {
-  const win = windowManager.createLauncherWindow()
+  try {
+    const win = windowManager.createLauncherWindow()
 
-  // 设置自动更新
-  setupUpdater()
+    // 设置自动更新
+    setupUpdater()
 
-  // 创建系统托盘
-  createTray()
+    // 创建系统托盘
+    createTray()
 
-  // 注册全局快捷键
-  registerShortcuts()
+    // 注册全局快捷键
+    registerShortcuts()
 
-  // 测试主动向渲染进程推送消息
-  win.webContents.on('did-finish-load', () => {
-    try {
-      if (!win.isDestroyed())
-        win.webContents.send('main-process-message', new Date().toLocaleString())
-    } catch {
-      // 忽略
-    }
-  })
+    // 测试主动向渲染进程推送消息
+    win.webContents.on('did-finish-load', () => {
+      try {
+        if (!win.isDestroyed())
+          win.webContents.send('main-process-message', new Date().toLocaleString())
+      } catch {
+        // 忽略
+      }
+    })
+  } catch (e) {
+    logger.error('Main', `创建窗口失败: ${e}`)
+  }
 }
 
 // 注册全局 IPC 处理程序
@@ -272,26 +291,30 @@ ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
 })
 
 app.whenReady().then(async () => {
-  registerAssetProtocol()
-  createWindow()
-
-  // 启动时自动从云端同步数据
   try {
-    const { cloudSyncService } = require('./services/cloudSync.js')
-    const status = cloudSyncService.getStatus()
-    if (status.enabled) {
-      logger.info('Main', 'Steam 云同步已启用，正在检查云端数据...')
-      // 异步下载，不阻塞启动
-      cloudSyncService.downloadFromCloud().then((result: SyncResult) => {
-        if (result.success) {
-          logger.info('Main', `云同步完成: 下载 ${result.downloaded.length} 个文件`)
-        } else {
-          logger.warn('Main', `云同步部分失败: ${result.errors.join(', ')}`)
-        }
-      })
+    registerAssetProtocol()
+    createWindow()
+
+    // 启动时自动从云端同步数据
+    try {
+      const { cloudSyncService } = require('./services/cloudSync.js')
+      const status = cloudSyncService.getStatus()
+      if (status.enabled) {
+        logger.info('Main', 'Steam 云同步已启用，正在检查云端数据...')
+        // 异步下载，不阻塞启动
+        cloudSyncService.downloadFromCloud().then((result: SyncResult) => {
+          if (result.success) {
+            logger.info('Main', `云同步完成: 下载 ${result.downloaded.length} 个文件`)
+          } else {
+            logger.warn('Main', `云同步部分失败: ${result.errors.join(', ')}`)
+          }
+        })
+      }
+    } catch (e) {
+      logger.warn('Main', `云同步检查失败: ${e}`)
     }
   } catch (e) {
-    logger.warn('Main', `云同步检查失败: ${e}`)
+    logger.error('Main', `App whenReady 执行失败: ${e}`)
   }
 })
 
