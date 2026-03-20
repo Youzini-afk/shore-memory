@@ -41,7 +41,9 @@ class TestMemoryService:
     def setup_mocks(self):
         # 重置模拟
         mock_event_bus.EventBus.publish = AsyncMock()
-        mock_embedding_service.embedding_service.encode_one.return_value = [0.1] * 384
+        mock_embedding_service.embedding_service.encode_one = AsyncMock(
+            return_value=[0.1] * 384
+        )
         # vector_service 是同步的
         mock_vector_service.vector_service.add_memory = MagicMock()
         mock_rust_engine.CognitiveGraphEngine = MagicMock()

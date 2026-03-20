@@ -24,6 +24,7 @@ export class WindowManager {
   }
 
   private getPreloadPath(): string {
+    // __dirname = dist-electron/main/windows, 需要向上2层到 dist-electron/
     return join(__dirname, '../../preload/index.js')
   }
 
@@ -49,7 +50,10 @@ export class WindowManager {
     if (process.env.VITE_DEV_SERVER_URL) {
       return `${process.env.VITE_DEV_SERVER_URL}#${route}`
     } else {
-      return `file://${join(__dirname, '../../../dist/index.html')}#${route}`
+      // 使用 app.getAppPath() 获取 asar 根路径，比相对路径更稳健
+      const { app } = require('electron')
+      const indexPath = join(app.getAppPath(), 'dist', 'index.html')
+      return `file://${indexPath}#${route}`
     }
   }
 

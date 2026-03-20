@@ -115,6 +115,7 @@
   },
   "overrides": {},
   "build": {
+    "npmRebuild": false,
     "publish": [
       {
         "provider": "github",
@@ -137,7 +138,8 @@
     ],
     "asarUnpack": [
       "**/*.node",
-      "node_modules/steamworks.js"
+      "**/*.dll",
+      "node_modules/steamworks.js/**/*"
     ],
     "extraResources": [
       {

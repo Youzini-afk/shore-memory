@@ -1,9 +1,7 @@
 import os
 import socket
 
-from fastapi import APIRouter, Depends, HTTPException
-
-from core.config_manager import get_config_manager
+from fastapi import APIRouter
 
 router = APIRouter(prefix="/api/connection", tags=["connection"])
 

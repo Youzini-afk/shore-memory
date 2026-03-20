@@ -20,20 +20,7 @@ jobs:
         with:
           path: PeroCore-Electron
 
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache-dependency-path: PeroCore-Electron/gateway/go.sum
-
-      - name: Build Gateway
-        run: |
-          cd PeroCore-Electron/gateway
-          echo "Building Gateway..."
-          # Ensure output directory exists
-          mkdir -p ../resources/bin
-          go mod tidy
-          go build -o ../resources/bin/gateway.exe gateway/main.go
+      # [已移除] Go Gateway 构建 — Gateway 已嵌入 Python 后端 (2026-03-20)
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -215,6 +202,14 @@ jobs:
         run: |
           cd PeroCore-Electron
           pnpm install
+
+      - name: Verify Critical Modules
+        run: |
+          cd PeroCore-Electron
+          node -e "try { require('electron-store'); console.log('electron-store OK') } catch(e) { console.error('FAIL:', e.message); process.exit(1) }"
+          node -e "try { require('axios'); console.log('axios OK') } catch(e) { console.error('FAIL:', e.message); process.exit(1) }"
+          node -e "try { require('fs-extra'); console.log('fs-extra OK') } catch(e) { console.error('FAIL:', e.message); process.exit(1) }"
+          node -e "const p = require.resolve('steamworks.js'); console.log('steamworks.js resolved:', p)"
 
       - name: Build Electron App
         run: |

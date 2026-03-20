@@ -1,12 +1,12 @@
-import os
-from typing import List, Optional, Any
+from typing import Any, List, Optional
+
 import numpy as np
 
 from core.model_manager import model_manager
 from services.core.embedding_provider import (
-    LocalEmbeddingProvider,
     ApiEmbeddingProvider,
     EmbeddingProvider,
+    LocalEmbeddingProvider,
 )
 
 
@@ -29,8 +29,9 @@ class EmbeddingService:
         根据数据库配置更新 Provider 喵~ 🔄
         """
         from sqlmodel import select
-        from models import Config, AIModelConfig
+
         from database import get_session
+        from models import Config
 
         async def _do_refresh(sess):
             # 1. 获取所有配置
@@ -44,12 +45,20 @@ class EmbeddingService:
                 reranker_id = configs.get("reranker_model_id")
 
                 # Embedding 专属配置喵~ 🌸
-                emb_api_key = configs.get("embedding_api_key") or configs.get("global_llm_api_key", "")
-                emb_api_base = configs.get("embedding_api_base") or configs.get("global_llm_api_base", "https://api.openai.com")
+                emb_api_key = configs.get("embedding_api_key") or configs.get(
+                    "global_llm_api_key", ""
+                )
+                emb_api_base = configs.get("embedding_api_base") or configs.get(
+                    "global_llm_api_base", "https://api.openai.com"
+                )
 
                 # Reranker 专属配置喵~ 🎯
-                rerank_api_key = configs.get("reranker_api_key") or configs.get("global_llm_api_key", "")
-                rerank_api_base = configs.get("reranker_api_base") or configs.get("global_llm_api_base", "https://api.openai.com")
+                rerank_api_key = configs.get("reranker_api_key") or configs.get(
+                    "global_llm_api_key", ""
+                )
+                rerank_api_base = configs.get("reranker_api_base") or configs.get(
+                    "global_llm_api_base", "https://api.openai.com"
+                )
 
                 if model_id:
                     dim = int(configs.get("embedding_dimension", "1536"))

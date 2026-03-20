@@ -103,4 +103,4 @@ async def get_server_info():
         pass
 
     # 猜测IP（前端应显示localhost或询问用户），返回端口很有用
-    return {"port": 14747, "token": token}
+    return {"port": 9120, "token": token}

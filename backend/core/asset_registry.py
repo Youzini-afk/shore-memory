@@ -158,7 +158,9 @@ class AssetRegistry:
 
         if data and "asset_id" in data:
             # 优先使用 display_name，兼容旧版 displayName
-            display_name = data.get("display_name") or data.get("displayName", data["asset_id"])
+            display_name = data.get("display_name") or data.get(
+                "displayName", data["asset_id"]
+            )
             return AssetMetadata(
                 asset_id=data["asset_id"],
                 type=data.get("type", "unknown"),

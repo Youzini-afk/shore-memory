@@ -85,7 +85,8 @@ async def get_all_agents_status(session: AsyncSession = Depends(get_session)):
     active_agents = (
         await session.exec(
             select(AgentProfile).where(
-                AgentProfile.role != "system", AgentProfile.is_active == True
+                AgentProfile.role != "system",
+                AgentProfile.is_active.is_(True),  # noqa: E712
             )
         )
     ).all()

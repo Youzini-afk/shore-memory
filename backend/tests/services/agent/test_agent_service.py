@@ -42,7 +42,6 @@ class TestAgentService:
             patch("services.agent.agent_service.get_nit_manager"),
             patch("services.agent.agent_manager.get_agent_manager") as mock_get_manager,
             patch("services.agent.agent_service.get_active_windows", return_value=[]),
-            patch("services.agent.agent_service.plugin_manager"),
         ):
             # 设置 ComponentContainer 模拟
             mock_container = MockContainer
@@ -62,7 +61,7 @@ class TestAgentService:
         session.add(Config(key="reflection_enabled", value="false"))
         await session.commit()
 
-        config = await agent_service._get_reflection_config()
+        config = await agent_service.config_loader.get_reflection_config()
         assert config is None
 
     @pytest.mark.asyncio
@@ -84,7 +83,7 @@ class TestAgentService:
         session.add(model_config)
         await session.commit()
 
-        config = await agent_service._get_reflection_config()
+        config = await agent_service.config_loader.get_reflection_config()
         assert config is not None
         assert config["model"] == "gpt-4"
         # 优先级：如果设置了全局 key，则优先于模型 key？
@@ -101,7 +100,7 @@ class TestAgentService:
         # 服务是否使用 LLMService.get_service_config 作为回退？
         # 不，它构建了一个默认字典。
 
-        config = await agent_service._get_llm_config()
+        config = await agent_service.config_loader.get_llm_config()
 
         # 默认回退通常是 gpt-3.5-turbo 或类似的硬编码值
         # 检查实现：
@@ -135,5 +134,5 @@ class TestAgentService:
         # fixture 中设置的 mock_agent_manager 返回一个 agent。
         # 我们需要确保该 agent 的 model_config 为空或已处理。
 
-        config = await agent_service._get_llm_config()
+        config = await agent_service.config_loader.get_llm_config()
         assert config["model"] == "gpt-4-turbo"

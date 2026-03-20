@@ -1,12 +1,27 @@
 import { app } from 'electron'
 import path from 'path'
+import fs from 'fs'
 import { getConfig, saveConfig } from './system.js'
 
 let steamworks: any = null
 try {
-  steamworks = require('steamworks.js')
+  // 安全检查：在加载 steamworks.js 之前，先检查 steam_api64.dll 是否存在
+  // 如果 DLL 缺失，require() 可能在 native 层直接 segfault，连 try-catch 都拦不住
+  const exeDir = path.dirname(process.execPath)
+  const dllPath = path.join(exeDir, 'steam_api64.dll')
+  const hasSteamDll = fs.existsSync(dllPath)
+
+  if (!hasSteamDll && app.isPackaged) {
+    // 生产环境下没有 Steam DLL，说明这是非 Steam 版本（如 GitHub Release）
+    // 跳过加载 steamworks.js 以避免原生层崩溃
+    console.log('[Steam] steam_api64.dll 未找到，跳过 Steamworks 加载 (非 Steam 版本)')
+    steamworks = null
+  } else {
+    steamworks = require('steamworks.js')
+  }
 } catch (e) {
   console.error('[Steam] 无法加载 steamworks.js 模块 (可能缺少 steam_api64.dll):', e)
+  steamworks = null
 }
 
 let client: any = null
@@ -175,7 +190,7 @@ export function getItemState(itemId: number) {
   if (!client) return 0
   try {
     return client.workshop.state(itemId)
-  } catch (e) {
+  } catch {
     return 0
   }
 }
@@ -184,7 +199,7 @@ export function getItemInstallInfo(itemId: number) {
   if (!client) return null
   try {
     return client.workshop.installInfo(itemId)
-  } catch (e) {
+  } catch {
     return null
   }
 }
@@ -326,7 +341,7 @@ export function cloudFileExists(name: string): boolean {
   if (!client) return false
   try {
     return client.cloud.fileExists(name)
-  } catch (e) {
+  } catch {
     return false
   }
 }

@@ -11,7 +11,7 @@ const logToMain = (msg: string, ...args: any[]) => {
 
 export class GatewayClient {
   private ws: WebSocket | null = null
-  private url: string = 'ws://localhost:14747/ws'
+  private url: string = 'ws://localhost:9120/ws/gateway'
   private reconnectInterval: number = 3000
   private heartbeatInterval: any = null
   private deviceId: string = 'electron-client-' + Math.random().toString(36).substr(2, 9)
@@ -30,7 +30,7 @@ export class GatewayClient {
     } else if (!(window as any).electron) {
       // 浏览器模式：从当前位置派生
       const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-      this.url = `${protocol}//${window.location.host}/gateway/ws`
+      this.url = `${protocol}//${window.location.host}/ws/gateway`
       console.log(`[Gateway] 使用浏览器 URL: ${this.url}`)
     }
   }

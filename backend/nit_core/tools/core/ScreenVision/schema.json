@@ -1,19 +1,5 @@
 [
   {
-    "name": "screen_ocr",
-    "description": "Extract text from screen using OCR.",
-    "parameters": {
-      "type": "object",
-      "properties": {
-        "return_detail": {
-          "type": "boolean",
-          "description": "Return coordinate details",
-          "default": false
-        }
-      }
-    }
-  },
-  {
     "name": "take_screenshot",
     "description": "Capture screen content.",
     "parameters": {

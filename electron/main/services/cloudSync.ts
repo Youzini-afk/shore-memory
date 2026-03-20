@@ -2,13 +2,11 @@ import fs from 'fs-extra'
 import path from 'path'
 import { paths } from '../utils/env'
 import {
-  getSteamClient,
   isCloudEnabledForAccount,
   isCloudEnabledForApp,
   readCloudFile,
   writeCloudFile,
   deleteCloudFile,
-  cloudFileExists,
   listCloudFiles
 } from './steam'
 
@@ -27,7 +25,7 @@ const SYNC_CONFIG = {
     'agent_launch_config.json',
     // 记忆索引
     'memory/tags.json',
-    'memory/tags.index',
+    'memory/tags.index'
     // Agent 记忆索引 (动态扫描)
     // 'memory/agents/{agent_id}/memory.index'
   ],
@@ -266,7 +264,9 @@ class CloudSyncService {
       this.lastSyncTime = metadata.lastSyncTime
       result.success = result.failed.length === 0
 
-      console.log(`[CloudSync] 上传完成: ${result.uploaded.length} 成功, ${result.failed.length} 失败`)
+      console.log(
+        `[CloudSync] 上传完成: ${result.uploaded.length} 成功, ${result.failed.length} 失败`
+      )
     } catch (e) {
       result.success = false
       result.errors.push(`上传过程出错: ${e}`)
@@ -306,12 +306,14 @@ class CloudSyncService {
       const metadataStr = readCloudFile('perocore/sync_metadata.json')
       if (metadataStr) {
         const metadata = JSON.parse(metadataStr)
-        console.log(`[CloudSync] 云端元数据: 最后同步时间 ${new Date(metadata.lastSyncTime).toLocaleString()}`)
+        console.log(
+          `[CloudSync] 云端元数据: 最后同步时间 ${new Date(metadata.lastSyncTime).toLocaleString()}`
+        )
       }
 
       // 获取云端文件列表
       const cloudFiles = listCloudFiles()
-      const perocoreFiles = cloudFiles.filter(f => f.name.startsWith('perocore/'))
+      const perocoreFiles = cloudFiles.filter((f) => f.name.startsWith('perocore/'))
 
       console.log(`[CloudSync] 开始从云端下载 ${perocoreFiles.length} 个文件...`)
 
@@ -343,7 +345,9 @@ class CloudSyncService {
       result.success = result.failed.length === 0
       this.lastSyncTime = Date.now()
 
-      console.log(`[CloudSync] 下载完成: ${result.downloaded.length} 成功, ${result.failed.length} 失败`)
+      console.log(
+        `[CloudSync] 下载完成: ${result.downloaded.length} 成功, ${result.failed.length} 失败`
+      )
     } catch (e) {
       result.success = false
       result.errors.push(`下载过程出错: ${e}`)
@@ -382,7 +386,7 @@ class CloudSyncService {
   async clearCloudData(): Promise<boolean> {
     try {
       const cloudFiles = listCloudFiles()
-      const perocoreFiles = cloudFiles.filter(f => f.name.startsWith('perocore/'))
+      const perocoreFiles = cloudFiles.filter((f) => f.name.startsWith('perocore/'))
 
       for (const file of perocoreFiles) {
         deleteCloudFile(file.name)

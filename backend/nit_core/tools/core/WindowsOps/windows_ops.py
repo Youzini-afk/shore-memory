@@ -255,20 +255,7 @@ def get_mouse_position():
         return f"获取鼠标位置失败: {str(e)}"
 
 
-# 使用来自 backend 的绝对导入
-try:
-    from backend.nit_core.tools.core.ScreenVision.screen_ocr import (
-        find_text_coordinates,
-    )
-except ImportError:
-    try:
-        from nit_core.tools.core.ScreenVision.screen_ocr import find_text_coordinates
-    except ImportError:
-        try:
-            from tools.core.ScreenVision.screen_ocr import find_text_coordinates
-        except ImportError:
-            # 最后的相对导入手段
-            from ..ScreenVision.screen_ocr import find_text_coordinates
+
 
 
 def safe_int(val):
@@ -288,7 +275,6 @@ def automation_execute(
     y: int = None,
     x2: int = None,
     y2: int = None,
-    target_text: str = None,
 ):
     """
     执行自动化操作。
@@ -303,31 +289,23 @@ def automation_execute(
     y2 = safe_int(y2)
 
     try:
-        # 如果提供了文字目标但没有坐标，尝试通过 OCR 定位
-        if target_text and x is None and y is None:
-            coords = find_text_coordinates(target_text)
-            if coords:
-                x, y = coords["x"], coords["y"]
-                print(f"OCR 定位成功: '{target_text}' -> ({x}, {y})")
-            else:
-                return f"未能在屏幕上找到文字: '{target_text}'"
 
         if action == "click":
             # 增加 duration 使鼠标移动更拟人化，同时提高点击准确率（给予UI响应hover的时间）
             if x is not None and y is not None:
                 scaled_pyautogui.moveTo(x, y, duration=0.6)
             scaled_pyautogui.click()
-            return f"已在{'文字 ' + target_text + ' 所在的' if target_text else ''}逻辑坐标 ({x}, {y}) 执行点击。"
+            return f"已在逻辑坐标 ({x}, {y}) 执行点击。"
         elif action == "double_click":
             if x is not None and y is not None:
                 scaled_pyautogui.moveTo(x, y, duration=0.6)
             scaled_pyautogui.doubleClick()
-            return f"已在{'文字 ' + target_text + ' 所在的' if target_text else ''}逻辑坐标 ({x}, {y}) 执行双击。"
+            return f"已在逻辑坐标 ({x}, {y}) 执行双击。"
         elif action == "right_click":
             if x is not None and y is not None:
                 scaled_pyautogui.moveTo(x, y, duration=0.6)
             scaled_pyautogui.rightClick()
-            return f"已在{'文字 ' + target_text + ' 所在的' if target_text else ''}逻辑坐标 ({x}, {y}) 执行右键点击。"
+            return f"已在逻辑坐标 ({x}, {y}) 执行右键点击。"
         elif action == "drag":
             if x is not None and y is not None and x2 is not None and y2 is not None:
                 scaled_pyautogui.moveTo(x, y)
@@ -369,7 +347,7 @@ def automation_execute(
             return f"已执行组合键: {target}"
         elif action == "notification":
             title = target or "Pero 提醒"
-            message = target_text or "主人，我有事情要告诉你哦！"
+            message = "主人，我有事情要告诉你哦！"
 
             # 使用 PowerShell 发送 Windows 11 原生通知
             modern_ps_script = f"""

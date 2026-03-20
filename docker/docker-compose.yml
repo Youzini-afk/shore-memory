@@ -35,15 +35,7 @@ services:
     networks:
       - pero-network
 
-  pero-gateway:
-    build:
-      context: ..
-      dockerfile: docker/Dockerfile.gateway
-    container_name: pero-gateway
-    ports:
-      - '14747:14747'
-    networks:
-      - pero-network
+  # [已移除] pero-gateway — Gateway 已嵌入 pero-backend (/ws/gateway)
 
 networks:
   pero-network:

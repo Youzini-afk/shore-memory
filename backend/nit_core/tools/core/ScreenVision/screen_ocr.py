@@ -4,38 +4,11 @@ import os
 import platform
 import tempfile
 
-import numpy as np
-
 # 可选导入
 try:
     import pyautogui
 except ImportError:
     pyautogui = None
-
-try:
-    import easyocr
-except ImportError:
-    easyocr = None
-
-# 全局初始化 reader，避免每次调用都重新加载模型
-# ['ch_sim', 'en'] 表示支持简体中文和英文
-_reader = None
-
-
-def warm_up():
-    """预热 OCR 模型，如果不存在则自动下载"""
-    global _reader
-    if _is_server_mode() or not easyocr:
-        return
-
-    if _reader is None:
-        try:
-            print("[OCR] 正在初始化/预下载 OCR 模型 (ch_sim, en)...")
-            # gpu=False 确保在没有显卡的环境也能跑，虽然慢一点但稳定
-            _reader = easyocr.Reader(["ch_sim", "en"], gpu=False)
-            print("[OCR] 模型初始化完成喵~")
-        except Exception as e:
-            print(f"[OCR] 初始化失败: {e}")
 
 
 def _is_server_mode():
@@ -63,7 +36,6 @@ def save_screenshot():
         return None
 
     try:
-        # 创建临时文件
         # [重构] 统一移动到 backend/data/temp_vision
         backend_dir = os.path.dirname(
             os.path.dirname(
@@ -89,74 +61,6 @@ def save_screenshot():
         return None
 
 
-def screen_ocr(return_detail=False):
-    """
-    获取屏幕截图并识别其中的文字内容。
-    :param return_detail: 是否返回详细的坐标信息。如果为 True，返回列表 [{text, box, confidence}]
-    """
-    if _is_server_mode() or not pyautogui or not easyocr:
-        if return_detail:
-            return []
-        return "错误: 服务器模式或缺少 OCR 依赖。"
-
-    global _reader
-    try:
-        # 懒加载 reader
-        if _reader is None:
-            warm_up()
-
-        # 截图
-        screenshot = pyautogui.screenshot()
-
-        # EasyOCR 需要 numpy 数组格式
-        img_np = np.array(screenshot)
-
-        if return_detail:
-            # 返回详细结果：[([[x,y], [x,y], [x,y], [x,y]], text, confidence), ...]
-            raw_results = _reader.readtext(img_np)
-            results = []
-            for box, text, prob in raw_results:
-                results.append(
-                    {"text": text, "box": box, "confidence": prob}  # 四个顶点的坐标
-                )
-            return results
-        else:
-            # 只返回识别到的文字列表
-            results = _reader.readtext(img_np, detail=0)
-
-            if not results:
-                return "屏幕上似乎没有识别到明显的文字内容。"
-
-            text = "\n".join(results)
-            return f"屏幕文字识别结果：\n{text}"
-    except Exception as e:
-        return f"OCR 识别过程中出现错误：{str(e)}"
-
-
-def find_text_coordinates(target_text: str):
-    """
-    在屏幕上查找指定文字的逻辑坐标 (0-1000)。
-    """
-    from utils.screen_adapter import screen_adapter
-
-    details = screen_ocr(return_detail=True)
-    if isinstance(details, str):  # 报错信息
-        return None
-
-    for item in details:
-        if target_text.lower() in item["text"].lower():
-            # 计算中心点
-            box = item["box"]
-            center_x = sum([p[0] for p in box]) / 4
-            center_y = sum([p[1] for p in box]) / 4
-
-            # 转换为逻辑坐标
-            log_x, log_y = screen_adapter.get_logical_coords(center_x, center_y)
-            return {"x": log_x, "y": log_y, "text": item["text"]}
-
-    return None
-
-
 def take_screenshot(count: int = 1):
     """
     这是一个占位函数。实际的截图获取和注入逻辑在 agent_service.py 中处理。
@@ -164,5 +68,5 @@ def take_screenshot(count: int = 1):
     return f"已请求获取 {count} 张截图。"
 
 
-# 已废弃：Native Tool Definition 移除，仅保留函数实现供 NIT 调用
-# TOOLS_DEFINITIONS = [...]
+# 已移除: easyocr 相关功能 (screen_ocr, find_text_coordinates, warm_up)
+# 原因: easyocr 体积大、依赖重，实际用途有限 (2026-03-20)

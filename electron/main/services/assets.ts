@@ -57,7 +57,7 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
               path: modelDir,
               config: manifest
             })
-          } catch (e) {
+          } catch {
             logger.warn('Assets', `解析内置模型清单失败: ${manifestPath}`)
           }
         } else if (await fs.pathExists(peroPath)) {
@@ -136,7 +136,7 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
                   config: manifest
                 })
               }
-            } catch (e) {
+            } catch {
               logger.warn('Assets', `解析创意工坊清单失败: ${manifestPath}`)
             }
           }
@@ -168,7 +168,7 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
               path: modelDir,
               config: manifest
             })
-          } catch (e) {
+          } catch {
             logger.warn('Assets', `解析自定义模型清单失败: ${manifestPath}`)
           }
         }

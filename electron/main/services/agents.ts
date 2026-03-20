@@ -61,7 +61,13 @@ export async function scanLocalAgents() {
 
             // 扫描头像
             let avatar = ''
-            const avatarFiles = ['avatar.png', 'avatar.jpg', 'avatar.jpeg', 'avatar.svg', 'icon.png']
+            const avatarFiles = [
+              'avatar.png',
+              'avatar.jpg',
+              'avatar.jpeg',
+              'avatar.svg',
+              'icon.png'
+            ]
             for (const name of avatarFiles) {
               const avatarPath = path.join(agentDir, name)
               if (await fs.pathExists(avatarPath)) {

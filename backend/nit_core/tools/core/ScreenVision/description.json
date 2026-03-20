@@ -4,8 +4,8 @@
   "source": "official",
   "name": "ScreenVision",
   "display_name": "视觉感知 (ScreenVision)",
-  "version": "1.0.1",
-  "description": "视觉感知。查看屏幕内容或识别文字。",
+  "version": "1.1.0",
+  "description": "视觉感知。获取屏幕截图。",
   "author": "PeroCore",
   "platforms": ["windows", "linux", "darwin"],
   "pluginType": "python-module",
@@ -13,11 +13,6 @@
   "tags": ["core"],
   "capabilities": {
     "invocationCommands": [
-      {
-        "commandIdentifier": "screen_ocr",
-        "description": "从屏幕截图中识别并提取文本信息",
-        "parameter": "是否返回详细坐标 (return_detail: True/False, 默认 False)"
-      },
       {
         "commandIdentifier": "take_screenshot",
         "description": "获取当前屏幕画面的截图",
