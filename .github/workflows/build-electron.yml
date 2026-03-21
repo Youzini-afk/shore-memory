@@ -54,6 +54,7 @@ jobs:
       - name: Setup Python Environment
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           # 1. Download Embedded Python
           $Url = "https://www.python.org/ftp/python/3.10.11/python-3.10.11-embed-amd64.zip"
           $ZipPath = "python.zip"
@@ -66,11 +67,15 @@ jobs:
           New-Item -ItemType Directory -Force -Path $Dest
           Expand-Archive -Path $ZipPath -DestinationPath $Dest -Force
 
-          # 2. Configure .pth to enable site-packages
+          # 2. Configure .pth to enable site-packages and Lib
           $PthFile = "$Dest/python310._pth"
-          $Content = Get-Content $PthFile
-          $Content = $Content -replace "#import site", "import site"
-          $Content | Set-Content $PthFile
+          $Content = @(
+            "python310.zip",
+            ".",
+            "Lib/site-packages",
+            "import site"
+          )
+          $Content | Set-Content $PthFile -Encoding UTF8
 
           # 3. Install Dependencies via uv
            echo "Installing dependencies..."
@@ -79,14 +84,17 @@ jobs:
            
            # Use pip to install uv first
            pip install uv
+           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
            # Install torch first (CPU only)
            uv pip install --target $SitePackages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --system
+           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
            
            # Install dependencies from pyproject.toml
            # Note: uv pip install . needs to run where pyproject.toml is
            cd PeroCore-Electron/backend
            uv pip install --target $SitePackages . --system
+           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           # Clean up
            cd ../..
@@ -105,17 +113,21 @@ jobs:
       - name: Build and Install Rust Core Extensions
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           pip install maturin
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $TARGET_LIB = "PeroCore-Electron/resources/python/Lib/site-packages"
 
           # 1. Build and Install pero_memory_core
           echo "Building pero_memory_core..."
           maturin build --release --manifest-path PeroCore-Electron/backend/rust_core/Cargo.toml --out dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $MEMORY_WHEEL = Get-ChildItem dist/pero_memory_core*.whl | Select-Object -First 1
           if ($MEMORY_WHEEL) {
               echo "Installing $($MEMORY_WHEEL.Name)..."
               pip install $MEMORY_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
               Write-Error "Failed to build pero_memory_core wheel"
               exit 1
@@ -124,10 +136,12 @@ jobs:
           # 2. Build and Install pero_vision_core
           echo "Building pero_vision_core..."
           maturin build --release --manifest-path PeroCore-Electron/backend/vision_core/Cargo.toml --out dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $VISION_WHEEL = Get-ChildItem dist/pero_vision_core*.whl | Select-Object -First 1
           if ($VISION_WHEEL) {
               echo "Installing $($VISION_WHEEL.Name)..."
               pip install $VISION_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
               Write-Error "Failed to build pero_vision_core wheel"
               exit 1
@@ -136,10 +150,12 @@ jobs:
           # 3. Build and Install nit_rust_runtime
           echo "Building nit_rust_runtime..."
           maturin build --release --manifest-path PeroCore-Electron/backend/nit_core/interpreter/rust_binding/Cargo.toml --out dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $NIT_WHEEL = Get-ChildItem dist/nit_rust_runtime*.whl | Select-Object -First 1
           if ($NIT_WHEEL) {
               echo "Installing $($NIT_WHEEL.Name)..."
               pip install $NIT_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
               Write-Error "Failed to build nit_rust_runtime wheel"
               exit 1
@@ -148,10 +164,12 @@ jobs:
           # 4. Build and Install pero_social_core
           echo "Building pero_social_core..."
           maturin build --release --manifest-path PeroCore-Electron/backend/social_core/Cargo.toml --out dist
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $SOCIAL_WHEEL = Get-ChildItem dist/pero_social_core*.whl | Select-Object -First 1
           if ($SOCIAL_WHEEL) {
               echo "Installing $($SOCIAL_WHEEL.Name)..."
               pip install $SOCIAL_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           } else {
               Write-Error "Failed to build pero_social_core wheel"
               exit 1
@@ -160,9 +178,11 @@ jobs:
       - name: Build Binary Tools
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           # 1. Build CodeSearcher Tool
           echo "Building CodeSearcher Tool..."
           cargo build --release --manifest-path PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $SEARCHER_SRC_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src"
           $SEARCHER_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher"
@@ -177,12 +197,14 @@ jobs:
               echo "Found CodeSearcher binary at $($SEARCHER_BIN.FullName)"
               Copy-Item -Path $SEARCHER_BIN.FullName -Destination "$SEARCHER_TARGET_DIR/CodeSearcher.exe" -Force
           } else {
-              Write-Warning "CodeSearcher binary not found after build!"
+              Write-Error "CodeSearcher binary not found after build!"
+              exit 1
           }
 
           # 2. Build nit_terminal_auditor (Wasm)
           echo "Building nit_terminal_auditor..."
           cargo build --release --target wasm32-unknown-unknown --manifest-path PeroCore-Electron/backend/nit_core/nit_terminal_auditor/Cargo.toml
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
           $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
           if (!(Test-Path $WASM_SRC)) {
@@ -195,7 +217,8 @@ jobs:
               echo "Found Wasm binary at $WASM_SRC"
               Copy-Item -Path $WASM_SRC -Destination "$WASM_TARGET_DIR/auditor.wasm" -Force
           } else {
-              Write-Warning "nit_terminal_auditor.wasm not found after build!"
+              Write-Error "nit_terminal_auditor.wasm not found after build!"
+              exit 1
           }
 
       - name: Install Dependencies
@@ -221,6 +244,7 @@ jobs:
       - name: Package Browser Extension
         shell: powershell
         run: |
+          $ErrorActionPreference = 'Stop'
           $EXT_DIR = "PeroCore-Electron/browser_extension"
           $ZIP_NAME = "PeroCore-Browser-Extension.zip"
           Compress-Archive -Path "$EXT_DIR/*" -DestinationPath $ZIP_NAME -Force
@@ -234,6 +258,7 @@ jobs:
             PeroCore-Electron/dist_electron/*.exe
             PeroCore-Browser-Extension.zip
 
+
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
@@ -241,25 +266,26 @@ jobs:
           files: |
             PeroCore-Electron/dist_electron/*.exe
             PeroCore-Browser-Extension.zip
-          name: PeroCore 版本 ${{ github.ref_name }}
+          name: 'PeroCore ${{ github.ref_name }}'
           body: |
-            ## 🎉 更新内容 ${{ github.ref_name }}
+            ## v0.8.3 Release Notes
 
-            ### ✨ 核心功能与架构升级
-            - **3D 角色系统回归**: 找回并优化了 `Pet3DView` 中的角色切换逻辑，现支持在外观菜单中自由切换角色模型。
-            - **模型加载优化**: 修正了 `.pero` 容器模型的加载路径，解决了跨环境路径识别导致模型无法显示的 Bug。
-            - **UI 全面优化**: 深度还原了 Minecraft（体素）风格样式，同时完成了所有视图组件的中文化注释与日志翻译。
+            ### Architecture
+            - Gateway embedded into Python backend (removed Go dependency)
+            - Agent service refactored into 6 submodules
+            - Build pipeline cleaned up (removed copy-gateway.js)
 
-            ### 🔧 稳定性提升
-            - **Steam 打包版本修复**: 解决了生产环境下因缺失 `steam_api64.dll` 导致的启动静默崩溃，增强了 Steamworks SDK 的容错性。
-            - **启动异常保护**: 引入了全局未捕获异常监听与窗口显示兜底逻辑，大幅降低了应用“双击无反应”的概率。
-            - **代码健壮性**: 修复了多处 TypeScript 类型断言错误，优化了主进程与渲染进程的通信可靠性。
+            ### Features
+            - Auto-hide launcher after startup
+            - 3D character system improvements
+            - Pixel-style UI enhancements
 
-            ### 📦 包含文件
-            - `PeroCore-Setup-*.exe`: Windows 安装程序
-            - `PeroCore-Browser-Extension.zip`: 浏览器扩展插件（手动安装包）
+            ### Stability
+            - Steam packaging fixes
+            - Global exception handling
+            - TypeScript type fixes
 
-            _此 Release 由 GitHub Actions 自动生成_
+            Automated release by GitHub Actions
           draft: false
           prerelease: false
         env:

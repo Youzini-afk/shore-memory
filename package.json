@@ -1,7 +1,7 @@
 {
   "name": "peropero-chat",
   "private": true,
-  "version": "0.8.1",
+  "version": "0.8.3",
   "description": "萌动链接：PeroperoChat！- 一个充满活力的 3D 桌面宠物应用",
   "author": "YoKONCy",
   "license": "Apache-2.0",
@@ -16,8 +16,8 @@
     "build:docker": "vite build --mode docker",
     "docker:up": "cd docker && docker-compose up --build",
     "docker:down": "cd docker && docker-compose down",
-    "build:electron": "npm run build:backend && node scripts/copy-gateway.js && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder",
-    "build:steam": "npm run build:backend && node scripts/copy-gateway.js && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder --win --dir",
+    "build:electron": "npm run build:backend && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder",
+    "build:steam": "npm run build:backend && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder --win --dir",
     "build:native": "cd src/components/avatar/native && npm install && npm run build",
     "dev": "vite",
     "build": "vite build",
@@ -142,10 +142,6 @@
       "node_modules/steamworks.js/**/*"
     ],
     "extraResources": [
-      {
-        "from": "resources/bin/gateway.exe",
-        "to": "bin/gateway.exe"
-      },
       {
         "from": "resources/python",
         "to": "python",

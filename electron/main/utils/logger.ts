@@ -1,4 +1,7 @@
 import dayjs from 'dayjs'
+import fs from 'fs-extra'
+import path from 'path'
+import os from 'os'
 
 export type LogLevel = 'INFO' | 'WARN' | 'ERROR' | 'DEBUG'
 export type LogSource =
@@ -15,6 +18,7 @@ export type LogSource =
 
 class Logger {
   private static instance: Logger
+  private logFile: string | null = null
 
   // 隐藏模式 (降噪)
   // 优化: 组合正则以获得更好的性能
@@ -86,7 +90,39 @@ class Logger {
     { from: 'checkNapCatInstalled result', to: 'NapCat 安装检查结果' }
   ]
 
-  constructor() {}
+  constructor() {
+    this.initializeLogFile()
+  }
+
+  private initializeLogFile() {
+    try {
+      // 动态获取 userData 路径，避免循环依赖
+      let userData = ''
+      try {
+        const { app } = require('electron')
+        if (app) {
+          userData = app.getPath('userData')
+        }
+      } catch {
+        // 非 Electron 环境
+        userData = process.env.PERO_USER_DATA || path.join(os.homedir(), '.perocore')
+      }
+
+      if (userData) {
+        const logDir = path.join(userData, 'logs')
+        if (!fs.existsSync(logDir)) {
+          fs.mkdirSync(logDir, { recursive: true })
+        }
+        this.logFile = path.join(logDir, 'main.log')
+
+        // 启动时清空旧日志，避免文件无限增长
+        // 或者我们可以保留最后的 5 个日志，但现在简单处理
+        fs.writeFileSync(this.logFile, `--- Log started at ${new Date().toISOString()} ---\n`)
+      }
+    } catch (e) {
+      console.error('[Logger] 初始化日志文件失败:', e)
+    }
+  }
 
   static getInstance(): Logger {
     if (!Logger.instance) {
@@ -140,6 +176,15 @@ class Logger {
 
     // 统一格式: [HH:mm:ss] [SOURCE] [LEVEL] 消息
     const formattedLog = `[${timestamp}] [${source}] [${level}] ${translatedMsg}`
+
+    // 写入文件
+    if (this.logFile) {
+      try {
+        fs.appendFileSync(this.logFile, formattedLog + '\n')
+      } catch {
+        // 忽略写入失败
+      }
+    }
 
     // 根据级别使用 console.log/error 以保留终端颜色 (如果可用)，
     // 或者只是标准输出。

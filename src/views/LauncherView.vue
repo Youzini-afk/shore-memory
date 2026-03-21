@@ -2371,8 +2371,13 @@ const toggleLaunch = async () => {
         // 关闭当前 Launcher 窗口
         await invoke('close_launcher')
       } else {
+        addLog('[SYSTEM] 正在打开角色窗口...')
         await invoke('open_pet_window')
         addLog('[SYSTEM] 角色窗口已激活。')
+        // 启动后自动隐藏启动器窗口
+        console.log('[DEBUG] 正在调用 hide_launcher...')
+        await invoke('hide_launcher')
+        console.log('[DEBUG] hide_launcher 调用已完成')
       }
 
       isStarting.value = false

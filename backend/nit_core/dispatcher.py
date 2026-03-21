@@ -486,6 +486,7 @@ class NITDispatcher:
         extra_plugins: Dict[str, Any] = None,
         expected_nit_id: str = None,
         allowed_tools: List[str] = None,
+        stop_check_func: Callable[[], bool] = None,
     ) -> List[Dict[str, Any]]:
         """
         处理 AI 输出的文本块
@@ -495,6 +496,7 @@ class NITDispatcher:
         :param extra_plugins: 临时的额外插件注册表 (例如 MCP 动态加载的工具)
         :param expected_nit_id: 本轮期望的 NIT-ID (用于安全握手)
         :param allowed_tools: 允许执行的工具名称白名单 (如果为 None 则不限制)
+        :param stop_check_func: 可选的中断检查函数，返回 True 表示需要中断
         """
         results = []
 
@@ -519,6 +521,11 @@ class NITDispatcher:
 
             # 定义 Runtime 的执行器回调
             async def runtime_tool_executor(name: str, params: Dict[str, Any]):
+                # --- 中断检查 ---
+                if stop_check_func and stop_check_func():
+                    logger.warning(f"NIT 脚本执行被外部中断。")
+                    raise asyncio.CancelledError("NIT execution interrupted")
+
                 # --- 白名单检查 ---
                 if normalized_allowed is not None:
                     norm_name = normalize_nit_key(name)

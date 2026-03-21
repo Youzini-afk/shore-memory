@@ -109,7 +109,7 @@ const icons = {
   tool: 'M10 2l4 4-2 2-4-4 2-2zM3 9l4 4-5 1 1-5z',
 
   // 刷新 (🔃) - 像素化箭头圆圈
-  refresh: 'M8 2v2H4v8h2v2H2V2h6zm6 12v-2h-4V4h-2V2h6v12h-6z',
+  refresh: 'M13 2v4h-4V5h2V3H5v7h2v2H3v-3h2V5h8V2z M3 14v-4h4v1H5v2h6V6h-2V4h4v10H3z',
 
   // 时钟 (🕰️/⏳)
   clock: 'M6 2h4v2h2v2h2v4h-2v2h-2v2H6v-2H4v-2H2V6h2V4h2V2zm2 3v4h3v2H7V5h1z',
@@ -303,7 +303,7 @@ const icons = {
   bot: 'M4 3h8v9H4V3zm2 2v2h1v-2H6zm3 0v2h1v-2H9zm-3 5h6v1H6v-1z M3 6h1v3H3V6zm10 0h1v3h-1V6z M7 1h2v2H7V1z',
 
   // 加载 (↻) - 类似刷新
-  loader: 'M8 2v2H4v8h2v2H2V2h6zm6 12v-2h-4V4h-2V2h6v12h-6z',
+  loader: 'M13 2v4h-4V5h2V3H5v7h2v2H3v-3h2V5h8V2z M3 14v-4h4v1H5v2h6V6h-2V4h4v10H3z',
 
   // 菜单 (☰)
   menu: 'M3 4h10v2H3V4zm0 4h10v2H3V8zm0 4h10v2H3v-2z',

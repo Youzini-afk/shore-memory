@@ -17,12 +17,8 @@ async function copyNative() {
     const toCopy = files.filter((f) => f.endsWith('.node'))
 
     if (toCopy.length === 0) {
-      console.warn('警告: 在 native 目录中未找到 .node 二进制模块。')
-      // 如果是在 GitHub Actions 中，这可能是一个错误
-      if (process.env.GITHUB_ACTIONS) {
-        process.exit(1)
-      }
-      return
+      console.error('错误: 在 native 目录中未找到 .node 二进制模块。无法继续构建。')
+      process.exit(1)
     }
 
     for (const file of toCopy) {

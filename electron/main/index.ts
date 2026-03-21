@@ -1,25 +1,31 @@
-import { app, BrowserWindow, shell, ipcMain, screen, Notification, protocol } from 'electron'
+import {
+  app,
+  BrowserWindow,
+  shell,
+  ipcMain,
+  screen,
+  Notification,
+  protocol,
+  dialog
+} from 'electron'
 import { release } from 'os'
 import { join } from 'path'
 import { logger } from './utils/logger'
 
 // 捕获未处理的异常以防止静默崩溃
 process.on('uncaughtException', (error) => {
-  logger.error('Main', `未捕获的异常 (Uncaught Exception): ${error.message}\n${error.stack}`)
-  // 弹出错误对话框让用户至少能看到发生了什么
+  const errorMsg = `未捕获的异常 (Uncaught Exception): ${error.message}\n${error.stack}`
+  logger.error('Main', errorMsg)
   try {
-    const { dialog } = require('electron')
-    dialog.showErrorBox(
-      '启动错误 (PeroCore)',
-      `应用遇到了一个意外错误:\n\n${error.message}\n\n请截图此消息并反馈给开发者。`
-    )
+    dialog.showErrorBox('应用启动错误 (Main Process Crash)', errorMsg)
   } catch {
-    // dialog 可能在 app ready 之前不可用
+    // 忽略
   }
 })
 
 process.on('unhandledRejection', (reason) => {
-  logger.error('Main', `未处理的 Promise 拒绝 (Unhandled Rejection): ${reason}`)
+  const reasonMsg = `未处理的 Promise 拒绝 (Unhandled Rejection): ${reason}`
+  logger.error('Main', reasonMsg)
 })
 
 import {
@@ -159,14 +165,11 @@ try {
   const steamStatus = initSteam()
   if (steamStatus === 'restarting') {
     logger.info('Main', '正在通过 Steam 重启应用...')
-    // 使用 app.quit() 优雅退出，不要用 process.exit 避免清理逻辑被跳过
     app.quit()
-    // 给 Electron 一些时间处理退出，如果 3 秒后还没退出则强制退出
-    setTimeout(() => process.exit(0), 3000)
+    process.exit(0)
   }
-} catch (e: any) {
-  // 关键安全阀：无论 Steam 初始化发生什么异常，绝不能阻止应用启动
-  logger.error('Main', `Steam 初始化发生异常，忽略并继续启动: ${e?.message || e}`)
+} catch (e) {
+  logger.error('Main', `Steam 初始化发生异常: ${e}`)
 }
 
 const createWindow = async () => {
@@ -392,11 +395,15 @@ app.on('before-quit', async (event) => {
 })
 
 app.on('second-instance', () => {
-  const win = windowManager.launcherWin
+  logger.info('Main', '收到第二个实例启动请求，正在激活现有窗口...')
+  const win = windowManager.launcherWin || windowManager.strongholdWin || windowManager.petWin
   if (win) {
-    // 如果用户尝试打开另一个窗口，则聚焦主窗口
     if (win.isMinimized()) win.restore()
     win.focus()
+    if (!win.isVisible()) win.show()
+  } else {
+    logger.info('Main', '未发现现有窗口，尝试重新创建 Launcher 窗口...')
+    createWindow()
   }
 })
 
@@ -499,7 +506,7 @@ ipcMain.handle('start_backend', async (_, args) => {
   if (!win) return
   try {
     // 首先启动网关
-    await startGateway(win)
+    await startGateway()
     // 然后启动后端
     await startBackend(win, args?.enableSocialMode ?? false)
     return null // Ok(())
@@ -510,7 +517,7 @@ ipcMain.handle('start_backend', async (_, args) => {
 
 ipcMain.handle('start_gateway', async (event) => {
   const win = BrowserWindow.fromWebContents(event.sender)
-  if (win) await startGateway(win)
+  if (win) await startGateway()
 })
 
 ipcMain.handle('stop_backend', async () => {
@@ -782,6 +789,11 @@ ipcMain.handle('open_dashboard', () => {
 
 ipcMain.handle('close_launcher', () => {
   windowManager.closeLauncherWindow()
+})
+
+ipcMain.handle('hide_launcher', () => {
+  logger.info('Main', 'IPC: hide_launcher 收到隐藏请求')
+  windowManager.hideLauncherWindow()
 })
 
 ipcMain.handle('open_ide_window', () => {

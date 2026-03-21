@@ -69,9 +69,14 @@ export function initSteam(): 'restarting' | 'success' | 'failed' {
       console.log('[Steam] 检测为非 Steam 环境启动，跳过强制重启逻辑')
     } else {
       // 只有在确认为 Steam 环境时，才执行重启检查
-      if (steamworks.restartAppIfNecessary(appId)) {
-        console.log('[Steam] 应用未通过 Steam 启动，正在请求 Steam 重启...')
-        return 'restarting'
+      try {
+        if (steamworks.restartAppIfNecessary(appId)) {
+          console.log('[Steam] 应用未通过 Steam 启动，正在请求 Steam 重启...')
+          return 'restarting'
+        }
+      } catch (e) {
+        console.error('[Steam] restartAppIfNecessary 失败:', e)
+        // 如果重启检查本身报错，我们宁愿继续运行也不要静默退出
       }
     }
   }

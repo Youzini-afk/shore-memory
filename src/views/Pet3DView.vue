@@ -196,7 +196,11 @@
           >
             <div class="bubble-content" :class="{ 'cursor-pointer': isThinking }" @mousedown.stop>
               <template v-if="isThinking">
-                <span class="thinking-text">{{ thinkingMessage }}</span>
+                <div class="thinking-container" @click="stopCurrentTask">
+                  <span class="thinking-text">{{ thinkingMessage }}</span>
+                  <div v-if="reactTurn > 0" class="react-badge">ReAct: {{ reactTurn }}</div>
+                  <div class="interrupt-hint">点击强行中断</div>
+                </div>
               </template>
               <template v-else>
                 <div ref="bubbleScrollArea" class="bubble-scroll-area">
@@ -255,7 +259,6 @@ import { API_BASE } from '../config'
 import { gatewayClient } from '../api/gateway'
 
 const isElectron = window.electron !== undefined
-const prefix = isElectron ? 'assets/' : '/assets/'
 
 // 可用模型列表
 const availableModels = ref([])
@@ -326,6 +329,7 @@ const isWorkMode = ref(false)
 const displayMode = ref(localStorage.getItem('ppc.display_mode') || 'bubble') // bubble | lyric
 const voiceMode = ref(parseInt(localStorage.getItem('ppc.voice_mode') || '0'))
 const isThinking = ref(false)
+const reactTurn = ref(0) // 当前 ReAct 轮数
 const isPTTRecording = ref(false) // PTT 状态
 const isSpeaking = ref(false) // TTS 状态
 // const voiceWs = ref(null); // 已弃用
@@ -721,12 +725,31 @@ const encodeWAV = (samples, sampleRate) => {
   return new Blob([view], { type: 'audio/wav' })
 }
 
+const stopCurrentTask = async () => {
+  if (!isThinking.value) return
+
+  try {
+    const API_BASE = 'http://localhost:9120/api'
+    const res = await fetch(`${API_BASE}/task/voice_session/stop`, { method: 'POST' })
+    if (res.ok) {
+      console.log('[Pet3DView] 任务中断请求已发送')
+      notificationManager.value?.add('已请求强行中断本次对话', 'warning', '任务控制')
+      // 乐观更新
+      isThinking.value = false
+      reactTurn.value = 0
+    }
+  } catch (e) {
+    console.error('[Pet3DView] 中断任务失败:', e)
+  }
+}
+
 // 处理语音更新请求 (状态、文本等)
 const handleVoiceUpdateRequest = (req) => {
   const params = req.params || {}
   const type = params.type
   const content = params.content
   const message = params.message
+  const turnCount = params.turn_count
 
   if (type === 'status') {
     if (content === 'listening') {
@@ -737,13 +760,18 @@ const handleVoiceUpdateRequest = (req) => {
     } else if (content === 'thinking') {
       isThinking.value = true
       thinkingMessage.value = message || '努力思考中...'
+      if (turnCount !== undefined) {
+        reactTurn.value = parseInt(turnCount)
+      }
       currentText.value = ''
     } else if (content === 'speaking') {
       isThinking.value = false
       thinkingMessage.value = '努力思考中...'
+      reactTurn.value = 0
     } else if (content === 'idle') {
       isThinking.value = false
       thinkingMessage.value = '努力思考中...'
+      reactTurn.value = 0
     }
   } else if (type === 'transcription') {
     console.log('用户说:', content)
@@ -1849,6 +1877,52 @@ const minimizeToTray = () => {
   display: flex;
   align-items: center;
   font-family: 'Consolas', monospace;
+}
+
+.thinking-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+}
+
+.react-badge {
+  background: #ff4757;
+  color: white;
+  font-size: 10px;
+  padding: 2px 8px;
+  border: 2px solid #000;
+  box-shadow: 2px 2px 0px rgba(0, 0, 0, 0.5);
+  font-weight: bold;
+  text-transform: uppercase;
+  margin-top: 4px;
+  animation: react-pulse 1s infinite alternate;
+}
+
+.interrupt-hint {
+  font-size: 10px;
+  color: #888;
+  margin-top: 4px;
+  opacity: 0.8;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.thinking-container:hover .interrupt-hint {
+  color: #ff4757;
+  opacity: 1;
+  font-weight: bold;
+}
+
+@keyframes react-pulse {
+  from {
+    transform: scale(1);
+    background: #ff4757;
+  }
+  to {
+    transform: scale(1.05);
+    background: #ff6b81;
+  }
 }
 
 .thinking-text::after {

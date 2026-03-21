@@ -28,7 +28,9 @@ class TaskManager:
         self.tasks[session_id] = {
             "pause_event": asyncio.Event(),
             "injected_messages": asyncio.Queue(),
-            "status": "running",  # running (运行中), paused (已暂停)
+            "status": "running",  # running (运行中), paused (已暂停), stopping (停止中)
+            "turn_count": 0,
+            "stop_requested": False,
         }
         self.tasks[session_id]["pause_event"].set()  # 初始状态为运行中
         logger.info(f"[TaskManager] 已注册 {session_id} 的任务")
@@ -65,6 +67,34 @@ class TaskManager:
             logger.info(f"[TaskManager] 恢复了任务 {session_id}")
             return True
         return False
+
+    def stop(self, session_id: str):
+        """请求强行停止任务。"""
+        if session_id in self.tasks:
+            self.tasks[session_id]["stop_requested"] = True
+            self.tasks[session_id]["status"] = "stopping"
+            # 如果处于暂停状态，也需要恢复以便退出循环
+            self.tasks[session_id]["pause_event"].set()
+            logger.info(f"[TaskManager] 已请求停止任务 {session_id}")
+            return True
+        return False
+
+    def is_stop_requested(self, session_id: str) -> bool:
+        """检查是否已请求停止任务。"""
+        if session_id in self.tasks:
+            return self.tasks[session_id].get("stop_requested", False)
+        return False
+
+    def update_turn_count(self, session_id: str, count: int):
+        """更新当前 ReAct 轮次。"""
+        if session_id in self.tasks:
+            self.tasks[session_id]["turn_count"] = count
+
+    def get_turn_count(self, session_id: str) -> int:
+        """获取当前 ReAct 轮次。"""
+        if session_id in self.tasks:
+            return self.tasks[session_id].get("turn_count", 0)
+        return 0
 
     def inject_instruction(self, session_id: str, instruction: str):
         """向运行中的任务注入用户指令。"""

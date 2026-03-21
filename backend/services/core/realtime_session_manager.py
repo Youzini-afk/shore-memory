@@ -204,9 +204,22 @@ class RealtimeSessionManager:
             # 3. Agent
             print("[Agent] 正在生成回复...")
 
+            session_id = "voice_session"
+
             async def report_status(status_type: str, content: str):
+                from services.agent.task_manager import task_manager
+
+                turn_count = 0
+                if session_id:
+                    turn_count = task_manager.get_turn_count(session_id)
+
                 await self.broadcast_gateway(
-                    {"type": "status", "content": status_type, "message": content}
+                    {
+                        "type": "status",
+                        "content": status_type,
+                        "message": content,
+                        "turn_count": turn_count,
+                    }
                 )
 
             await self.broadcast_gateway({"type": "status", "content": "thinking"})

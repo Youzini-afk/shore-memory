@@ -23,6 +23,14 @@ async def resume_task(session_id: str):
     raise HTTPException(status_code=404, detail="未找到任务")
 
 
+@router.post("/{session_id}/stop")
+async def stop_task(session_id: str):
+    success = task_manager.stop(session_id)
+    if success:
+        return {"status": "success", "message": "任务停止请求已发送"}
+    raise HTTPException(status_code=404, detail="未找到任务")
+
+
 @router.post("/{session_id}/inject")
 async def inject_instruction(session_id: str, payload: Dict[str, str] = Body(...)):  # noqa: B008
     instruction = payload.get("instruction")

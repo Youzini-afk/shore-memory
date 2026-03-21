@@ -103,6 +103,10 @@ async function setupPython() {
   // 检查 Python 是否已安装
   if (fs.existsSync(pythonExe)) {
     log('Python 环境似乎已设置。', 'warning')
+    if (IS_GITHUB_ACTIONS) {
+      log('检测到 GitHub Actions 环境，跳过嵌入式 Python 基础设置。', 'success')
+      return
+    }
   } else {
     log(`正在下载 Python ${PYTHON_VERSION}...`)
     try {
@@ -351,9 +355,11 @@ function buildRustExtensions() {
           fs.unlinkSync(wheelPath)
         } else {
           log(`未找到 ${ext.name} 的 wheel`, 'error')
+          process.exit(1)
         }
       } catch (e) {
         log(`构建/安装 ${ext.name} 失败: ${e.message}`, 'error')
+        process.exit(1)
       }
     }
   }
@@ -405,9 +411,11 @@ function buildBinaryTools() {
         // 构建后再次尝试复制
         if (!checkAndCopy(searchPaths, codeSearcherDest, 'CodeSearcher.exe')) {
           log('构建后仍无法定位 CodeSearcher.exe', 'error')
+          process.exit(1)
         }
       } catch (e) {
         log(`构建 CodeSearcher 失败: ${e.message}`, 'error')
+        process.exit(1)
       }
     }
   }
@@ -438,9 +446,11 @@ function buildBinaryTools() {
 
         if (!checkAndCopy(searchPaths, auditorDest, 'nit_terminal_auditor.wasm')) {
           log('无法定位已构建的 nit_terminal_auditor.wasm', 'error')
+          process.exit(1)
         }
       } catch (e) {
         log(`构建 nit_terminal_auditor 失败: ${e.message}`, 'error')
+        process.exit(1)
       }
     }
   }
@@ -448,6 +458,14 @@ function buildBinaryTools() {
 
 async function main() {
   log('开始本地后端构建流程...', 'bright')
+
+  if (IS_GITHUB_ACTIONS) {
+    log('检测到 GitHub Actions 环境，后端已在外部预设，跳过内部构建。', 'success')
+    // 即使跳过，我们也需要确保目录存在以避免后续脚本报错
+    ensureDir(PYTHON_DEST)
+    ensureDir(SITE_PACKAGES)
+    return
+  }
 
   await setupPython()
   installDependencies()
