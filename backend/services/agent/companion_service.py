@@ -50,7 +50,8 @@ class CompanionService:
             cls._instance.vision_buffer = []  # 存储最近 10 张截图 (base64)
             cls._instance.chat_cache = []  # 存储会话期间的日志用于总结
             cls._instance.cache_file = os.path.join(
-                os.getcwd(), "data", "companion_chat_cache.json"
+                os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+                "data", "companion_chat_cache.json"
             )
 
             # 确保数据目录存在

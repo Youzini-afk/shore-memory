@@ -24,20 +24,59 @@ export class StandardBedrockProvider implements IModelProvider {
   }
 
   async getModelData(): Promise<ParsedModelData> {
+    // [调试开关] 设为 true 强制走 JS 路径（跳过 Rust），用于排查渲染问题
+    const FORCE_JS_PATH = false
+
     const url = resolveAssetUrl(this.config.model)
     const response = await fetch(url)
     if (!response.ok) throw new Error(`Failed to load model: ${this.config.model}`)
     const arrayBuffer = await response.arrayBuffer()
 
-    // 调用 Native 模块解析并生成几何体 (通过 IPC)
-    // 直接返回解析后的对象，不再需要前端解包
+    // 优先尝试 Rust Native 模块解析（高性能路径）
     // @ts-ignore
-    const parsedData = await window.electron.loadStandardModel(
-      new Uint8Array(arrayBuffer),
-      this.boneFilterPatterns
-    )
+    if (!FORCE_JS_PATH && window.electron?.loadStandardModel) {
+      try {
+        // @ts-ignore
+        const parsedData = await window.electron.loadStandardModel(
+          new Uint8Array(arrayBuffer),
+          this.boneFilterPatterns
+        )
+        return parsedData
+      } catch (e) {
+        console.warn('[StandardBedrockProvider] Rust 解析失败，回退到 JS 路径:', e)
+      }
+    }
 
-    return parsedData
+    // JS 回退路径：直接解析 Bedrock JSON，返回 cubes 数据供 AvatarRenderer 处理
+    console.log('[StandardBedrockProvider] 使用 JS 路径解析模型')
+    const jsonStr = new TextDecoder().decode(arrayBuffer)
+    const json = JSON.parse(jsonStr)
+
+    const geometry = json['minecraft:geometry']?.[0]
+    if (!geometry) throw new Error('Invalid Bedrock model: missing minecraft:geometry')
+
+    const desc = geometry.description || {}
+    const textureWidth = desc.texture_width || 64
+    const textureHeight = desc.texture_height || 64
+
+    const filterPatterns = this.boneFilterPatterns || []
+    const bones = (geometry.bones || [])
+      .filter((b: any) => {
+        if (filterPatterns.length === 0) return true
+        return !filterPatterns.some((pattern: string) =>
+          b.name.toLowerCase().includes(pattern.toLowerCase())
+        )
+      })
+      .map((b: any) => ({
+        name: b.name,
+        parent: b.parent,
+        pivot: b.pivot || [0, 0, 0],
+        rotation: b.rotation,
+        cubes: b.cubes || []
+        // 注意：不提供 vertices/uvs/indices，让 AvatarRenderer 的 JS 回退路径处理
+      }))
+
+    return { textureWidth, textureHeight, bones }
   }
 
   async getTexture(): Promise<THREE.Texture> {

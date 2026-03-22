@@ -108,7 +108,7 @@ jobs:
       - name: Rust Cache
         uses: Swatinem/rust-cache@v2
         with:
-          workspaces: 'PeroCore-Electron/backend -> target'
+          workspaces: 'PeroCore-Electron -> target'
 
       - name: Build and Install Rust Core Extensions
         shell: powershell
@@ -188,7 +188,11 @@ jobs:
           $SEARCHER_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher"
 
           # Try to find the built binary.
-          $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
+          # Cargo workspace outputs to workspace root target/ by default
+          $SEARCHER_BIN = Get-ChildItem -Path "PeroCore-Electron/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
+          if (-not $SEARCHER_BIN) {
+               $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
+          }
           if (-not $SEARCHER_BIN) {
                $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/../target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
           }
@@ -206,7 +210,10 @@ jobs:
           cargo build --release --target wasm32-unknown-unknown --manifest-path PeroCore-Electron/backend/nit_core/nit_terminal_auditor/Cargo.toml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
+          $WASM_SRC = "PeroCore-Electron/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
+          if (!(Test-Path $WASM_SRC)) {
+              $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
+          }
           if (!(Test-Path $WASM_SRC)) {
               $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/release/nit_terminal_auditor.wasm" 
           }

@@ -6,6 +6,10 @@
   "version": "1.0.0",
   "description": "Rossi 虚拟形象模型",
   "author": "PeroCore",
+  "metadata": {
+    "name": "Rossi",
+    "version": "1.0.0"
+  },
   "featureButtons": [
     { "id": "dress", "label": "连衣裙", "group": "服装", "defaultValue": true },
     { "id": "armour", "label": "盔甲", "group": "服装", "defaultValue": true },

@@ -7,6 +7,9 @@ members = [
     "backend/social_core",
     "backend/vision_core",
 ]
+exclude = [
+    "src/components/avatar/native",
+]
 resolver = "2"
 
 [profile.release]

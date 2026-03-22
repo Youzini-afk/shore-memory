@@ -858,7 +858,7 @@
 </template>
 
 <script setup>
-import { ref, shallowRef, computed, onMounted, onUnmounted, nextTick, watch, provide } from 'vue'
+import { ref, computed, onMounted, onUnmounted, nextTick, watch, provide } from 'vue'
 import QrcodeVue from 'qrcode.vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import { listen, invoke, isElectron } from '@/utils/ipcAdapter'
@@ -894,160 +894,428 @@ import { useDashboardData } from '@/composables/dashboard/useDashboardData'
 import { useLogs } from '@/composables/dashboard/useLogs'
 import { useMemories } from '@/composables/dashboard/useMemories'
 import { useTasks } from '@/composables/dashboard/useTasks'
-import { useModelConfig, providerOptions, mcpTypeOptions, providerDefaults } from '@/composables/dashboard/useModelConfig'
+import {
+  useModelConfig,
+  providerOptions,
+  mcpTypeOptions,
+  providerDefaults
+} from '@/composables/dashboard/useModelConfig'
 
 const {
-  currentTab, isBackendOnline, isSaving, isGlobalRefreshing,
-  particles, initParticles,
-  showConfirmModal, confirmModalTitle, confirmModalContent, confirmType,
-  isPrompt, promptValue, promptPlaceholder,
-  openConfirm, handleConfirm, handleCancel,
-  showImageViewer, imageViewerList, imageViewerIndex, openImageViewer,
-  appVersion, updateStatus, isCheckingUpdate, checkForUpdates, handleUpdateMessage,
-  showQrModal, connectionInfo, isLoadingConnection, fetchConnectionInfo,
-  handleQuitApp, handleTabSelect, menuGroups
+  currentTab,
+  isBackendOnline,
+  isSaving,
+  isGlobalRefreshing,
+  particles,
+  initParticles,
+  showConfirmModal,
+  confirmModalTitle,
+  confirmModalContent,
+  confirmType,
+  isPrompt,
+  promptValue,
+  promptPlaceholder,
+  openConfirm,
+  handleConfirm,
+  handleCancel,
+  showImageViewer,
+  imageViewerList,
+  imageViewerIndex,
+  openImageViewer,
+  appVersion,
+  updateStatus,
+  isCheckingUpdate,
+  checkForUpdates,
+  handleUpdateMessage,
+  showQrModal,
+  connectionInfo,
+  isLoadingConnection,
+  fetchConnectionInfo,
+  handleQuitApp,
+  handleTabSelect,
+  menuGroups
 } = useDashboard()
 
 const {
-  availableAgents, activeAgent, isSwitchingAgent, fetchAgents, switchAgent,
+  availableAgents,
+  activeAgent,
+  isSwitchingAgent,
+  fetchAgents,
+  switchAgent,
   napCatStatus,
-  isCompanionEnabled, isTogglingCompanion, toggleCompanion, fetchCompanionStatus,
-  isSocialEnabled, fetchSocialStatus,
-  isLightweightEnabled, isTogglingLightweight, toggleLightweight, fetchLightweightStatus,
-  isAuraVisionEnabled, isTogglingAuraVision, toggleAuraVision, fetchAuraVisionStatus,
-  activeMemoryTab, isSavingMemoryConfig, memoryConfig, fetchMemoryConfig, saveMemoryConfig
+  isCompanionEnabled,
+  isTogglingCompanion,
+  toggleCompanion,
+  fetchCompanionStatus,
+  isSocialEnabled,
+  fetchSocialStatus,
+  isLightweightEnabled,
+  isTogglingLightweight,
+  toggleLightweight,
+  fetchLightweightStatus,
+  isAuraVisionEnabled,
+  isTogglingAuraVision,
+  toggleAuraVision,
+  fetchAuraVisionStatus,
+  activeMemoryTab,
+  isSavingMemoryConfig,
+  memoryConfig,
+  fetchMemoryConfig,
+  saveMemoryConfig
 } = useAgentConfig()
 
-const {
-  stats, petState, nitStatus, ambientLightStyle,
-  fetchStats, fetchPetState, fetchNitStatus
-} = useDashboardData({ activeAgent, isBackendOnline, isGlobalRefreshing, currentTab })
+const { stats, petState, nitStatus, ambientLightStyle, fetchStats, fetchPetState, fetchNitStatus } =
+  useDashboardData({ activeAgent, isBackendOnline, isGlobalRefreshing, currentTab })
 
 const {
-  logs, isLogsFetching,
-  selectedSource, selectedSessionId, lastSyncedSessionId, selectedDate, selectedSort,
-  editingLogId, editingContent,
-  showDebugDialog, currentDebugLog, debugSegments, debugViewMode,
-  currentPromptMessages, isLoadingPrompt, totalPromptLength,
-  initSessionAndFetchLogs, fetchLogs,
-  startLogEdit, cancelLogEdit, saveLogEdit, deleteLog,
+  logs,
+  isLogsFetching,
+  selectedSource,
+  selectedSessionId,
+  lastSyncedSessionId,
+  selectedDate,
+  selectedSort,
+  editingLogId,
+  editingContent,
+  showDebugDialog,
+  currentDebugLog,
+  debugSegments,
+  debugViewMode,
+  currentPromptMessages,
+  isLoadingPrompt,
+  totalPromptLength,
+  initSessionAndFetchLogs,
+  fetchLogs,
+  startLogEdit,
+  cancelLogEdit,
+  saveLogEdit,
+  deleteLog,
   retryLogAnalysis,
-  openDebugDialog, handleDebugModeChange, handleLogUpdate,
-  getLogMetadata, getSentimentEmoji, getSentimentLabel, formatLogContent
+  openDebugDialog,
+  handleDebugModeChange,
+  handleLogUpdate,
+  getLogMetadata,
+  getSentimentEmoji,
+  getSentimentLabel,
+  formatLogContent
 } = useLogs({ activeAgent, currentTab, openConfirm })
 
 const {
-  memories, tagCloud, memoryFilterTags, memoryFilterDate, memoryFilterType,
-  memoryViewMode, memoryGraphData, isLoadingGraph, graphRef, topTags,
-  isClearingEdges, isScanningLonely, isRunningMaintenance, isDreaming,
-  showImportStoryDialog, importStoryText, isImportingStory,
-  fetchMemories, fetchTagCloud, fetchMemoryGraph, initGraph, disposeGraph, deleteMemory,
-  clearOrphanedEdges, triggerScanLonely, triggerMaintenance, triggerDream,
-  handleImportStory, getMemoryTypeLabel, getSentimentColor
+  memories,
+  tagCloud,
+  memoryFilterTags,
+  memoryFilterDate,
+  memoryFilterType,
+  memoryViewMode,
+  memoryGraphData,
+  isLoadingGraph,
+  graphRef,
+  topTags,
+  isClearingEdges,
+  isScanningLonely,
+  isRunningMaintenance,
+  isDreaming,
+  showImportStoryDialog,
+  importStoryText,
+  isImportingStory,
+  fetchMemories,
+  fetchTagCloud,
+  fetchMemoryGraph,
+  initGraph,
+  disposeGraph,
+  deleteMemory,
+  clearOrphanedEdges,
+  triggerScanLonely,
+  triggerMaintenance,
+  triggerDream,
+  handleImportStory,
+  getMemoryTypeLabel,
+  getSentimentColor
 } = useMemories({ activeAgent, currentTab, openConfirm })
 
 const { tasks, fetchTasks, deleteTask } = useTasks({ activeAgent, openConfirm })
 
 const {
-  globalConfig, showGlobalSettings, currentModelTab,
-  fetchConfig, openGlobalSettings, saveGlobalSettings, handleGlobalProviderChange,
-  models, showModelEditor, remoteModels, isFetchingRemote, currentEditingModel,
-  currentActiveModelId, secretaryModelId, reflectionModelId, auxModelId,
-  fetchModels, openModelEditor, handleProviderChange, fetchRemoteModels, saveModel, deleteModel,
-  setActiveModel, setSecretaryModel, setReflectionModel, setAuxModel,
-  embeddingProvider, embeddingModelId, embeddingApiBase, embeddingApiKey,
-  rerankerProvider, rerankerModelId, rerankerApiBase, rerankerApiKey, embeddingDimension,
-  isReindexing, availableEmbeddingModels, isFetchingEmbeddingModels,
-  availableRerankerModels, isFetchingRerankerModels,
-  handleEmbeddingProviderChange, fetchRemoteVectorModels, saveVectorConfig, triggerReindex,
-  mcps, showMcpEditor, currentEditingMcp,
-  fetchMcps, openMcpEditor, saveMcp, deleteMcp, toggleMcpEnabled,
-  userSettings, saveUserSettings, handleSystemReset: _handleSystemReset
+  globalConfig,
+  showGlobalSettings,
+  currentModelTab,
+  fetchConfig,
+  openGlobalSettings,
+  saveGlobalSettings,
+  handleGlobalProviderChange,
+  models,
+  showModelEditor,
+  remoteModels,
+  isFetchingRemote,
+  currentEditingModel,
+  currentActiveModelId,
+  secretaryModelId,
+  reflectionModelId,
+  auxModelId,
+  fetchModels,
+  openModelEditor,
+  handleProviderChange,
+  fetchRemoteModels,
+  saveModel,
+  deleteModel,
+  setActiveModel,
+  setSecretaryModel,
+  setReflectionModel,
+  setAuxModel,
+  embeddingProvider,
+  embeddingModelId,
+  embeddingApiBase,
+  embeddingApiKey,
+  rerankerProvider,
+  rerankerModelId,
+  rerankerApiBase,
+  rerankerApiKey,
+  embeddingDimension,
+  isReindexing,
+  availableEmbeddingModels,
+  isFetchingEmbeddingModels,
+  availableRerankerModels,
+  isFetchingRerankerModels,
+  handleEmbeddingProviderChange,
+  fetchRemoteVectorModels,
+  saveVectorConfig,
+  triggerReindex,
+  mcps,
+  showMcpEditor,
+  currentEditingMcp,
+  fetchMcps,
+  openMcpEditor,
+  saveMcp,
+  deleteMcp,
+  toggleMcpEnabled,
+  userSettings,
+  saveUserSettings,
+  handleSystemReset: _handleSystemReset
 } = useModelConfig({ memories, isSaving, openConfirm })
-
-const handleSystemReset = () => _handleSystemReset(activeAgent, fetchAllData, currentTab)
-
-// --- Provide all composable state to Tab components ---
-import {
-  DASHBOARD_KEY, AGENT_CONFIG_KEY, DASHBOARD_DATA_KEY,
-  LOGS_KEY, MEMORIES_KEY, TASKS_KEY, MODEL_CONFIG_KEY
-} from '@/composables/dashboard/injectionKeys'
-
-provide(DASHBOARD_KEY, {
-  currentTab, isBackendOnline, isSaving, isGlobalRefreshing,
-  particles, initParticles,
-  showConfirmModal, confirmModalTitle, confirmModalContent, confirmType,
-  isPrompt, promptValue, promptPlaceholder,
-  openConfirm, handleConfirm, handleCancel,
-  showImageViewer, imageViewerList, imageViewerIndex, openImageViewer,
-  appVersion, updateStatus, isCheckingUpdate, checkForUpdates, handleUpdateMessage,
-  showQrModal, connectionInfo, isLoadingConnection, fetchConnectionInfo,
-  handleQuitApp, handleTabSelect, menuGroups
-})
-
-provide(AGENT_CONFIG_KEY, {
-  availableAgents, activeAgent, isSwitchingAgent, fetchAgents, switchAgent,
-  napCatStatus,
-  isCompanionEnabled, isTogglingCompanion, toggleCompanion, fetchCompanionStatus,
-  isSocialEnabled, fetchSocialStatus,
-  isLightweightEnabled, isTogglingLightweight, toggleLightweight, fetchLightweightStatus,
-  isAuraVisionEnabled, isTogglingAuraVision, toggleAuraVision, fetchAuraVisionStatus,
-  activeMemoryTab, isSavingMemoryConfig, memoryConfig, fetchMemoryConfig, saveMemoryConfig
-})
-
-provide(DASHBOARD_DATA_KEY, {
-  stats, petState, nitStatus, ambientLightStyle,
-  fetchStats, fetchPetState, fetchNitStatus
-})
-
-provide(LOGS_KEY, {
-  logs, isLogsFetching,
-  selectedSource, selectedSessionId, lastSyncedSessionId, selectedDate, selectedSort,
-  editingLogId, editingContent,
-  showDebugDialog, currentDebugLog, debugSegments, debugViewMode,
-  currentPromptMessages, isLoadingPrompt, totalPromptLength,
-  initSessionAndFetchLogs, fetchLogs,
-  startLogEdit, cancelLogEdit, saveLogEdit, deleteLog,
-  retryLogAnalysis,
-  openDebugDialog, handleDebugModeChange, handleLogUpdate,
-  getLogMetadata, getSentimentEmoji, getSentimentLabel, formatLogContent
-})
-
-provide(MEMORIES_KEY, {
-  memories, tagCloud, memoryFilterTags, memoryFilterDate, memoryFilterType,
-  memoryViewMode, memoryGraphData, isLoadingGraph, graphRef, topTags,
-  isClearingEdges, isScanningLonely, isRunningMaintenance, isDreaming,
-  showImportStoryDialog, importStoryText, isImportingStory,
-  fetchMemories, fetchTagCloud, fetchMemoryGraph, initGraph, disposeGraph, deleteMemory,
-  clearOrphanedEdges, triggerScanLonely, triggerMaintenance, triggerDream,
-  handleImportStory, getMemoryTypeLabel, getSentimentColor
-})
-
-provide(TASKS_KEY, { tasks, fetchTasks, deleteTask })
-
-provide(MODEL_CONFIG_KEY, {
-  globalConfig, showGlobalSettings, currentModelTab,
-  fetchConfig, openGlobalSettings, saveGlobalSettings, handleGlobalProviderChange,
-  models, showModelEditor, remoteModels, isFetchingRemote, currentEditingModel,
-  currentActiveModelId, secretaryModelId, reflectionModelId, auxModelId,
-  fetchModels, openModelEditor, handleProviderChange, fetchRemoteModels, saveModel, deleteModel,
-  setActiveModel, setSecretaryModel, setReflectionModel, setAuxModel,
-  embeddingProvider, embeddingModelId, embeddingApiBase, embeddingApiKey,
-  rerankerProvider, rerankerModelId, rerankerApiBase, rerankerApiKey, embeddingDimension,
-  isReindexing, availableEmbeddingModels, isFetchingEmbeddingModels,
-  availableRerankerModels, isFetchingRerankerModels,
-  handleEmbeddingProviderChange, fetchRemoteVectorModels, saveVectorConfig, triggerReindex,
-  mcps, showMcpEditor, currentEditingMcp,
-  fetchMcps, openMcpEditor, saveMcp, deleteMcp, toggleMcpEnabled,
-  userSettings, saveUserSettings, handleSystemReset,
-  isCurrentModelVisionEnabled, providerOptions, mcpTypeOptions, providerDefaults
-})
 
 const isCurrentModelVisionEnabled = computed(() => {
   if (!currentActiveModelId.value || !models.value.length) return false
   const activeModel = models.value.find((m) => m.id === currentActiveModelId.value)
   return activeModel ? !!activeModel.enable_vision : false
 })
+
+const handleSystemReset = () => _handleSystemReset(activeAgent, fetchAllData, currentTab)
+
+// --- Provide all composable state to Tab components ---
+import {
+  DASHBOARD_KEY,
+  AGENT_CONFIG_KEY,
+  DASHBOARD_DATA_KEY,
+  LOGS_KEY,
+  MEMORIES_KEY,
+  TASKS_KEY,
+  MODEL_CONFIG_KEY
+} from '@/composables/dashboard/injectionKeys'
+
+provide(DASHBOARD_KEY, {
+  currentTab,
+  isBackendOnline,
+  isSaving,
+  isGlobalRefreshing,
+  particles,
+  initParticles,
+  showConfirmModal,
+  confirmModalTitle,
+  confirmModalContent,
+  confirmType,
+  isPrompt,
+  promptValue,
+  promptPlaceholder,
+  openConfirm,
+  handleConfirm,
+  handleCancel,
+  showImageViewer,
+  imageViewerList,
+  imageViewerIndex,
+  openImageViewer,
+  appVersion,
+  updateStatus,
+  isCheckingUpdate,
+  checkForUpdates,
+  handleUpdateMessage,
+  showQrModal,
+  connectionInfo,
+  isLoadingConnection,
+  fetchConnectionInfo,
+  handleQuitApp,
+  handleTabSelect,
+  menuGroups
+})
+
+provide(AGENT_CONFIG_KEY, {
+  availableAgents,
+  activeAgent,
+  isSwitchingAgent,
+  fetchAgents,
+  switchAgent,
+  napCatStatus,
+  isCompanionEnabled,
+  isTogglingCompanion,
+  toggleCompanion,
+  fetchCompanionStatus,
+  isSocialEnabled,
+  fetchSocialStatus,
+  isLightweightEnabled,
+  isTogglingLightweight,
+  toggleLightweight,
+  fetchLightweightStatus,
+  isAuraVisionEnabled,
+  isTogglingAuraVision,
+  toggleAuraVision,
+  fetchAuraVisionStatus,
+  activeMemoryTab,
+  isSavingMemoryConfig,
+  memoryConfig,
+  fetchMemoryConfig,
+  saveMemoryConfig
+})
+
+provide(DASHBOARD_DATA_KEY, {
+  stats,
+  petState,
+  nitStatus,
+  ambientLightStyle,
+  fetchStats,
+  fetchPetState,
+  fetchNitStatus
+})
+
+provide(LOGS_KEY, {
+  logs,
+  isLogsFetching,
+  selectedSource,
+  selectedSessionId,
+  lastSyncedSessionId,
+  selectedDate,
+  selectedSort,
+  editingLogId,
+  editingContent,
+  showDebugDialog,
+  currentDebugLog,
+  debugSegments,
+  debugViewMode,
+  currentPromptMessages,
+  isLoadingPrompt,
+  totalPromptLength,
+  initSessionAndFetchLogs,
+  fetchLogs,
+  startLogEdit,
+  cancelLogEdit,
+  saveLogEdit,
+  deleteLog,
+  retryLogAnalysis,
+  openDebugDialog,
+  handleDebugModeChange,
+  handleLogUpdate,
+  getLogMetadata,
+  getSentimentEmoji,
+  getSentimentLabel,
+  formatLogContent
+})
+
+provide(MEMORIES_KEY, {
+  memories,
+  tagCloud,
+  memoryFilterTags,
+  memoryFilterDate,
+  memoryFilterType,
+  memoryViewMode,
+  memoryGraphData,
+  isLoadingGraph,
+  graphRef,
+  topTags,
+  isClearingEdges,
+  isScanningLonely,
+  isRunningMaintenance,
+  isDreaming,
+  showImportStoryDialog,
+  importStoryText,
+  isImportingStory,
+  fetchMemories,
+  fetchTagCloud,
+  fetchMemoryGraph,
+  initGraph,
+  disposeGraph,
+  deleteMemory,
+  clearOrphanedEdges,
+  triggerScanLonely,
+  triggerMaintenance,
+  triggerDream,
+  handleImportStory,
+  getMemoryTypeLabel,
+  getSentimentColor
+})
+
+provide(TASKS_KEY, { tasks, fetchTasks, deleteTask })
+
+provide(MODEL_CONFIG_KEY, {
+  globalConfig,
+  showGlobalSettings,
+  currentModelTab,
+  fetchConfig,
+  openGlobalSettings,
+  saveGlobalSettings,
+  handleGlobalProviderChange,
+  models,
+  showModelEditor,
+  remoteModels,
+  isFetchingRemote,
+  currentEditingModel,
+  currentActiveModelId,
+  secretaryModelId,
+  reflectionModelId,
+  auxModelId,
+  fetchModels,
+  openModelEditor,
+  handleProviderChange,
+  fetchRemoteModels,
+  saveModel,
+  deleteModel,
+  setActiveModel,
+  setSecretaryModel,
+  setReflectionModel,
+  setAuxModel,
+  embeddingProvider,
+  embeddingModelId,
+  embeddingApiBase,
+  embeddingApiKey,
+  rerankerProvider,
+  rerankerModelId,
+  rerankerApiBase,
+  rerankerApiKey,
+  embeddingDimension,
+  isReindexing,
+  availableEmbeddingModels,
+  isFetchingEmbeddingModels,
+  availableRerankerModels,
+  isFetchingRerankerModels,
+  handleEmbeddingProviderChange,
+  fetchRemoteVectorModels,
+  saveVectorConfig,
+  triggerReindex,
+  mcps,
+  showMcpEditor,
+  currentEditingMcp,
+  fetchMcps,
+  openMcpEditor,
+  saveMcp,
+  deleteMcp,
+  toggleMcpEnabled,
+  userSettings,
+  saveUserSettings,
+  handleSystemReset,
+  isCurrentModelVisionEnabled,
+  providerOptions,
+  mcpTypeOptions,
+  providerDefaults
+})
+
+// isCurrentModelVisionEnabled 已在 useModelConfig() 之后定义（第968行附近）
 
 const showOnboarding = ref(false)
 const appConfig = ref({})
@@ -1059,10 +1327,14 @@ const handleOnboardingFinish = async (choice) => {
       await invoke('save_config', { config })
       await invoke('open_pet_window')
       await invoke('close_dashboard')
-    } catch (e) { console.error('启动失败:', e) }
+    } catch (e) {
+      console.error('启动失败:', e)
+    }
   } else if (choice === 'stay') {
     showOnboarding.value = false
-    setTimeout(() => { showOnboarding.value = true }, 500)
+    setTimeout(() => {
+      showOnboarding.value = true
+    }, 500)
   } else {
     const config = await invoke('get_config')
     config.onboarding_completed = true
@@ -1081,12 +1353,29 @@ const fetchAllData = async (silent = false) => {
   if (!isBackendOnline.value || isGlobalRefreshing.value) return
   isGlobalRefreshing.value = true
   try {
-    await Promise.all([fetchPetState(), fetchConfig({ selectedSessionId, lastSyncedSessionId }), fetchStats(), fetchAgents()])
-  } catch { console.error('核心数据获取错误') }
+    await Promise.all([
+      fetchPetState(),
+      fetchConfig({ selectedSessionId, lastSyncedSessionId }),
+      fetchStats(),
+      fetchAgents()
+    ])
+  } catch {
+    console.error('核心数据获取错误')
+  }
   setTimeout(async () => {
     try {
-      await Promise.all([fetchModels(), fetchMcps(), fetchCompanionStatus(), fetchSocialStatus(), fetchLightweightStatus(), fetchAuraVisionStatus(), fetchNitStatus()])
-    } catch { console.error('次要数据获取错误') }
+      await Promise.all([
+        fetchModels(),
+        fetchMcps(),
+        fetchCompanionStatus(),
+        fetchSocialStatus(),
+        fetchLightweightStatus(),
+        fetchAuraVisionStatus(),
+        fetchNitStatus()
+      ])
+    } catch {
+      console.error('次要数据获取错误')
+    }
   }, 100)
   setTimeout(async () => {
     try {
@@ -1108,7 +1397,8 @@ const fetchAllData = async (silent = false) => {
 }
 
 const waitForBackend = async () => {
-  const maxRetries = 60; let retries = 0
+  const maxRetries = 60
+  let retries = 0
   const check = async () => {
     try {
       const res = await fetchWithTimeout(`${API_BASE}/pet/state`, { silent: true }, 2000)
@@ -1118,9 +1408,14 @@ const waitForBackend = async () => {
         fetchMemoryConfig()
         return
       }
-    } catch { /* silent */ }
-    if (retries < maxRetries) { retries++; isBackendOnline.value = false; setTimeout(check, 1000) }
-    else window.$notify('无法连接到 Pero 后端，请检查后台进程是否运行。', 'error')
+    } catch {
+      /* silent */
+    }
+    if (retries < maxRetries) {
+      retries++
+      isBackendOnline.value = false
+      setTimeout(check, 1000)
+    } else window.$notify('无法连接到 Pero 后端，请检查后台进程是否运行。', 'error')
   }
   check()
 }
@@ -1131,7 +1426,9 @@ watch(memoryViewMode, (val) => {
       if (memoryGraphData.value.nodes.length > 0) initGraph()
       else fetchMemoryGraph()
     })
-  } else { disposeGraph() }
+  } else {
+    disposeGraph()
+  }
 })
 
 watch(currentTab, (newTab) => {
@@ -1146,7 +1443,9 @@ watch([selectedSessionId, selectedSource, selectedSort, selectedDate], () => {
 })
 
 watch(activeAgent, () => {
-  memories.value = []; logs.value = []; tasks.value = []
+  memories.value = []
+  logs.value = []
+  tasks.value = []
   fetchStats()
   if (currentTab.value === 'logs') fetchLogs()
   else if (currentTab.value === 'memories') fetchMemories()
@@ -1158,17 +1457,32 @@ watch(embeddingProvider, (newVal) => {
 })
 
 const listenSafe = (event, callback) => listen(event, callback)
-const handleStateUpdate = () => { if (currentTab.value === 'overview') fetchPetState() }
-const handleScheduleUpdate = () => { if (currentTab.value === 'tasks') fetchTasks() }
-const handleAgentChanged = () => { fetchAgents() }
-const _handleLogUpdate = (data) => { if (currentTab.value === 'logs') handleLogUpdate(data, fetchLogs) }
+const handleStateUpdate = () => {
+  if (currentTab.value === 'overview') fetchPetState()
+}
+const handleScheduleUpdate = () => {
+  if (currentTab.value === 'tasks') fetchTasks()
+}
+const handleAgentChanged = () => {
+  fetchAgents()
+}
+const _handleLogUpdate = (data) => {
+  if (currentTab.value === 'logs') handleLogUpdate(data, fetchLogs)
+}
 
 onMounted(async () => {
   initParticles()
   waitForBackend()
-  watch(isBackendOnline, (online) => {
-    if (online) { console.log('[Dashboard] Backend online, connecting to Gateway...'); gatewayClient.connect() }
-  }, { immediate: false })
+  watch(
+    isBackendOnline,
+    (online) => {
+      if (online) {
+        console.log('[Dashboard] Backend online, connecting to Gateway...')
+        gatewayClient.connect()
+      }
+    },
+    { immediate: false }
+  )
   gatewayClient.on('action:agent_changed', (payload) => {
     const agentId = payload.agent_id || (payload.params && payload.params.agent_id)
     if (agentId) fetchAgents().then(() => fetchAllData(true))
@@ -1177,7 +1491,17 @@ onMounted(async () => {
     if (currentTab.value === 'logs') {
       const exists = logs.value.some((l) => l.id == payload.id)
       if (!exists) {
-        logs.value = [Object.freeze({ ...payload, displayTime: new Date(payload.timestamp).toLocaleString(), metadata: JSON.parse(payload.metadata || '{}'), sentiment: 'neutral', importance: 1, analysis_status: 'pending' }), ...logs.value]
+        logs.value = [
+          Object.freeze({
+            ...payload,
+            displayTime: new Date(payload.timestamp).toLocaleString(),
+            metadata: JSON.parse(payload.metadata || '{}'),
+            sentiment: 'neutral',
+            importance: 1,
+            analysis_status: 'pending'
+          }),
+          ...logs.value
+        ]
         stats.value.total_logs = (stats.value.total_logs || 0) + 1
       }
     }
@@ -1186,9 +1510,16 @@ onMounted(async () => {
     const config = await invoke('get_config')
     appConfig.value = config
     if (config.onboarding_completed !== true) showOnboarding.value = true
-  } catch (e) { console.error('加载配置失败:', e) }
+  } catch (e) {
+    console.error('加载配置失败:', e)
+  }
   await listenSafe('update-message', (data) => handleUpdateMessage(data, openConfirm))
-  try { const v = await invoke('get_app_version'); if (v) appVersion.value = v } catch { /* noop */ }
+  try {
+    const v = await invoke('get_app_version')
+    if (v) appVersion.value = v
+  } catch {
+    /* noop */
+  }
   gatewayClient.on('action:state_update', handleStateUpdate)
   gatewayClient.on('action:schedule_update', handleScheduleUpdate)
   gatewayClient.on('action:agent_changed', handleAgentChanged)
@@ -1197,7 +1528,10 @@ onMounted(async () => {
     let logFetchTimeout = null
     window.electron.on('history-update', () => {
       if (logFetchTimeout) clearTimeout(logFetchTimeout)
-      logFetchTimeout = setTimeout(() => { fetchLogs(); logFetchTimeout = null }, 500)
+      logFetchTimeout = setTimeout(() => {
+        fetchLogs()
+        logFetchTimeout = null
+      }, 500)
     })
   }
 })
@@ -1212,7 +1546,6 @@ onUnmounted(() => {
   disposeGraph()
 })
 </script>
-
 
 <style scoped>
 /* 平面化动作按钮 */

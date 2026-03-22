@@ -94,7 +94,8 @@ async def get_server_info():
     # 读取本地Gateway Token
     token = ""
     try:
-        token_path = os.path.join(os.getcwd(), "data", "gateway_token.json")
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        token_path = os.path.join(current_dir, "..", "data", "gateway_token.json")
         if os.path.exists(token_path):
             with open(token_path, "r", encoding="utf-8") as f:
                 data = json.load(f)

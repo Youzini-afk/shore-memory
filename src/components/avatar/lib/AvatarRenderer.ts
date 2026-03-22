@@ -168,8 +168,8 @@ export class AvatarRenderer {
         // 设置骨骼旋转
         if (boneData.rotation) {
           const rot = boneData.rotation
-          // Bedrock 旋转顺序是 ZXY
-          boneGroup.rotation.order = 'ZXY'
+          // Bedrock 旋转顺序: extrinsic X→Y→Z = intrinsic ZYX
+          boneGroup.rotation.order = 'ZYX'
           // X 轴取反后，Y 和 Z 的旋转方向需要反转以维持镜像后的正确朝向
           boneGroup.rotation.x = THREE.MathUtils.degToRad(-rot[0])
           boneGroup.rotation.y = THREE.MathUtils.degToRad(-rot[1])
@@ -425,7 +425,7 @@ export class AvatarRenderer {
         cubePivot[2] - bonePivot[2]
       )
 
-      pivotGroup.rotation.order = 'ZXY'
+      pivotGroup.rotation.order = 'ZYX'
       pivotGroup.rotation.x = THREE.MathUtils.degToRad(-cubeData.rotation[0])
       pivotGroup.rotation.y = THREE.MathUtils.degToRad(-cubeData.rotation[1])
       pivotGroup.rotation.z = THREE.MathUtils.degToRad(cubeData.rotation[2])

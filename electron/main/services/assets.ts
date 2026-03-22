@@ -33,23 +33,52 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
   const models: AssetInfo[] = []
   const root = getRootPath()
 
-  // 1. 扫描内置模型 (public/assets/3d)
+  // 1. 优先扫描 .pero 加密容器 (public/assets/3d/*.pero)
   const officialModelsDir = path.join(root, 'public/assets/3d')
+  const allFiles = await fs.readdir(officialModelsDir).catch(() => [] as string[])
+  for (const file of allFiles) {
+    if (file.endsWith('.pero')) {
+      const name = file.replace('.pero', '')
+      const filePath = path.join(officialModelsDir, file)
+      const assetId = `com.perocore.model.${name.toLowerCase()}`
+      models.push({
+        asset_id: assetId,
+        type: 'model_3d',
+        source: 'official',
+        display_name: name,
+        version: '1.0.0',
+        path: filePath
+      })
+    }
+  }
+
+  // 2. 扫描目录型模型作为向下兼容（.pero 优先，manifest.json 回退）
   if (await fs.pathExists(officialModelsDir)) {
-    const dirs = await fs.readdir(officialModelsDir)
-    for (const dir of dirs) {
+    for (const dir of allFiles) {
       const modelDir = path.join(officialModelsDir, dir)
       const stat = await fs.stat(modelDir).catch(() => null)
       if (stat?.isDirectory()) {
-        // 检查 manifest.json 或 .pero 文件
-        const manifestPath = path.join(modelDir, 'manifest.json')
-        const peroPath = path.join(modelDir, `${dir}.pero`)
+        const assetId = `com.perocore.model.${dir.toLowerCase()}`
+        // 如果已有同名 .pero，跳过
+        if (models.find((m) => m.asset_id === assetId)) continue
 
-        if (await fs.pathExists(manifestPath)) {
+        const peroPath = path.join(modelDir, `${dir}.pero`)
+        const manifestPath = path.join(modelDir, 'manifest.json')
+
+        if (await fs.pathExists(peroPath)) {
+          models.push({
+            asset_id: assetId,
+            type: 'model_3d',
+            source: 'official',
+            display_name: dir,
+            version: '1.0.0',
+            path: peroPath
+          })
+        } else if (await fs.pathExists(manifestPath)) {
           try {
             const manifest = await fs.readJson(manifestPath)
             models.push({
-              asset_id: manifest.asset_id || `com.perocore.model.${dir.toLowerCase()}`,
+              asset_id: manifest.asset_id || assetId,
               type: 'model_3d',
               source: 'official',
               display_name: manifest.display_name || manifest.metadata?.name || dir,
@@ -60,36 +89,7 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
           } catch {
             logger.warn('Assets', `解析内置模型清单失败: ${manifestPath}`)
           }
-        } else if (await fs.pathExists(peroPath)) {
-          models.push({
-            asset_id: `com.perocore.model.${dir.toLowerCase()}`,
-            type: 'model_3d',
-            source: 'official',
-            display_name: dir,
-            version: '1.0.0',
-            path: peroPath
-          })
         }
-      }
-    }
-  }
-
-  // 2. 扫描 .pero 文件 (根目录下的)
-  const peroFiles = await fs.readdir(officialModelsDir).catch(() => [])
-  for (const file of peroFiles) {
-    if (file.endsWith('.pero')) {
-      const name = file.replace('.pero', '')
-      const filePath = path.join(officialModelsDir, file)
-      // 避免重复添加
-      if (!models.find((m) => m.path === filePath)) {
-        models.push({
-          asset_id: `com.perocore.model.${name.toLowerCase()}`,
-          type: 'model_3d',
-          source: 'official',
-          display_name: name,
-          version: '1.0.0',
-          path: filePath
-        })
       }
     }
   }
@@ -177,6 +177,9 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
   }
 
   logger.info('Assets', `扫描到 ${models.length} 个 3D 模型`)
+  models.forEach((m) => {
+    logger.info('Assets', `  - [${m.source}] ${m.display_name} (${m.asset_id}) @ ${m.path}`)
+  })
   return models
 }
 
@@ -205,19 +208,32 @@ export function getModelLoadPath(model: AssetInfo): string {
 
 export function registerAssetProtocol() {
   protocol.handle('asset', (request) => {
-    let url = request.url.replace('asset://', '')
+    let filePath: string
 
-    // 处理 Windows 盘符 (例如 /C:/Users... -> C:/Users...)
-    // 浏览器通常会把 asset://C:/... 变成 asset://c:/... (小写)
-    // 或者 asset:///C:/... -> /C:/...
+    try {
+      const parsedUrl = new URL(request.url)
 
-    // 如果 URL 以 / 开头，且是 Windows 盘符格式 (/C:/...), 去掉开头的 /
-    if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(url)) {
-      url = url.slice(1)
+      if (parsedUrl.hostname && process.platform === 'win32') {
+        // Windows 盘符被 URL 解析器当作主机名
+        // asset://C:/Users/... → hostname='c', pathname='/Users/...'
+        // 需要把主机名还原为盘符
+        filePath = `${parsedUrl.hostname}:${decodeURIComponent(parsedUrl.pathname)}`
+      } else {
+        // 正常的路径解析 (含 asset:///C:/... 三斜杠格式)
+        let pathStr = decodeURIComponent(parsedUrl.pathname)
+        // 如果是 /C:/... 格式，去掉开头的 /
+        if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(pathStr)) {
+          pathStr = pathStr.slice(1)
+        }
+        filePath = pathStr
+      }
+    } catch {
+      // 降级: 简单字符串处理
+      filePath = decodeURIComponent(request.url.replace('asset://', ''))
+      if (process.platform === 'win32' && /^\/[a-zA-Z]:/.test(filePath)) {
+        filePath = filePath.slice(1)
+      }
     }
-
-    // 解码 URL (处理空格等特殊字符)
-    const filePath = decodeURIComponent(url)
 
     logger.info('AssetProtocol', `正在提供资源: ${filePath}`)
 

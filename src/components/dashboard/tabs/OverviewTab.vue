@@ -846,7 +846,7 @@ import PCard from '@/components/ui/PCard.vue'
 import PButton from '@/components/ui/PButton.vue'
 import PSwitch from '@/components/ui/PSwitch.vue'
 import PSlider from '@/components/ui/PSlider.vue'
-import PCheckbox from '@/components/ui/PCheckbox.vue'
+import PInputNumber from '@/components/ui/PInputNumber.vue'
 import PTooltip from '@/components/ui/PTooltip.vue'
 import PixelIcon from '@/components/ui/PixelIcon.vue'
 import {
@@ -875,7 +875,6 @@ const {
   isAuraVisionEnabled,
   isTogglingAuraVision,
   toggleAuraVision,
-  isSocialEnabled,
   activeMemoryTab,
   memoryConfig,
   isSavingMemoryConfig,

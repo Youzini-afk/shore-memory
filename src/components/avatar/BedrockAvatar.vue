@@ -36,6 +36,7 @@
 import { onMounted, onUnmounted, ref, shallowRef, watch } from 'vue'
 import * as THREE from 'three'
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js'
+import PixelIcon from '../ui/PixelIcon.vue'
 import { AvatarRenderer } from './lib/AvatarRenderer'
 import { StandardBedrockProvider } from './lib/adapter/StandardBedrockProvider'
 import { PeroSecureProvider } from './lib/adapter/PeroSecureProvider'
@@ -603,9 +604,8 @@ async function loadDefaultManifest() {
   const isElectron = (window as any).electron !== undefined
   const prefix = isElectron ? 'assets/' : '/assets/'
 
-  console.log('未指定 Manifest，使用默认配置（.pero 容器）')
-
-  // 使用 .pero 容器格式
+  // 优先使用 .pero 加密容器（走 PeroContainerProvider / Rust 路径），
+  // 加载失败时再回退到 manifest.json（走 StandardBedrockProvider / TS 路径）
   const containerPath = `${prefix}3d/Rossi.pero`
   const defaultManifest: IAvatarManifest = {
     metadata: {
@@ -622,7 +622,24 @@ async function loadDefaultManifest() {
     retargetingMap: { mapping: {} }
   }
 
-  await loadAvatar(defaultManifest)
+  try {
+    await loadAvatar(defaultManifest)
+    return
+  } catch (e) {
+    console.warn('.pero 容器加载失败，尝试 manifest.json:', e)
+  }
+
+  // 回退到 manifest.json（非加密模型）
+  const manifestJsonPath = `${prefix}3d/Rossi/manifest.json`
+  try {
+    console.log('回退加载 manifest.json（TS 路径）...')
+    const manifest = await ManifestLoader.fromJson(manifestJsonPath)
+    await loadAvatar(manifest)
+  } catch (e2) {
+    console.error('所有加载路径均失败:', e2)
+    errorMsg.value = `加载模型失败: 无可用的模型文件`
+    loading.value = false
+  }
 }
 
 let isInteracting = false

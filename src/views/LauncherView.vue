@@ -2087,19 +2087,9 @@ onMounted(async () => {
     }
   }, 200)
 
-  await loadConfig()
-  console.log('[DEBUG] Launcher 挂载，加载到的配置:', appConfig.value)
-
-  // 如果检测到引导未完成，立即强制开启 Launcher 引导喵~ 🌸
-  if (appConfig.value.onboarding_completed === false) {
-    showOnboarding.value = true
-  }
-
-  // 监听器: es-log
-  await listen('es-log', (event) => addLog(`[ES] ${event.payload}`))
-
-  // 监听下载进度
-  await listen('napcat-download-progress', (payload) => {
+  // 注册事件监听器（不阻塞）
+  listen('es-log', (event) => addLog(`[ES] ${event.payload}`))
+  listen('napcat-download-progress', (payload) => {
     downloadProgress.value = {
       active: true,
       percent: payload.percent,
@@ -2120,11 +2110,7 @@ onMounted(async () => {
       }, 5000)
     }
   })
-
-  // 监听模型下载进度
-  await listen('download-progress', (payload) => {
-    // 这里的 percent 可能是 -1，表示未知进度
-    // 如果是 -1，保留 -1 以触发不确定性进度条
+  listen('download-progress', (payload) => {
     const percent = payload.percent
 
     downloadProgress.value = {
@@ -2134,51 +2120,63 @@ onMounted(async () => {
       error: false,
       completed: false
     }
-
-    // 如果消息包含 "complete" 或 "下载完成"，则视为完成
-    // 但实际上后端脚本执行完毕后 IPC 调用才会返回，所以这里的监听主要用于实时日志
   })
 
-  // 加载插件
-  try {
-    plugins.value = await invoke('get_plugins')
-  } catch (e) {
-    console.error('加载插件失败:', e)
-    addLog(`[ERROR] Failed to load plugins: ${e}`)
+  // 并行执行所有 IPC 调用以加速启动
+  const [_configResult, pluginsResult, esResult, envResult] = await Promise.allSettled([
+    loadConfig(),
+    invoke('get_plugins'),
+    invoke('check_es'),
+    checkEnvironment()
+  ])
+
+  console.log('[DEBUG] Launcher 挂载，加载到的配置:', appConfig.value)
+
+  // 如果检测到引导未完成，立即强制开启 Launcher 引导喵~ 🌸
+  if (appConfig.value.onboarding_completed === false) {
+    showOnboarding.value = true
   }
 
-  // 检查 ES 状态
-  try {
-    const installed = await invoke('check_es')
-    esStatus.value = installed ? 'INSTALLED' : 'NOT_INSTALLED'
-  } catch {
-    // eslint-disable-line @typescript-eslint/no-unused-vars
+  // 处理插件结果
+  if (pluginsResult.status === 'fulfilled') {
+    plugins.value = pluginsResult.value
+  } else {
+    console.error('加载插件失败:', pluginsResult.reason)
+    addLog(`[ERROR] Failed to load plugins: ${pluginsResult.reason}`)
+  }
+
+  // 处理 ES 状态结果
+  if (esResult.status === 'fulfilled') {
+    esStatus.value = esResult.value ? 'INSTALLED' : 'NOT_INSTALLED'
+  } else {
     esStatus.value = 'ERROR'
   }
 
-  // [已移除] 自动安装 NapCat 逻辑移至启动流程 (toggleLaunch) 以避免冲突并确保顺序
-  // if (isSocialEnabled.value) { ... }
+  // 处理环境检查结果
+  if (envResult.status === 'fulfilled') {
+    const status = envResult.value
+    if (status === 'error') {
+      if (window.$notify) {
+        window.$notify(
+          '关键运行环境缺失，启动已禁用。请前往环境检测页修复。',
+          'error',
+          '环境缺失',
+          8000
+        )
+      }
+    } else if (status === 'warning') {
+      if (window.$notify) {
+        window.$notify('环境存在警告，建议检查。', 'warning', '环境警告', 5000)
+      }
+    }
+  }
 
   // 开始统计轮询
   updateStats()
   statsInterval = setInterval(updateStats, 2000)
 
-  // 初始环境检查
-  const status = await checkEnvironment()
-  if (status === 'error') {
-    if (window.$notify) {
-      window.$notify(
-        '关键运行环境缺失，启动已禁用。请前往环境检测页修复。',
-        'error',
-        '环境缺失',
-        8000
-      )
-    }
-  } else if (status === 'warning') {
-    if (window.$notify) {
-      window.$notify('环境存在警告，建议检查。', 'warning', '环境警告', 5000)
-    }
-  }
+  // 初始加载 Agent 列表（用于侧边栏头像显示）
+  fetchAgents()
 })
 
 onUnmounted(() => {
@@ -2466,7 +2464,12 @@ const fetchAgents = async () => {
     const agents = await invoke('scan_local_agents')
     agentList.value = agents.map((agent) => ({
       ...agent,
-      avatarUrl: agent.avatar ? `http://localhost:9120${agent.avatar}` : null
+      // avatar 已经是 data URL 或 API 路径
+      avatarUrl: agent.avatar
+        ? agent.avatar.startsWith('data:')
+          ? agent.avatar
+          : `http://localhost:9120${agent.avatar}`
+        : null
     }))
   } catch (e) {
     console.error('Failed to fetch agents via Rust', e)

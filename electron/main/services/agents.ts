@@ -68,12 +68,25 @@ export async function scanLocalAgents() {
               'avatar.svg',
               'icon.png'
             ]
+            const mimeMap: Record<string, string> = {
+              '.png': 'image/png',
+              '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg',
+              '.svg': 'image/svg+xml'
+            }
             for (const name of avatarFiles) {
               const avatarPath = path.join(agentDir, name)
               if (await fs.pathExists(avatarPath)) {
-                // 如果是开发环境，使用 file:// 协议或者通过后端接口
-                // 这里统一使用后端接口，前端会自动处理后端未启动的情况
-                avatar = `/api/agents/${id}/avatar`
+                // 直接将文件读取为 base64 data URL，无需后端服务即可显示
+                try {
+                  const ext = path.extname(name).toLowerCase()
+                  const mime = mimeMap[ext] || 'image/png'
+                  const buf = await fs.readFile(avatarPath)
+                  avatar = `data:${mime};base64,${buf.toString('base64')}`
+                } catch {
+                  // 回退到后端 API 路径
+                  avatar = `/api/agents/${id}/avatar`
+                }
                 break
               }
             }

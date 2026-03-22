@@ -85,7 +85,7 @@ class EmbeddingService:
         if session:
             await _do_refresh(session)
         else:
-            async with get_session() as sess:
+            async for sess in get_session():
                 await _do_refresh(sess)
 
     def warm_up(self):
