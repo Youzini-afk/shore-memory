@@ -290,7 +290,7 @@ class AgentProfile(SQLModel, table=True):
     updated_at: datetime = Field(default_factory=datetime.utcnow)
 
 
-# --- Stronghold System Models ---
+# --- 据点系统模型 ---
 
 
 class StrongholdFacility(SQLModel, table=True):

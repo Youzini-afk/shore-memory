@@ -65,8 +65,8 @@ const toggleState = (id: string) => {
   padding: 8px;
   background: rgba(255, 255, 255, 0.2);
   backdrop-filter: blur(4px);
-  border: 2px solid rgba(249, 168, 212, 0.3); /* moe-pink */
-  border-radius: 0; /* Pixel style */
+  border: 2px solid rgba(249, 168, 212, 0.3); /* 萌粉色 */
+  border-radius: 0; /* 像素风格 */
   min-width: 120px;
   box-shadow: 4px 4px 0 rgba(0, 0, 0, 0.1);
 }
@@ -79,12 +79,12 @@ const toggleState = (id: string) => {
 
 .group-title {
   font-size: 10px;
-  color: #2d1b1e; /* moe-cocoa */
+  color: #2d1b1e; /* 萌可可色 */
   font-weight: bold;
   text-transform: uppercase;
   letter-spacing: 0.5px;
   margin-bottom: 2px;
-  font-family: 'Press Start 2P', cursive, sans-serif; /* Fallback */
+  font-family: 'Press Start 2P', cursive, sans-serif; /* 回退 */
 }
 
 .button-list {
@@ -116,7 +116,7 @@ const toggleState = (id: string) => {
 }
 
 .feature-btn.active {
-  background: #f9a8d4; /* moe-pink */
+  background: #f9a8d4; /* 萌粉色 */
   color: white;
   border-color: #f472b6;
   box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.1);

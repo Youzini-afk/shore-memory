@@ -111,7 +111,7 @@ export async function startNapCat(window: WindowLike) {
       if (!window.isDestroyed())
         window.webContents.send('system-error', '未找到 QQ。NapCat 需要安装 QQ。')
     } catch {
-      // ignore
+      // 忽略
     }
     throw new Error('默认路径或注册表中未找到 QQ。')
   }
@@ -168,7 +168,7 @@ export async function startNapCat(window: WindowLike) {
   try {
     if (!window.isDestroyed()) window.webContents.send('napcat-log', `[系统] 正在启动 NapCat...`)
   } catch {
-    // ignore
+    // 忽略
   }
 
   napcatProcess = spawn(cmd, args, {
@@ -186,7 +186,7 @@ export async function startNapCat(window: WindowLike) {
     try {
       if (!window.isDestroyed()) window.webContents.send('napcat-log', line)
     } catch {
-      // ignore
+      // 忽略
     }
   })
 
@@ -197,7 +197,7 @@ export async function startNapCat(window: WindowLike) {
     try {
       if (!window.isDestroyed()) window.webContents.send('napcat-log', `[错误] ${line}`)
     } catch {
-      // ignore
+      // 忽略
     }
   })
 
@@ -208,7 +208,7 @@ export async function startNapCat(window: WindowLike) {
       if (!window.isDestroyed())
         window.webContents.send('napcat-log', `[系统] NapCat 已退出 (代码: ${code})`)
     } catch {
-      // ignore
+      // 忽略
     }
   })
 }
@@ -262,7 +262,7 @@ export async function installNapCat(window: WindowLike) {
     try {
       if (!window.isDestroyed()) window.webContents.send('napcat-log', msg)
     } catch {
-      // ignore
+      // 忽略
     }
   }
 
@@ -367,7 +367,7 @@ export async function installNapCat(window: WindowLike) {
         processing: true
       })
   } catch {
-    // ignore
+    // 忽略
   }
 
   try {
@@ -405,7 +405,7 @@ export async function installNapCat(window: WindowLike) {
           completed: true
         })
     } catch {
-      // ignore
+      // 忽略
     }
     return true
   } catch (e: any) {
@@ -418,7 +418,7 @@ export async function installNapCat(window: WindowLike) {
           error: true
         })
     } catch {
-      // ignore
+      // 忽略
     }
     return false
   }

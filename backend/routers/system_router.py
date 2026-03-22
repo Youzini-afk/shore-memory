@@ -149,7 +149,7 @@ async def get_overview_stats(
         return {"total_memories": 0, "total_logs": 0, "total_tasks": 0}
 
 
-# --- Configs ---
+# --- 配置 ---
 
 
 @router.get("/api/configs")
@@ -163,7 +163,7 @@ async def update_config(
     configs: Dict[str, str],
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
-    # [Check] Block enabling incompatible modes if in Work Mode
+    # [检查] 工作模式下阻止启用不兼容模式
     try:
         current_session = (
             await session.exec(select(Config).where(Config.key == "current_session_id"))
@@ -245,7 +245,7 @@ async def get_waifu_texts(session: AsyncSession = Depends(get_session)):  # noqa
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# --- System Reset ---
+# --- 系统重置 ---
 
 
 @router.post("/api/system/reset")

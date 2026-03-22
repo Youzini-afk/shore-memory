@@ -48,7 +48,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
   const fetchMemoriesState: FetchWithLoading = { isLoading: false, lastRequestId: null }
   const fetchTagCloudState = { isLoading: false }
 
-  // ─── Computed ──────────────────────────────────────────────────────────────
+  // ─── 计算属性 ──────────────────────────────────────────────────────────────
   const topTags = computed<TagCloudItem[]>(() => {
     if (!tagCloud.value) return []
     if (Array.isArray(tagCloud.value)) return tagCloud.value
@@ -58,7 +58,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       .map(([tag, count]) => ({ tag, count }))
   })
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // ─── 辅助函数 ───────────────────────────────────────────────────────────────
   const getMemoryTypeLabel = (type?: string): string => {
     const map: Record<string, string> = {
       event: '🧩 记忆块',

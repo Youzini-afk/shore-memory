@@ -1,7 +1,7 @@
 <template>
   <!-- 7. MCP 配置 (重构版) -->
   <div class="h-full flex flex-col overflow-hidden">
-    <!-- Toolbar -->
+    <!-- 工具栏 -->
     <div class="p-6 pb-0 flex-none">
       <PCard
         glass
@@ -51,7 +51,7 @@
       </PCard>
     </div>
 
-    <!-- MCP Servers Grid -->
+    <!-- MCP 服务器网格 -->
     <div class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
         <div v-for="mcp in mcps" :key="mcp.id" class="group/mcp-container relative">
@@ -72,7 +72,7 @@
               :class="mcp.enabled ? 'bg-sky-400' : 'bg-sky-200'"
             ></div>
 
-            <!-- Header -->
+            <!-- 头部 -->
             <div class="flex items-center justify-between mb-5 relative z-10">
               <div class="flex-1 min-w-0 pr-4">
                 <PTooltip :content="mcp.name">
@@ -101,7 +101,7 @@
               />
             </div>
 
-            <!-- Config Details -->
+            <!-- 配置详情 -->
             <div class="space-y-3 mb-6 relative z-10">
               <div class="flex flex-col gap-2">
                 <span class="text-[10px] font-black text-slate-400 uppercase tracking-widest ml-1">
@@ -117,7 +117,7 @@
               </div>
             </div>
 
-            <!-- Actions -->
+            <!-- 操作 -->
             <div
               class="mt-auto pt-5 border-t border-sky-100/30 flex items-center justify-end gap-2 relative z-10"
             >

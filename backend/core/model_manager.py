@@ -103,7 +103,7 @@ class ModelManager:
 
     def get_model_path(self, model_key: str) -> str:
         """获取模型的本地存储路径"""
-        # [AssetRegistry Integration]
+        # [资产注册集成]
         # 如果资产注册表中存在该模型，直接返回其路径
         from core.asset_registry import get_asset_registry
 
@@ -124,7 +124,7 @@ class ModelManager:
 
     def check_model_exists(self, model_key: str) -> bool:
         """检查模型是否已下载且完整"""
-        # [AssetRegistry Integration]
+        # [资产注册集成]
         from core.asset_registry import get_asset_registry
 
         registry = get_asset_registry()
@@ -136,7 +136,7 @@ class ModelManager:
             return os.path.exists(asset.path)
 
         try:
-            # HuggingFace Cache Check logic
+            # HuggingFace 缓存检查逻辑
             if model_key not in self.models:
                 return False
 
@@ -177,7 +177,7 @@ class ModelManager:
 
     def get_actual_model_path(self, model_key: str) -> Optional[str]:
         """获取模型实际加载路径（指向具体的 snapshot 目录 或 注册表路径）"""
-        # [AssetRegistry Integration]
+        # [资产注册集成]
         from core.asset_registry import get_asset_registry
 
         registry = get_asset_registry()
@@ -205,7 +205,7 @@ class ModelManager:
 
     def download_model(self, model_key: str, force: bool = False) -> str:
         """下载模型"""
-        # [AssetRegistry Integration]
+        # [资产注册集成]
         # 如果在注册表中，直接返回路径 (不执行下载，因为假定它是本地/手动管理的)
         from core.asset_registry import get_asset_registry
 
@@ -233,7 +233,7 @@ class ModelManager:
                 repo_id=model.repo_id,
                 cache_dir=self.models_cache_dir,
                 local_files_only=False,
-                # resume_download=True,  # Deprecated in newer versions
+                # resume_download=True,  # 新版本中已弃用
             )
             logger.info(f"Model {model_key} downloaded successfully to {path}")
             return path

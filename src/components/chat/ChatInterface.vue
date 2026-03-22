@@ -604,7 +604,7 @@
         <!-- 思维链卡片 -->
         <div v-else-if="msg.role === 'thought_chain'" class="flex justify-start mb-4 gap-3 w-full">
           <div class="w-10 h-10 flex-shrink-0"></div>
-          <!-- Spacer -->
+          <!-- 间隔 -->
           <!-- 占位符 -->
           <div class="w-full max-w-2xl">
             <div
@@ -1367,16 +1367,14 @@ const parseMessage = (content) => {
     }
 
     if (match[1]) {
-      // Thinking or Monologue (Standard)
-      // 思考或独白（标准）
+      // 思考或独白（标准格式）
       // [兼容性保留] Monologue 类型在 2024-02 之后已废弃，合并入 Thinking，此处保留解析以支持历史记录显示
       segments.push({
         type: match[1].toLowerCase(),
         content: match[2].trim()
       })
     } else if (match[6]) {
-      // DeepSeek <think>
-      // DeepSeek <think>
+      // DeepSeek 思考标签
       segments.push({
         type: 'thinking',
         content: match[6].trim()
@@ -1734,7 +1732,6 @@ const fetchHistory = async (append = false) => {
       )
     } else {
       let url = `${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`
-      // Pass agent_id for direct mode (targetId acts as agentId)
       // 直接模式传递 agent_id (targetId 作为 agentId)
       if (props.targetId) {
         url += `&agent_id=${props.targetId}`
@@ -1765,7 +1762,6 @@ const fetchHistory = async (append = false) => {
             console.warn('Meta parse error', e)
           }
 
-          // Group Chat Compatibility
           // 群聊兼容性
           let role = log.role
           if (props.mode === 'group') {
@@ -1840,10 +1836,10 @@ const startGroupPolling = () => {
     if (document.hidden) return // Optimization
     try {
       // 使用 fetchHistory with append=true 获取新消息？
-      // Actually fetchHistory implementation for group chat might need adjustment or we use a separate endpoint.
-      // 目前，让我们重用 fetchHistory，但我们需要小心处理重复。
-      // 或者更好的是，只获取最新消息。
-      // Let's stick to simple polling for now.
+      // 实际上群聊的 fetchHistory 实现可能需要调整，或者使用单独的接口。
+      // 目前，我们重用 fetchHistory，但需要小心处理重复。
+      // 或者更好的方式是只获取最新消息。
+      // 暂时使用简单轮询。
       await fetchHistory(true)
     } catch (e) {
       console.error('Group polling failed', e)
@@ -1997,7 +1993,7 @@ const sendMessage = async () => {
     emit('sync-chat-to-pet', { role: 'user', content, timestamp: new Date().toISOString() })
   }
 
-  // Construct Payload Content (Structured if images exist)
+  // 构建请求负载内容（如果有图片则使用结构化格式）
   let payloadContent
   if (currentImages.length > 0) {
     payloadContent = []

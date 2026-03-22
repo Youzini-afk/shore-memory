@@ -190,7 +190,7 @@ class SocialMemoryService:
                     continue
 
                 # 创建双向关联
-                # New -> Old
+                # 新 -> 旧
                 rel1 = SocialMemoryRelation(
                     source_id=memory.id,
                     target_id=rid,
@@ -200,7 +200,7 @@ class SocialMemoryService:
                 session.add(rel1)
                 new_relations.append((memory.id, rid, 0.8))
 
-                # Old -> New
+                # 旧 -> 新
                 rel2 = SocialMemoryRelation(
                     source_id=rid,
                     target_id=memory.id,

@@ -9,6 +9,8 @@ members = [
 ]
 exclude = [
     "src/components/avatar/native",
+    "tools/pero-encryptor",
+    "tools/pero-encryptor/pero-crypto",
 ]
 resolver = "2"
 

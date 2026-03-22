@@ -451,7 +451,7 @@ class LLMService:
 
             parts = []
 
-            # 1. tool_calls
+            # 1. 工具调用
             if role == "model" and "tool_calls" in msg and msg["tool_calls"]:
                 for tc in msg["tool_calls"]:
                     func = tc.get("function", {})
@@ -468,7 +468,7 @@ class LLMService:
                             )
                         )
 
-            # 2. content
+            # 2. 内容
             content = msg.get("content")
             if content:
                 if isinstance(content, str):
@@ -507,7 +507,7 @@ class LLMService:
                             except Exception as e:
                                 print(f"[Gemini] 图片解码错误: {e}")
 
-            # 3. tool response
+            # 3. 工具响应
             if msg["role"] == "tool":
                 tool_name = msg.get("name", "unknown_tool")
                 parts.append(

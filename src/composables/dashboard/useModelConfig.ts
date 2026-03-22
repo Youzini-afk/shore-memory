@@ -126,7 +126,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
   const availableRerankerModels = ref<string[]>([])
   const isFetchingRerankerModels = ref<boolean>(false)
 
-  // --- MCP ---
+  // --- MCP 配置 ---
   const mcps = ref<Mcp[]>([])
   const showMcpEditor = ref<boolean>(false)
   const currentEditingMcp = ref<Partial<Mcp>>({})

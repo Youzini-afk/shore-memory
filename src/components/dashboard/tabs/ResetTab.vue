@@ -99,7 +99,7 @@
                   ><PixelIcon name="firecracker" size="md"
                 /></span>
               </div>
-              <!-- Button gloss effect -->
+              <!-- 按钮光泽效果 -->
               <div
                 class="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-1000"
               ></div>
@@ -110,7 +110,7 @@
     </PCard>
   </div>
 
-  <!-- 10. NapCat Terminal -->
+  <!-- 10. NapCat 终端 -->
 </template>
 
 <script setup lang="ts">

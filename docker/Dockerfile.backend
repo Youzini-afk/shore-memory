@@ -1,80 +1,86 @@
-# --- Stage 1: Builder (Rust + Python) ---
+# --- 阶段 1: 构建器 (Rust + Python) ---
 FROM python:3.10-slim AS builder
 
-# Install build dependencies
+# 安装构建依赖
 RUN apt-get update && apt-get install -y \
     curl build-essential libssl-dev pkg-config git clang \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Rust
+# 安装 Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Add WASM target
+# 添加 WASM 编译目标
 RUN rustup target add wasm32-unknown-unknown
 
-# Install maturin
+# 安装 maturin
 RUN pip install maturin
 
 WORKDIR /app
 
-# Copy source
+# 复制 Cargo workspace 配置和源码
+COPY Cargo.toml Cargo.toml
 COPY backend/ backend/
 
-# 1. Build Maturin extensions (Python bindings)
-RUN maturin build --release -m backend/rust_core/Cargo.toml
-RUN maturin build --release -m backend/nit_core/interpreter/rust_binding/Cargo.toml
-RUN maturin build --release -m backend/social_core/Cargo.toml
-RUN maturin build --release -m backend/vision_core/Cargo.toml
+# 1. 构建 Maturin 扩展 (Python 绑定)
+# 使用 --out 明确指定输出路径，避免 workspace 路径不确定性
+RUN maturin build --release -m backend/rust_core/Cargo.toml --out /tmp/wheels
+RUN maturin build --release -m backend/nit_core/interpreter/rust_binding/Cargo.toml --out /tmp/wheels
+RUN maturin build --release -m backend/social_core/Cargo.toml --out /tmp/wheels
+RUN maturin build --release -m backend/vision_core/Cargo.toml --out /tmp/wheels
 
-# 2. Build WASM module (nit_terminal_auditor)
-RUN cargo build --release --target wasm32-unknown-unknown --manifest-path backend/nit_core/nit_terminal_auditor/Cargo.toml
+# 2. 构建 WASM 模块 (nit_terminal_auditor)
+RUN cargo build --release --target wasm32-unknown-unknown \
+    --manifest-path backend/nit_core/nit_terminal_auditor/Cargo.toml
 
-# 3. Build Binary (CodeSearcher)
-# Note: The output binary name depends on Cargo.toml [package] name.
-# Checked: backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml name is "CodeSearcher"
-RUN cargo build --release --manifest-path backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml
+# 3. 构建二进制工具 (CodeSearcher)
+RUN cargo build --release \
+    --manifest-path backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml
 
-# --- Stage 2: Runner (Python) ---
+# --- 阶段 2: 运行时 (Python) ---
 FROM python:3.10-slim
 
 WORKDIR /app
 
-# Install runtime dependencies
+# 安装运行时依赖
 RUN apt-get update && apt-get install -y \
     libgl1-mesa-glx \
     libglib2.0-0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
+# 复制依赖清单
 COPY backend/requirements-server.txt .
 
-# Install Python dependencies
+# 安装 Python 依赖
 RUN pip install --no-cache-dir -r requirements-server.txt
 
-# Copy built wheels from builder and install
-COPY --from=builder /app/target/wheels/*.whl /tmp/wheels/
+# 从构建器中复制编译好的 wheel 并安装
+COPY --from=builder /tmp/wheels/*.whl /tmp/wheels/
 RUN pip install /tmp/wheels/*.whl && rm -rf /tmp/wheels
 
-# Copy built artifacts from builder
-# WASM for Python (Wasmtime)
+# 复制 WASM 模块 (供 Python Wasmtime 使用)
 COPY --from=builder /app/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm \
     backend/nit_core/tools/work/TerminalExecutor/auditor.wasm
-# CodeSearcher Binary
-# On Linux, cargo build produces "CodeSearcher" (no extension)
+
+# 复制 CodeSearcher 二进制
+# Cargo workspace 模式下输出在根 target/release/
 COPY --from=builder /app/target/release/CodeSearcher \
     backend/nit_core/tools/work/CodeSearcher/CodeSearcher
-# Make it executable just in case
 RUN chmod +x backend/nit_core/tools/work/CodeSearcher/CodeSearcher
 
-# Copy source code
+# 复制后端源码
 COPY backend/ backend/
-COPY config/ config/
 
-# Environment variables
+# 环境变量
 ENV PERO_ENV=server
 ENV PORT=9120
 ENV PYTHONPATH=/app
 
-# Start command
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:9120/health')" || exit 1
+
+EXPOSE 9120
+
+# 启动命令
 CMD ["python", "backend/main.py"]

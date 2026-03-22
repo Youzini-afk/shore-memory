@@ -217,7 +217,7 @@ class NITRuntime:
         return result
 
 
-# Tool Definitions
+# 工具定义
 enter_work_mode_definition = {
     "type": "function",
     "function": {

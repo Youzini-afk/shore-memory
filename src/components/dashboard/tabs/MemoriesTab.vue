@@ -1,7 +1,7 @@
 <template>
   <!-- 3. 核心记忆 (重构版) -->
   <div class="h-full flex flex-col overflow-hidden">
-    <!-- Toolbar -->
+    <!-- 工具栏 -->
     <div class="p-6 pb-0 flex-none">
       <PCard
         glass
@@ -16,7 +16,7 @@
         ></div>
 
         <div class="flex flex-wrap items-end gap-5 relative z-10">
-          <!-- Agent Selector -->
+          <!-- 助手选择器 -->
           <div class="flex flex-col gap-2 min-w-[160px]">
             <label
               class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
@@ -93,7 +93,7 @@
             </div>
           </div>
 
-          <!-- Filter Type -->
+          <!-- 筛选类型 -->
           <div class="flex flex-col gap-2 w-[160px]">
             <label
               class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
@@ -125,7 +125,7 @@
             </PSelect>
           </div>
 
-          <!-- Date Filter -->
+          <!-- 日期筛选 -->
           <div class="flex flex-col gap-2 w-[160px]">
             <label
               class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
@@ -148,11 +148,11 @@
             </div>
           </div>
 
-          <!-- View Mode -->
+          <!-- 视图模式 -->
           <div
             class="flex bg-purple-50/50 p-1 rounded-2xl border border-purple-100 self-end h-[42px] items-center relative group/vmode shadow-lg shadow-black/30 backdrop-blur-md"
           >
-            <!-- 🐾 Floating decoration -->
+            <!-- 🐾 浮动装饰 -->
             <div
               class="absolute -top-6 left-1/2 -translate-x-1/2 text-[10px] opacity-0 group-hover/vmode:opacity-60 transition-all duration-500 translate-y-2 group-hover/vmode:translate-y-0"
             >
@@ -197,7 +197,7 @@
             </PTooltip>
           </div>
 
-          <!-- Actions -->
+          <!-- 操作 -->
           <div class="flex items-center gap-3 pb-0.5 ml-auto">
             <PTooltip content="清除无效连线">
               <PButton
@@ -299,7 +299,7 @@
       </PCard>
     </div>
 
-    <!-- List Mode -->
+    <!-- 列表模式 -->
     <div
       v-show="memoryViewMode === 'list'"
       class="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar"
@@ -310,7 +310,7 @@
           :key="m.id"
           class="group relative bg-white/80 hover:bg-sky-50/50 border border-sky-100 hover:border-sky-300 rounded-2xl p-4 transition-all duration-300 flex flex-col h-[280px] hover:-translate-y-1 hover:shadow-xl hover:shadow-sky-100/30"
         >
-          <!-- Hover Effect ✨ -->
+          <!-- 悬停效果 ✨ -->
           <div
             class="absolute -top-1.5 -right-1.5 opacity-0 group-hover:opacity-100 transition-all duration-300 scale-0 group-hover:scale-110 z-20"
           >
@@ -319,7 +319,7 @@
             </div>
           </div>
 
-          <!-- Header -->
+          <!-- 头部 -->
           <div class="flex items-start justify-between mb-3">
             <div class="flex flex-wrap gap-2">
               <span
@@ -346,14 +346,14 @@
             </button>
           </div>
 
-          <!-- Content -->
+          <!-- 内容 -->
           <div
             class="flex-1 overflow-y-auto custom-scrollbar mb-3 text-sm text-slate-600 leading-relaxed group-hover:text-slate-700 transition-colors"
           >
             {{ m.content }}
           </div>
 
-          <!-- Footer -->
+          <!-- 底部 -->
           <div class="mt-auto pt-3 border-t border-sky-100/50 flex flex-col gap-2">
             <div class="flex flex-wrap gap-1">
               <span
@@ -393,7 +393,7 @@
       </div>
     </div>
 
-    <!-- Graph Mode -->
+    <!-- 图谱模式 -->
     <div
       v-show="memoryViewMode === 'graph'"
       v-loading="isLoadingGraph"
@@ -406,13 +406,13 @@
         <PEmpty description="暂无关联数据或数据量过少" />
       </div>
       <div v-else class="flex-1 flex gap-4 h-full">
-        <!-- Chart -->
+        <!-- 图表 -->
         <div
           ref="graphRef"
           class="flex-1 h-full bg-sky-50/30 border border-sky-100 rounded-xl overflow-hidden"
         ></div>
 
-        <!-- Legend -->
+        <!-- 图例 -->
         <div
           class="w-64 bg-white/90 backdrop-blur border border-sky-100 rounded-xl p-4 overflow-y-auto custom-scrollbar"
         >

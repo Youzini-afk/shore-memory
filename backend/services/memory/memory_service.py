@@ -292,7 +292,7 @@ class MemoryService:
             except Exception:
                 pass
 
-        # [Hook] memory.save.post
+        # [钩子] memory.save.post
         await EventBus.publish("memory.save.post", memory)
 
         return memory
@@ -798,7 +798,7 @@ class MemoryService:
         ranked_results.sort(key=lambda x: x[1], reverse=True)
         final_memories = [m for m, s in ranked_results[:limit]]
 
-        # [Reinforcement] 更新访问统计
+        # [强化] 更新访问统计
         if update_access_stats and final_memories:
             await MemoryService.mark_memories_accessed(session, final_memories)
 

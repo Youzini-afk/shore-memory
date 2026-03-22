@@ -239,13 +239,13 @@ export function downloadItem(itemId: number, highPriority = false) {
 export function getWorkshopInstallPath(): string | null {
   if (!client) return null
   try {
-    // 4457100 is PeroCore Steam App ID
-    // appInstallDir usually returns path to .../steamapps/common/PeroCore
+    // 4457100 是 PeroCore 的 Steam App ID
+    // appInstallDir 通常返回 .../steamapps/common/PeroCore 的路径
     const installDir = client.apps.appInstallDir(4457100)
     if (!installDir) return null
 
-    // We assume the workshop content is in .../steamapps/workshop/content/4457100
-    // This assumes the standard Steam library folder structure
+    // 我们假设创意工坊内容在 .../steamapps/workshop/content/4457100
+    // 这假设了标准的 Steam 库文件夹结构
     const steamAppsDir = path.dirname(path.dirname(installDir))
     const workshopDir = path.join(steamAppsDir, 'workshop', 'content', '4457100')
     return workshopDir

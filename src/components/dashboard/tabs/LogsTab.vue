@@ -1,7 +1,7 @@
 <template>
   <!-- 2. 对话日志 (重构版) -->
   <div class="h-full flex flex-col overflow-hidden">
-    <!-- Toolbar -->
+    <!-- 工具栏 -->
     <div class="p-6 pb-0 flex-none">
       <PCard
         glass
@@ -18,7 +18,7 @@
         ></div>
 
         <div class="flex flex-wrap items-end gap-5 relative z-10">
-          <!-- Agent Selector -->
+          <!-- 助手选择器 -->
           <div class="flex flex-col gap-2 min-w-[150px]">
             <label
               class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
@@ -55,7 +55,7 @@
                   class="text-slate-400 group-hover/agent:rotate-180 transition-transform duration-500"
                 />
               </button>
-              <!-- Dropdown -->
+              <!-- 下拉菜单 -->
               <div
                 class="absolute left-0 top-full mt-3 w-full py-2 bg-white/70 backdrop-blur-2xl border border-sky-100 rounded-2xl shadow-2xl shadow-sky-200/40 opacity-0 invisible group-hover/agent:opacity-100 group-hover/agent:visible transition-all duration-500 z-50 transform origin-top scale-90 group-hover/agent:scale-100 ring-1 ring-sky-100/5"
               >
@@ -101,7 +101,7 @@
             </div>
           </div>
 
-          <!-- Source -->
+          <!-- 来源 -->
           <div class="flex flex-col gap-2 w-[140px] relative z-40">
             <label
               class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
@@ -129,7 +129,7 @@
             </PSelect>
           </div>
 
-          <!-- Session -->
+          <!-- 会话 -->
           <div class="flex flex-col gap-2 w-[160px] relative z-30">
             <label
               class="text-[11px] font-bold text-slate-500 flex items-center gap-1.5 ml-1 uppercase tracking-wider"
@@ -207,7 +207,7 @@
             </PSelect>
           </div>
 
-          <!-- Refresh -->
+          <!-- 刷新 -->
           <div class="pb-0.5 ml-auto">
             <PButton
               variant="secondary"
@@ -225,7 +225,7 @@
       </PCard>
     </div>
 
-    <!-- Chat List -->
+    <!-- 聊天列表 -->
     <div class="flex-1 overflow-y-auto px-6 pb-6 custom-scrollbar">
       <PEmpty v-if="logs.length === 0">
         <template #description>
@@ -242,7 +242,7 @@
           class="flex gap-4 group"
           :class="log.role === 'user' ? 'flex-row-reverse' : ''"
         >
-          <!-- Avatar -->
+          <!-- 头像 -->
           <div
             class="flex-none w-14 h-14 rounded-2xl flex items-center justify-center text-lg shadow-xl border transition-all duration-500 group-hover:scale-110 group-hover:rotate-6 group-hover:shadow-sky-200/50 relative overflow-hidden"
             :class="
@@ -262,7 +262,7 @@
             </div>
           </div>
 
-          <!-- Bubble Content -->
+          <!-- 气泡内容 -->
           <div
             class="flex flex-col max-w-[85%] relative"
             :class="log.role === 'user' ? 'items-end' : 'items-start'"
@@ -330,7 +330,7 @@
               </div>
             </div>
 
-            <!-- Bubble -->
+            <!-- 气泡 -->
             <div
               class="relative px-7 py-5 rounded-[2.5rem] text-[14.5px] leading-relaxed shadow-xl transition-all duration-500 border group/bubble backdrop-blur-xl"
               :class="[
@@ -340,7 +340,7 @@
                 editingLogId === log.id ? 'w-full min-w-[400px]' : ''
               ]"
             >
-              <!-- Floating Icons for Bot ✨ -->
+              <!-- 机器人浮动图标 ✨ -->
               <div
                 v-if="log.role !== 'user' && !editingLogId"
                 class="absolute -right-5 -top-5 opacity-0 group-hover/bubble:opacity-100 transition-all duration-700 transform scale-0 group-hover/bubble:scale-125 rotate-12 group-hover/bubble:rotate-0 drop-shadow-[0_0_12px_rgba(192,132,252,0.4)] flex flex-col gap-1"
@@ -349,7 +349,7 @@
                 <PixelIcon name="heart" size="xs" animation="pulse" class="text-pink-400 ml-2" />
               </div>
 
-              <!-- Floating Paw for User 🐾 -->
+              <!-- 用户浮动爪印 🐾 -->
               <div
                 v-if="log.role === 'user' && !editingLogId"
                 class="absolute -left-5 -top-5 opacity-0 group-hover/bubble:opacity-100 transition-all duration-700 transform scale-0 group-hover/bubble:scale-125 -rotate-12 group-hover/bubble:rotate-0 drop-shadow-[0_0_12px_rgba(14,165,233,0.3)]"
@@ -357,7 +357,7 @@
                 <PixelIcon name="paw" size="lg" animation="bounce" />
               </div>
 
-              <!-- Edit Mode -->
+              <!-- 编辑模式 -->
               <div v-if="editingLogId === log.id" class="space-y-4">
                 <PTextarea
                   v-model="editingContent"
@@ -379,9 +379,9 @@
                 </div>
               </div>
 
-              <!-- Display Mode -->
+              <!-- 显示模式 -->
               <div v-else class="relative z-10">
-                <!-- Images -->
+                <!-- 图片 -->
                 <div v-if="log.images && log.images.length > 0" class="flex flex-wrap gap-3 mb-3">
                   <div
                     v-for="(img, idx) in log.images"
@@ -398,7 +398,7 @@
                   </div>
                 </div>
 
-                <!-- Text Content -->
+                <!-- 文本内容 -->
                 <AsyncMarkdown
                   :content="formatLogContent(log.content)"
                   class="prose prose-sky prose-sm max-w-none"
@@ -406,7 +406,7 @@
               </div>
             </div>
 
-            <!-- Actions -->
+            <!-- 操作 -->
             <div
               class="flex items-center gap-3 mt-2 opacity-0 group-hover:opacity-100 transition-all duration-300 px-2"
             >

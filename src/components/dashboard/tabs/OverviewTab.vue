@@ -30,7 +30,7 @@
               导入故事 <PixelIcon name="thought" size="xs" class="ml-0.5" />
             </button>
           </div>
-          <!-- Decorative element -->
+          <!-- 装饰元素 -->
           <div
             class="absolute -right-4 -bottom-4 text-purple-200/20 group-hover:opacity-10 group-hover:scale-150 transition-all duration-700 pointer-events-none"
           >
@@ -55,7 +55,7 @@
               {{ stats.total_logs || logs.length }}
             </div>
           </div>
-          <!-- Decorative element -->
+          <!-- 装饰元素 -->
           <div
             class="absolute -right-4 -bottom-4 text-sky-200/20 group-hover:opacity-10 group-hover:scale-150 transition-all duration-700 pointer-events-none"
           >
@@ -80,7 +80,7 @@
               {{ stats.total_tasks || tasks.length }}
             </div>
           </div>
-          <!-- Decorative element -->
+          <!-- 装饰元素 -->
           <div
             class="absolute -right-4 -bottom-4 text-orange-200/20 group-hover:opacity-10 group-hover:scale-150 transition-all duration-700 pointer-events-none"
           >
@@ -99,7 +99,7 @@
             <span class="text-xs font-normal text-slate-400 font-mono">Status</span>
           </span>
           <div class="flex items-center gap-4">
-            <!-- Mobile Connect Button -->
+            <!-- 移动端连接按钮 -->
             <PButton
               variant="secondary"
               size="sm"
@@ -113,7 +113,7 @@
               手机连接
             </PButton>
 
-            <!-- NapCat Status -->
+            <!-- NapCat 状态 -->
             <PTooltip
               v-if="!napCatStatus.disabled"
               :content="
@@ -251,7 +251,7 @@
               :style="{ width: '80%' }"
             ></div>
           </div>
-          <!-- Decoration -->
+          <!-- 装饰 -->
           <div
             class="absolute -right-2 -bottom-2 opacity-[0.05] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none"
           >
@@ -282,7 +282,7 @@
               :style="{ width: '60%' }"
             ></div>
           </div>
-          <!-- Decoration -->
+          <!-- 装饰 -->
           <div
             class="absolute -right-2 -bottom-2 opacity-[0.05] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none"
           >
@@ -313,7 +313,7 @@
               :style="{ width: '90%' }"
             ></div>
           </div>
-          <!-- Decoration -->
+          <!-- 装饰 -->
           <div
             class="absolute -right-2 -bottom-2 opacity-[0.05] group-hover:opacity-[0.1] transition-all duration-700 pointer-events-none"
           >
@@ -323,7 +323,7 @@
       </div>
     </PCard>
 
-    <!-- NIT Status -->
+    <!-- NIT 状态 -->
     <PCard
       v-if="nitStatus"
       id="nit-status-card"
@@ -527,7 +527,7 @@
             /></span>
           </span>
 
-          <!-- 🐾 Hover indicator -->
+          <!-- 🐾 悬停指示器 -->
           <span
             class="absolute -top-1 left-1/2 -translate-x-1/2 opacity-0 group-hover/tab:opacity-100 transition-all duration-300 -translate-y-2 group-hover/tab:translate-y-0 pointer-events-none"
           >
@@ -541,7 +541,7 @@
         </button>
       </div>
 
-      <!-- Tab Content -->
+      <!-- 选项卡内容 -->
       <div class="space-y-6">
         <!-- 桌面模式 (Desktop Mode) -->
         <div v-if="activeMemoryTab === 'desktop'" class="space-y-6">

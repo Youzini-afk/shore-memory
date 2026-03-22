@@ -215,7 +215,7 @@ export function registerAssetProtocol() {
 
       if (parsedUrl.hostname && process.platform === 'win32') {
         // Windows 盘符被 URL 解析器当作主机名
-        // asset://C:/Users/... → hostname='c', pathname='/Users/...'
+        // asset://C:/Users/... → hostname='c', pathname='/Users/...'（盘符被解析为主机名）
         // 需要把主机名还原为盘符
         filePath = `${parsedUrl.hostname}:${decodeURIComponent(parsedUrl.pathname)}`
       } else {

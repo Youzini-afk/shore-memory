@@ -2,7 +2,7 @@
   <div ref="container" class="bedrock-avatar-container relative group">
     <div ref="canvasContainer" class="canvas-container w-full h-full"></div>
 
-    <!-- Loading Overlay -->
+    <!-- 加载遮罩 -->
     <div
       v-if="loading"
       class="absolute inset-0 flex flex-col items-center justify-center bg-moe-pink/5 backdrop-blur-sm z-10"
@@ -17,7 +17,7 @@
       </div>
     </div>
 
-    <!-- Error Overlay -->
+    <!-- 错误遮罩 -->
     <div
       v-if="errorMsg"
       class="absolute inset-0 flex items-center justify-center bg-red-500/10 backdrop-blur-md z-20 p-4"

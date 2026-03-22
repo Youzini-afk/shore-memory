@@ -2,7 +2,7 @@
   <div
     class="flex flex-col h-full bg-slate-950 text-slate-300 font-mono text-sm overflow-hidden relative group/terminal pixel-border-dark"
   >
-    <!-- CRT Scanline Effect -->
+    <!-- CRT 扫描线效果 -->
     <div
       class="absolute inset-0 pointer-events-none z-10 bg-[linear-gradient(rgba(18,16,16,0)_50%,rgba(0,0,0,0.1)_50%),linear-gradient(90deg,rgba(255,0,0,0.03),rgba(0,255,0,0.01),rgba(0,0,255,0.03))]"
       style="

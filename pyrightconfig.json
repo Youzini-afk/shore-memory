@@ -1,6 +1,8 @@
 {
   "typeCheckingMode": "off",
   "include": ["backend"],
+  "venvPath": "backend",
+  "venv": ".venv",
   "exclude": [
     "**/node_modules",
     "**/__pycache__",

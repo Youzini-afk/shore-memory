@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Cleaned style.css */
+/* 整理后的样式文件 */
 
 :root {
   /* 字体配置：优先使用系统高质量无衬线字体，保留像素字体作为特色 */

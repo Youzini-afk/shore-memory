@@ -127,7 +127,7 @@ async def toggle_companion(
     return {"status": "success", "enabled": enabled}
 
 
-# --- Social Mode ---
+# --- 社交模式 ---
 
 
 @router.get("/api/social/status")

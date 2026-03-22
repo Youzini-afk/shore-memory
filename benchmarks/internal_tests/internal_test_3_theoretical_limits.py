@@ -1,5 +1,4 @@
 # Copyright (c) 2026 YoKONCy. All rights reserved.
-# Theoretical Scientific Benchmark for Diffusion Layer (1000B Nodes) (Internal Test 3)
 # 扩散层理论科学基准测试 (1000B 节点) (内部测试 3)
 
 import time

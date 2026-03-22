@@ -269,8 +269,8 @@ function buildRustExtensions() {
       continue
     }
 
-    // In CI, if the package is already installed, skip building to avoid double-build issues
-    // (The YAML workflow already builds and installs them using the system python)
+    // 在 CI 中，如果包已安装，则跳过构建以避免双重构建问题
+    // (YAML 工作流已经使用系统 Python 构建并安装了它们)
     if (process.env.CI) {
       let installed = false
       try {
@@ -386,7 +386,7 @@ function buildBinaryTools() {
     return false
   }
 
-  // 1. CodeSearcher
+  // 1. CodeSearcher（代码搜索器）
   const codeSearcherSrc = path.join(BACKEND_DIR, 'nit_core/tools/work/CodeSearcher/src')
   const codeSearcherDest = path.join(
     BACKEND_DIR,
@@ -420,7 +420,7 @@ function buildBinaryTools() {
     }
   }
 
-  // 2. nit_terminal_auditor (Wasm)
+  // 2. nit_terminal_auditor (Wasm 终端审计器)
   const auditorSrc = path.join(BACKEND_DIR, 'nit_core/nit_terminal_auditor')
   const auditorDest = path.join(BACKEND_DIR, 'nit_core/tools/work/TerminalExecutor/auditor.wasm')
 

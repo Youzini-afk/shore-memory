@@ -201,7 +201,7 @@ class RealtimeSessionManager:
             except Exception as e:
                 logger.warning(f"更新活动失败: {e}")
 
-            # 3. Agent
+            # 3. 助手
             print("[Agent] 正在生成回复...")
 
             session_id = "voice_session"
@@ -409,11 +409,11 @@ class RealtimeSessionManager:
                 "type": "confirmation_request",
                 "id": request_id,
                 "command": command,
-                "risk_info": json.dumps(risk_info),  # Gateway params must be string
+                "risk_info": json.dumps(risk_info),  # Gateway 参数必须为字符串
                 "is_high_risk": str(risk_info["level"] >= 2),
             }
             await self.broadcast_gateway(payload)
-            # Legacy broadcast removed
+            # 旧版广播已移除
 
             # 等待响应 (设置超时，例如 5 分钟)
             result = await asyncio.wait_for(future, timeout=300)

@@ -52,10 +52,10 @@ def main():
     parser = argparse.ArgumentParser(description="PeroCore Model Management CLI")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
 
-    # check command
+    # 检查命令
     subparsers.add_parser("check", help="Check model status")
 
-    # download command
+    # 下载命令
     download_parser = subparsers.add_parser("download", help="Download models")
     download_parser.add_argument("--model", default="all", help="Model key (or 'all')")
     download_parser.add_argument(

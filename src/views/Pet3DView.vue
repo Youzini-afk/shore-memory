@@ -12,7 +12,7 @@
 
     <!-- UI 覆盖层 -->
     <div class="ui-overlay" @mouseenter="onUIEnter" @mouseleave="onUILeave">
-      <!-- Notification Manager -->
+      <!-- 通知管理器 -->
       <PetNotificationManager ref="notificationManager" />
 
       <!-- 状态标签 (左上角) -->
@@ -57,7 +57,7 @@
           />
         </div>
 
-        <!-- Avatar Tools -->
+        <!-- 头像工具 -->
         <!-- 角色工具 -->
         <div
           v-show="showInput"
@@ -956,7 +956,7 @@ const handleGlobalKeyDown = (e) => {
     return
   }
 
-  // 2. Alt + Shift + V PTT
+  // 2. Alt + Shift + V 按键说话
   if (
     e.altKey &&
     e.shiftKey &&
@@ -1107,12 +1107,12 @@ onMounted(async () => {
           localStorage.setItem('ppc.mind', state.mind)
         }
 
-        // Sync interaction texts
+        // 同步交互文本
         if (state.click_messages_json) {
           try {
             const clickData = JSON.parse(state.click_messages_json)
             let curTexts = localTexts.value || {}
-            // Merge logic similar to state_update
+            // 类似 state_update 的合并逻辑
             if (clickData.head)
               curTexts['click_head_01'] = Array.isArray(clickData.head)
                 ? clickData.head[0]
@@ -1131,7 +1131,7 @@ onMounted(async () => {
                 : clickData.default
             localTexts.value = { ...curTexts }
           } catch {
-            // ignore
+            // 忽略
           }
         }
       }
@@ -1154,11 +1154,11 @@ onMounted(async () => {
   window.addEventListener('keydown', handleGlobalKeyDown)
   window.addEventListener('keyup', handleGlobalKeyUp)
 
-  // ... rest of listeners ...
+  // ... 其余监听器 ...
   // 后端日志 -> 思考气泡
   const unlistenLog = await listen('backend-log', (event) => {
     console.log('[Backend]', event.payload)
-    // Simple logic: if log contains "Thinking", show it
+    // 简单逻辑：如果日志包含 "Thinking"，则显示
     if (typeof event.payload === 'string' && event.payload.includes('Thinking')) {
       currentText.value = '正在思考...'
       isThinking.value = true
@@ -1166,7 +1166,7 @@ onMounted(async () => {
   })
   unlistenFunctions.push(unlistenLog)
 
-  // Status Updates
+  // 状态更新
   const unlistenMood = await listen('update-mood', (event) => {
     moodText.value = event.payload
     localStorage.setItem('ppc.mood', event.payload)
@@ -1185,7 +1185,7 @@ onMounted(async () => {
   })
   unlistenFunctions.push(unlistenMind)
 
-  // Work Mode
+  // 工作模式
   const unlistenWorkMode = await listen('work-mode-changed', (event) => {
     isWorkMode.value = event.payload.is_work_mode
     if (isWorkMode.value) {
@@ -1196,28 +1196,28 @@ onMounted(async () => {
   })
   unlistenFunctions.push(unlistenWorkMode)
 
-  // Chat Sync (Agent Reply)
+  // 聊天同步（助手回复）
   const unlistenChat = await listen('sync-chat-to-pet', (event) => {
     if (isWorkMode.value) return
     const { role, content } = event.payload
     if (role === 'assistant') {
       currentText.value = content
       isThinking.value = false
-      // Trigger bubble expand
+      // 触发气泡展开
       isBubbleExpanded.value = true
       bubbleKey.value++
     }
   })
   unlistenFunctions.push(unlistenChat)
 
-  // File Search
+  // 文件搜索
   const unlistenSearch = await listen('file-search-result', (event) => {
     foundFiles.value = event.payload
     showFileModal.value = true
   })
   unlistenFunctions.push(unlistenSearch)
 
-  // Status Updates (from Gateway)
+  // 状态更新（来自 Gateway）
   gatewayClient.on('action:agent_changed', async () => {
     console.log('[Pet3DView] 检测到助手变更，正在刷新状态...')
 
@@ -1250,7 +1250,7 @@ onMounted(async () => {
     // GatewayClient emits: this.emit(`action:${envelope.request.actionName}`, envelope.request);
     const params = data.params || data
 
-    // 1. Basic Status
+    // 1. 基础状态
     if (params.mood) {
       moodText.value = params.mood
       localStorage.setItem('ppc.mood', params.mood)
@@ -1272,7 +1272,7 @@ onMounted(async () => {
       const saved = localStorage.getItem(storageKey)
       if (saved) curTexts = JSON.parse(saved)
     } catch {
-      // ignore
+      // 忽略
     }
 
     let updated = false
@@ -1284,7 +1284,7 @@ onMounted(async () => {
         try {
           clickData = JSON.parse(clickData)
         } catch {
-          // ignore
+          // 忽略
         }
       }
 
@@ -1316,7 +1316,7 @@ onMounted(async () => {
         try {
           msgs = JSON.parse(msgs)
         } catch {
-          // ignore
+          // 忽略
         }
       }
 
@@ -1339,12 +1339,12 @@ onMounted(async () => {
   gatewayClient.on('action:reminder_trigger', (params) => {
     const content = params.content || '提醒时间到！'
 
-    // 1. Show Bubble
+    // 1. 显示气泡
     currentText.value = `⏰ ${content}`
     isBubbleExpanded.value = true
     bubbleKey.value++
 
-    // 2. Play Sound / TTS
+    // 2. 播放音效 / TTS
     if (voiceMode.value !== 0) {
       // 使用浏览器原生 TTS 进行即时反馈
       if ('speechSynthesis' in window) {
@@ -1357,7 +1357,7 @@ onMounted(async () => {
       }
     }
 
-    // 3. Desktop Notification (Native)
+    // 3. 桌面通知（原生）
     if (window.electron && window.electron.send) {
       window.electron.send('show-notification', { title: 'Pero 提醒', body: content })
     }
@@ -1458,7 +1458,7 @@ const loadLocalTexts = async () => {
 const getRandomLocalText = (category) => {
   if (!localTexts.value) return null
 
-  // Find keys starting with category (e.g. 'click_head')
+  // 查找以分类开头的键（如 'click_head'）
   const keys = Object.keys(localTexts.value).filter((k) => k.startsWith(category))
   if (keys.length === 0) return null
 
@@ -1481,7 +1481,7 @@ const onPet = (event) => {
       if (!text) text = '要牵手手吗？'
       break
     case 'body':
-      // Try chest first, then body
+      // 先尝试胸部，再尝试身体
       text = getRandomLocalText('click_chest') || getRandomLocalText('click_body')
       if (!text) text = '不要戳那里啦！'
       break
@@ -1495,29 +1495,29 @@ const onPet = (event) => {
 
   // console.log('选中文本:', text);
 
-  // Fallback
+  // 回退
   if (!text) {
     text = '嗯？'
   }
 
-  // Force re-render for immediate visual feedback even if text is same
+  // 即使文本相同也强制重新渲染以获得即时视觉反馈
   currentText.value = text
   isBubbleExpanded.value = true
   bubbleKey.value++
 
-  // Random vertical offset (12% to 18%)
+  // 随机垂直偏移 (12% 到 18%)
   const randomTop = 12 + Math.random() * 6
   bubbleTop.value = `${randomTop}%`
 
-  // Random horizontal offset (-10% to 10%)
-  // Since we use translate(-50%, 0), adding margin-left or just changing left is easiest.
-  // Let's use calc for left: 50% + offset
-  // Actually let's use pixels for horizontal shift to be safe with narrow bubbles
-  // Or just percentage: -5% to 5%
+  // 随机水平偏移 (-10% 到 10%)
+  // 因为使用了 translate(-50%, 0)，调整 margin-left 或 left 最简单
+  // 用 calc 实现 left: 50% + offset
+  // 实际上用像素做水平偏移更安全，避免窄气泡问题
+  // 或者直接用百分比: -5% 到 5%
   const randomLeftPct = Math.random() * 10 - 5
-  // We can bind 'left' style
-  // Default is left: 50%, transform: translateX(-50%)
-  // We can adjust the left percentage directly
+  // 我们可以绑定 'left' 样式
+  // 默认 left: 50%, transform: translateX(-50%)
+  // 我们可以直接调整 left 百分比
   bubbleLeft.value = `${50 + randomLeftPct}%`
 }
 
@@ -1584,7 +1584,7 @@ const windowSizes = [
 const currentSizeIndex = ref(0) // Default 600x600
 
 const toggleWindowSize = async () => {
-  // Increment index and wrap around
+  // 递增索引并循环
   // 增加索引并循环
   currentSizeIndex.value = (currentSizeIndex.value + 1) % windowSizes.length
   const size = windowSizes[currentSizeIndex.value]
@@ -1617,19 +1617,19 @@ const minimizeToTray = () => {
 </script>
 
 <style scoped>
-/* Ensure the container takes full window space and supports transparency */
+/* 确保容器占满窗口并支持透明 */
 .pet-3d-container {
   width: 100vw;
   height: 100vh;
   margin: 0;
   padding: 0;
-  background: transparent; /* Crucial for Electron transparent window */
+  background: transparent; /* 对 Electron 透明窗口至关重要 */
   overflow: hidden;
   position: relative;
   display: flex;
   justify-content: center;
   align-items: center;
-  /* Use a pixel font if available, or a clean sans-serif */
+  /* 使用像素字体或简洁无衬线字体 */
   font-family: 'Segoe UI', sans-serif;
 }
 
@@ -1639,7 +1639,7 @@ const minimizeToTray = () => {
   left: 0;
   width: 100%;
   height: 100%;
-  pointer-events: none; /* Let clicks pass through to 3D scene/desktop */
+  pointer-events: none; /* 让点击穿透到 3D 场景/桌面 */
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1759,7 +1759,7 @@ const minimizeToTray = () => {
   position: absolute;
   transform: translateX(-50%);
 
-  /* Voxel Style */
+  /* 体素风格 */
   /* Voxel 风格 */
   background-color: rgba(20, 20, 20, 0.85);
   border: 2px solid #e0e0e0;
@@ -1768,7 +1768,7 @@ const minimizeToTray = () => {
   z-index: 100;
   max-width: 280px;
 
-  /* Hard shadow */
+  /* 硬阴影 */
   /* 硬阴影 */
   box-shadow: 4px 4px 0px rgba(0, 0, 0, 0.5);
 
@@ -1792,7 +1792,7 @@ const minimizeToTray = () => {
   z-index: 110;
 }
 
-/* Pixel Tail */
+/* 像素尾巴 */
 /* 像素风格尾巴 */
 .bubble-tail {
   position: absolute;
@@ -2004,13 +2004,13 @@ const minimizeToTray = () => {
   transform: translateX(-50%) scale(1.1);
 }
 
-/* Status Tags (Voxel) */
+/* 状态标签（体素） */
 /* 状态标签 (Voxel) */
 .status-tags {
   position: absolute;
   left: 40px;
   top: 160px;
-  /* transform: translate(-320px, -250px); Removed, using inline scale */
+  /* transform: translate(-320px, -250px); 已移除，使用内联缩放 */
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -2071,7 +2071,7 @@ const minimizeToTray = () => {
 }
 
 @keyframes float-tag {
-  /* Reduced float for voxel style */
+  /* 体素风格减少浮动 */
   /* 减少 Voxel 风格的浮动 */
   0%,
   100% {
@@ -2082,7 +2082,7 @@ const minimizeToTray = () => {
   }
 }
 
-/* Floating Trigger (Voxel Cube) */
+/* 浮动触发器（体素方块） */
 /* 悬浮触发器 (Voxel 立方体) */
 .floating-trigger {
   position: absolute;
@@ -2130,7 +2130,7 @@ const minimizeToTray = () => {
   width: 100%;
   height: 100%;
   background: rgba(255, 255, 255, 0.95);
-  border-radius: 4px; /* Slightly more rounded */
+  border-radius: 4px; /* 稍微更圆润 */
   transition: all 0.2s ease;
   box-shadow:
     0 0 15px rgba(255, 255, 255, 0.6),
@@ -2415,7 +2415,7 @@ const minimizeToTray = () => {
   border-color: #fff;
 }
 
-/* PTT Button (Voxel) */
+/* 按键说话按钮（体素） */
 .ptt-voxel-container {
   position: absolute;
   left: 50%;

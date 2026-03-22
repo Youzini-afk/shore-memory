@@ -9,7 +9,7 @@
       isDialogAtTop ? 'justify-start pt-32' : 'justify-end pb-12'
     ]"
   >
-    <!-- Spotlight Mask (SVG with Hole) 🔦 -->
+    <!-- 聚光灯遮罩 (带孔 SVG) 🔦 -->
     <svg v-if="spotlightRect" class="absolute inset-0 w-full h-full pointer-events-none z-0">
       <defs>
         <mask id="spotlight-mask">
@@ -26,7 +26,7 @@
       </defs>
       <rect width="100%" height="100%" fill="rgba(0,0,0,0.4)" mask="url(#spotlight-mask)" />
 
-      <!-- Highlight Border -->
+      <!-- 高亮边框 -->
       <rect
         :x="spotlightRect.x - 10"
         :y="spotlightRect.y - 10"
@@ -41,7 +41,7 @@
       />
     </svg>
 
-    <!-- Guiding Arrow 🏹 -->
+    <!-- 引导箭头 🏹 -->
     <div
       v-if="spotlightRect"
       class="absolute z-[10001] pointer-events-none transition-all duration-500"
@@ -81,7 +81,7 @@
       </div>
     </div>
 
-    <!-- Pero's 2D Sprite (Tachie) -->
+    <!-- Pero 的 2D 立绘 -->
     <div
       v-if="currentStep?.expression !== 'none'"
       class="absolute bottom-0 transition-all duration-1000 ease-out z-10"
@@ -95,7 +95,7 @@
       ]"
     >
       <div class="relative group">
-        <!-- Glow Effect -->
+        <!-- 发光效果 -->
         <div class="absolute inset-0 bg-sky-400/15 blur-[120px] animate-pulse rounded-full"></div>
 
         <!-- 立绘容器喵~ 🌸 -->
@@ -126,7 +126,7 @@
                 {{ currentExpressionLabel }}
               </div>
             </div>
-            <!-- Holographic effects -->
+            <!-- 全息效果 -->
             <div
               class="absolute inset-0 bg-gradient-to-b from-transparent via-white/10 to-transparent h-8 w-full animate-[scanline_5s_linear_infinite] pointer-events-none"
             ></div>
@@ -135,7 +135,7 @@
       </div>
     </div>
 
-    <!-- Dialogue Box -->
+    <!-- 对话框 -->
     <div
       class="w-full max-w-5xl bg-white pixel-border-sky p-10 relative z-20 transition-all duration-700 cursor-pointer select-none pointer-events-auto"
       :class="[
@@ -146,7 +146,7 @@
       ]"
       @click="handleNext"
     >
-      <!-- Name Tag -->
+      <!-- 名称标签 -->
       <div
         class="absolute left-10 px-10 py-3 bg-sky-500 text-white font-black pixel-border-sky text-xl font-moe tracking-[0.2em] shadow-[6px_6px_0_0_rgba(14,165,233,0.3)] transition-all duration-500"
         :class="isDialogAtTop ? '-bottom-7 top-auto' : '-top-7 bottom-auto'"
@@ -154,7 +154,7 @@
         {{ currentStep?.speaker || 'Pero' }}
       </div>
 
-      <!-- Dialogue Text -->
+      <!-- 对话文本 -->
       <div
         class="min-h-[100px] text-2xl font-black text-slate-700 leading-relaxed font-moe tracking-tight"
       >
@@ -166,12 +166,12 @@
         >
       </div>
 
-      <!-- Decorative Elements -->
+      <!-- 装饰元素 -->
       <div class="absolute top-4 right-4 opacity-10">
         <PixelIcon name="heart" size="lg" class="text-sky-500" />
       </div>
 
-      <!-- Click to Continue Indicator -->
+      <!-- 点击继续指示器 -->
       <div
         v-if="currentStep?.nextAction !== 'wait_click'"
         class="absolute bottom-6 right-8 text-[11px] font-black text-sky-300 uppercase tracking-[0.4em] animate-pulse font-moe"
@@ -180,7 +180,7 @@
       </div>
     </div>
 
-    <!-- Choice Box -->
+    <!-- 选择框 -->
     <div
       v-if="currentStep?.choices && isTextFullyDisplayed"
       class="flex gap-4 mt-8 relative z-30 pointer-events-auto"

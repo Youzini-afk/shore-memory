@@ -214,6 +214,18 @@ code {
   padding-bottom: 0.5rem;
 }
 
+/* 加粗文本增强样式 🌸 */
+.vp-doc strong {
+  color: var(--moe-sakura-pink-dark);
+  font-weight: 800;
+  background: linear-gradient(
+    transparent 60%,
+    rgba(249, 168, 212, 0.2) 60%
+  );
+  padding: 0 2px;
+  border-radius: 2px;
+}
+
 /* 9. 滚动条像素化 🌸 */
 
 ::-webkit-scrollbar {

@@ -4,12 +4,15 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.backend
     container_name: pero-backend
+    restart: unless-stopped
     environment:
       - PERO_ENV=server
       - PORT=9120
+    ports:
+      - '9120:9120'
     volumes:
-      - ../config:/app/config
-      - ../data:/app/data
+      - pero-data:/app/data
+      - pero-workspace:/app/pero_workspace
     networks:
       - pero-network
 
@@ -18,25 +21,34 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.web
     container_name: pero-web
+    restart: unless-stopped
     ports:
       - '8080:80'
     depends_on:
-      - pero-backend
+      pero-backend:
+        condition: service_healthy
     networks:
       - pero-network
 
   pero-napcat:
     image: docker.io/napneko/napcat-docker:latest
     container_name: pero-napcat
+    restart: unless-stopped
     environment:
-      - ACCOUNT=
+      - ACCOUNT=${NAPCAT_ACCOUNT:-}
     volumes:
-      - ../config/napcat:/app/config
+      - napcat-config:/app/config
+    depends_on:
+      pero-backend:
+        condition: service_healthy
     networks:
       - pero-network
-
-  # [已移除] pero-gateway — Gateway 已嵌入 pero-backend (/ws/gateway)
 
 networks:
   pero-network:
     driver: bridge
+
+volumes:
+  pero-data:
+  pero-workspace:
+  napcat-config:

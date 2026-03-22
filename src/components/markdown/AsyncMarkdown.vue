@@ -54,7 +54,7 @@ const render = () => {
       return
     }
 
-    // ... (rest of the logic remains the same, but let's make it cleaner)
+    // ... (其余逻辑保持不变，但让我们使其更简洁)
     // 仅保留少数仍在使用的功能性 XML 标签 (如核心记忆)
     const triggers = [{ tag: 'MEMORY', title: '核心记忆', icon: '💾' }]
     const replacements = []

@@ -58,7 +58,6 @@ export class AvatarRenderer {
     const caseInsensitiveBoneMap = new Map<string, string>()
 
     // 预处理：第一遍扫描，创建所有骨骼对象
-    // Pre-processing: Create all bone objects
     bones.forEach((boneData) => {
       // 1. 解析 cubesJson (Rust 兼容层)
       if (boneData.cubesJson && !boneData.cubes) {
@@ -103,7 +102,6 @@ export class AvatarRenderer {
     })
 
     // 第二遍：建立父子关系和添加几何体
-    // Second pass: Build hierarchy and add geometry
     const processedBones = new Set<string>()
 
     bones.forEach((boneData) => {
@@ -139,7 +137,7 @@ export class AvatarRenderer {
 
         // 2. 计算初始变换 (Bind Pose)
         // Bedrock Pivot 处理逻辑:
-        // Bone Position = (Pivot - ParentPivot)
+        // 骨骼位置 = (枢轴点 - 父枢轴点)
 
         let parentPivot = [0, 0, 0]
         if (boneData.parent) {
@@ -237,9 +235,9 @@ export class AvatarRenderer {
 
     // BlockBench setShape 顶点定义 (参照 blockbench-master/js/util/three_custom.js)
     // 注意：BlockBench 使用 from/to 坐标系，我们这里使用中心点坐标系
-    // from = [-w, -h, -d], to = [w, h, d]
+    // from = [-w, -h, -d], to = [w, h, d]（中心点坐标系）
     const vertices = new Float32Array([
-      // East (+x): to[0], to[1], to[2] -> to[0], to[1], from[2] -> to[0], from[1], to[2] -> to[0], from[1], from[2]
+      // 东面 (+x): to[0], to[1], to[2] -> to[0], to[1], from[2] -> to[0], from[1], to[2] -> to[0], from[1], from[2]
       w,
       h,
       d,
@@ -252,7 +250,7 @@ export class AvatarRenderer {
       w,
       -h,
       -d,
-      // West (-x): from[0], to[1], from[2] -> from[0], to[1], to[2] -> from[0], from[1], from[2] -> from[0], from[1], to[2]
+      // 西面 (-x): from[0], to[1], from[2] -> from[0], to[1], to[2] -> from[0], from[1], from[2] -> from[0], from[1], to[2]
       -w,
       h,
       -d,
@@ -265,7 +263,7 @@ export class AvatarRenderer {
       -w,
       -h,
       d,
-      // Up (+y): from[0], to[1], from[2] -> to[0], to[1], from[2] -> from[0], to[1], to[2] -> to[0], to[1], to[2]
+      // 上面 (+y): from[0], to[1], from[2] -> to[0], to[1], from[2] -> from[0], to[1], to[2] -> to[0], to[1], to[2]
       -w,
       h,
       -d,
@@ -278,7 +276,7 @@ export class AvatarRenderer {
       w,
       h,
       d,
-      // Down (-y): from[0], from[1], to[2] -> to[0], from[1], to[2] -> from[0], from[1], from[2] -> to[0], from[1], from[2]
+      // 下面 (-y): from[0], from[1], to[2] -> to[0], from[1], to[2] -> from[0], from[1], from[2] -> to[0], from[1], from[2]
       -w,
       -h,
       d,
@@ -291,7 +289,7 @@ export class AvatarRenderer {
       w,
       -h,
       -d,
-      // South (+z): from[0], to[1], to[2] -> to[0], to[1], to[2] -> from[0], from[1], to[2] -> to[0], from[1], to[2]
+      // 南面 (+z): from[0], to[1], to[2] -> to[0], to[1], to[2] -> from[0], from[1], to[2] -> to[0], from[1], to[2]
       -w,
       h,
       d,
@@ -304,7 +302,7 @@ export class AvatarRenderer {
       w,
       -h,
       d,
-      // North (-z): to[0], to[1], from[2] -> from[0], to[1], from[2] -> to[0], from[1], from[2] -> from[0], from[1], from[2]
+      // 北面 (-z): to[0], to[1], from[2] -> from[0], to[1], from[2] -> to[0], from[1], from[2] -> from[0], from[1], from[2]
       w,
       h,
       -d,
@@ -380,7 +378,7 @@ export class AvatarRenderer {
   ) {
     // Bedrock Cube 定义:
     // origin: [x, y, z] (方块左下角坐标)
-    // size: [w, h, d]
+    // size: [w, h, d] (宽, 高, 深)
     // pivot: [x, y, z] (方块旋转中心，可选)
     // rotation: [x, y, z] (方块旋转角度，可选)
 
@@ -413,8 +411,7 @@ export class AvatarRenderer {
 
     // 处理 Cube 自身的旋转
     if (cubeData.rotation) {
-      // 如果 Cube 没有定义自己的 pivot，则默认使用骨骼的 pivot (即相对于骨骼 pivot 偏移为 0)
-      // If cube has no own pivot, use bone pivot (offset 0)
+      // 如果 Cube 没有定义自己的 pivot，则默认使用骨骼的 pivot（即相对于骨骼 pivot 偏移为 0）
       const cubePivot = cubeData.pivot || bonePivot
       const pivotGroup = new THREE.Group()
 
@@ -431,7 +428,7 @@ export class AvatarRenderer {
       pivotGroup.rotation.z = THREE.MathUtils.degToRad(cubeData.rotation[2])
 
       // Mesh 在 PivotGroup 内的位置
-      // Mesh Center - Cube Pivot
+      // Mesh 中心 - Cube 枢轴点
       mesh.position.set(
         -(origin[0] + size[0] / 2 - cubePivot[0]),
         origin[1] + size[1] / 2 - cubePivot[1],
@@ -442,7 +439,7 @@ export class AvatarRenderer {
       boneGroup.add(pivotGroup)
     } else {
       // 无旋转，直接挂在 Bone Group 下
-      // Mesh Center - Bone Pivot
+      // Mesh 中心 - 骨骼枢轴点
       mesh.position.set(
         -(origin[0] + size[0] / 2 - bonePivot[0]),
         origin[1] + size[1] / 2 - bonePivot[1],
@@ -569,12 +566,12 @@ export class AvatarRenderer {
       // ]
       //
       // Three.js BoxGeometry 面索引映射：
-      // 0: +x (East)
-      // 1: -x (West)
-      // 2: +y (Up)
-      // 3: -y (Down)
-      // 4: +z (South/Front)
-      // 5: -z (North/Back)
+      // 0: +x (东面)
+      // 1: -x (西面)
+      // 2: +y (上面)
+      // 3: -y (下面)
+      // 4: +z (南面/前)
+      // 5: -z (北面/后)
 
       setFaceUV(0, u, v + d, d, h) // East (+x) -> BlockBench: from [0, d], size [d, h]
       setFaceUV(1, u + d + w, v + d, d, h) // West (-x) -> BlockBench: from [d+w, d], size [d, h]
@@ -583,8 +580,8 @@ export class AvatarRenderer {
       setFaceUV(4, u + d * 2 + w, v + d, w, h) // South (+z) -> BlockBench: from [d*2+w, d], size [w, h]
       setFaceUV(5, u + d, v + d, w, h) // North (-z) -> BlockBench: from [d, d], size [w, h]
     } else {
-      // Per-face UV
-      // Object: { up: { uv: [u, v], uv_size: [w, h] }, ... }
+      // 逐面 UV
+      // 对象格式: { up: { uv: [u, v], uv_size: [w, h] }, ... }
       const map: Record<string, number> = {
         east: 0,
         west: 1,

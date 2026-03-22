@@ -2,7 +2,7 @@
   <div class="relative h-full w-full overflow-hidden pixel-bg-moe pixel-ui pixel-grid-overlay">
     <CustomTitleBar v-if="isElectron()" title="Stronghold" :show-mode-toggle="false" />
 
-    <!-- Ambient Light Effects -->
+    <!-- 环境光效果 -->
     <div class="absolute inset-0 pointer-events-none z-0 opacity-30">
       <div
         class="absolute top-0 left-1/4 w-96 h-96 bg-moe-pink/20 blur-[120px] rounded-full animate-pulse"
@@ -110,7 +110,7 @@
                     : 'bg-white/40 hover:bg-white/70 opacity-70 hover:opacity-100'
                 "
               >
-                <!-- Selection Indicator -->
+                <!-- 选择指示器 -->
                 <div
                   v-if="currentRoom?.id === room.id"
                   class="absolute -left-1 top-4 bottom-4 w-1.5 bg-moe-pink shadow-[2px_0_8px_rgba(244,63,94,0.4)]"
@@ -144,7 +144,7 @@
                 </div>
               </div>
 
-              <!-- Shadow Layer -->
+              <!-- 阴影层 -->
               <div
                 v-if="currentRoom?.id === room.id"
                 class="absolute inset-0 bg-moe-pink/10 blur-md -z-10"
@@ -158,7 +158,7 @@
       <main
         class="flex-1 flex flex-col min-w-0 bg-white/40 backdrop-blur-xl relative pixel-border-moe overflow-hidden shadow-2xl group"
       >
-        <!-- Corner Accents -->
+        <!-- 角落装饰 -->
         <div
           class="absolute top-0 right-0 p-2 opacity-10 group-hover:opacity-30 transition-opacity pointer-events-none"
         >
@@ -243,7 +243,7 @@
                 class="text-moe-cocoa/10 group-hover/empty:text-moe-pink/20 transition-colors duration-700"
               />
             </div>
-            <!-- Floating Sparkles -->
+            <!-- 浮动闪光 -->
             <div
               class="absolute -top-4 -right-4 animate-pixel-bounce"
               style="animation-delay: 0.2s"
@@ -272,7 +272,7 @@
       <aside
         class="w-80 bg-white/60 backdrop-blur-xl pixel-border-moe hidden xl:flex flex-col overflow-hidden shadow-2xl"
       >
-        <!-- Top Action Bar -->
+        <!-- 顶部操作栏 -->
         <div
           class="p-5 border-b-2 border-moe-cocoa/5 bg-white/40 flex justify-between items-center relative group"
         >
@@ -303,7 +303,7 @@
           <div
             class="bg-white/60 p-5 text-[10px] font-bold text-moe-cocoa/70 pixel-border-sm relative overflow-hidden group shadow-inner"
           >
-            <!-- Scanline effect -->
+            <!-- 扫描线效果 -->
             <div
               class="absolute inset-0 bg-gradient-to-b from-transparent via-moe-pink/[0.05] to-transparent h-2 w-full animate-[scanline_3s_linear_infinite] pointer-events-none"
             ></div>
@@ -455,7 +455,7 @@
         <div
           class="p-6 bg-white/40 backdrop-blur-xl border-t-2 border-moe-cocoa/5 text-moe-cocoa relative overflow-hidden group"
         >
-          <!-- Background Decoration -->
+          <!-- 背景装饰 -->
           <div
             class="absolute -right-4 -bottom-4 opacity-5 group-hover:rotate-12 transition-transform duration-700 pointer-events-none"
           >
@@ -508,7 +508,7 @@
         <div
           class="bg-[#fffcf9] w-full max-w-lg shadow-[0_0_100px_rgba(45,27,30,0.3)] pixel-border-moe overflow-hidden animate-in"
         >
-          <!-- Modal Header -->
+          <!-- 弹窗头部 -->
           <div
             class="p-8 border-b-2 border-moe-cocoa/5 bg-white relative flex justify-between items-center group"
           >
@@ -536,7 +536,7 @@
             </button>
           </div>
 
-          <!-- Modal Body -->
+          <!-- 弹窗主体 -->
           <div class="p-10">
             <div class="relative group/input mb-8">
               <div class="absolute -top-3 left-4 px-2 bg-[#fffcf9] z-10">
@@ -557,7 +557,7 @@
               </div>
             </div>
 
-            <!-- Action Buttons -->
+            <!-- 操作按钮 -->
             <div class="flex justify-end gap-4">
               <button
                 class="px-8 py-3 text-[10px] font-black text-moe-cocoa/40 hover:text-moe-cocoa/80 hover:bg-moe-cocoa/5 transition-all pixel-border-moe bouncy-hover active:scale-95 uppercase tracking-widest"
@@ -576,7 +576,7 @@
             </div>
           </div>
 
-          <!-- Modal Footer -->
+          <!-- 弹窗底部 -->
           <div class="px-8 py-4 bg-moe-cocoa/5 flex items-center gap-3">
             <div class="w-2 h-2 bg-moe-yellow rounded-full animate-pulse"></div>
             <span class="text-[9px] font-black text-moe-cocoa/20 uppercase tracking-[0.2em]"
@@ -698,7 +698,7 @@ onUnmounted(() => {
   background: transparent;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(45, 27, 30, 0.1); /* moe-cocoa with opacity */
+  background: rgba(45, 27, 30, 0.1); /* 带透明度的萌可可色 */
   border-radius: 0;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {

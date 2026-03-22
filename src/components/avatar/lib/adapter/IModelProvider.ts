@@ -16,7 +16,7 @@ export interface ParsedBone {
   pivot: number[] // [number, number, number] but flexibility for Float64Array from Rust
   rotation?: number[]
   // 几何数据 (可选，如果为空则需要从 cubes 生成)
-  // Geometry Data (Optional, if empty, generate from cubes)
+  // 几何体数据（可选，为空时从 cubes 生成）
   vertices?: Float32Array
   uvs?: Float32Array
   indices?: Uint16Array

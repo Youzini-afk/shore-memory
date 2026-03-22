@@ -494,7 +494,7 @@ class PromptManager:
             # 2. Schema 回退逻辑 (处理 MCP 工具等)
             desc = func.get("description", "").strip()
 
-            # [NIT Protocol Adapter]
+            # [NIT 协议适配器]
             # 如果是原生 NIT 工具，desc 通常已经包含了详细的参数说明 (例如 "搜索文件。参数 query: ...")
             # 这种情况下我们不需要从参数模式重新生成，以免重复或格式混乱。
             # 简单的判断依据是检查是否包含 "参数" 关键字。
@@ -753,7 +753,7 @@ class PromptManager:
         """
         from core.event_bus import EventBus
 
-        # [Hook] prompt.build.pre
+        # [钩子] prompt.build.pre
         # 允许 MOD 修改变量 (variables)
         ctx = {
             "variables": variables,
@@ -798,7 +798,7 @@ class PromptManager:
             else:
                 messages.append({"role": "user", "content": user_message})
 
-        # [Hook] prompt.build.post
+        # [钩子] prompt.build.post
         # 允许 MOD 修改最终的消息列表 (messages)
         ctx = {"messages": messages, "variables": variables}
         await EventBus.publish("prompt.build.post", ctx)

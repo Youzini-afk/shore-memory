@@ -1,7 +1,7 @@
 <template>
   <!-- 5. 模型配置 (重构版) -->
   <div class="h-full flex flex-col overflow-hidden">
-    <!-- Toolbar & Tabs -->
+    <!-- 工具栏与选项卡 -->
     <div class="p-6 pb-0 flex-none">
       <PCard
         glass
@@ -110,7 +110,7 @@
       </PCard>
     </div>
 
-    <!-- Models Grid (LLM Tab) -->
+    <!-- 模型网格 (LLM 选项卡) -->
     <div v-if="currentModelTab === 'llm'" class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 pb-8">
         <div v-for="model in models" :key="model.id" class="group relative">
@@ -309,10 +309,10 @@
       </div>
     </div>
 
-    <!-- Vector Models Config (Vector Tab) -->
+    <!-- 向量模型配置 (Vector 选项卡) -->
     <div v-else class="flex-1 overflow-y-auto px-6 py-4 custom-scrollbar">
       <div class="max-w-4xl mx-auto space-y-8 pb-12">
-        <!-- Embedding Section -->
+        <!-- 嵌入模型部分 -->
         <PCard pixel class="!p-8 !overflow-visible">
           <div class="flex items-center gap-4 mb-8">
             <div class="p-3 bg-sky-100 rounded-2xl text-sky-600">
@@ -411,7 +411,7 @@
           </div>
         </PCard>
 
-        <!-- Reranker Section -->
+        <!-- 重排序模型部分 -->
         <PCard pixel class="!p-8 !overflow-visible">
           <div class="flex items-center gap-4 mb-8">
             <div class="p-3 bg-amber-100 rounded-2xl text-amber-600">
@@ -491,7 +491,7 @@
           </div>
         </PCard>
 
-        <!-- Help Alert -->
+        <!-- 帮助提示 -->
         <div class="bg-amber-50 border-2 border-amber-100 p-5 rounded-[1.5rem] flex gap-4">
           <div class="text-amber-500 mt-1">
             <PixelIcon name="alert" size="sm" />

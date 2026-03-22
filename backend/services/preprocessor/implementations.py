@@ -567,7 +567,7 @@ class RAGPreprocessor(BasePreprocessor):
                 else:
                     memory_context = "无相关记忆"
 
-                # [Reinforcement]
+                # [强化]
                 # 注意：mark_memories_accessed 现已在 get_relevant_memories 内部处理
                 # 以确保所有访问路径（包括回退）的一致性。
 
@@ -817,8 +817,8 @@ class SystemPromptPreprocessor(BasePreprocessor):
         if "dynamic_tools" in context:
             variables["dynamic_tools"] = context["dynamic_tools"]
 
-        # [Fix] PromptManager.compose_messages is async and has a new signature
-        # Inject is_voice_mode into variables for templates
+        # [修复] PromptManager.compose_messages 是异步的且签名已更新
+        # 将 is_voice_mode 注入模板变量
         if is_voice_mode:
             variables["is_voice_mode"] = True
 

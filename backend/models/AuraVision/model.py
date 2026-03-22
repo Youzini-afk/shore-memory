@@ -36,7 +36,7 @@ class AuraVisionEncoder(nn.Module):
     def __init__(self, embed_dim=128, num_layers=3, num_heads=4, mlp_ratio=2.0):
         super().__init__()
 
-        # 1. Spatial Composition Stem (CNN)
+        # 1. 空间组合主干 (CNN)
         # 64x64 -> 32x32
         self.stem_l1 = nn.Sequential(
             nn.Conv2d(1, 16, kernel_size=3, stride=2, padding=1),
@@ -48,7 +48,7 @@ class AuraVisionEncoder(nn.Module):
             16, embed_dim, kernel_size=3, stride=2, padding=1
         )
 
-        # 2. Semantic Transformer Blocks
+        # 2. 语义 Transformer 块
         self.pos_embed = nn.Parameter(torch.zeros(1, 16 * 16, embed_dim))
 
         encoder_layer = nn.TransformerEncoderLayer(
@@ -60,7 +60,7 @@ class AuraVisionEncoder(nn.Module):
         )
         self.transformer = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
 
-        # 3. Intent Projection Neck
+        # 3. 意图投影颈部
         self.neck = nn.Sequential(
             nn.Linear(embed_dim, 384), nn.LayerNorm(384), nn.GELU(), nn.Linear(384, 384)
         )
@@ -68,35 +68,35 @@ class AuraVisionEncoder(nn.Module):
     def forward(self, x):
         # x: (B, 1, 64, 64)
 
-        # Stem: (B, 128, 16, 16)
+        # 主干输出: (B, 128, 16, 16)
         x = self.stem_l1(x)
         x = self.stem_l2(x)
 
-        # Flatten to tokens: (B, 256, 128)
+        # 展平为 tokens: (B, 256, 128)
         B, C, H, W = x.shape
         x = x.view(B, C, H * W).transpose(1, 2)
 
-        # Add Positional Encoding
+        # 添加位置编码
         x = x + self.pos_embed
 
-        # Transformer: (B, 256, 128)
+        # Transformer 输出: (B, 256, 128)
         x = self.transformer(x)
 
-        # Global Average Pooling (GAP)
-        # Instead of [CLS] token, we average all tokens to capture "atmosphere"
+        # 全局平均池化 (GAP)
+        # 不使用 [CLS] token，而是对所有 token 取平均以捕获「氛围」
         x = x.mean(dim=1)  # (B, 128)
 
-        # Projection: (B, 384)
+        # 投影输出: (B, 384)
         x = self.neck(x)
 
-        # L2 Normalization for Cosine Similarity
+        # L2 归一化（用于余弦相似度）
         x = F.normalize(x, p=2, dim=1)
 
         return x
 
 
 if __name__ == "__main__":
-    # Test shape
+    # 测试形状
     model = AuraVisionEncoder()
     test_input = torch.randn(1, 1, 64, 64)
     output = model(test_input)

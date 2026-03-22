@@ -102,11 +102,11 @@ export class AnimationLibrary {
       return [{ time: 0, value: [val, val, val] }]
     }
 
-    // Check if it's a vector [x, y, z]
+    // 检查是否为向量 [x, y, z]
     if (Array.isArray(trackData)) {
-      // It could be a single keyframe value [x,y,z] at time 0,
-      // OR it could be array of keyframes? No, bedrock spec says array is value.
-      // But wait, parseTrack in old manager handles it as single keyframe.
+      // 它可能是一个单关键帧值 [x,y,z]（对应时间 0），
+      // 也可能是关键帧数组？不，Bedrock 规范说数组就是值。
+      // 但旧版 parseTrack 把它作为单关键帧处理。
       return [{ time: 0, value: trackData as [number, number, number] }]
     }
 

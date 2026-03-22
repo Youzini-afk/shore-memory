@@ -776,7 +776,7 @@
                   {{ plugin.description || '这个插件还没有写它的功能介绍哦~' }}
                 </p>
 
-                <!-- Commands -->
+                <!-- 指令 -->
                 <div
                   v-if="plugin.capabilities?.invocationCommands?.length"
                   class="mt-8 pt-6 border-t-2 border-sky-100 relative z-10"
@@ -1761,7 +1761,7 @@
           </div>
         </footer>
 
-        <!-- Global Download Progress Overlay -->
+        <!-- 全局下载进度遮罩 -->
         <div
           v-if="downloadProgress.active"
           class="fixed bottom-16 left-1/2 -translate-x-1/2 z-50 w-96 bg-white p-5 pixel-border-pink flex flex-col gap-3 shadow-2xl animate-in fade-in slide-in-from-bottom-4 duration-300"
@@ -1997,7 +1997,7 @@ const updateStats = async () => {
     memoryUsed.value = stats.memory_used
     memoryTotal.value = stats.memory_total
   } catch {
-    // ignore
+    // 忽略
   }
 }
 
@@ -2206,7 +2206,7 @@ const getStatusColor = (status) => {
 }
 
 const addLog = (msg) => {
-  // Directly use console.log/error to feed into TerminalPanel
+  // 直接使用 console.log/error 输出到终端面板
   // 直接使用 console.log/error 输入到 TerminalPanel
   if (msg.toLowerCase().includes('error')) {
     console.error(msg)
@@ -2226,7 +2226,7 @@ const stopServices = async () => {
     backendStatus.value = 'STOPPED'
     napcatStatus.value = 'STOPPED'
 
-    // Use Rust command to hide pet window reliably
+    // 使用 Rust 命令可靠地隐藏宠物窗口
     await invoke('hide_pet_window')
 
     await invoke('close_dashboard')
@@ -2241,17 +2241,17 @@ const checkEnvironment = async () => {
     const report = await invoke('get_diagnostics')
     envReport.value = report
 
-    // Determine overall status
+    // 判断整体状态
     let criticalMissing = false
     let warning = false
 
-    // Critical checks
+    // 关键检查
     if (!report.python_exists) criticalMissing = true
     if (!report.script_exists) criticalMissing = true
     if (!report.data_dir_writable) criticalMissing = true
     if (!report.vc_redist_installed) criticalMissing = true
 
-    // Warning checks
+    // 警告检查
     if (!report.port_9120_free) warning = true
     if (!report.core_available) warning = true
     if (!report.webview2_installed) warning = true // Should be critical but let's be lenient
@@ -2311,7 +2311,7 @@ const toggleLaunch = async () => {
     try {
       addLog('[SYSTEM] Starting services...')
 
-      // 0. NapCat Pre-check (If Social Mode is enabled)
+      // 0. NapCat 预检（如果社交模式已启用）
       // 0. NapCat 预检 (如果开启了社交模式)
       if (isSocialEnabled.value) {
         addLog('[SYSTEM] 正在检查 NapCat 环境...')
@@ -2339,7 +2339,7 @@ const toggleLaunch = async () => {
         }
       }
 
-      // 1. Start Backend
+      // 1. 启动后端
       // 1. 启动后端
       backendStatus.value = 'STARTING'
       await invoke('start_backend', {
@@ -2348,7 +2348,7 @@ const toggleLaunch = async () => {
       backendStatus.value = 'RUNNING'
       addLog('[SYSTEM] 核心服务已启动。')
 
-      // 2. Start NapCat
+      // 2. 启动 NapCat
       // 2. 启动 NapCat
       if (isSocialEnabled.value) {
         napcatStatus.value = 'STARTING'
@@ -2359,7 +2359,7 @@ const toggleLaunch = async () => {
         addLog('[SYSTEM] 社交模式已禁用，跳过 NapCat 启动。')
       }
 
-      // 3. Open Pet Window
+      // 3. 打开宠物窗口
       // 3. 打开角色窗口
       // [引导逻辑] 如果是初次引导（状态不是 true），则打开 Dashboard 而不是 Pet Window 喵~ 🚀
       console.log('[DEBUG] 准备启动，检查引导状态:', appConfig.value.onboarding_completed)
@@ -2452,7 +2452,7 @@ const downloadModels = async () => {
   }
 }
 
-// --- Agent Logic ---
+// --- 助手逻辑 ---
 const agentList = ref([])
 const activeAgent = computed(() => agentList.value.find((a) => a.is_active))
 const isLoadingAgents = ref(false)
@@ -2510,14 +2510,14 @@ const saveAgentConfig = async () => {
   }
 }
 
-// Watchers
+// 监听器
 watch(activeTab, (val) => {
   if (val === 'agents') {
     fetchAgents()
   }
 })
 
-// Removed watch(isRunning) since we now load independently
+// 已移除 watch(isRunning)，因为现在独立加载
 </script>
 
 <style>

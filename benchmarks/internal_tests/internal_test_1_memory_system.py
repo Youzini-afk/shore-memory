@@ -5,7 +5,6 @@ import random
 import asyncio
 from typing import List
 
-# Add paths for both backend and local imports
 # 添加后端和本地导入路径
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.abspath(
@@ -24,7 +23,6 @@ except ImportError:
     print("⚠️ 未找到 PeroCore Rust 引擎。使用回退模拟。")
 
 
-# Mocking parts of the backend for standalone logic testing
 # 模拟后端部分用于独立逻辑测试
 class MockEmbeddingService:
     def __init__(self, dim=384):
@@ -73,9 +71,6 @@ class MemorySystemTest:
             print("跳过逻辑验证 (Rust 引擎缺失)")
             return
 
-        # Setup a specific logic chain
-        # A (Old, Important) -> B (New, Low Importance)
-        # We want to see if B can activate A even if A is old.
         # 设置特定逻辑链
         # A (旧, 重要) -> B (新, 低重要性)
         # 我们想看看 B 是否能激活 A，即使 A 是旧的。
@@ -85,7 +80,6 @@ class MemorySystemTest:
         ]
         self.engine.batch_add_connections(nodes)
 
-        # Test propagation
         # 测试传播
         results = self.engine.propagate_activation({1: 1.0}, steps=3, decay=0.8)
 
@@ -111,13 +105,13 @@ class MemorySystemTest:
         print(f"   Injecting {scale} random memories and cross-theme relations...")
         start_time = time.perf_counter()
 
-        # Create random relations within and between themes
+        # 在主题内和主题间创建随机关联
         relations = []
         for i in range(scale):
-            # Same theme relation
+            # 同主题关联
             target = random.randint(0, scale - 1)
             relations.append((i, target, random.uniform(0.5, 0.9)))
-            # Random jump
+            # 随机跳转
             if i % 10 == 0:
                 jump_target = random.randint(0, scale - 1)
                 relations.append((i, jump_target, 0.4))
@@ -126,7 +120,7 @@ class MemorySystemTest:
         ingest_time = (time.perf_counter() - start_time) * 1000
         print(f"   ✅ Ingestion completed in {ingest_time:.2f}ms")
 
-        # Test mass activation
+        # 测试大规模激活
         print("   Simulating massive associative recall...")
         start_prop = time.perf_counter()
         active_results = self.engine.propagate_activation(
@@ -145,10 +139,10 @@ class MemorySystemTest:
         if not RUST_AVAILABLE:
             return
 
-        # "The Beach Trip" scenario
-        # 1: Buying tickets -> 2: Packing -> 3: Airport -> 4: Beach -> 5: Sunburn
+        # "海滩旅行"场景
+        # 1: 买票 -> 2: 打包 -> 3: 机场 -> 4: 海滩 -> 5: 晒伤
         story = [(1, 2, 0.8), (2, 3, 0.8), (3, 4, 0.9), (4, 5, 0.7)]
-        # Noise that looks like 'Beach' but isn't part of the trip
+        # 看起来像"海滩"但不属于旅行的噪音数据
         noise = [(100, 101, 0.8) for _ in range(500)]
 
         self.engine.batch_add_connections(story + noise)
@@ -156,7 +150,7 @@ class MemorySystemTest:
         print("   Triggering recall from 'Buying tickets'...")
         results = self.engine.propagate_activation({1: 1.0}, steps=5, decay=0.9)
 
-        # Check if we reached 'Sunburn' (4 hops away)
+        # 检查是否到达了"晒伤"（4 跳之外）
         sunburn_score = results.get(5, 0)
         print(f"   'Sunburn' activation score: {sunburn_score:.4f}")
 

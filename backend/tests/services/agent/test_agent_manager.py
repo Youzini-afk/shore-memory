@@ -110,7 +110,7 @@ class TestAgentManager:
         entry2.name = "agent2"
         entry2.path = "/agents/agent2"
 
-        # Mock _load_agent_config to return dummy profiles
+        # Mock _load_agent_config 返回虚拟配置
         with (
             patch("os.scandir", return_value=[entry1, entry2]),
             patch("os.path.exists", return_value=True),

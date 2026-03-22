@@ -2,7 +2,7 @@ import os
 import sys
 from unittest.mock import MagicMock, patch
 
-# Add backend to path
+# 将 backend 添加到路径
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from core.asset_registry import AssetMetadata
@@ -12,11 +12,11 @@ from core.plugin_manager import PluginManager
 class TestPluginManagerIntegration:
     @patch("core.asset_registry.get_asset_registry")
     def test_load_plugins_via_registry(self, mock_get_registry):
-        # Setup mock registry
+        # 设置 mock 注册表
         mock_registry = MagicMock()
         mock_get_registry.return_value = mock_registry
 
-        # Create a fake asset
+        # 创建假资产
         fake_asset = AssetMetadata(
             asset_id="test_plugin",
             type="plugin",
@@ -42,34 +42,34 @@ class TestPluginManagerIntegration:
         mock_registry.get_assets_by_type.return_value = [fake_asset]
         mock_registry.assets = {"test_plugin": fake_asset}  # Simulate scanned state
 
-        # Mock importlib inside PluginManager
-        # Note: We need to patch where it is used. Since PluginManager imports importlib at top level,
-        # we patch 'core.plugin_manager.importlib'
+        # Mock PluginManager 内的 importlib
+        # 注意: 需要在使用处 patch。因为 PluginManager 在顶层导入了 importlib，
+        # 所以我们 patch 'core.plugin_manager.importlib'
         with patch("core.plugin_manager.importlib") as mock_importlib:
-            # Mock module loading
+            # Mock 模块加载
             mock_module = MagicMock()
             mock_module.test_cmd = lambda: "success"
 
-            # Setup import_module to return our mock module
+            # 设置 import_module 返回 mock 模块
             mock_importlib.import_module.return_value = mock_module
 
-            # Setup spec_from_file_location fallback
+            # 设置 spec_from_file_location 回退
             mock_spec = MagicMock()
             mock_spec.loader = MagicMock()
             mock_importlib.util.spec_from_file_location.return_value = mock_spec
             mock_importlib.util.module_from_spec.return_value = mock_module
 
-            # Instantiate PluginManager
-            # We can pass a dummy path since it won't be used for scanning anymore
+            # 实例化 PluginManager
+            # 可以传虚拟路径，因为不再用于扫描
             pm = PluginManager("/dummy/path")
 
-            # Run load_plugins
+            # 运行 load_plugins
             pm.load_plugins()
 
-            # Assertions
+            # 断言
             mock_registry.get_assets_by_type.assert_called_with("plugin")
 
-            # Verify plugin loaded
+            # 验证插件已加载
             assert "TestPlugin" in pm.plugins
             assert "test_cmd" in pm.tools_map
             assert pm.tools_map["test_cmd"]() == "success"
@@ -83,8 +83,8 @@ class TestPluginManagerIntegration:
         pm = PluginManager("/dummy/path")
         pm.load_plugins()
 
-        # Now reload
+        # 现在重新加载
         pm.reload_plugins()
 
-        # Verify scan_all was called
+        # 验证 scan_all 被调用
         mock_registry.scan_all.assert_called_once()

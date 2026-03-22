@@ -81,7 +81,7 @@ class AgentToolExecutor:
 
         # --- 分发执行 ---
 
-        # 1. finish_task
+        # 1. 完成任务
         if function_name == "finish_task":
             return await self._handle_finish_task(function_args)
 
@@ -114,7 +114,7 @@ class AgentToolExecutor:
                 function_name, function_args, mcp_tool_map, on_status
             )
 
-        # 6. Fallback
+        # 6. 回退
         print(f"[ToolExecutor] 未找到工具 {function_name}。")
         return f"Error: Tool '{function_name}' not found or not supported.", False, None
 

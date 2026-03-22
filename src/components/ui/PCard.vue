@@ -104,7 +104,7 @@ const cardClasses = computed(() => {
     :class="[cardClasses, pixel ? 'pixel-border-sky' : 'rounded-2xl', 'relative group/pcard']"
     :style="{ padding: padding || '1.5rem' }"
   >
-    <!-- Hover Sparkle ✨ -->
+    <!-- 悬停闪光 ✨ -->
     <div
       v-if="hoverable"
       class="absolute top-4 right-4 opacity-0 group-hover/pcard:opacity-100 transition-all duration-500 scale-0 group-hover/pcard:scale-125 z-20 pointer-events-none"
@@ -120,7 +120,7 @@ const cardClasses = computed(() => {
     <div :class="['relative z-10', { 'flex-1 h-full flex flex-col': fullHeight }]">
       <slot />
     </div>
-    <!-- Optional glow effect -->
+    <!-- 可选发光效果 -->
     <div
       class="absolute -top-10 -right-10 w-32 h-32 bg-sky-500/5 blur-[60px] rounded-full pointer-events-none group-hover/pcard:bg-sky-500/10 transition-colors"
     />

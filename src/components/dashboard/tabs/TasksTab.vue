@@ -1,7 +1,7 @@
 <template>
   <!-- 4. 待办任务 -->
   <div class="h-full flex flex-col overflow-hidden">
-    <!-- Toolbar -->
+    <!-- 工具栏 -->
     <div class="p-6 pb-4 flex-none">
       <PCard
         glass
@@ -126,7 +126,7 @@
               :class="task.type === 'reminder' ? 'bg-pink-400' : 'bg-orange-400'"
             ></div>
 
-            <!-- 🐾 Hover icon -->
+            <!-- 🐾 悬停图标 -->
             <div
               class="absolute -top-1 -right-1 opacity-0 group-hover/tcard:opacity-100 transition-all duration-500 scale-50 group-hover/tcard:scale-100 z-20"
             >
@@ -142,7 +142,7 @@
               </div>
             </div>
 
-            <!-- Header -->
+            <!-- 头部 -->
             <div class="flex items-start justify-between mb-4 relative z-10">
               <span
                 class="px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest border backdrop-blur-md transition-all duration-300"
@@ -163,14 +163,14 @@
               </button>
             </div>
 
-            <!-- Content -->
+            <!-- 内容 -->
             <div
               class="text-[15px] text-slate-600 leading-relaxed mb-6 font-medium relative z-10 group-hover/tcard:text-slate-800 transition-colors"
             >
               {{ task.content }}
             </div>
 
-            <!-- Footer -->
+            <!-- 底部 -->
             <div
               class="flex items-center justify-between text-[11px] text-slate-400 font-mono border-t border-sky-100/30 pt-4 mt-auto relative z-10 group-hover/tcard:border-sky-200 transition-colors"
             >
@@ -197,7 +197,7 @@
         </div>
       </div>
 
-      <!-- Empty State -->
+      <!-- 空状态 -->
       <PEmpty v-else description="暂无待办任务，Pero 正在休息中... 🐾" />
     </div>
   </div>

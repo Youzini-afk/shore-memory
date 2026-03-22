@@ -29,7 +29,7 @@ class TTSPreviewRequest(BaseModel):
     text: str
 
 
-# --- Voice Configs CRUD ---
+# --- 语音配置 CRUD ---
 
 
 @router.get("/api/voice-configs", response_model=List[VoiceConfig])
@@ -160,7 +160,7 @@ async def delete_voice_config(
         raise HTTPException(status_code=500, detail=f"删除失败: {str(e)}") from e
 
 
-# --- Voice ASR/TTS API ---
+# --- 语音 ASR/TTS API ---
 
 
 @router.post("/api/voice/asr")

@@ -70,7 +70,7 @@ export const formatLLMError = (error: unknown): string => {
   return msg
 }
 
-// ─── useDashboard composable ──────────────────────────────────────────────────
+// ─── useDashboard 组合式函数 ──────────────────────────────────────────────────
 export function useDashboard() {
   // --- 全局 UI 状态 ---
   const currentTab = ref<string>('overview')
@@ -279,7 +279,7 @@ export function useDashboard() {
     isGlobalRefreshing,
     particles,
     initParticles,
-    // Confirm modal
+    // 确认弹窗
     showConfirmModal,
     confirmModalTitle,
     confirmModalContent,

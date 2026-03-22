@@ -1272,12 +1272,12 @@ class SocialService:
                 }
                 logger.info(f"[Social] Bot 信息已更新: {self.bot_info}")
 
-                # [Fix] Sync Bot ID to SessionManager for message filtering
+                # [修复] 同步 Bot ID 到 SessionManager 以过滤消息
                 if self.bot_info["user_id"]:
                     self.session_manager.set_bot_id(self.bot_info["user_id"])
         except Exception as e:
             logger.error(f"[Social] 获取 Bot 信息失败: {e}")
-            # Clean up if needed, though pop happens in handle_websocket
+            # 如需清理，虽然 pop 发生在 handle_websocket 中
             if request_id in self.pending_requests:
                 del self.pending_requests[request_id]
 
@@ -1306,7 +1306,7 @@ class SocialService:
                 config = await agent._get_llm_config()
 
                 # 构建提示（中文）
-                # Get Agent Profile for dynamic persona injection
+                # 获取助手配置以动态注入人设
                 from services.agent.agent_manager import AgentManager
 
                 agent_manager = AgentManager()
@@ -1504,7 +1504,7 @@ class SocialService:
 
         try:
             # [Scheme 2] 强制延迟 0.5s，给数据库写入留出喘息时间，释放文件锁
-            # [Debug] Check if sleep hangs
+            # [调试] 检查 sleep 是否卡死
             logger.debug(f"[{session.session_id}] 正在休眠 0.5s 以等待数据库写入...")
             await asyncio.sleep(0.5)
             logger.debug(f"[{session.session_id}] 休眠结束。")
@@ -1522,7 +1522,7 @@ class SocialService:
 
             logger.debug(f"[{session.session_id}] 获取最近消息历史...")
             # 获取历史记录
-            # [Fix] Add timeout to detect hang
+            # [修复] 添加超时检测卡死
             try:
                 # [Scheme 3] 内存优先 + 数据库补充
                 # 先尝试从数据库获取，如果超时或失败，不再阻塞流程，而是使用 Buffer 降级
@@ -1554,23 +1554,23 @@ class SocialService:
                 logger.warning(
                     f"[{session.session_id}] 数据库历史为空或超时，使用内存 Buffer 构建上下文。"
                 )
-                recent_messages = list(session.buffer)  # Shallow copy
+                recent_messages = list(session.buffer)  # 浅拷贝
 
-            # [Enhancement] Fetch Related Private Contexts (Cross-Context Awareness)
+            # [增强] 获取相关私聊上下文（跨上下文感知）
             if not recent_messages:
                 # logger.warning(f"[{session.session_id}] 数据库历史记录为空，回退到缓冲区。")
                 recent_messages = session.buffer
 
-            # [Enhancement] Fetch Related Private Contexts (Cross-Context Awareness)
+            # [增强] 获取相关私聊上下文（跨上下文感知）
             private_contexts = {}  # user_id -> list[SocialMessage]
             injected_ids = set()  # For deduplication
 
-            # 1. Identify relevant users from recent 10 messages
+            # 1. 从最近 10 条消息中识别相关用户
             relevant_users = []
             seen_users = set()
 
-            # Check last N messages (or fewer if not enough)
-            scan_limit = cross_context_history  # Reuse history limit for scan range
+            # 检查最后 N 条消息（如果不够则更少）
+            scan_limit = cross_context_history  # 复用历史记录限制作为扫描范围
             scan_range = (
                 recent_messages[-scan_limit:]
                 if len(recent_messages) >= scan_limit
@@ -1584,11 +1584,11 @@ class SocialService:
                 else ""
             )
 
-            # Scan in reverse (latest first)
+            # 逆序扫描（最新的优先）
             for msg in reversed(scan_range):
                 uid = str(msg.sender_id)
-                # Filter: Not Self, Not System, Not Duplicate, limit to 3
-                # [Fix] In private chat, exclude the current session user to avoid redundancy and potential deadlocks
+                # 过滤: 非自身、非系统、非重复，限制 3 个
+                # [修复] 在私聊中排除当前会话用户以避免冗余和潜在死锁
                 is_current_session_user = (
                     session.session_type == "private" and uid == str(session.session_id)
                 )
@@ -1608,7 +1608,7 @@ class SocialService:
 
             logger.debug(f"[{session.session_id}] 发现相关用户: {relevant_users}")
 
-            # 2. Fetch private history for these users
+            # 2. 获取这些用户的私聊历史
             if relevant_users:
                 logger.debug(
                     f"[{session.session_id}] 正在获取相关私聊上下文: {relevant_users}"
@@ -1638,12 +1638,12 @@ class SocialService:
                             for pm in p_msgs:
                                 injected_ids.add(str(pm.msg_id))
 
-            # Set ContextVar for tool deduplication
+            # 设置 ContextVar 用于工具去重
             token = injected_msg_ids_var.set(injected_ids)
 
             xml_context = "<social_context>\n"
 
-            # 3. Inject Private Contexts
+            # 3. 注入私聊上下文
             if private_contexts:
                 xml_context += "  <related_private_contexts>\n"
                 for uid, p_msgs in private_contexts.items():
@@ -1657,9 +1657,9 @@ class SocialService:
                     xml_context += (
                         f'    <session type="private" id="{uid}" name="{p_name}">\n'
                     )
-                    # [Fix] Deduplicate: Don't inject messages that are already in recent_messages
-                    # This happens if we fetch cross-context history for the current user (which we shouldn't, but just in case)
-                    # Or if there's overlap in data fetching logic
+                    # [修复] 去重: 不注入已存在于 recent_messages 中的消息
+                    # 当我们获取当前用户的跨上下文历史时可能发生（虽然不应该，但以防万一） case)
+                    # 或者数据获取逻辑存在重叠
 
                     current_session_msg_ids = {str(m.msg_id) for m in recent_messages}
 
@@ -1672,7 +1672,7 @@ class SocialService:
                     xml_context += "    </session>\n"
                 xml_context += "  </related_private_contexts>\n"
 
-            # 4. [Enhancement] Inject Related Group Context (For Private Chat)
+            # 4. [增强] 注入相关群组上下文（用于私聊）
             # 只有在私聊模式下，才去寻找最近活跃的群上下文
             if session.session_type == "private":
                 latest_group_id = await self.session_manager.get_latest_active_group(
@@ -1683,7 +1683,7 @@ class SocialService:
                         f"[{session.session_id}] 发现最近活跃群聊: {latest_group_id}，正在获取上下文..."
                     )
                     try:
-                        # Fetch group history (limit 10)
+                        # 获取群组历史（限制 10 条）
                         # 这里我们不需要太复杂的并发，因为只有一个群
                         group_msgs = await self.session_manager.get_recent_messages(
                             latest_group_id, "group", limit=cross_context_history
@@ -1696,21 +1696,21 @@ class SocialService:
                             xml_context += f'    <session type="group" id="{latest_group_id}" name="Recent Group Context">\n'
 
                             for gm in group_msgs:
-                                # Skip duplicates if any (unlikely across different session types, but good practice)
+                                # 跳过重复项（跨会话类型不太可能，但属于良好实践）
                                 if str(gm.msg_id) in injected_ids:
                                     continue
 
-                                # Process CQ codes for images
+                                # 处理图片 CQ 码
                                 content = self._clean_cq_codes(gm.content)
 
-                                # Simplified format: Time User: Content
+                                # 简化格式: 时间 用户: 内容
                                 time_str = gm.timestamp.strftime("%H:%M")
                                 xml_context += (
                                     f"      [{time_str}] {gm.sender_name}: {content}\n"
                                 )
                                 injected_ids.add(
                                     str(gm.msg_id)
-                                )  # Add to deduplication set
+                                )  # 添加到去重集合
 
                             xml_context += "    </session>\n"
                             xml_context += "  </related_group_contexts>\n"
@@ -1728,56 +1728,56 @@ class SocialService:
 
                 xml_context += f'      <msg sender="{msg.sender_name}" sender_id="{msg.sender_id}" id="{msg.msg_id}" time="{msg.timestamp.strftime("%H:%M:%S")}">{content}{img_tag}</msg>\n'
 
-            # [Multimodal Enhancement] Collect images from recent history (last 2 turns) + buffer
-            # This ensures Pero can see images sent just before the trigger.
+            # [多模态增强] 从最近历史（最后 2 轮）+ 缓冲区收集图片
+            # 确保 Pero 能看到触发前发送的图片
             history_images = []
             if recent_messages:
-                # Check last N messages in history based on image_limit
+                # 根据 image_limit 检查历史中的最后 N 条消息
                 for msg in recent_messages[-image_limit:]:
-                    # Extract CQ codes for images
+                    # 提取图片 CQ 码
                     import re
 
-                    # Pattern to find [CQ:image,file=...,url=...]
-                    # We prioritize 'url' if available, or 'file' if it's a local path or filename
-                    # Note: models_db stores 'content' which has CQ codes.
+                    # 匹配 [CQ:image,file=...,url=...] 的模式
+                    # 优先使用 'url'，否则使用 'file'（本地路径或文件名）
+                    # 注意: models_db 存储的 'content' 包含 CQ 码
                     # Standard OneBot CQ: [CQ:image,file=http://...,url=...] or [CQ:image,file=abc.jpg,url=...]
 
-                    # Regex to capture url or file
-                    # Try to find 'url' parameter first
+                    # 正则捕获 url 或 file
+                    # 优先查找 'url' 参数
                     cq_matches = re.finditer(r"\[CQ:image,.*?\]", msg.content)
                     for match in cq_matches:
                         full_tag = match.group(0)
 
-                        # Extract URL
+                        # 提取 URL
                         url_match = re.search(r"url=([^,\]]+)", full_tag)
                         if url_match:
                             history_images.append(url_match.group(1))
                             continue
 
-                        # If no URL, try file (might be url or filename)
+                        # 如果没有 URL，尝试 file（可能是 URL 或文件名）
                         file_match = re.search(r"file=([^,\]]+)", full_tag)
                         if file_match:
                             val = file_match.group(1)
                             if val.startswith("http"):
                                 history_images.append(val)
-                            # If it's a filename, we might need to resolve it via ImageCacheManager if we downloaded it before
-                            # But reconstructing the hash path is tricky without the original URL.
-                            # For now, we prioritize URLs found in history.
+                            # 如果是文件名，可能需要通过 ImageCacheManager 解析
+                            # 但没有原始 URL 重建哈希路径很困难
+                            # 目前优先使用历史中发现的 URL
 
-            # Combine history images and buffer images
-            # Buffer images (extra_images) are already local paths or URLs
-            # History images are URLs extracted from CQ codes. We need to download them if not cached?
-            # For this context, we pass URLs to LLM, or better, try to use local cache if available.
+            # 合并历史图片和缓冲区图片
+            # 缓冲区图片 (extra_images) 已经是本地路径或 URL
+            # 历史图片是从 CQ 码提取的 URL。未缓存时需要下载吗？
+            # 在此上下文中传 URL 给 LLM，或更好地使用本地缓存
 
             # [Optimization] 限制图片数量，防止上下文过大
-            # Logic: Buffer images (Newest) > History images (Older)
-            # We want to keep the NEWEST images, up to 2.
+            # 逻辑: 缓冲区图片（最新）> 历史图片（较旧）
+            # 保留最新的图片，最多 2 张
 
             all_potential_images = history_images + (extra_images or [])
             session_images = []
 
             if all_potential_images:
-                # Take the last 2 (newest)
+                # 取最后 2 张（最新的）
                 if len(all_potential_images) > 2:
                     dropped_count = len(all_potential_images) - 2
                     logger.debug(
@@ -1787,21 +1787,21 @@ class SocialService:
                 else:
                     session_images = all_potential_images
 
-                # Ensure history images (URLs) are handled.
-                # If they are URLs, the downstream logic handles download/base64 conversion?
-                # The downstream logic (lines 1448+) checks `os.path.exists(img_path)`.
-                # If it's a URL, it falls into the `else` block (line 1463).
-                # The `else` block skips incompatible URLs (multimedia.nt.qq.com.cn etc) but appends others as URL.
-                # So if history has valid http URLs, they will be passed as `image_url` to LLM.
-                # If history has unsupported URLs, they are skipped.
-                # If history has local paths (unlikely in CQ code unless we modified DB), they are loaded.
+                # 确保历史图片（URL）被正确处理
+                # 如果是 URL，下游逻辑处理下载/base64 转换？
+                # 下游逻辑（第 1448+ 行）检查 `os.path.exists(img_path)`
+                # 如果是 URL，进入 `else` 分支（第 1463 行）
+                # `else` 分支跳过不兼容的 URL (multimedia.nt.qq.com.cn 等) 但添加其他 URL
+                # 因此如果历史中有有效的 http URL，会作为 `image_url` 传给 LLM
+                # 如果历史中有不支持的 URL，则跳过
+                # 如果历史中有本地路径（CQ 码中不太可能，除非修改了数据库），则加载
 
             xml_context += "    </session>\n"
             xml_context += "  </recent_messages>\n"
 
             xml_context += "</social_context>"
 
-            # [Optimization] Skip if context is empty
+            # [优化] 上下文为空时跳过
             if not recent_messages and not private_contexts:
                 logger.warning(f"[{session.session_id}] 上下文为空，跳过主动搭话。")
                 return False
@@ -1827,19 +1827,19 @@ class SocialService:
 
                 prompt_manager = PromptManager()
                 # logger.info(f"[{session.session_id}] 获取系统 Prompt...")
-                # [Fix] Don't pre-render system prompt here, as it causes recursive injection in AgentService.
+                # [修复] 不在此处预渲染系统提示词，避免 AgentService 递归注入
                 # core_system_prompt = await prompt_manager.get_rendered_system_prompt(db_session, is_social_mode=True)
 
                 owner_qq = self.config_manager.get("owner_qq") or "未知"
 
-                # Prepare sticker list
-                # [Refactor] Load stickers from agent directory based on config
+                # 准备表情包列表
+                # [重构] 根据配置从助手目录加载表情包
                 sticker_list = ""
                 sticker_expression_prompt = ""
 
-                # Get Agent Profile
+                # 获取助手配置
                 agent_manager = AgentManager()
-                # Use session agent_id or fallback to default
+                # 使用会话 agent_id 或回退到默认
                 current_agent_id = session.agent_id or agent_manager.active_agent_id
                 agent_profile = agent_manager.agents.get(current_agent_id)
 
@@ -1847,16 +1847,16 @@ class SocialService:
                 if agent_profile and agent_profile.use_stickers:
                     use_stickers = True
                 elif not agent_profile:
-                    # Fallback for legacy single-agent setup
+                    # 兼容旧版单助手设置的回退
                     use_stickers = self.config_manager.get("social.use_stickers", False)
 
                 if use_stickers:
-                    # [Refactor] Use shared method to load stickers
+                    # [重构] 使用共享方法加载表情包
                     sticker_list = self._load_agent_stickers(current_agent_id)
 
-                # [Refactor] Inject Decoupled Persona & Traits
-                # [User Request] Temporarily disable multi-agent support in Social Mode.
-                # Always use default Pero configuration regardless of active agent.
+                # [重构] 注入解耦的人设与特质
+                # [用户要求] 暂时禁用社交模式的多助手支持
+                # 始终使用默认 Pero 配置，不管活跃助手是谁
 
                 # from services.agent.agent_manager import get_agent_manager
                 # agent_manager = get_agent_manager()
@@ -1866,12 +1866,12 @@ class SocialService:
                 agent_name = self.config_manager.get("bot_name", "Pero")
                 custom_persona = None
 
-                # Get Agent Profile for dynamic persona injection
+                # 获取助手配置以动态注入人设
                 agent_manager = AgentManager()
-                # [Fix] Use session agent_id instead of active_agent_id for true multi-agent support
+                # [修复] 使用会话 agent_id 代替 active_agent_id 实现真正的多助手支持
                 agent_profile = agent_manager.agents.get(session.agent_id)
 
-                # [Enabled] Multi-agent support in Social Mode
+                # [已启用] 社交模式多助手支持
                 if agent_profile:
                     agent_name = agent_profile.name
                     custom_persona = agent_profile.social_custom_persona
@@ -1896,9 +1896,9 @@ class SocialService:
                     except Exception:
                         custom_persona = fallback_persona
 
-                # Prepare sticker expression prompt
+                # 准备表情包表达提示词
 
-                # Prepare sticker expression prompt
+                # 准备表情包表达提示词
                 sticker_expression_prompt = ""
                 if use_stickers and sticker_list:
                     sticker_expression_prompt = mdp.render(
@@ -1920,7 +1920,7 @@ class SocialService:
                     },
                 )
 
-                # [Fix] Inject XML Guide and Time Awareness for Active Initiative
+                # [修复] 注入 XML 指南和时间感知以支持主动发起
                 current_time_str = datetime.now().strftime("%H:%M:%S")
                 xml_guide = mdp.render(
                     "social/active_mode_guide", {"current_time": current_time_str}
@@ -2116,8 +2116,8 @@ class SocialService:
         # 即使这次不回复，我们也检查是否积累了足够的消息需要总结
         asyncio.create_task(self._check_and_summarize_memory(session))
 
-        # [Multimodal Barrier] Ensure all pending image downloads are complete
-        # We do this FIRST so both Secretary and Agent can see the images.
+        # [多模态屏障] 确保所有待下载图片已完成
+        # 优先执行，确保秘书和助手都能看到图片
         all_pending_tasks = []
         task_to_msg_map = {}  # task -> (msg, index)
 
@@ -2128,11 +2128,11 @@ class SocialService:
                         all_pending_tasks.append(task)
                         task_to_msg_map[task] = (msg, idx)
                     else:
-                        # Task already done, update image path if successful
+                        # 任务已完成，成功则更新图片路径
                         try:
                             res = task.result()
                             if res and os.path.exists(res) and idx < len(msg.images):
-                                # Replace URL with local path
+                                # 用本地路径替换 URL
                                 msg.images[idx] = res
                         except Exception as e:
                             logger.warning(f"[Social] 图片下载任务失败（已完成）: {e}")
@@ -2142,10 +2142,10 @@ class SocialService:
                 f"[{session.session_id}] 等待 {len(all_pending_tasks)} 个图片下载..."
             )
             try:
-                # Wait with timeout (e.g. 10 seconds)
+                # 带超时等待（如 10 秒）
                 done, pending = await asyncio.wait(all_pending_tasks, timeout=10.0)
 
-                # Process results
+                # 处理结果
                 for task in done:
                     try:
                         res = task.result()
@@ -2423,7 +2423,7 @@ class SocialService:
 
                     # 获取当前 Agent 名称作为 ID (默认 Pero)
                     # agent_id = self.config_manager.get("bot_name", "Pero")
-                    # Use session agent ID
+                    # 使用会话助手 ID
                     agent_id = session.agent_id
 
                     await mem_service.add_summary(
@@ -2457,7 +2457,7 @@ class SocialService:
         """
         通用发送消息助手
         """
-        # [Fix] Ensure stickers for this agent are loaded (Fixes inconsistent parsing)
+        # [修复] 确保该助手的表情包已加载（修复不一致的解析）
         if hasattr(session, "agent_id") and session.agent_id:
             self._load_agent_stickers(session.agent_id)
 
@@ -2533,25 +2533,25 @@ class SocialService:
             return ""
 
         try:
-            # Import here just in case, though module level import exists
+            # 以防万一在此导入，虽然模块级导入已存在
             from services.agent.agent_manager import AgentManager
 
             agent_manager = AgentManager()
 
-            # Try agent-specific directory first
+            # 优先尝试助手专属目录
             agent_stickers_dir = os.path.join(
                 agent_manager.agents_dir, agent_id, "stickers"
             )
 
-            # Fallback to user agents dir if not found in builtin
+            # 内置未找到时回退到用户助手目录
             if not os.path.exists(agent_stickers_dir):
                 agent_stickers_dir = os.path.join(
                     agent_manager.user_agents_dir, agent_id, "stickers"
                 )
 
-            # Fallback to legacy global assets (only if not found in agent dir)
+            # 回退到旧版全局资产（仅在助手目录未找到时）
             if not os.path.exists(agent_stickers_dir):
-                # Check legacy path
+                # 检查旧版路径
                 legacy_stickers_dir = os.path.abspath(
                     os.path.join(
                         os.path.dirname(
@@ -2569,16 +2569,16 @@ class SocialService:
                     agent_stickers_dir = legacy_stickers_dir
 
             if os.path.exists(agent_stickers_dir):
-                # Scan stickers
+                # 扫描表情包
                 stickers = []
                 for entry in os.scandir(agent_stickers_dir):
                     if entry.is_file() and entry.name.lower().endswith(
                         (".jpg", ".png", ".gif", ".jpeg")
                     ):
-                        # Extract name without extension
+                        # 提取不含扩展名的名称
                         name = os.path.splitext(entry.name)[0]
                         stickers.append(name)
-                        # Update internal map for sending
+                        # 更新内部映射用于发送
                         self._sticker_map[name] = entry.path
 
                 if stickers:
@@ -2591,7 +2591,7 @@ class SocialService:
         return sticker_list
 
     def _ensure_sticker_map(self):
-        # [Fix] Check _sticker_base_dir instead of _sticker_map because _sticker_map is initialized in __init__
+        # [修复] 检查 _sticker_base_dir 而非 _sticker_map，因为 _sticker_map 在 __init__ 中初始化
         if self._sticker_base_dir is None:
             try:
                 import json
@@ -2608,7 +2608,7 @@ class SocialService:
                 logger.debug(f"[Social] Loading sticker map from: {sticker_path}")
 
                 if not os.path.exists(sticker_path):
-                    # Fallback to default agent sticker path
+                    # 回退到默认助手表情包路径
                     fallback_path = os.path.join(
                         base_dir,
                         "services",
@@ -2636,12 +2636,12 @@ class SocialService:
                         f"[Social] Sticker index not found at {sticker_path} (or fallback)"
                     )
                     self._sticker_map = {}
-                    # Do not set _sticker_base_dir to "" so we can retry if file appears later
+                    # 不将 _sticker_base_dir 设为空，以便文件出现后可重试
                     # self._sticker_base_dir = ""
             except Exception as e:
                 logger.error(f"Failed to load sticker index: {e}")
                 self._sticker_map = {}
-                # Allow retry on next attempt
+                # 允许下次重试
                 # self._sticker_base_dir = ""
 
     def _process_stickers(self, message: str) -> str:
@@ -2655,16 +2655,16 @@ class SocialService:
         self._ensure_sticker_map()
 
         def replace_match(match):
-            # Clean up the sticker name: remove whitespace
+            # 清理表情包名称：移除空格
             sticker_name_raw = match.group(1).strip()
 
-            # Debug log
+            # 调试日志
             # logger.debug(f"[Sticker] Processing tag: {sticker_name_raw}")
 
-            # Try exact match first
+            # 先尝试精确匹配
             filename = self._sticker_map.get(sticker_name_raw)
 
-            # If not found, try case-insensitive match (slow but robust)
+            # 未找到时尝试不区分大小写匹配（较慢但稳健）
             if not filename:
                 for k, v in self._sticker_map.items():
                     if k.lower() == sticker_name_raw.lower():
@@ -2673,38 +2673,38 @@ class SocialService:
                         break
 
             if filename:
-                # Construct absolute path for NapCat/OneBot
-                # OneBot usually supports file:// protocol
+                # 构建 NapCat/OneBot 的绝对路径
+                # OneBot 通常支持 file:// 协议
                 base_dir = self._sticker_base_dir if self._sticker_base_dir else ""
                 full_path = os.path.join(base_dir, filename)
-                # Convert to forward slashes for compatibility
+                # 转换为正斜杠以兼容
                 full_path = full_path.replace("\\", "/")
 
                 cq_code = f"[CQ:image,file=file:///{full_path}]"
                 # logger.debug(f"[Sticker] Generated CQ: {cq_code}")
                 return cq_code
 
-            # If still not found, keep original text to let user know it failed (or silently fail)
+            # 仍未找到则保留原文（让用户知道失败，或静默失败）
             logger.warning(
                 f"[Sticker] Sticker not found in map: '{sticker_name_raw}'. Map size: {len(self._sticker_map)}"
             )
             return match.group(0)
 
-        # Regex to find [sticker:xxx]
-        # Supports:
-        # - Standard: [sticker:name]
-        # - Spaces: [ sticker : name ]
-        # - Full-width colon: [sticker：name]
-        # - Mixed: [sticker ： name]
+        # 查找 [sticker:xxx] 的正则
+        # 支持:
+        # - 标准: [sticker:name]
+        # - 空格: [ sticker : name ]
+        # - 全角冒号: [sticker：name]
+        # - 混合: [sticker ： name]
         pattern = r"\[\s*sticker\s*[:：]\s*(.*?)\s*\]"
 
         return re.sub(pattern, replace_match, message, flags=re.IGNORECASE)
 
     async def send_group_msg(self, group_id: int, message: str):
-        # Preprocess stickers
+        # 预处理表情包
         final_message = self._process_stickers(message)
         logger.debug(f"[Social] 准备发送群消息给 {group_id}: {final_message}")
-        # Use _send_api_and_wait to ensure delivery and catch errors (e.g. muted, group not found)
+        # 使用 _send_api_and_wait 确保送达并捕获错误（如被禁言、群不存在）
         try:
             await self._send_api_and_wait(
                 "send_group_msg", {"group_id": group_id, "message": final_message}
@@ -2715,9 +2715,9 @@ class SocialService:
             raise e
 
     async def send_private_msg(self, user_id: int, message: str):
-        # Preprocess stickers
+        # 预处理表情包
         final_message = self._process_stickers(message)
-        # Use _send_api_and_wait to ensure delivery
+        # 使用 _send_api_and_wait 确保送达
         try:
             await self._send_api_and_wait(
                 "send_private_msg", {"user_id": user_id, "message": final_message}

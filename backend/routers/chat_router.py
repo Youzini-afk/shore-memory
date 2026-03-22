@@ -32,7 +32,7 @@ current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 logger = logging.getLogger(__name__)
 
 
-# --- Models for Validation ---
+# --- 验证模型 ---
 
 
 class ChatMessage(BaseModel):

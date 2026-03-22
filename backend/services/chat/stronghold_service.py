@@ -21,7 +21,7 @@ class StrongholdService:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    # --- Initialization ---
+    # --- 初始化 ---
     async def ensure_initial_data(self):
         """确保据点系统有默认数据（默认设施和客厅），并归位无家可归的 Agent"""
         print("[Stronghold] 正在检查初始化...")
@@ -301,7 +301,7 @@ class StrongholdService:
         )
         return (await self.session.exec(statement)).all()
 
-    # --- Environment ---
+    # --- 环境 ---
     async def update_environment_variable(self, room_id: str, key: str, value: Any):
         room = await self.get_room(room_id)
         if not room:

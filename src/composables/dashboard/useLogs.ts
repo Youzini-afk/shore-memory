@@ -42,7 +42,7 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
   const totalPromptLength = (): number =>
     currentPromptMessages.value.reduce((acc, msg) => acc + (msg.content ?? '').length, 0)
 
-  // ─── Helpers ───────────────────────────────────────────────────────────────
+  // ─── 辅助函数 ───────────────────────────────────────────────────────────────
   const getLogMetadata = (log: LogEntry): Record<string, unknown> => {
     if (!log) return {}
     try {

@@ -505,7 +505,7 @@ async def lifespan(app: FastAPI):
                 traceback.print_exc()
                 print(f"[Main] 记忆维护检查任务错误: {e!s}")
 
-            # Check every 1 hour
+            # 每 1 小时检查一次
             await asyncio.sleep(3600)
 
     maintenance_task = asyncio.create_task(periodic_memory_maintenance_check())
@@ -828,7 +828,7 @@ app.include_router(group_chat_router)
 app.include_router(stronghold_router)
 app.include_router(connection_router)
 
-# [Plugin] Social Adapter Router
+# [插件] 社交适配器路由
 from nit_core.plugins.social_adapter.social_router import router as social_router
 
 app.include_router(social_router)
@@ -957,7 +957,7 @@ async def seed_voice_configs():
             existing_token.updated_at = datetime.utcnow()
             session.add(existing_token)
 
-        # Configure GatewayClient with this token
+        # 使用此令牌配置 GatewayClient
         gateway_client.set_token(new_dynamic_token)
 
         # print(f"\n" + "="*60)

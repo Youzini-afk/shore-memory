@@ -267,7 +267,7 @@ def get_plugin_manager() -> PluginManager:
     global _instance
     if _instance is None:
         # 使用 path_resolver 解析
-        # Target: backend/nit_core/tools
+        # 目标路径: backend/nit_core/tools
         plugin_dir = path_resolver.resolve("@app/backend/nit_core/tools")
         _instance = PluginManager(str(plugin_dir))
         _instance.load_plugins()

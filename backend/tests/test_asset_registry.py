@@ -169,7 +169,7 @@ class TestAssetRegistry(unittest.TestCase):
 
         self.registry.scan_all()
 
-        # Expected ID: com.perocore.plugin.legacyplugin
+        # 预期 ID: com.perocore.plugin.legacyplugin
         asset = self.registry.get_asset("com.perocore.plugin.legacyplugin")
         self.assertIsNotNone(asset)
         self.assertEqual(asset.type, "plugin")

@@ -1,0 +1,56 @@
+# === 构建上下文排除 ===
+# 依赖目录
+node_modules/
+backend/.venv/
+backend/venv/
+backend/__pycache__/
+backend/**/__pycache__/
+
+# Rust 构建产物 (在 Docker 中重新编译)
+target/
+
+# 打包产物
+dist/
+dist-electron/
+dist_electron/
+
+# Git
+.git/
+.gitignore
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 开发相关
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.egg-info/
+backend/pero_backend.egg-info/
+
+# 数据和运行时 (通过 volume 挂载)
+backend/data/
+data/
+pero_workspace/
+
+# Electron 资源 (Docker 部署不需要)
+resources/
+public/assets/3d/
+
+# 临时文件
+*.log
+*.tmp
+.env.local
+.env.*.local
+
+# Docker 自身 (避免递归)
+docker/
+
+# 其他
+benchmarks/
+wiki/
+docs/
+.github/

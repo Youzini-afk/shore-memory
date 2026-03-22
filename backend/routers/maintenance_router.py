@@ -24,7 +24,7 @@ from services.memory.memory_service import MemoryService
 router = APIRouter(tags=["maintenance"])
 
 
-# --- NIT Status ---
+# --- NIT 状态 ---
 
 
 @router.get("/api/nit/status")
@@ -44,7 +44,7 @@ async def get_nit_status():
     }
 
 
-# --- Tasks (ScheduledTask) ---
+# --- 任务 (定时任务) ---
 
 
 @router.get("/api/tasks", response_model=List[ScheduledTask])
@@ -130,7 +130,7 @@ async def check_tasks(session: AsyncSession = Depends(get_session)):  # noqa: B0
     return {"prompts": triggered_prompts}
 
 
-# --- Memory Dashboard APIs ---
+# --- 记忆仪表盘 API ---
 
 
 @router.get("/api/memories/list")
@@ -273,7 +273,7 @@ async def delete_memory(memory_id: int, session: AsyncSession = Depends(get_sess
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-# --- Maintenance ---
+# --- 维护 ---
 
 
 @router.post("/api/maintenance/run")
@@ -307,7 +307,7 @@ async def get_maintenance_records(session: AsyncSession = Depends(get_session)):
     return (await session.exec(statement)).all()
 
 
-# --- Memory Reindex ---
+# --- 记忆重建索引 ---
 
 
 @router.post("/api/memory/reindex")

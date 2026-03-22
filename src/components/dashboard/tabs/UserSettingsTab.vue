@@ -2,7 +2,7 @@
   <!-- 8. 用户设定 (重构版) -->
   <div class="h-full overflow-y-auto custom-scrollbar p-6">
     <div class="max-w-2xl mx-auto pb-12">
-      <!-- Header -->
+      <!-- 头部 -->
       <div class="flex items-center gap-4 mb-8">
         <div
           class="p-3 bg-sky-50 rounded-2xl text-sky-500 border border-sky-100 shadow-sm shadow-sky-200/20"
@@ -40,7 +40,7 @@
         ></div>
 
         <div class="p-4 space-y-8 relative z-10">
-          <!-- Name & QQ -->
+          <!-- 名称和 QQ -->
           <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
             <div class="space-y-3">
               <label class="text-sm font-bold text-slate-600 flex items-center gap-2 ml-1">
@@ -68,7 +68,7 @@
             </div>
           </div>
 
-          <!-- Persona -->
+          <!-- 人设 -->
           <div class="space-y-3">
             <label class="text-sm font-bold text-slate-600 flex items-center gap-2 ml-1">
               <span class="w-1.5 h-1.5 rounded-full bg-sky-400 animate-pulse"></span>
@@ -86,7 +86,7 @@
             </p>
           </div>
 
-          <!-- Actions -->
+          <!-- 操作 -->
           <div class="pt-4 flex justify-end">
             <PButton
               variant="primary"

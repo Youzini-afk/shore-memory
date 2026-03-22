@@ -16,17 +16,17 @@
     <CustomTitleBar v-if="isElectron()" :transparent="true" title="Pero Dashboard" />
 
     <div class="flex h-screen overflow-hidden relative z-10" :class="{ 'pt-8': isElectron() }">
-      <!-- Sidebar -->
+      <!-- 侧边栏 -->
       <aside
         id="dashboard-sidebar"
         class="w-64 flex flex-col border-r-2 border-sky-100/50 glass-effect transition-all duration-300 z-20 relative"
       >
-        <!-- Pixel Shadow Line on Right -->
+        <!-- 右侧像素阴影线 -->
         <div
           class="absolute right-[-2px] top-0 bottom-0 w-[2px] bg-sky-200/30 pointer-events-none"
         ></div>
 
-        <!-- Brand -->
+        <!-- 品牌标识 -->
         <div class="p-6 pb-2 relative z-10">
           <div class="flex items-center gap-4 mb-6">
             <div
@@ -95,7 +95,7 @@
                 ]"
                 @click="handleTabSelect(item.id)"
               >
-                <!-- Active Indicator -->
+                <!-- 活跃指示器 -->
                 <div
                   v-if="currentTab === item.id"
                   class="absolute left-0 top-2 bottom-2 w-1 rounded-full transition-all duration-500"
@@ -118,7 +118,7 @@
                 />
                 <span class="relative z-10">{{ item.label }}</span>
 
-                <!-- Pixel Arrow for Active -->
+                <!-- 活跃项像素箭头 -->
                 <div
                   v-if="currentTab === item.id"
                   class="ml-auto opacity-0 group-hover:opacity-100 transition-opacity"
@@ -130,9 +130,9 @@
           </div>
         </nav>
 
-        <!-- Footer -->
+        <!-- 底部 -->
         <div class="p-4 border-t-2 border-sky-100/50 bg-sky-50/30 relative">
-          <!-- Pixel Decoration -->
+          <!-- 像素装饰 -->
           <div class="absolute top-[-2px] left-4 right-4 h-[2px] bg-white"></div>
 
           <button
@@ -184,15 +184,15 @@
         </div>
       </aside>
 
-      <!-- Main Content -->
+      <!-- 主内容区 -->
       <main class="flex-1 overflow-hidden relative flex flex-col min-w-0 bg-transparent">
-        <!-- ✨ Background Ambient Light & Particles ✨ -->
+        <!-- ✨ 背景环境光与粒子 ✨ -->
         <div
           class="absolute inset-0 pointer-events-none transition-all duration-1000 z-0"
           :style="ambientLightStyle"
         ></div>
 
-        <!-- 🐾 Floating Background Particles -->
+        <!-- 🐾 浮动背景粒子 -->
         <div class="absolute inset-0 pointer-events-none z-0 overflow-hidden">
           <div
             v-for="p in particles"
@@ -213,7 +213,7 @@
           "
         >
           <Transition name="fade-slide" mode="out-in">
-            <!-- Tab Components (state via provide/inject) -->
+            <!-- 选项卡组件 (通过 provide/inject 传递状态) -->
             <OverviewTab v-if="currentTab === 'overview'" key="overview" />
             <LogsTab v-else-if="currentTab === 'logs'" key="logs" />
             <MemoriesTab v-else-if="currentTab === 'memories'" key="memories" />
@@ -230,8 +230,8 @@
       </main>
     </div>
 
-    <!-- Dialogs -->
-    <!-- Story Import Dialog -->
+    <!-- 对话框 -->
+    <!-- 故事导入对话框 -->
     <PModal
       v-model="showImportStoryDialog"
       title="导入故事生成记忆"
@@ -271,7 +271,7 @@
       </div>
     </PModal>
 
-    <!-- Global Settings Dialog -->
+    <!-- 全局设置对话框 -->
     <PModal
       v-model="showGlobalSettings"
       title="全局服务商配置"
@@ -321,7 +321,7 @@
       </div>
     </PModal>
 
-    <!-- Model Editor Dialog -->
+    <!-- 模型编辑对话框 -->
     <PModal
       v-model="showModelEditor"
       :title="currentEditingModel.id ? '编辑模型' : '添加模型'"
@@ -330,7 +330,7 @@
       class="backdrop-blur-2xl bg-white/80 border-sky-100 shadow-2xl shadow-sky-100/40"
     >
       <div class="space-y-5">
-        <!-- Display Name -->
+        <!-- 显示名称 -->
         <div class="space-y-2 relative z-30">
           <label class="text-sm font-medium text-slate-600">显示名称</label>
           <PInput
@@ -340,7 +340,7 @@
           />
         </div>
 
-        <!-- Provider -->
+        <!-- 提供商 -->
         <div class="space-y-2 relative z-20">
           <label class="text-sm font-medium text-slate-600">服务商 (Provider)</label>
           <PSelect
@@ -352,7 +352,7 @@
           />
         </div>
 
-        <!-- Model ID -->
+        <!-- 模型 ID -->
         <div class="space-y-2 relative z-10">
           <label class="text-sm font-medium text-slate-600">Model ID</label>
           <div class="flex gap-2">
@@ -377,7 +377,7 @@
           />
         </div>
 
-        <!-- Configuration Source -->
+        <!-- 配置来源 -->
         <div class="space-y-2 relative z-5">
           <label class="text-sm font-medium text-slate-600">配置来源</label>
           <div class="flex items-center gap-6">
@@ -435,7 +435,7 @@
           </div>
         </div>
 
-        <!-- Custom Config Fields -->
+        <!-- 自定义配置字段 -->
         <div
           v-if="currentEditingModel.provider_type === 'custom'"
           class="space-y-4 p-4 rounded-2xl bg-sky-50/30 border border-sky-100 shadow-inner"
@@ -519,7 +519,7 @@
       </div>
     </PModal>
 
-    <!-- MCP Editor Dialog -->
+    <!-- MCP 编辑对话框 -->
     <PModal
       v-model="showMcpEditor"
       :title="currentEditingMcp.id ? '编辑 MCP' : '添加 MCP'"
@@ -769,7 +769,7 @@
       </div>
     </PModal>
 
-    <!-- Confirm Dialog -->
+    <!-- 确认对话框 -->
     <PModal
       v-model="showConfirmModal"
       :title="confirmModalTitle"
@@ -874,7 +874,7 @@ import logoImg from '../assets/logo.png'
 import { gatewayClient } from '../api/gateway'
 import OnboardingOverlay from '../components/onboarding/OnboardingOverlay.vue'
 
-// Tab Components
+// 选项卡组件
 import OverviewTab from '../components/dashboard/tabs/OverviewTab.vue'
 import LogsTab from '../components/dashboard/tabs/LogsTab.vue'
 import MemoriesTab from '../components/dashboard/tabs/MemoriesTab.vue'
@@ -887,7 +887,7 @@ import ResetTab from '../components/dashboard/tabs/ResetTab.vue'
 import NapCatTab from '../components/dashboard/tabs/NapCatTab.vue'
 import TerminalTab from '../components/dashboard/tabs/TerminalTab.vue'
 
-// Composables
+// 组合式函数
 import { useDashboard, API_BASE, fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 import { useAgentConfig } from '@/composables/dashboard/useAgentConfig'
 import { useDashboardData } from '@/composables/dashboard/useDashboardData'
@@ -1101,7 +1101,7 @@ const isCurrentModelVisionEnabled = computed(() => {
 
 const handleSystemReset = () => _handleSystemReset(activeAgent, fetchAllData, currentTab)
 
-// --- Provide all composable state to Tab components ---
+// --- 向选项卡组件提供所有组合式状态 ---
 import {
   DASHBOARD_KEY,
   AGENT_CONFIG_KEY,
@@ -1617,7 +1617,7 @@ onUnmounted(() => {
   display: block;
 }
 
-/* Logs View */
+/* 日志视图 */
 .logs-layout {
   display: flex;
   flex-direction: column;
@@ -1633,7 +1633,7 @@ onUnmounted(() => {
   overflow-y: auto;
   padding: 20px;
   border-radius: var(--radius-md);
-  background: rgba(255, 255, 255, 0.2); /* Lighter glass */
+  background: rgba(255, 255, 255, 0.2); /* 更浅的玻璃效果 */
   border: 1px solid rgba(255, 255, 255, 0.2);
   margin-right: -10px;
   padding-right: 20px;
@@ -1669,16 +1669,16 @@ onUnmounted(() => {
 .bubble-content-box {
   max-width: 70%;
   padding: 16px 20px;
-  border-radius: 20px; /* More rounded */
+  border-radius: 20px; /* 更圆润 */
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
   position: relative;
   transition: all 0.3s;
 }
 
 .chat-bubble-wrapper.user .bubble-content-box {
-  background: var(--healing-primary); /* Sky Blue */
+  background: var(--healing-primary); /* 天蓝色 */
   color: white;
-  border-bottom-right-radius: 4px; /* Squircle effect */
+  border-bottom-right-radius: 4px; /* 圆角矩形效果 */
   box-shadow: 0 4px 12px rgba(108, 180, 238, 0.3);
 }
 
@@ -1727,7 +1727,7 @@ onUnmounted(() => {
 
 .log-meta-tag {
   background: rgba(0, 0, 0, 0.05);
-  padding: 2px 8px; /* Larger capsule */
+  padding: 2px 8px; /* 更大的胶囊形 */
   border-radius: 12px;
   cursor: help;
   font-weight: 600;
@@ -1748,7 +1748,7 @@ onUnmounted(() => {
   line-height: 1.6;
 }
 
-/* User text color fix for Markdown */
+/* 用户文本颜色修复 (Markdown) */
 .chat-bubble-wrapper.user .message-content-wrapper :deep(.markdown-body),
 .chat-bubble-wrapper.user .message-content-wrapper :deep(.markdown-body p),
 .chat-bubble-wrapper.user .message-content-wrapper :deep(.markdown-body span),
@@ -1757,7 +1757,7 @@ onUnmounted(() => {
   color: white !important;
 }
 
-/* User Bubble Meta Color Fix */
+/* 用户气泡元信息颜色修复 */
 .chat-bubble-wrapper.user .bubble-meta {
   color: rgba(255, 255, 255, 0.9) !important;
 }
@@ -1766,9 +1766,9 @@ onUnmounted(() => {
   color: inherit !important;
 }
 
-/* Exclude code blocks from being white if they have their own styling */
+/* 排除有自身样式的代码块的白色覆盖 */
 .chat-bubble-wrapper.user .message-content-wrapper :deep(.markdown-body code) {
-  color: #c7254e; /* Default code color or whatever fits */
+  color: #c7254e; /* 默认代码颜色 */
   background-color: #f9f2f4;
   border-radius: 4px;
   padding: 2px 4px;
@@ -1784,10 +1784,10 @@ onUnmounted(() => {
   background-color: transparent;
 }
 
-/* Trigger Blocks inside Markdown */
+/* Markdown 内的触发器块 */
 :deep(.trigger-block) {
   margin: 12px 0;
-  border-radius: 16px; /* Rounded block */
+  border-radius: 16px; /* 圆角块 */
   overflow: hidden;
   font-size: 13px;
   border: 1px solid rgba(0, 0, 0, 0.05);
@@ -1833,7 +1833,7 @@ onUnmounted(() => {
   border-top: 1px solid rgba(0, 0, 0, 0.05);
 }
 
-/* Specific Block Themes */
+/* 特定块主题 */
 :deep(.trigger-block.perocue) {
   border-color: #fca5a5; /* red-300 */
 }
@@ -1876,7 +1876,7 @@ onUnmounted(() => {
   color: #64748b; /* slate-500 */
 }
 
-/* Sub-elements styling */
+/* 子元素样式 */
 :deep(.pero-meta-row) {
   display: flex;
   flex-wrap: wrap;
@@ -1997,7 +1997,7 @@ onUnmounted(() => {
   width: 100%;
 }
 
-/* Memories View */
+/* 记忆视图 */
 .toolbar {
   display: flex;
   justify-content: space-between;
@@ -2080,7 +2080,7 @@ onUnmounted(() => {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.03) !important;
   position: relative;
   overflow: hidden;
-  padding-top: 5px; /* Make space for the top bar */
+  padding-top: 5px; /* 为顶栏留出空间 */
 }
 
 .memory-card:hover {
@@ -2093,7 +2093,7 @@ onUnmounted(() => {
   border-color: rgba(255, 255, 255, 0.9) !important;
 }
 
-/* Color Coding with Gradients */
+/* 渐变色编码 */
 .memory-card::after {
   content: '';
   position: absolute;
@@ -2124,7 +2124,7 @@ onUnmounted(() => {
   background: linear-gradient(90deg, #94a3b8 0%, #cbd5e1 100%); /* slate-400 to slate-300 */
 }
 
-/* Remove old specific borders */
+/* 移除旧的特定边框 */
 .memory-card.preference,
 .memory-card.event,
 .memory-card.fact,
@@ -2147,7 +2147,7 @@ onUnmounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 8px;
-  padding-top: 8px; /* Extra padding since we have the top bar */
+  padding-top: 8px; /* 因有顶栏而增加的额外内边距 */
 }
 
 .memory-bottom {
@@ -2166,7 +2166,7 @@ onUnmounted(() => {
   box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
 }
 
-/* Enhanced Memory Toolbar */
+/* 增强记忆工具栏 */
 .memory-toolbar {
   flex-direction: column !important;
   align-items: stretch !important;
@@ -2313,7 +2313,7 @@ onUnmounted(() => {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
 }
 
-/* Tasks Waterfall */
+/* 任务瀑布流 */
 .task-waterfall {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
@@ -2377,7 +2377,7 @@ onUnmounted(() => {
   color: var(--healing-text-light);
 }
 
-/* Fix Dialog Transparency Issue */
+/* 修复对话框透明度问题 */
 .custom-modal-content {
   background: rgba(15, 23, 42, 0.95) !important; /* slate-900 */
   backdrop-filter: blur(20px);
@@ -2386,7 +2386,7 @@ onUnmounted(() => {
   border: 1px solid rgba(255, 255, 255, 0.1);
 }
 
-/* Ensure input text is visible in custom components */
+/* 确保自定义组件中的输入文本可见 */
 .p-input-inner {
   color: #f1f5f9 !important; /* slate-100 */
 }
@@ -2445,13 +2445,13 @@ onUnmounted(() => {
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  background-color: #94a3b8; /* Offline - slate-400 */
+  background-color: #94a3b8; /* 离线 - slate-400 */
   box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.8);
   transition: all 0.3s;
 }
 
 .status-dot.online {
-  background-color: #0ea5e9; /* Online - sky-500 */
+  background-color: #0ea5e9; /* 在线 - sky-500 */
   box-shadow: 0 0 4px #0ea5e9;
 }
 
@@ -2473,7 +2473,7 @@ onUnmounted(() => {
   border: 2px solid #0284c7; /* sky-600 */
 }
 
-/* Scrollbar Beauty */
+/* 滚动条美化 */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -2522,7 +2522,7 @@ onUnmounted(() => {
   gap: 4px;
 }
 
-/* MCP Card Modern */
+/* MCP 卡片现代风格 */
 .mcp-card-modern {
   border-radius: 12px;
   height: 100%;
@@ -2558,7 +2558,7 @@ onUnmounted(() => {
   justify-content: flex-end;
 }
 
-/* Transition */
+/* 过渡动画 */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition: all 0.3s ease;
@@ -2574,7 +2574,7 @@ onUnmounted(() => {
   transform: translateY(-10px);
 }
 
-/* List Transition */
+/* 列表过渡 */
 .list-enter-active,
 .list-leave-active {
   transition: all 0.4s ease;
@@ -2585,7 +2585,7 @@ onUnmounted(() => {
   transform: translateY(20px);
 }
 
-/* Responsive */
+/* 响应式 */
 @media (max-width: 768px) {
   .memory-waterfall,
   .task-waterfall {
@@ -2593,10 +2593,10 @@ onUnmounted(() => {
   }
   .glass-sidebar {
     display: none;
-  } /* Mobile todo */
+  } /* 移动端待办 */
 }
 
-/* Dashboard Global Edit Input Style */
+/* 仪表盘全局编辑输入框样式 */
 .dashboard-edit-textarea {
   font-size: 15px;
   line-height: 1.6;
@@ -2628,7 +2628,7 @@ onUnmounted(() => {
   gap: 10px;
   justify-content: flex-end;
 }
-/* New Memory UI Styles */
+/* 新记忆界面样式 */
 .memory-top {
   display: flex;
   justify-content: space-between;
@@ -2661,7 +2661,7 @@ onUnmounted(() => {
   cursor: help;
 }
 
-/* --- NIT Status Styles --- */
+/* --- NIT 状态样式 --- */
 .nit-status-box {
   display: flex;
   flex-direction: column;
@@ -2701,7 +2701,7 @@ onUnmounted(() => {
   color: #94a3b8; /* slate-400 */
 }
 
-/* --- Memory Dashboard Styles --- */
+/* --- 记忆仪表盘样式 --- */
 .memory-toolbar {
   display: flex;
   justify-content: space-between;
@@ -2738,7 +2738,7 @@ onUnmounted(() => {
   font-size: 12px !important;
 }
 
-/* Graph Mode */
+/* 图谱模式 */
 .memory-graph-container {
   background: #ffffff;
   border-radius: 12px;
@@ -2771,7 +2771,7 @@ onUnmounted(() => {
   pointer-events: none;
 }
 
-/* --- Transition Animations --- */
+/* --- 过渡动画 --- */
 .fade-slide-enter-active,
 .fade-slide-leave-active {
   transition:

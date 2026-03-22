@@ -2,7 +2,7 @@
   <div
     class="absolute inset-0 flex overflow-hidden pixel-bg-moe font-sans pixel-ui pixel-grid-overlay"
   >
-    <!-- Ambient Light & Particles -->
+    <!-- 环境光与粒子 -->
     <div
       class="absolute inset-0 pointer-events-none transition-all duration-1000 z-0 opacity-40"
       :style="ambientLightStyle"
@@ -18,16 +18,16 @@
       </div>
     </div>
 
-    <!-- Sidebar -->
+    <!-- 侧边栏 -->
     <aside
       class="w-64 flex flex-col h-full border-r-2 border-moe-cocoa/10 bg-white/40 backdrop-blur-md transition-all duration-300 z-20 relative"
     >
-      <!-- Pixel Shadow Line -->
+      <!-- 像素阴影线 -->
       <div
         class="absolute right-[-2px] top-0 bottom-0 w-[2px] bg-moe-cocoa/5 pointer-events-none"
       ></div>
 
-      <!-- Search -->
+      <!-- 搜索 -->
       <div class="px-4 pb-4 pt-2 flex-shrink-0">
         <div class="relative group">
           <input
@@ -43,7 +43,7 @@
         </div>
       </div>
 
-      <!-- Agent List -->
+      <!-- 助手列表 -->
       <div class="flex-1 min-h-0 overflow-y-auto custom-scrollbar px-3 space-y-2 pb-2">
         <div class="flex items-center justify-between px-2 py-1.5 mb-1">
           <div
@@ -84,7 +84,7 @@
           ]"
           @click="switchAgent(agent)"
         >
-          <!-- Active Indicator -->
+          <!-- 活跃指示器 -->
           <div
             v-if="activeAgentId === agent.id"
             class="absolute left-0 top-2 bottom-2 w-1 bg-moe-pink"
@@ -124,7 +124,7 @@
         </div>
       </div>
 
-      <!-- Bottom Actions -->
+      <!-- 底部操作 -->
       <div class="p-3 border-t-2 border-moe-cocoa/5 bg-white/20 relative flex-shrink-0">
         <div class="absolute top-[-2px] left-3 right-3 h-[2px] bg-white/50"></div>
         <button
@@ -137,9 +137,9 @@
       </div>
     </aside>
 
-    <!-- Main Chat Area -->
+    <!-- 主聊天区 -->
     <div class="flex-1 flex flex-col relative z-10 overflow-hidden">
-      <!-- Header -->
+      <!-- 头部 -->
       <header
         class="h-14 px-6 flex items-center justify-between border-b-2 border-moe-cocoa/5 bg-white/30 backdrop-blur-md"
       >
@@ -174,7 +174,7 @@
         </div>
       </header>
 
-      <!-- Chat Component -->
+      <!-- 聊天组件 -->
       <ChatInterface
         v-if="activeAgentId"
         :key="'direct-' + activeAgentId"
@@ -206,7 +206,7 @@ import PTooltip from '../components/ui/PTooltip.vue'
 
 const API_BASE = 'http://localhost:9120'
 
-// State
+// 状态
 const agents = ref([])
 const isLoading = ref(false)
 const errorMsg = ref('')
@@ -214,7 +214,7 @@ const activeAgentId = ref(null)
 const activeAgentName = ref('Pero')
 const particles = ref([])
 
-// Ambient Light Logic
+// 环境光逻辑
 const ambientLightStyle = computed(() => {
   const color = { primary: 'rgba(125, 211, 252, 0.2)', secondary: 'rgba(153, 246, 228, 0.15)' }
   return {
@@ -225,7 +225,7 @@ const ambientLightStyle = computed(() => {
   }
 })
 
-// Particles Logic
+// 粒子效果逻辑
 const initParticles = () => {
   particles.value = Array.from({ length: 8 }, (_, i) => ({
     id: i,
@@ -241,7 +241,7 @@ const initParticles = () => {
   }))
 }
 
-// Data Fetching
+// 数据加载
 const loadAgents = async () => {
   isLoading.value = true
   errorMsg.value = ''
