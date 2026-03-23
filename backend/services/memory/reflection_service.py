@@ -1558,38 +1558,55 @@ class ReflectionService:
 
             # 4.3 维护 Entity 共现统计 (纯统计，不涉及 LLM)
             # 同一批对话中同时出现的 Entity 互为共现
+            # [P0 优化] 批量 UPSERT + Top-K 剪枝，避免 O(k²) 逐对查询爆炸
             if len(entity_map) >= 2:
                 try:
                     from itertools import combinations
 
-                    from models import EntityCooccurrence
+                    from sqlalchemy import text as sa_text
 
                     entity_ids = list(entity_map.values())
-                    for id_a, id_b in combinations(entity_ids, 2):
-                        # 规范化顺序 (小 ID 在前)
-                        a, b = min(id_a, id_b), max(id_a, id_b)
 
-                        existing_co = (
-                            await self.session.exec(
-                                select(EntityCooccurrence).where(
-                                    EntityCooccurrence.entity_a_id == a,
-                                    EntityCooccurrence.entity_b_id == b,
-                                    EntityCooccurrence.agent_id == agent_id,
-                                )
-                            )
-                        ).first()
+                    # Top-K 剪枝：限制参与共现计算的 Entity 数量
+                    # C(10,2)=45 对, C(20,2)=190 对, C(50,2)=1225 对
+                    MAX_COOCCURRENCE_ENTITIES = 10
+                    if len(entity_ids) > MAX_COOCCURRENCE_ENTITIES:
+                        # 按 ID 大小取最近创建的（通常更相关）
+                        entity_ids = sorted(entity_ids, reverse=True)[
+                            :MAX_COOCCURRENCE_ENTITIES
+                        ]
+                        print(
+                            f"[GraphGardener] 共现剪枝: {len(entity_map)} → {MAX_COOCCURRENCE_ENTITIES} entities"
+                        )
 
-                        if existing_co:
-                            existing_co.co_count += 1
-                        else:
-                            self.session.add(
-                                EntityCooccurrence(
-                                    entity_a_id=a,
-                                    entity_b_id=b,
-                                    co_count=1,
-                                    agent_id=agent_id,
-                                )
-                            )
+                    # 构建所有共现对 (规范化顺序: 小 ID 在前)
+                    pairs = [
+                        (min(a, b), max(a, b))
+                        for a, b in combinations(entity_ids, 2)
+                    ]
+
+                    if pairs:
+                        # 批量 UPSERT: 一条 SQL 处理所有共现对
+                        # SQLite 3.24+ 支持 INSERT ... ON CONFLICT DO UPDATE
+                        upsert_sql = sa_text("""
+                            INSERT INTO entitycooccurrence (entity_a_id, entity_b_id, co_count, agent_id)
+                            VALUES (:a, :b, 1, :agent_id)
+                            ON CONFLICT (entity_a_id, entity_b_id, agent_id)
+                            DO UPDATE SET co_count = co_count + 1
+                        """)
+
+                        # executemany 风格: 一次传入所有参数
+                        params_list = [
+                            {"a": a, "b": b, "agent_id": agent_id}
+                            for a, b in pairs
+                        ]
+
+                        conn = await self.session.connection()
+                        await conn.execute(upsert_sql, params_list)
+
+                        print(
+                            f"[GraphGardener] 共现统计批量更新: {len(pairs)} 对"
+                        )
                 except Exception as co_e:
                     print(f"[GraphGardener] 共现统计更新失败 (非致命): {co_e}")
 
@@ -1597,6 +1614,14 @@ class ReflectionService:
             print(
                 f"[Reflection] 图谱构建完成: +{new_entities_count} 实体, +{new_relations_count} 关系"
             )
+
+            # [P1b] 持久化图谱引擎到磁盘
+            try:
+                from services.memory.memory_service import persist_engine_graph
+
+                persist_engine_graph()
+            except Exception as pe:
+                print(f"[Reflection] 图谱持久化失败 (非致命): {pe}")
 
             return {
                 "status": "success",

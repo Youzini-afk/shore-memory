@@ -1,6 +1,7 @@
 from datetime import datetime
 from typing import Optional
 
+import sqlalchemy as sa
 from sqlalchemy import Column, Text
 from sqlmodel import Field, SQLModel
 
@@ -69,6 +70,12 @@ class EntityCooccurrence(SQLModel, table=True):
     记录同一批对话中 Entity 类记忆的共同出现次数，
     用于检索增强的共现增益计算。
     """
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "entity_a_id", "entity_b_id", "agent_id", name="uq_cooccurrence_pair"
+        ),
+    )
 
     id: Optional[int] = Field(default=None, primary_key=True)
     entity_a_id: int = Field(foreign_key="memory.id", index=True)

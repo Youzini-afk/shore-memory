@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -34,6 +35,63 @@ async def get_rust_engine(session: AsyncSession):
         from pero_memory_core import CognitiveGraphEngine
 
         print("[Memory] 初始化 Rust 图遍历引擎...", flush=True)
+
+        # [P1b 优化] 优先从持久化文件加载图谱 (毫秒级)
+        env_data_dir = os.environ.get("PERO_DATA_DIR")
+        if env_data_dir:
+            graph_dir = os.path.join(env_data_dir, "memory")
+        else:
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            graph_dir = os.path.join(base_dir, "data", "memory")
+
+        os.makedirs(graph_dir, exist_ok=True)
+        graph_path = os.path.join(graph_dir, "graph.json")
+
+        if os.path.exists(graph_path):
+            try:
+                import time as _time
+
+                t0 = _time.perf_counter()
+                _rust_engine = CognitiveGraphEngine.load_graph(graph_path)
+                _rust_engine.configure(max_active_nodes=10000, max_fan_out=20)
+                elapsed = (_time.perf_counter() - t0) * 1000
+                print(
+                    f"[Memory] ✅ 从持久化文件加载图谱: {_rust_engine.node_count()} 节点, "
+                    f"{_rust_engine.edge_count()} 边 ({elapsed:.1f}ms)",
+                    flush=True,
+                )
+
+                # 增量同步：加载持久化之后新增的 MemoryRelation
+                # 查找比图谱文件更新的关系
+                graph_mtime = os.path.getmtime(graph_path)
+                from datetime import datetime
+
+                cutoff = datetime.fromtimestamp(graph_mtime)
+                new_rels_stmt = select(MemoryRelation).where(
+                    MemoryRelation.created_at > cutoff
+                )
+                new_rels = (await session.exec(new_rels_stmt)).all()
+                if new_rels:
+                    chunk = []
+                    for rel in new_rels:
+                        type_id = RELATION_TYPE_MAP.get(rel.relation_type, 0)
+                        chunk.append(
+                            (rel.source_id, rel.target_id, rel.strength, type_id)
+                        )
+                    _rust_engine.batch_add_connections(chunk)
+                    print(
+                        f"[Memory] 增量同步 {len(new_rels)} 条新关系到图谱",
+                        flush=True,
+                    )
+
+                return _rust_engine
+            except Exception as e:
+                print(f"[Memory] 持久化文件加载失败，回退到 SQL 加载: {e}")
+                _rust_engine = None
+
+        # 回退路径：从 SQL 逐行加载 (首次启动或文件损坏时)
         _rust_engine = CognitiveGraphEngine()
         _rust_engine.configure(max_active_nodes=10000, max_fan_out=20)
 
@@ -86,12 +144,49 @@ async def get_rust_engine(session: AsyncSession):
                 total_loaded += len(chunk_links)
             mem_offset += BATCH_SIZE
 
-        print(f"[Memory] Rust 引擎已加载 {total_loaded} 个连接。", flush=True)
+        print(f"[Memory] Rust 引擎已从 SQL 加载 {total_loaded} 个连接。", flush=True)
+
+        # 持久化图谱供下次快速启动
+        try:
+            _rust_engine.persist_graph(graph_path)
+            print(f"[Memory] 图谱已持久化到 {graph_path}", flush=True)
+        except Exception as pe:
+            print(f"[Memory] 图谱持久化失败 (非致命): {pe}")
+
     except Exception as e:
         print(f"[Memory] Rust 引擎初始化失败: {e}")
         _rust_engine = False
 
     return _rust_engine
+
+
+def persist_engine_graph():
+    """[P1b] 将当前 Rust 图谱引擎持久化到磁盘。
+    应在图谱发生较大变更后调用（如 build_ontology_graph 之后）。
+    """
+    global _rust_engine
+    if _rust_engine is None or _rust_engine is False:
+        return
+
+    try:
+        env_data_dir = os.environ.get("PERO_DATA_DIR")
+        if env_data_dir:
+            graph_dir = os.path.join(env_data_dir, "memory")
+        else:
+            base_dir = os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            )
+            graph_dir = os.path.join(base_dir, "data", "memory")
+
+        graph_path = os.path.join(graph_dir, "graph.json")
+        _rust_engine.persist_graph(graph_path)
+        print(
+            f"[Memory] 图谱已持久化: {_rust_engine.node_count()} 节点, "
+            f"{_rust_engine.edge_count()} 边",
+            flush=True,
+        )
+    except Exception as e:
+        print(f"[Memory] 图谱持久化失败 (非致命): {e}")
 
 
 class MemoryService:

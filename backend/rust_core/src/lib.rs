@@ -162,22 +162,31 @@ impl CognitiveGraphEngine {
         self.max_fan_out = max_fan_out;
     }
 
-    /// 批量添加连接关系 (带自动剪枝)
+    /// 批量添加连接关系 (带脏标记局部剪枝)
     /// 输入格式: (src, tgt, weight, type_id)
+    ///
+    /// [P1 优化] 仅对本次添加涉及的节点做 fan-out 剪枝，
+    /// 而非遍历整个图谱。从 O(|V|) 降为 O(|dirty_nodes|)。
     #[pyo3(text_signature = "($self, connections)")]
     fn batch_add_connections(&mut self, connections: Vec<(i64, i64, f32, u8)>) {
+        let mut dirty_nodes: ahash::AHashSet<i64> = ahash::AHashSet::new();
+
         for (src, tgt, weight, type_id) in connections {
             self.add_single_edge(src, tgt, weight, type_id);
             // 无向图处理：反向边通常具有相同属性
             // 如果需要有向图，请在 Python 层控制传入数据
             self.add_single_edge(tgt, src, weight, type_id);
+            dirty_nodes.insert(src);
+            dirty_nodes.insert(tgt);
         }
 
-        // 自动剪枝
-        for edges in self.dynamic_map.values_mut() {
-            if edges.len() > self.max_fan_out {
-                edges.sort_by(|a, b| b.connection_strength.cmp(&a.connection_strength));
-                edges.truncate(self.max_fan_out);
+        // 局部剪枝: 仅对脏节点做 fan-out 检查
+        for node_id in dirty_nodes {
+            if let Some(edges) = self.dynamic_map.get_mut(&node_id) {
+                if edges.len() > self.max_fan_out {
+                    edges.sort_by(|a, b| b.connection_strength.cmp(&a.connection_strength));
+                    edges.truncate(self.max_fan_out);
+                }
             }
         }
     }
@@ -227,6 +236,89 @@ impl CognitiveGraphEngine {
 
     fn clear_graph(&mut self) {
         self.dynamic_map.clear();
+    }
+
+    /// 获取图谱节点数量
+    fn node_count(&self) -> usize {
+        self.dynamic_map.len()
+    }
+
+    /// 获取图谱边数量 (总计，含双向)
+    fn edge_count(&self) -> usize {
+        self.dynamic_map.values().map(|edges| edges.len()).sum()
+    }
+
+    /// [P1b 优化] 将图谱持久化到磁盘 (JSON 格式)
+    /// 启动时可以直接加载，避免逐行 SQL 查询
+    #[pyo3(text_signature = "($self, path)")]
+    fn persist_graph(&self, path: String) -> PyResult<()> {
+        // 序列化为可持久化格式: Vec<(src, Vec<(tgt, weight_u16, type_u8)>)>
+        let serializable: Vec<(i64, Vec<(i32, u16, u8)>)> = self
+            .dynamic_map
+            .iter()
+            .map(|(&src, edges)| {
+                let edge_list: Vec<(i32, u16, u8)> = edges
+                    .iter()
+                    .map(|e| (e.target_node_id, e.connection_strength, e.edge_type))
+                    .collect();
+                (src, edge_list)
+            })
+            .collect();
+
+        // 写入临时文件后原子重命名
+        let tmp_path = format!("{}.tmp", path);
+        let file = std::fs::File::create(&tmp_path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("创建文件失败: {}", e))
+        })?;
+        let writer = std::io::BufWriter::new(file);
+        serde_json::to_writer(writer, &serializable).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("序列化失败: {}", e))
+        })?;
+
+        std::fs::rename(&tmp_path, &path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("重命名失败: {}", e))
+        })?;
+
+        Ok(())
+    }
+
+    /// [P1b 优化] 从磁盘加载图谱
+    /// 替代启动时的逐行 SQL 查询，毫秒级加载百万边
+    #[staticmethod]
+    #[pyo3(text_signature = "(path, max_active_nodes=10000, max_fan_out=20)")]
+    fn load_graph(
+        path: String,
+        max_active_nodes: Option<usize>,
+        max_fan_out: Option<usize>,
+    ) -> PyResult<Self> {
+        let file = std::fs::File::open(&path).map_err(|e| {
+            PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("打开文件失败: {}", e))
+        })?;
+        let reader = std::io::BufReader::new(file);
+
+        let data: Vec<(i64, Vec<(i32, u16, u8)>)> =
+            serde_json::from_reader(reader).map_err(|e| {
+                PyErr::new::<pyo3::exceptions::PyIOError, _>(format!("反序列化失败: {}", e))
+            })?;
+
+        let mut dynamic_map: AHashMap<i64, SmallVec<[GraphEdge; 4]>> = AHashMap::new();
+        for (src, edges_data) in data {
+            let edges: SmallVec<[GraphEdge; 4]> = edges_data
+                .into_iter()
+                .map(|(target, strength, edge_type)| GraphEdge {
+                    target_node_id: target,
+                    connection_strength: strength,
+                    edge_type,
+                })
+                .collect();
+            dynamic_map.insert(src, edges);
+        }
+
+        Ok(CognitiveGraphEngine {
+            dynamic_map,
+            max_active_nodes: max_active_nodes.unwrap_or(10000),
+            max_fan_out: max_fan_out.unwrap_or(20),
+        })
     }
 
     /// 执行加权图遍历 (带稳定性剪枝和并行优化)
