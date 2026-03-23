@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import datetime
 from typing import Any, Dict, List, Optional
@@ -7,6 +8,8 @@ from sqlmodel import delete, desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from models import ConversationLog, Memory, MemoryRelation
+
+logger = logging.getLogger("pero.memory")
 
 # [Global] Rust 引擎单例 (PEDSA 算法核心)
 _rust_engine = None
@@ -678,17 +681,30 @@ class MemoryService:
         agent_id: str = "pero",
     ) -> List[Memory]:
         """
-        [混合检索策略]
+        [混合检索策略 v2 - 增强版]
         1. 锚点定位: 使用关键词/标签命中实体节点
-        2. 扩散激活: 利用 Rust 引擎进行能量扩散
-        3. 向量重排: 结合向量相似度输出最终结果
+        2. 向量召回: Top-20 初步候选
+        2.5 稀疏编码残差: 发现被遮蔽的弱信号 (FISTA/LASSO)
+        3. 扩散激活: 利用 Rust 引擎进行能量扩散
+        3.5 共现增益: Entity 统计共现增强
+        4. 多维重排: 扩散分 + 向量分 + 重要性 + 时间衰减
+        4.5 DPP 多样性采样: 行列式点过程去冗余
         """
         import math
 
+        import numpy as np
         from sqlmodel import or_
 
         from services.core.embedding_service import embedding_service
         from services.core.vector_service import vector_service
+
+        # 加载增强参数（支持热更新）
+        try:
+            from services.memory.retrieval_enhancer import get_params
+
+            params = get_params()
+        except Exception:
+            params = {}
 
         # --- 1. 锚点定位 ---
         # 简单分词 (未来可接入 AC 自动机)
@@ -722,6 +738,92 @@ class MemoryService:
         vector_candidates = vector_service.search(
             query_vec, limit=20, agent_id=agent_id
         )
+        # --- 2.3 NMF 语义分解 ---
+        nmf_result = None
+        if params.get("enable_nmf", False) and entity_anchors:
+            try:
+                from services.memory.retrieval_enhancer import nmf_query_analysis
+
+                # 收集 Entity 嵌入
+                nmf_vecs = []
+                nmf_ids = []
+                for ent in entity_anchors:
+                    if ent.embedding_json and ent.embedding_json != "[]":
+                        try:
+                            vec = json.loads(ent.embedding_json)
+                            if vec and len(vec) > 0:
+                                nmf_vecs.append(vec)
+                                nmf_ids.append(ent.id)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+                if len(nmf_vecs) >= 2:
+                    nmf_result = nmf_query_analysis(
+                        query_vec=np.array(query_vec, dtype=np.float32),
+                        entity_vecs=np.array(nmf_vecs, dtype=np.float32),
+                        entity_ids=nmf_ids,
+                        agent_id=agent_id,
+                        n_topics=params.get("nmf_n_topics", 15),
+                    )
+                    logger.debug(
+                        f"NMF: depth={nmf_result['semantic_depth']:.2f}, "
+                        f"coverage={nmf_result['topic_coverage']}, "
+                        f"novelty={nmf_result['novelty']:.2f}"
+                    )
+            except Exception as e:
+                logger.warning(f"NMF 语义分解跳过: {e}")
+
+        # --- 2.5 稀疏编码残差发现 (FISTA/LASSO) ---
+        # 触发条件: NMF novelty 超过阈值（查询中有显著的未解释成分）
+        nmf_novelty = nmf_result["novelty"] if nmf_result else 1.0
+        sparse_threshold = params.get("nmf_novelty_threshold", 0.4)
+        should_sparse = nmf_novelty >= sparse_threshold
+
+        if params.get("enable_sparse_coding", False) and entity_anchors and should_sparse:
+            try:
+                from services.memory.retrieval_enhancer import sparse_code_residual
+
+                # 收集 Entity 嵌入
+                entity_vecs_list = []
+                valid_entities = []
+                for ent in entity_anchors:
+                    if ent.embedding_json and ent.embedding_json != "[]":
+                        try:
+                            vec = json.loads(ent.embedding_json)
+                            if vec and len(vec) > 0:
+                                entity_vecs_list.append(vec)
+                                valid_entities.append(ent)
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+                if len(entity_vecs_list) >= 2:
+                    q_np = np.array(query_vec, dtype=np.float32)
+                    e_np = np.array(entity_vecs_list, dtype=np.float32)
+
+                    _, residual, residual_norm = sparse_code_residual(
+                        q_np,
+                        e_np,
+                        lambda_=params.get("sparse_coding_lambda", 0.1),
+                        max_iter=params.get("sparse_coding_iterations", 80),
+                    )
+
+                    threshold = params.get("residual_threshold", 0.30)
+                    if residual_norm > threshold:
+                        # 残差足够大 → 二次检索
+                        residual_list = residual.tolist()
+                        topk = params.get("residual_topk", 5)
+                        secondary = vector_service.search(
+                            residual_list, limit=topk, agent_id=agent_id
+                        )
+                        # 合并（去重）
+                        existing_ids = {r["id"] for r in vector_candidates}
+                        for r in secondary:
+                            if r["id"] not in existing_ids:
+                                vector_candidates.append(r)
+                                existing_ids.add(r["id"])
+
+            except Exception as e:
+                logger.warning(f"稀疏编码残差发现跳过: {e}")
 
         # --- 3. 扩散激活 ---
         # 初始能量源:
@@ -744,10 +846,49 @@ class MemoryService:
 
         if engine and initial_energy:
             # 扩散 2 步，衰减 0.6，阈值 0.05
-            # 这样 Entity 可以激活与之相连的 Event
+            # PPR 回家概率 (防止在大图谱中能量发散)
+            teleport = params.get("teleport_alpha", 0.0)
             final_scores = engine.propagate_activation(
-                initial_scores=initial_energy, steps=2, decay=0.6, min_threshold=0.05
+                initial_scores=initial_energy,
+                steps=2,
+                decay=0.6,
+                min_threshold=0.05,
+                teleport_alpha=teleport,
             )
+
+        # --- 3.5 共现增益 ---
+        if params.get("enable_cooccurrence_boost", False) and entity_anchors:
+            try:
+                from models import EntityCooccurrence
+                from services.memory.retrieval_enhancer import (
+                    apply_cooccurrence_boost,
+                )
+
+                # 构建当前 Entity 的共现映射
+                anchor_ids = [e.id for e in entity_anchors]
+                cooccur_stmt = select(EntityCooccurrence).where(
+                    EntityCooccurrence.entity_a_id.in_(anchor_ids),
+                    EntityCooccurrence.agent_id == agent_id,
+                )
+                cooccur_rows = (await session.exec(cooccur_stmt)).all()
+
+                if cooccur_rows:
+                    cooccur_map: Dict[int, List] = {}
+                    for row in cooccur_rows:
+                        if row.entity_a_id not in cooccur_map:
+                            cooccur_map[row.entity_a_id] = []
+                        cooccur_map[row.entity_a_id].append(
+                            (row.entity_b_id, row.co_count)
+                        )
+
+                    final_scores = apply_cooccurrence_boost(
+                        final_scores,
+                        cooccur_map,
+                        scale=params.get("cooccurrence_bonus_scale", 0.10),
+                        max_neighbors=params.get("cooccurrence_max_neighbors", 10),
+                    )
+            except Exception as e:
+                logger.warning(f"共现增益跳过: {e}")
 
         # --- 4. 结果重排 ---
         # 结合: 扩散分数 + 向量相似度 (如果存在) + 时间衰减 + 重要性
@@ -794,9 +935,53 @@ class MemoryService:
 
             ranked_results.append((mem, score))
 
-        # 排序并截断
+        # 排序
         ranked_results.sort(key=lambda x: x[1], reverse=True)
-        final_memories = [m for m, s in ranked_results[:limit]]
+
+        # --- 4.5 DPP 多样性采样 ---
+        if params.get("enable_dpp", False) and len(ranked_results) > limit:
+            try:
+                from services.memory.retrieval_enhancer import dpp_greedy_select
+
+                # 取 limit * multiplier 个候选做 DPP
+                multiplier = params.get("dpp_candidate_multiplier", 3)
+                pool_size = min(len(ranked_results), limit * multiplier)
+                pool = ranked_results[:pool_size]
+
+                # 构建候选向量和分数
+                pool_vecs = []
+                pool_scores = []
+                pool_valid = []
+                for mem, score in pool:
+                    if mem.embedding_json and mem.embedding_json != "[]":
+                        try:
+                            vec = json.loads(mem.embedding_json)
+                            if vec and len(vec) > 0:
+                                pool_vecs.append(vec)
+                                pool_scores.append(score)
+                                pool_valid.append((mem, score))
+                        except (json.JSONDecodeError, TypeError):
+                            pass
+
+                if len(pool_valid) > limit:
+                    vecs_np = np.array(pool_vecs, dtype=np.float32)
+                    scores_np = np.array(pool_scores, dtype=np.float32)
+
+                    selected_indices = dpp_greedy_select(
+                        vecs_np,
+                        scores_np,
+                        k=limit,
+                        quality_weight=params.get("dpp_quality_weight", 1.0),
+                    )
+
+                    final_memories = [pool_valid[i][0] for i in selected_indices]
+                else:
+                    final_memories = [m for m, s in pool_valid[:limit]]
+            except Exception as e:
+                logger.warning(f"DPP 多样性采样跳过: {e}")
+                final_memories = [m for m, s in ranked_results[:limit]]
+        else:
+            final_memories = [m for m, s in ranked_results[:limit]]
 
         # [强化] 更新访问统计
         if update_access_stats and final_memories:

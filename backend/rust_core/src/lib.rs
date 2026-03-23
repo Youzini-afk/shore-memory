@@ -236,8 +236,9 @@ impl CognitiveGraphEngine {
     /// 2. 权重衰减 (Decay): 防止分数无限发散
     /// 3. 并行计算: 利用 Rayon 进行并行规约
     /// 4. 抑制机制 (Inhibition): 类型为 255 的边会传递负能量
+    /// 5. PPR 回家概率 (Teleport): 以 alpha 概率回到初始种子节点，防止发散
     #[pyo3(
-        text_signature = "($self, initial_scores, steps=1, decay=0.5, min_threshold=0.01, max_active_nodes_per_layer=10000)"
+        text_signature = "($self, initial_scores, steps=1, decay=0.5, min_threshold=0.01, max_active_nodes_per_layer=10000, teleport_alpha=0.0)"
     )]
     fn propagate_activation(
         &self,
@@ -246,10 +247,13 @@ impl CognitiveGraphEngine {
         decay: f32,
         min_threshold: f32,
         max_active_nodes_per_layer: Option<usize>,
+        teleport_alpha: Option<f32>,
     ) -> HashMap<i64, f32> {
-        let mut current_scores: AHashMap<i64, f32> = initial_scores.into_iter().collect();
+        let mut current_scores: AHashMap<i64, f32> = initial_scores.iter().cloned().collect();
         // 默认每层最大激活节点数 10000
         let layer_limit = max_active_nodes_per_layer.unwrap_or(10000);
+        // PPR 回家概率 (默认 0.0 = 不启用)
+        let alpha = teleport_alpha.unwrap_or(0.0).clamp(0.0, 1.0);
 
         for _ in 0..steps {
             let mut active_nodes: Vec<(&i64, &f32)> = current_scores
@@ -285,7 +289,8 @@ impl CognitiveGraphEngine {
                                 let energy = if edge.edge_type == 255 {
                                     -score.abs() * weight * decay * 2.0 // 抑制效果通常更强
                                 } else {
-                                    score * weight * decay
+                                    // PPR: 传播能量乘以 (1 - alpha)
+                                    score * weight * decay * (1.0 - alpha)
                                 };
 
                                 if energy.abs() >= min_threshold * 0.5 {
@@ -314,6 +319,15 @@ impl CognitiveGraphEngine {
                     *entry = 2.0;
                 } else if *entry < -2.0 {
                     *entry = -2.0;
+                }
+            }
+
+            // PPR 回家: 以 alpha 概率将种子节点的能量拉回初始值
+            if alpha > 0.0 {
+                for (&seed_id, &seed_energy) in initial_scores.iter() {
+                    let entry = current_scores.entry(seed_id).or_insert(0.0);
+                    // 混合: current = (1-alpha)*current + alpha*initial
+                    *entry = (1.0 - alpha) * (*entry) + alpha * seed_energy;
                 }
             }
         }

@@ -63,6 +63,20 @@ class MemoryRelation(SQLModel, table=True):
     created_at: datetime = Field(default_factory=get_local_now)
 
 
+class EntityCooccurrence(SQLModel, table=True):
+    """
+    Entity 共现统计表
+    记录同一批对话中 Entity 类记忆的共同出现次数，
+    用于检索增强的共现增益计算。
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    entity_a_id: int = Field(foreign_key="memory.id", index=True)
+    entity_b_id: int = Field(foreign_key="memory.id", index=True)
+    co_count: int = Field(default=1)  # 共现次数
+    agent_id: str = Field(default="pero", index=True)
+
+
 class ConversationLog(SQLModel, table=True):
     """
     存储原始对话记录 (Raw History Logs)

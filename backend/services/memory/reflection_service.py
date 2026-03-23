@@ -1556,6 +1556,43 @@ class ReflectionService:
                     self.session.add(new_rel)
                     new_relations_count += 1
 
+            # 4.3 维护 Entity 共现统计 (纯统计，不涉及 LLM)
+            # 同一批对话中同时出现的 Entity 互为共现
+            if len(entity_map) >= 2:
+                try:
+                    from itertools import combinations
+
+                    from models import EntityCooccurrence
+
+                    entity_ids = list(entity_map.values())
+                    for id_a, id_b in combinations(entity_ids, 2):
+                        # 规范化顺序 (小 ID 在前)
+                        a, b = min(id_a, id_b), max(id_a, id_b)
+
+                        existing_co = (
+                            await self.session.exec(
+                                select(EntityCooccurrence).where(
+                                    EntityCooccurrence.entity_a_id == a,
+                                    EntityCooccurrence.entity_b_id == b,
+                                    EntityCooccurrence.agent_id == agent_id,
+                                )
+                            )
+                        ).first()
+
+                        if existing_co:
+                            existing_co.co_count += 1
+                        else:
+                            self.session.add(
+                                EntityCooccurrence(
+                                    entity_a_id=a,
+                                    entity_b_id=b,
+                                    co_count=1,
+                                    agent_id=agent_id,
+                                )
+                            )
+                except Exception as co_e:
+                    print(f"[GraphGardener] 共现统计更新失败 (非致命): {co_e}")
+
             await self.session.commit()
             print(
                 f"[Reflection] 图谱构建完成: +{new_entities_count} 实体, +{new_relations_count} 关系"
