@@ -8,25 +8,29 @@ PeroCore 的核心记忆引擎基于 **PEDSA (Parallel Energy-Decay Spreading Ac
 
 ## 1. 核心原理：PEDSA 算法
 
-PEDSA 全称为 **并行权重衰减传播** 算法，由 PeroCore Team 研发。它是一个模拟权重在图中传播、衰减和汇聚的动力学系统。
+PEDSA 全称为 **并行权重衰减传播** 算法，由 PeroCore Team 自研。它是一个模拟权重在图中传播、衰减和汇聚的动力学系统。
+v2 引入了 **PPR 回家概率**，进一步强化了图扩散对查询的主题相关性约束。
 
 ### 1.1 传播公式
 
 在每一轮遍历（Step）中，节点 $j$ 接收到的传播分值 $E_{t+1}(j)$ 由其所有上游邻居节点 $i$ 传递而来：
 
-$$E_{t+1}(j) = \sum_{i \in Neighbors(j)} \left( E_t(i) \times W_{ij} \times D_{decay} \right)$$
+$$E_{t+1}(j) = (1-\alpha) \sum_{i \in Neighbors(j)} \left( E_t(i) \times W_{ij} \times D_{decay} \right) + \alpha \cdot E_0(j)$$
 
 其中：
 
 - $E_t(i)$: 节点 $i$ 在当前时刻的分数。
 - $W_{ij}$: 节点 $i$ 到节点 $j$ 的连接权重，范围 $[0, 1]$。
 - $D_{decay}$: 全局衰减系数（Decay Factor），通常取 $0.5 \sim 0.9$。
+- $\alpha$: PPR 回家概率（Teleport Alpha），默认 $0.0$（不启用），推荐 $0.1 \sim 0.2$。
+- $E_0(j)$: 节点 $j$ 的初始种子能量（非种子节点则为 0）。
 
 ### 1.2 关键特性
 
 - **动态剪枝 (Dynamic Pruning)**: 为了在千万级节点中保持毫秒级响应，算法在每一步传播后，只保留分数最高的 **Top-K**（默认 10,000）个活跃节点继续下一轮传播。这有效抑制了“计算爆炸”，同时保留了最重要的信号。
 - **权重衰减 (Weight Decay)**: 分数随着传播距离指数级衰减，确保只有紧密相关的概念被检索，避免无关联想。
 - **并行计算 (Parallelization)**: 底层使用 Rust 的 `rayon` 库实现无锁并行计算，充分利用多核 CPU 性能。
+- **PPR 回家概率 (Teleport)** *(v2 新增)*: 引入 PageRank 中的 “回家”弹动机制。在每步传播中，传播能量乘以 `(1-α)`，并将种子节点的当前能量按 `α` 混合回初始値。当 `α=0` 时等价于原始 PEDSA；当 `α=0.15` 时扩散范围实现较弱的收敛，防止能量在大图谱中漂移到无关区域。
 
 ### 1.3 为什么不是 RAG？
 
@@ -89,13 +93,9 @@ pip install pero-memory-core
 from pero_memory_core import CognitiveGraphEngine
 
 # 1. 初始化引擎
-# max_active_nodes: 每层最大活跃节点数
-# max_fan_out: 每个节点最大扩散分支数
 engine = CognitiveGraphEngine(max_active_nodes=10000, max_fan_out=20)
 
 # 2. 注入记忆 (源ID, 目标ID, 关联权重)
-# 这种关联是有向且带权的
-# 模拟逻辑链: 苹果 -> 乔布斯 -> 皮克斯 -> 玩具总动员
 connections = [
     (101, 102, 0.9),  # "Apple" -> "Steve Jobs"
     (102, 103, 0.85), # "Steve Jobs" -> "Pixar"
@@ -103,26 +103,18 @@ connections = [
 ]
 engine.batch_add_connections(connections)
 
-# 3. 执行加权传播 (PEDSA)
-# initial_scores: 初始锚点 {节点ID: 初始分数}
-# steps: 传播步数 (逻辑链深度)
-# decay: 权重衰减系数
+# 3. 执行加权传播 (PEDSA + PPR)
 results = engine.propagate_activation(
-    initial_scores={101: 1.0}, # 从 "Apple" 开始关联
+    initial_scores={101: 1.0},  # 从 "Apple" 开始关联
     steps=3,
-    decay=0.8
+    decay=0.8,
+    teleport_alpha=0.15,        # PPR 回家概率 (v2 新增, 默认 0.0)
 )
 
 # 4. 输出结果
 print("关联结果 (按分数排序):")
 for node_id, score in sorted(results.items(), key=lambda x: x[1], reverse=True):
     print(f"节点 ID: {node_id}, 传播分数: {score:.4f}")
-
-# 预期输出:
-# 节点 101 (Apple): 分数最高 (源头)
-# 节点 102 (Steve Jobs): 被强关联
-# 节点 103 (Pixar): 被次级关联
-# 节点 104 (Toy Story): 被微弱关联 (如果步数够多且衰减没耗尽分数)
 ```
 
 ### 3.3 性能指标
