@@ -341,7 +341,8 @@ impl CognitiveGraphEngine {
         max_active_nodes_per_layer: Option<usize>,
         teleport_alpha: Option<f32>,
     ) -> HashMap<i64, f32> {
-        let mut current_scores: AHashMap<i64, f32> = initial_scores.iter().cloned().collect();
+        let mut current_scores: AHashMap<i64, f32> =
+            initial_scores.iter().map(|(&k, &v)| (k, v)).collect();
         // 默认每层最大激活节点数 10000
         let layer_limit = max_active_nodes_per_layer.unwrap_or(10000);
         // PPR 回家概率 (默认 0.0 = 不启用)
@@ -350,7 +351,7 @@ impl CognitiveGraphEngine {
         for _ in 0..steps {
             let mut active_nodes: Vec<(&i64, &f32)> = current_scores
                 .iter()
-                .filter(|(_, &score)| score.abs() >= min_threshold) // 支持负激活
+                .filter(|(_, score)| score.abs() >= min_threshold) // 支持负激活
                 .collect();
 
             // 动态截断：如果激活节点过多，只保留能量绝对值最高的 Top-K
@@ -370,8 +371,8 @@ impl CognitiveGraphEngine {
             let increments: AHashMap<i64, f32> = active_nodes
                 .into_par_iter()
                 .fold(
-                    || AHashMap::new(),
-                    |mut acc, (&node_id, &score)| {
+                    AHashMap::<i64, f32>::new,
+                    |mut acc: AHashMap<i64, f32>, (&node_id, &score)| {
                         if let Some(neighbors) = self.dynamic_map.get(&node_id) {
                             for edge in neighbors {
                                 // 反量化: u16 [0, 65535] -> f32 [0.0, 1.0]
@@ -394,8 +395,8 @@ impl CognitiveGraphEngine {
                     },
                 )
                 .reduce(
-                    || AHashMap::new(),
-                    |mut map1, map2| {
+                    AHashMap::<i64, f32>::new,
+                    |mut map1: AHashMap<i64, f32>, map2| {
                         for (k, v) in map2 {
                             *map1.entry(k).or_default() += v;
                         }
@@ -537,6 +538,11 @@ impl SemanticVectorIndex {
 
     fn capacity(&self) -> usize {
         self.engine.capacity()
+    }
+
+    /// 获取当前搜索策略 (用于诊断)
+    fn search_strategy(&self) -> String {
+        self.engine.search_strategy().to_string()
     }
 }
 

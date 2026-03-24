@@ -28,7 +28,7 @@ def run_logical_chain_test(hops=5, noise_count=100000):
     logic_edges = []
     # 使用 0.8 作为强逻辑链接
     for i in range(len(chain_nodes) - 1):
-        logic_edges.append((chain_nodes[i], chain_nodes[i + 1], 0.8, 0))
+        logic_edges.append((chain_nodes[i], chain_nodes[i + 1], 0.8))
 
     # 2. 创建大量噪声 (死胡同)
     # 这些干扰项以高相似度 (0.79) 连接到起点
@@ -36,7 +36,7 @@ def run_logical_chain_test(hops=5, noise_count=100000):
     noise_edges = []
     for _ in range(noise_count):
         noise_node = random.randint(1000001, 2000000)
-        noise_edges.append((start_node, noise_node, 0.79, 0))
+        noise_edges.append((start_node, noise_node, 0.79))
 
     print(f"[*] 正在注入逻辑链和 {noise_count:,} 条噪声边...")
     engine.batch_add_connections(logic_edges + noise_edges)

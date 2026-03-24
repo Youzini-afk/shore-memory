@@ -34,11 +34,11 @@ def run_synthetic_knowledge_web_test(node_count=50000, relation_density=5):
         num_hubs = random.randint(1, 3)
         for _ in range(num_hubs):
             hub = random.randint(1, 100)
-            connections.append((i, hub, random.uniform(0.3, 0.9), 0))
+            connections.append((i, hub, random.uniform(0.3, 0.9)))
 
         for _ in range(2):
             other = random.randint(1, node_count)
-            connections.append((i, other, random.uniform(0.1, 0.5), 0))
+            connections.append((i, other, random.uniform(0.1, 0.5)))
 
     start_ingest = time.perf_counter()
     engine.batch_add_connections(connections)

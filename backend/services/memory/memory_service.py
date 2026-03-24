@@ -801,9 +801,27 @@ class MemoryService:
         except Exception:
             params = {}
 
-        # --- 1. 锚点定位 ---
-        # 简单分词 (未来可接入 AC 自动机)
-        keywords = set(re.findall(r"[\w]+", text))
+        # --- 1. 意图拆分 + 关键词提取 ---
+        # [v2.1] 多意图拆分: 按标点/转折词断句, 每段独立检索
+        intent_segments = re.split(
+            r'[，,。.；;！!？?\n]+|(?:顺便|另外|还有|对了|然后)', text
+        )
+        intent_segments = [s.strip() for s in intent_segments if len(s.strip()) > 2]
+        if not intent_segments:
+            intent_segments = [text]
+
+        # [v2.1] jieba 分词 (替代单字 re.findall)
+        try:
+            import jieba
+            keywords = set()
+            for seg in intent_segments:
+                for word in jieba.cut(seg):
+                    word = word.strip()
+                    if len(word) > 1:  # 忽略单字和标点
+                        keywords.add(word)
+        except ImportError:
+            # jieba 未安装时回退到正则
+            keywords = {w for w in re.findall(r"[\w]{2,}", text)}
 
         # 查找匹配的 Entity Node
         entity_anchors = []
@@ -811,8 +829,7 @@ class MemoryService:
             # 构造 SQL OR 查询
             conditions = []
             for kw in keywords:
-                if len(kw) > 1:  # 忽略单字
-                    conditions.append(Memory.content == kw)
+                conditions.append(Memory.content == kw)
 
             if conditions:
                 stmt = select(Memory).where(
@@ -822,17 +839,49 @@ class MemoryService:
                 )
                 entity_anchors = (await session.exec(stmt)).all()
 
-        # --- 2. 向量检索 ---
+        # --- 2. 多意图向量检索 ---
         if query_vec is None:
             query_vec = await embedding_service.encode_one(text)
 
         if not query_vec:
             return []
 
-        # 初步召回 Top-20 (为了给扩散留余地)
-        vector_candidates = vector_service.search(
-            query_vec, limit=20, agent_id=agent_id
-        )
+        # [v2.1] 多段并行检索: 每个意图片段独立搜索, 合并去重
+        vector_candidates = []
+        seen_ids = set()
+
+        if len(intent_segments) > 1:
+            # 多意图: 每段分配配额
+            per_segment_limit = max(8, 20 // len(intent_segments))
+            for seg in intent_segments:
+                seg_vec = await embedding_service.encode_one(seg)
+                if seg_vec:
+                    seg_results = vector_service.search(
+                        seg_vec, limit=per_segment_limit, agent_id=agent_id
+                    )
+                    for r in seg_results:
+                        if r["id"] not in seen_ids:
+                            vector_candidates.append(r)
+                            seen_ids.add(r["id"])
+
+            # 补充: 整句向量也搜一次 (捕获跨意图关联)
+            full_results = vector_service.search(
+                query_vec, limit=10, agent_id=agent_id
+            )
+            for r in full_results:
+                if r["id"] not in seen_ids:
+                    vector_candidates.append(r)
+                    seen_ids.add(r["id"])
+
+            logger.info(
+                f"多意图检索: {len(intent_segments)} 段, "
+                f"共召回 {len(vector_candidates)} 个候选"
+            )
+        else:
+            # 单意图: 走原路径
+            vector_candidates = vector_service.search(
+                query_vec, limit=20, agent_id=agent_id
+            )
         # --- 2.3 NMF 语义分解 ---
         nmf_result = None
         if params.get("enable_nmf", False) and entity_anchors:

@@ -40,7 +40,7 @@ def run_massive_scale_test(scale=1000000):
         for _ in range(actual_batch_size):
             src = random.randint(1, scale)
             dst = random.randint(1, scale)
-            batch.append((src, dst, random.random(), 0))
+            batch.append((src, dst, random.random()))
 
         b_start = time.perf_counter()
         engine.batch_add_connections(batch)
