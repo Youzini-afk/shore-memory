@@ -12,12 +12,22 @@ function getRootPath() {
   }
 }
 
+/**
+ * 获取 Agent 用户覆盖配置目录。
+ * 用户对 Agent 的修改（启用/禁用、自定义参数等）保存在此目录，
+ * 不修改源码/资源目录中的原始 config.json。
+ */
+function getAgentOverridesDir(): string {
+  return path.join(paths.data, 'agent_overrides')
+}
+
 export async function scanLocalAgents() {
   const root = getRootPath()
-  // 后端结构: backend/services/mdp/agents
-  // 生产环境中，后端可能位于 resources/backend
   const backendAgentsDir = path.join(root, 'backend/services/mdp/agents')
-  const globalConfigPath = path.join(root, 'backend/data/agent_launch_config.json')
+  // 全局配置已迁移到 paths.data
+  const globalConfigPath = path.join(paths.data, 'agent_launch_config.json')
+  // 兼容旧路径（如果 paths.data 中找不到，尝试旧位置）
+  const legacyConfigPath = path.join(root, 'backend/data/agent_launch_config.json')
 
   logger.info('Main', `[Agents] 正在扫描 Agents，路径: ${backendAgentsDir}`)
   logger.info('Main', `[Agents] 全局配置路径: ${globalConfigPath}`)
@@ -30,8 +40,13 @@ export async function scanLocalAgents() {
   // 加载全局配置
   let globalConfig = { enabled_agents: [] as string[], active_agent: '' }
   try {
-    if (await fs.pathExists(globalConfigPath)) {
-      const loadedConfig = await fs.readJson(globalConfigPath)
+    let configToLoad = globalConfigPath
+    if (!(await fs.pathExists(configToLoad)) && (await fs.pathExists(legacyConfigPath))) {
+      configToLoad = legacyConfigPath
+      logger.info('Main', '[Agents] 从旧路径加载全局配置')
+    }
+    if (await fs.pathExists(configToLoad)) {
+      const loadedConfig = await fs.readJson(configToLoad)
       globalConfig = { ...globalConfig, ...loadedConfig }
       logger.info('Main', `[Agents] 已加载全局配置: ${JSON.stringify(globalConfig)}`)
     } else {
@@ -39,6 +54,20 @@ export async function scanLocalAgents() {
     }
   } catch (e) {
     logger.warn('Main', `[Agents] 加载全局 Agent 配置失败: ${e}`)
+  }
+
+  // 加载用户覆盖配置
+  const overridesDir = getAgentOverridesDir()
+  const loadOverride = async (agentId: string): Promise<any> => {
+    const overridePath = path.join(overridesDir, `${agentId}.json`)
+    if (await fs.pathExists(overridePath)) {
+      try {
+        return await fs.readJson(overridePath)
+      } catch {
+        return {}
+      }
+    }
+    return {}
   }
 
   const agents = []
@@ -54,6 +83,10 @@ export async function scanLocalAgents() {
           try {
             const config = await fs.readJson(configPath)
             const id = file
+
+            // 合并用户覆盖配置
+            const override = await loadOverride(id)
+            const mergedConfig = { ...config, ...override }
 
             // 合并全局状态
             const isEnabled = globalConfig.enabled_agents.includes(id)
@@ -93,13 +126,13 @@ export async function scanLocalAgents() {
 
             agents.push({
               id: id,
-              name: config.name || id,
-              description: config.description || '',
-              avatar: avatar || config.avatar || '',
+              name: mergedConfig.name || id,
+              description: mergedConfig.description || '',
+              avatar: avatar || mergedConfig.avatar || '',
               path: agentDir,
               is_enabled: isEnabled,
               is_active: isActive,
-              ...config
+              ...mergedConfig
             })
           } catch (e) {
             logger.error('Main', `无法读取 ${file} 的配置: ${e}`)
@@ -175,15 +208,14 @@ export async function getPlugins() {
 }
 
 export async function saveGlobalLaunchConfig(enabledAgents: string[], activeAgent: string) {
-  const root = getRootPath()
-  const dataDir = path.join(root, 'backend/data')
-  const configPath = path.join(dataDir, 'agent_launch_config.json')
+  // 保存到 paths.data（可写目录），而非 resources/backend/data（可能只读）
+  const configPath = path.join(paths.data, 'agent_launch_config.json')
 
   logger.info('Main', `[Config] 正在保存全局配置到 ${configPath}`)
   logger.info('Main', `[Config] 数据: ${JSON.stringify({ enabledAgents, activeAgent })}`)
 
   try {
-    await fs.ensureDir(dataDir)
+    await fs.ensureDir(path.dirname(configPath))
 
     const config = {
       enabled_agents: enabledAgents,
@@ -200,18 +232,27 @@ export async function saveGlobalLaunchConfig(enabledAgents: string[], activeAgen
 }
 
 export async function saveAgentLaunchConfig(agentId: string, config: any) {
-  const root = getRootPath()
-  const backendAgentsDir = path.join(root, 'backend/services/mdp/agents')
-  const agentDir = path.join(backendAgentsDir, agentId)
-  const configPath = path.join(agentDir, 'config.json')
+  // 用户的 Agent 配置修改保存到 paths.data/agent_overrides/，不修改源码中的 config.json
+  const overridesDir = getAgentOverridesDir()
+  const overridePath = path.join(overridesDir, `${agentId}.json`)
 
-  if (!(await fs.pathExists(configPath))) {
-    throw new Error(`未找到 Agent 配置: ${configPath}`)
+  logger.info('Main', `[Config] 正在保存 Agent ${agentId} 的覆盖配置到 ${overridePath}`)
+
+  try {
+    await fs.ensureDir(overridesDir)
+
+    // 读取已有的覆盖配置并合并
+    let existing: any = {}
+    if (await fs.pathExists(overridePath)) {
+      existing = await fs.readJson(overridePath)
+    }
+    const merged = { ...existing, ...config }
+
+    await fs.writeJson(overridePath, merged, { spaces: 4 })
+    logger.info('Main', `[Config] Agent ${agentId} 覆盖配置保存成功`)
+    return merged
+  } catch (e) {
+    logger.error('Main', `[Config] 保存 Agent ${agentId} 覆盖配置失败: ${e}`)
+    throw e
   }
-
-  // 合并现有配置和新配置
-  const current = await fs.readJson(configPath)
-  const newConfig = { ...current, ...config }
-  await fs.writeJson(configPath, newConfig, { spaces: 4 })
-  return newConfig
 }

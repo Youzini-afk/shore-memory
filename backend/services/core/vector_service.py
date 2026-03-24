@@ -29,13 +29,19 @@ class VectorService:
             return
         vector_store.add_memory(memory_id, embedding, metadata)
 
-    def delete_memory(self, memory_id: int):
-        """删除记忆向量"""
-        # Rust 索引目前不容易支持删除 (HNSW 针对仅追加进行了优化)。
-        # 我们可以实现一个墓碑列表或重建索引。
-        # 目前，我们忽略删除或 TODO: 在 Rust 核心中实现删除。
-        print("[VectorService] 警告: delete_memory 在 Rust 索引中尚未完全实现。")
-        pass
+    def delete_memory(self, memory_id: int, agent_id: str = "pero"):
+        """逻辑删除记忆向量（Tombstone 机制）。
+
+        底层 HNSW 索引不支持原地物理删除，此方法将 memory_id 写入
+        已删除集合，搜索时实时过滤，并在下一次 save() 时从持久化
+        文件中物理清除，同时重建内存索引以回收空间。
+        """
+        vector_store.delete_memory(memory_id, agent_id)
+        # 触发一次 save()，将 tombstone 标记刷到持久化文件并重建索引
+        try:
+            vector_store.save()
+        except Exception as e:
+            print(f"[VectorService] delete_memory 触发 save 失败 (非致命): {e}")
 
     def search(
         self,

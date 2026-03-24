@@ -3,25 +3,38 @@ import path from 'path'
 import fs from 'fs'
 import { getConfig, saveConfig } from './system.js'
 
+/**
+ * steamworks.js 延迟加载。
+ * 不在模块顶层 require()，因为如果 steam_api64.dll 缺失，
+ * native addon 可能直接 segfault，连 try-catch 都无法捕获。
+ */
 let steamworks: any = null
-try {
-  // 安全检查：在加载 steamworks.js 之前，先检查 steam_api64.dll 是否存在
-  // 如果 DLL 缺失，require() 可能在 native 层直接 segfault，连 try-catch 都拦不住
-  const exeDir = path.dirname(process.execPath)
-  const dllPath = path.join(exeDir, 'steam_api64.dll')
-  const hasSteamDll = fs.existsSync(dllPath)
+let steamLoadAttempted = false
 
-  if (!hasSteamDll && app.isPackaged) {
-    // 生产环境下没有 Steam DLL，说明这是非 Steam 版本（如 GitHub Release）
-    // 跳过加载 steamworks.js 以避免原生层崩溃
-    console.log('[Steam] steam_api64.dll 未找到，跳过 Steamworks 加载 (非 Steam 版本)')
+function loadSteamworks(): any {
+  if (steamLoadAttempted) return steamworks
+  steamLoadAttempted = true
+
+  try {
+    // 安全检查：在加载 steamworks.js 之前，先检查 steam_api64.dll 是否存在
+    const exeDir = path.dirname(process.execPath)
+    const dllPath = path.join(exeDir, 'steam_api64.dll')
+    const hasSteamDll = fs.existsSync(dllPath)
+
+    if (!hasSteamDll && app.isPackaged) {
+      // 生产环境下没有 Steam DLL，说明这是非 Steam 版本（如 GitHub Release）
+      // 跳过加载 steamworks.js 以避免原生层崩溃
+      console.log('[Steam] steam_api64.dll 未找到，跳过 Steamworks 加载 (非 Steam 版本)')
+      steamworks = null
+    } else {
+      steamworks = require('steamworks.js')
+    }
+  } catch (e) {
+    console.error('[Steam] 无法加载 steamworks.js 模块 (可能缺少 steam_api64.dll):', e)
     steamworks = null
-  } else {
-    steamworks = require('steamworks.js')
   }
-} catch (e) {
-  console.error('[Steam] 无法加载 steamworks.js 模块 (可能缺少 steam_api64.dll):', e)
-  steamworks = null
+
+  return steamworks
 }
 
 let client: any = null
@@ -42,7 +55,10 @@ export const ACHIEVEMENTS = {
 // 'failed': Steam 初始化失败（在没有 Steam 的情况下继续运行）
 export function initSteam(): 'restarting' | 'success' | 'failed' {
   if (isInitialized) return 'success'
-  if (!steamworks) return 'failed'
+
+  // 延迟加载 steamworks.js native addon
+  const sw = loadSteamworks()
+  if (!sw) return 'failed'
 
   const appId = 4457100 // PeroCore Steam App ID
 

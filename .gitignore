@@ -127,3 +127,7 @@ backend/nit_core/plugins/social_adapter/NapCat/
 View3D/
 
 !backend/debug/
+
+# VitePress (wiki)
+wiki/.vitepress/cache/
+wiki/.vitepress/dist/

@@ -32,7 +32,7 @@ export interface DiagnosticReport {
 const workspaceRoot = isDev
   ? path.resolve(__dirname, '../../..') // dist-electron/main -> electron -> 根目录
   : isElectron
-    ? path.dirname(paths.exe)
+    ? paths.resources // 生产环境: 资源 (python/, backend/) 位于 resources/ 下，而非 exe 同级目录
     : paths.app
 
 // 规范化路径

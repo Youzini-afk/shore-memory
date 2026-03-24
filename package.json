@@ -18,6 +18,7 @@
     "docker:down": "cd docker && docker-compose down",
     "build:electron": "npm run build:backend && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder",
     "build:steam": "npm run build:backend && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder --win --dir",
+    "build:portable": "npm run build:backend && node scripts/copy-native.js && vite build && tsc -p electron/tsconfig.json && electron-builder --win --dir",
     "build:native": "cd src/components/avatar/native && npm install && npm run build",
     "dev": "vite",
     "build": "vite build",
@@ -178,7 +179,8 @@
     ],
     "win": {
       "target": [
-        "nsis"
+        "nsis",
+        "dir"
       ],
       "icon": "public/Logo.png"
     },

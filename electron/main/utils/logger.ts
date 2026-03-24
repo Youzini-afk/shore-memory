@@ -19,6 +19,7 @@ export type LogSource =
 class Logger {
   private static instance: Logger
   private logFile: string | null = null
+  private secondaryLogFile: string | null = null   // 开发模式下同时写入 %APPDATA%
 
   // 隐藏模式 (降噪)
   // 优化: 组合正则以获得更好的性能
@@ -96,28 +97,53 @@ class Logger {
 
   private initializeLogFile() {
     try {
-      // 动态获取 userData 路径，避免循环依赖
-      let userData = ''
+      // 动态获取路径，避免循环依赖
+      // 注意: logger 在 env.ts 之前被加载，不能直接 import paths，需自行检测模式
+      let primaryDir = ''
+      let systemDir = ''   // %APPDATA% 路径（用于开发模式双写）
+
       try {
         const { app } = require('electron')
         if (app) {
-          userData = app.getPath('userData')
+          const exePath = app.getPath('exe')
+          const portableMarker = path.join(path.dirname(exePath), '.portable')
+
+          if (fs.existsSync(portableMarker)) {
+            // 便携模式：日志存在 exe 同目录
+            primaryDir = path.dirname(exePath)
+          } else if (!app.isPackaged) {
+            // 开发模式：主日志在 backend/data/logs/，同时写 %APPDATA% 副本
+            const projectRoot = path.resolve(__dirname, '../../..')
+            primaryDir = path.join(projectRoot, 'backend')
+            systemDir = app.getPath('userData')   // %APPDATA%/...
+          } else {
+            // 发行模式
+            primaryDir = app.getPath('userData')
+          }
         }
       } catch {
         // 非 Electron 环境
-        userData = process.env.PERO_USER_DATA || path.join(os.homedir(), '.perocore')
+        primaryDir = process.env.PERO_USER_DATA || path.join(os.homedir(), '.perocore')
       }
 
-      if (userData) {
-        const logDir = path.join(userData, 'logs')
+      // 初始化主日志文件
+      if (primaryDir) {
+        const logDir = path.join(primaryDir, 'data', 'logs')
         if (!fs.existsSync(logDir)) {
           fs.mkdirSync(logDir, { recursive: true })
         }
         this.logFile = path.join(logDir, 'main.log')
-
-        // 启动时清空旧日志，避免文件无限增长
-        // 或者我们可以保留最后的 5 个日志，但现在简单处理
         fs.writeFileSync(this.logFile, `--- Log started at ${new Date().toISOString()} ---\n`)
+      }
+
+      // 初始化开发模式副本日志文件（%APPDATA%）
+      if (systemDir && systemDir !== primaryDir) {
+        const sysLogDir = path.join(systemDir, 'logs')
+        if (!fs.existsSync(sysLogDir)) {
+          fs.mkdirSync(sysLogDir, { recursive: true })
+        }
+        this.secondaryLogFile = path.join(sysLogDir, 'main.log')
+        fs.writeFileSync(this.secondaryLogFile, `--- Log started at ${new Date().toISOString()} (dev secondary) ---\n`)
       }
     } catch (e) {
       console.error('[Logger] 初始化日志文件失败:', e)
@@ -148,10 +174,6 @@ class Logger {
     if (message.startsWith('[') && message.includes('] [')) return message
 
     let translated = message
-    // 大多数翻译都是特定短语。我们可以先检查消息是否*包含*关键字吗？
-    // 但由于我们有一个替换列表，迭代是必要的，除非我们重建整个字符串。
-    // 但是，我们可以通过仅在源字符串存在时进行替换来优化。
-
     for (const { from, to } of this.translations) {
       if (typeof from === 'string') {
         if (translated.includes(from)) {
@@ -177,10 +199,19 @@ class Logger {
     // 统一格式: [HH:mm:ss] [SOURCE] [LEVEL] 消息
     const formattedLog = `[${timestamp}] [${source}] [${level}] ${translatedMsg}`
 
-    // 写入文件
+    // 写入主日志文件
     if (this.logFile) {
       try {
         fs.appendFileSync(this.logFile, formattedLog + '\n')
+      } catch {
+        // 忽略写入失败
+      }
+    }
+
+    // 写入副本日志文件（开发模式下同时写入 %APPDATA%）
+    if (this.secondaryLogFile) {
+      try {
+        fs.appendFileSync(this.secondaryLogFile, formattedLog + '\n')
       } catch {
         // 忽略写入失败
       }

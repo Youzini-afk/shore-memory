@@ -78,6 +78,7 @@ interface ApiConfig {
   embedding_model_id?: string
   embedding_api_base?: string
   embedding_api_key?: string
+  reranker_enabled?: string
   reranker_provider?: string
   reranker_model_id?: string
   reranker_api_base?: string
@@ -115,6 +116,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
   const embeddingModelId = ref<string>('')
   const embeddingApiBase = ref<string>('')
   const embeddingApiKey = ref<string>('')
+  const rerankerEnabled = ref<boolean>(true)
   const rerankerProvider = ref<string>('local')
   const rerankerModelId = ref<string>('')
   const rerankerApiBase = ref<string>('')
@@ -176,6 +178,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
       embeddingModelId.value = data.embedding_model_id ?? ''
       embeddingApiBase.value = data.embedding_api_base ?? ''
       embeddingApiKey.value = data.embedding_api_key ?? ''
+      rerankerEnabled.value = data.reranker_enabled !== 'false'  // 默认开启
       rerankerProvider.value = data.reranker_provider ?? 'local'
       rerankerModelId.value = data.reranker_model_id ?? ''
       rerankerApiBase.value = data.reranker_api_base ?? ''
@@ -521,10 +524,12 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
             embedding_model_id: embeddingModelId.value,
             embedding_api_base: embeddingApiBase.value,
             embedding_api_key: embeddingApiKey.value,
-            reranker_provider: rerankerProvider.value,
-            reranker_model_id: rerankerModelId.value,
-            reranker_api_base: rerankerApiBase.value,
-            reranker_api_key: rerankerApiKey.value,
+            reranker_enabled: rerankerEnabled.value ? 'true' : 'false',
+            // 当 reranker 关闭时，清空配置以通知后端不使用 reranker
+            reranker_provider: rerankerEnabled.value ? rerankerProvider.value : '',
+            reranker_model_id: rerankerEnabled.value ? rerankerModelId.value : '',
+            reranker_api_base: rerankerEnabled.value ? rerankerApiBase.value : '',
+            reranker_api_key: rerankerEnabled.value ? rerankerApiKey.value : '',
             embedding_dimension: embeddingDimension.value,
             global_llm_api_key: globalConfig.value.global_llm_api_key,
             global_llm_api_base: globalConfig.value.global_llm_api_base
@@ -739,6 +744,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     embeddingModelId,
     embeddingApiBase,
     embeddingApiKey,
+    rerankerEnabled,
     rerankerProvider,
     rerankerModelId,
     rerankerApiBase,

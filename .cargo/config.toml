@@ -4,5 +4,5 @@
 rustflags = ["-C", "target-cpu=native"]
 
 [env]
-# 强制 PyO3 使用项目虚拟环境中的 Python (避免指向全局 Python 3.14)
-PYO3_PYTHON = "c:\\Users\\Administrator\\OneDrive\\桌面\\PeroCore\\backend\\.venv\\Scripts\\python.exe"
+# 强制 PyO3 使用项目虚拟环境中的 Python
+PYO3_PYTHON = { value = "backend/.venv/Scripts/python.exe", relative = true }

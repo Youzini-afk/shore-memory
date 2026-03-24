@@ -464,16 +464,42 @@ class ReflectionService:
 
             for agent_id in agent_ids:
                 print(f"[Reflection] 正在处理代理: {agent_id}")
+
+                # [降本] 检查今日新增记忆数，不足阈值则跳过 LLM 密集型步骤
+                today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start_ms = today_start.timestamp() * 1000
+                new_mem_stmt = (
+                    select(Memory.id)
+                    .where(Memory.agent_id == agent_id)
+                    .where(Memory.timestamp >= today_start_ms)
+                )
+                new_count = len((await self.session.exec(new_mem_stmt)).all())
+
+                MAINTENANCE_THRESHOLD = 5  # 每日新增记忆 < 5 时跳过 LLM 密集型维护
+
+                if new_count < MAINTENANCE_THRESHOLD:
+                    print(
+                        f"[Reflection] Agent {agent_id} 今日新增 {new_count} 条记忆 "
+                        f"(< {MAINTENANCE_THRESHOLD})，跳过 LLM 密集型维护步骤。"
+                    )
+                    # 仍执行低成本的清理操作
+                    report[
+                        "social_summaries_cleaned"
+                    ] += await self._clean_duplicate_social_summaries(agent_id)
+                    report["retired_count"] += await self._handle_maintenance_boundary(
+                        agent_id
+                    )
+                    continue
+
                 # 1. 提取偏好 (已按需关闭)
                 report["preferences_extracted"] += (
                     0  # await self._extract_preferences(llm, agent_id)
                 )
 
-                # 2. 标记重要性
-                report["important_tagged"] += await self._tag_importance(llm, agent_id)
-
-                # 3. 自动归簇
-                report["clustered_count"] += await self._cluster_memories(llm, agent_id)
+                # 2+3. [降本合并] 重要性标注 + 思维簇归类 (单次 LLM 调用)
+                tagged, clustered = await self._tag_and_cluster_memories(llm, agent_id)
+                report["important_tagged"] += tagged
+                report["clustered_count"] += clustered
 
                 # 4. 记忆合并
                 for _ in range(3):
@@ -484,17 +510,17 @@ class ReflectionService:
                     if merged_count == 0:
                         break
 
-                # 5. 新增：清理可疑/错误记忆
+                # 5. 清理可疑/错误记忆
                 report["cleaned_count"] += await self._clean_invalid_memories(
                     llm, agent_id
                 )
 
-                # 6. 新增：自动清理重复的社交日报总结
+                # 6. 自动清理重复的社交日报总结
                 report[
                     "social_summaries_cleaned"
                 ] += await self._clean_duplicate_social_summaries(agent_id)
 
-                # 6. 维护边界处理
+                # 7. 维护边界处理
                 report["retired_count"] += await self._handle_maintenance_boundary(
                     agent_id
                 )
@@ -699,14 +725,28 @@ class ReflectionService:
             traceback.print_exc()
         return 0
 
-    async def _cluster_memories(self, llm: LLMService, agent_id: str = "pero") -> int:
-        """为未归类的记忆分配思维簇"""
-        # 查找 clusters 为空或 null 的 event 类型记忆
+    async def _tag_and_cluster_memories(
+        self, llm: LLMService, agent_id: str = "pero"
+    ) -> tuple:
+        """
+        [降本合并] 重要性标注 + 思维簇归类，单次 LLM 调用完成。
+        返回 (tagged_count, clustered_count)。
+
+        合并条件:
+        - importance == 1 (未标注) 或 clusters 为空
+        - 两种条件 OR 取并集，一次送入 LLM
+        """
+        from sqlmodel import or_
+
         statement = (
             select(Memory)
             .where(
                 Memory.agent_id == agent_id,
-                (Memory.clusters is None) | (Memory.clusters == ""),
+                or_(
+                    Memory.importance == 1,  # 未标注重要性
+                    Memory.clusters.is_(None),
+                    Memory.clusters == "",
+                ),
             )
             .order_by(desc(Memory.timestamp))
             .limit(50)
@@ -714,113 +754,15 @@ class ReflectionService:
 
         memories = (await self.session.exec(statement)).all()
         if not memories:
-            return 0
+            return 0, 0
 
         mem_data = [{"id": m.id, "content": m.content} for m in memories]
         bot_name = await self._get_bot_name()
+        if agent_id != "pero":
+            bot_name = agent_id.capitalize()
 
         prompt = mdp.render(
-            "tasks/memory/reflection/memory_clusterizer",
-            {
-                "agent_name": bot_name,
-                "memory_data": json.dumps(mem_data, ensure_ascii=False),
-            },
-        )
-
-        try:
-            response = await llm.chat(
-                [{"role": "user", "content": prompt}], temperature=0.2
-            )
-            content = (
-                response.get("choices", [{}])[0].get("message", {}).get("content", "")
-            )
-
-            import re
-
-            json_match = re.search(r"\{.*\}", content, re.S)
-            if json_match:
-                updates = json.loads(json_match.group(0))
-                count = 0
-                for m in memories:
-                    if str(m.id) in updates:
-                        self.modified_data.append(m.dict())
-                        clusters = updates[str(m.id)]
-                        if isinstance(clusters, list):
-                            m.clusters = ",".join(clusters)
-                        elif isinstance(clusters, str):
-                            m.clusters = clusters
-
-                        # [修复] 簇变更后更新向量元数据
-                        try:
-                            from services.core.embedding_service import (
-                                embedding_service,
-                            )
-                            from services.core.vector_service import vector_service
-
-                            enriched = (
-                                f"{m.tags} {m.tags} {m.content}"
-                                if m.tags
-                                else m.content
-                            )
-                            new_vec = await embedding_service.encode_one(enriched)
-
-                            if new_vec:
-                                metadata_dict = {
-                                    "type": m.type,
-                                    "timestamp": m.timestamp,
-                                    "importance": float(m.importance),
-                                    "tags": m.tags,
-                                    "clusters": m.clusters,
-                                    "agent_id": agent_id,
-                                }
-
-                                if m.clusters:
-                                    cluster_list = [
-                                        c.strip()
-                                        for c in m.clusters.split(",")
-                                        if c.strip()
-                                    ]
-                                    for c in cluster_list:
-                                        clean_c = c.replace("[", "").replace("]", "")
-                                        if clean_c:
-                                            metadata_dict[f"cluster_{clean_c}"] = True
-
-                                vector_service.add_memory(
-                                    memory_id=m.id,
-                                    content=m.content,
-                                    embedding=new_vec,
-                                    metadata=metadata_dict,
-                                )
-                        except Exception as e:
-                            print(f"[Reflection] 更新簇向量失败: {e}")
-
-                        self.session.add(m)
-                        count += 1
-                await self.session.commit()
-                return count
-        except Exception as e:
-            print(f"归类记忆簇时出错: {e}")
-        return 0
-
-    async def _tag_importance(self, llm: LLMService, agent_id: str = "pero") -> int:
-        """优化重要性打分逻辑"""
-        statement = (
-            select(Memory)
-            .where(Memory.type == "event")
-            .where(Memory.importance == 1)
-            .where(Memory.agent_id == agent_id)
-            .order_by(desc(Memory.timestamp))
-            .limit(50)
-        )
-        memories = (await self.session.exec(statement)).all()
-        if not memories:
-            return 0
-
-        mem_data = [{"id": m.id, "content": m.content} for m in memories]
-
-        bot_name = await self._get_bot_name()
-        prompt = mdp.render(
-            "tasks/memory/reflection/importance_tagger",
+            "tasks/memory/reflection/importance_and_cluster",
             {
                 "agent_name": bot_name,
                 "memory_data": json.dumps(mem_data, ensure_ascii=False),
@@ -837,57 +779,99 @@ class ReflectionService:
             import re
 
             json_match = re.search(r"\{.*\}", content, re.S)
-            if json_match:
-                updates = json.loads(json_match.group(0))
-                count = 0
-                for m in memories:
-                    if str(m.id) in updates:
-                        self.modified_data.append(m.dict())
-                        info = updates[str(m.id)]
-                        m.importance = info.get("importance", m.importance)
-                        new_tags = info.get("tags", [])
-                        if not new_tags and "tag" in info:
-                            new_tags = [info["tag"]]
+            if not json_match:
+                return 0, 0
 
-                        if new_tags:
-                            current_tags = set(m.tags.split(",")) if m.tags else set()
-                            for t in new_tags:
-                                if t:
-                                    current_tags.add(t)
-                            m.tags = ",".join(filter(None, current_tags))
+            updates = json.loads(json_match.group(0))
+            tagged_count = 0
+            clustered_count = 0
 
-                            # [Fix] 标签变更后更新向量
-                            try:
-                                from services.core.embedding_service import (
-                                    embedding_service,
-                                )
-                                from services.core.vector_service import vector_service
+            for m in memories:
+                info = updates.get(str(m.id))
+                if not info or not isinstance(info, dict):
+                    continue
 
-                                enriched = f"{m.tags} {m.tags} {m.content}"
-                                new_vec = await embedding_service.encode_one(enriched)
-                                if new_vec:
-                                    vector_service.add_memory(
-                                        memory_id=m.id,
-                                        content=m.content,
-                                        embedding=new_vec,
-                                        metadata={
-                                            "type": m.type,
-                                            "timestamp": m.timestamp,
-                                            "importance": float(m.importance),
-                                            "tags": m.tags,
-                                            "agent_id": agent_id,
-                                        },
-                                    )
-                            except Exception as e:
-                                print(f"[Reflection] 更新标签向量失败: {e}")
+                self.modified_data.append(m.dict())
+                changed = False
 
-                        self.session.add(m)
-                        count += 1
-                await self.session.commit()
-                return count
+                # --- 重要性更新 ---
+                new_importance = info.get("importance")
+                if new_importance is not None and m.importance == 1:
+                    m.importance = int(new_importance)
+                    m.base_importance = float(m.importance)
+                    tagged_count += 1
+                    changed = True
+
+                # --- 标签更新 ---
+                new_tags = info.get("tags", [])
+                if not new_tags and "tag" in info:
+                    new_tags = [info["tag"]]
+                if new_tags:
+                    current_tags = set(m.tags.split(",")) if m.tags else set()
+                    for t in new_tags:
+                        if t:
+                            current_tags.add(t)
+                    m.tags = ",".join(filter(None, current_tags))
+                    changed = True
+
+                # --- 思维簇更新 ---
+                new_clusters = info.get("clusters", [])
+                if new_clusters:
+                    if isinstance(new_clusters, list):
+                        m.clusters = ",".join(new_clusters)
+                    elif isinstance(new_clusters, str):
+                        m.clusters = new_clusters
+                    clustered_count += 1
+                    changed = True
+
+                # --- 向量同步 (标签或簇变更后) ---
+                if changed:
+                    try:
+                        from services.core.embedding_service import embedding_service
+                        from services.core.vector_service import vector_service
+
+                        enriched = (
+                            f"{m.tags} {m.tags} {m.content}" if m.tags else m.content
+                        )
+                        new_vec = await embedding_service.encode_one(enriched)
+                        if new_vec:
+                            metadata_dict = {
+                                "type": m.type,
+                                "timestamp": m.timestamp,
+                                "importance": float(m.importance),
+                                "tags": m.tags,
+                                "clusters": m.clusters or "",
+                                "agent_id": agent_id,
+                            }
+                            if m.clusters:
+                                for c in m.clusters.split(","):
+                                    clean_c = c.strip().replace("[", "").replace("]", "")
+                                    if clean_c:
+                                        metadata_dict[f"cluster_{clean_c}"] = True
+
+                            vector_service.add_memory(
+                                memory_id=m.id,
+                                content=m.content,
+                                embedding=new_vec,
+                                metadata=metadata_dict,
+                            )
+                    except Exception as e:
+                        print(f"[Reflection] 更新向量失败: {e}")
+
+                    self.session.add(m)
+
+            await self.session.commit()
+            print(
+                f"[Reflection] 合并标注完成: {tagged_count} 条重要性, "
+                f"{clustered_count} 条归簇"
+            )
+            return tagged_count, clustered_count
+
         except Exception as e:
-            print(f"标记重要性时出错: {e}")
-        return 0
+            print(f"[Reflection] 合并标注+归簇时出错: {e}")
+            import traceback
+            traceback.print_exc()
+        return 0, 0
 
     async def _consolidate_memories(
         self, llm: LLMService, offset: int = 0, agent_id: str = "pero"
@@ -1384,7 +1368,7 @@ class ReflectionService:
         return {"status": "success", "new_relations": new_relations_count}
 
     async def build_ontology_graph(
-        self, limit: int = 20, agent_id: str = "pero"
+        self, limit: int = 10, agent_id: str = "pero"
     ) -> dict:
         """
         [图谱园丁] (Graph Gardener)

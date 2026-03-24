@@ -4,10 +4,23 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/png" href="/icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <!-- 引入萌动像素风与快乐体字体 🌸 -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+KuaiLe&family=DotGothic16&display=swap" rel="stylesheet">
+    <!-- 本地字体加载（避免依赖 Google Fonts CDN，解决中国网络/离线环境下阻塞渲染的问题） -->
+    <style>
+      @font-face {
+        font-family: 'ZCOOL KuaiLe';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('./fonts/ZCOOLKuaiLe-Regular.woff2') format('woff2');
+      }
+      @font-face {
+        font-family: 'DotGothic16';
+        font-style: normal;
+        font-weight: 400;
+        font-display: swap;
+        src: url('./fonts/DotGothic16-Regular.woff2') format('woff2');
+      }
+    </style>
     <script>
       window.startTime = Date.now()
       console.log('[Perf] index.html parsing at ' + window.startTime)

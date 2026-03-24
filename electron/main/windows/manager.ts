@@ -46,14 +46,21 @@ export class WindowManager {
     return ''
   }
 
-  private getPageUrl(route: string = ''): string {
+  /**
+   * 加载窗口内容。
+   * 生产环境使用 loadFile() 以避免 Windows 上 file:// URL 格式问题（反斜杠、缺少第三个斜杠等）。
+   * 开发环境使用 loadURL() 连接 Vite Dev Server。
+   */
+  private loadWindowContent(window: BrowserWindow, route: string = '') {
     if (process.env.VITE_DEV_SERVER_URL) {
-      return `${process.env.VITE_DEV_SERVER_URL}#${route}`
+      const url = `${process.env.VITE_DEV_SERVER_URL}#${route}`
+      logger.info('Main', `正在加载 Dev URL: ${url}`)
+      window.loadURL(url)
     } else {
-      // 使用 app.getAppPath() 获取 asar 根路径，比相对路径更稳健
       const { app } = require('electron')
       const indexPath = join(app.getAppPath(), 'dist', 'index.html')
-      return `file://${indexPath}#${route}`
+      logger.info('Main', `正在加载文件: ${indexPath}, hash: ${route}`)
+      window.loadFile(indexPath, { hash: route })
     }
   }
 
@@ -112,8 +119,7 @@ export class WindowManager {
       }
     }
 
-    this.launcherWin.loadURL(this.getPageUrl('/launcher'))
-    logger.info('Main', `正在加载 URL: ${this.getPageUrl('/launcher')}`)
+    this.loadWindowContent(this.launcherWin, '/launcher')
 
     this.setupWindowStateListeners(this.launcherWin)
 
@@ -197,7 +203,7 @@ export class WindowManager {
       }
     }
 
-    this.strongholdWin.loadURL(this.getPageUrl('/stronghold'))
+    this.loadWindowContent(this.strongholdWin, '/stronghold')
 
     this.setupWindowStateListeners(this.strongholdWin)
 
@@ -245,7 +251,7 @@ export class WindowManager {
     })
 
     // 根据用户请求，默认加载 Pet3DView
-    this.petWin.loadURL(this.getPageUrl('/pet-3d'))
+    this.loadWindowContent(this.petWin, '/pet-3d')
 
     // 打开 DevTools 以调试渲染器崩溃/错误
     // this.petWin.webContents.openDevTools({ mode: 'detach' })
@@ -349,8 +355,7 @@ export class WindowManager {
     // 注意：Steam Overlay 通常只能依附于一个渲染进程。
     // 我们选择 DashboardView 作为主要依附对象，因为它是一个标准窗口，适合展示 Overlay。
 
-    this.dashboardWin.loadURL(this.getPageUrl('/dashboard'))
-    logger.info('Main', `Dashboard 正在加载 URL: ${this.getPageUrl('/dashboard')}`)
+    this.loadWindowContent(this.dashboardWin, '/dashboard')
 
     this.setupWindowStateListeners(this.dashboardWin)
 
@@ -413,7 +418,7 @@ export class WindowManager {
       }
     }
 
-    this.ideWin.loadURL(this.getPageUrl('/ide'))
+    this.loadWindowContent(this.ideWin, '/ide')
 
     this.setupWindowStateListeners(this.ideWin)
 

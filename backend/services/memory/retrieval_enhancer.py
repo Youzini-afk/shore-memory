@@ -25,6 +25,20 @@ import numpy as np
 logger = logging.getLogger("pero.retrieval_enhancer")
 
 # --------------------------------------------------------------------------- #
+#  Rust 加速引擎 (可选)
+# --------------------------------------------------------------------------- #
+
+try:
+    from pero_memory_core import RetrievalMath
+    _rust_math = RetrievalMath()
+    _RUST_MATH_AVAILABLE = True
+    logger.info("✅ Rust RetrievalMath 已加载，FISTA/DPP/NMF 将使用高性能 Rust 实现")
+except ImportError:
+    _rust_math = None
+    _RUST_MATH_AVAILABLE = False
+    logger.info("ℹ️ Rust RetrievalMath 未找到，回退到 Python/NumPy 实现")
+
+# --------------------------------------------------------------------------- #
 #  加载增强参数（支持运行时热更新）
 # --------------------------------------------------------------------------- #
 
@@ -151,6 +165,41 @@ def nmf_query_analysis(
     n_topics: int = 15,
 ) -> Dict:
     """
+    NMF 语义分解。
+    优先使用 Rust 加速实现，回退到 Python/NumPy。
+    """
+    if _RUST_MATH_AVAILABLE:
+        try:
+            result = _rust_math.nmf_query_analysis(
+                query_vec.tolist(),
+                entity_vecs.tolist(),
+                [int(x) for x in entity_ids],
+                agent_id,
+                n_topics,
+                100,  # max_iter
+            )
+            return {
+                "semantic_depth": float(result["semantic_depth"][0]),
+                "topic_coverage": int(result["topic_coverage"][0]),
+                "novelty": float(result["novelty"][0]),
+                "top_topics": result["top_topics"],
+            }
+        except Exception as e:
+            logger.warning(f"Rust NMF 失败，回退到 Python: {e}")
+
+    return _nmf_query_analysis_python(
+        query_vec, entity_vecs, entity_ids, agent_id, n_topics
+    )
+
+
+def _nmf_query_analysis_python(
+    query_vec: np.ndarray,
+    entity_vecs: np.ndarray,
+    entity_ids: List[int],
+    agent_id: str = "pero",
+    n_topics: int = 15,
+) -> Dict:
+    """
     NMF 语义分解：分析查询向量在已知语义空间中的结构。
 
     参数:
@@ -239,6 +288,31 @@ def sparse_code_residual(
     max_iter: int = 80,
 ) -> Tuple[np.ndarray, np.ndarray, float]:
     """
+    FISTA 稀疏编码残差发现。
+    优先使用 Rust 加速实现，回退到 Python/NumPy。
+    """
+    if _RUST_MATH_AVAILABLE:
+        try:
+            alpha, residual, norm = _rust_math.sparse_code_residual(
+                query_vec.tolist(),
+                entity_vecs.tolist(),
+                lambda_,
+                max_iter,
+            )
+            return np.array(alpha, dtype=np.float32), np.array(residual, dtype=np.float32), norm
+        except Exception as e:
+            logger.warning(f"Rust FISTA 失败，回退到 Python: {e}")
+
+    return _sparse_code_residual_python(query_vec, entity_vecs, lambda_, max_iter)
+
+
+def _sparse_code_residual_python(
+    query_vec: np.ndarray,
+    entity_vecs: np.ndarray,
+    lambda_: float = 0.1,
+    max_iter: int = 80,
+) -> Tuple[np.ndarray, np.ndarray, float]:
+    """
     使用 FISTA (Fast Iterative Shrinkage-Thresholding) 求解：
         min_α  ½‖q - Eᵀα‖² + λ‖α‖₁
 
@@ -302,6 +376,30 @@ def sparse_code_residual(
 # =========================================================================== #
 
 def dpp_greedy_select(
+    candidate_vecs: np.ndarray,
+    candidate_scores: np.ndarray,
+    k: int,
+    quality_weight: float = 1.0,
+) -> List[int]:
+    """
+    DPP 贪心多样性采样。
+    优先使用 Rust 加速实现，回退到 Python/NumPy。
+    """
+    if _RUST_MATH_AVAILABLE:
+        try:
+            return _rust_math.dpp_greedy_select(
+                candidate_vecs.tolist(),
+                candidate_scores.tolist(),
+                k,
+                quality_weight,
+            )
+        except Exception as e:
+            logger.warning(f"Rust DPP 失败，回退到 Python: {e}")
+
+    return _dpp_greedy_select_python(candidate_vecs, candidate_scores, k, quality_weight)
+
+
+def _dpp_greedy_select_python(
     candidate_vecs: np.ndarray,
     candidate_scores: np.ndarray,
     k: int,

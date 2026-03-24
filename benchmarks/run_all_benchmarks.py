@@ -20,6 +20,7 @@ def main():
         "benchmarks/benchmark_1_massive_scale.py",
         "benchmarks/benchmark_2_multi_hop_reasoning.py",
         "benchmarks/benchmark_3_real_world_integration.py",
+        "benchmarks/benchmark_4_math_ablation.py",
     ]
 
     print("\n" + "=" * 80)

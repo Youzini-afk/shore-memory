@@ -19,9 +19,11 @@ use std::collections::HashMap;
 
 // 模块声明
 pub mod intent_engine;
+pub mod retrieval_math;
 
 // 重导出核心类型
 pub use intent_engine::{IntentAnchor, IntentEngine};
+pub use retrieval_math::RetrievalMath;
 
 // === 常量与元数据 ===
 const MAX_INPUT_LENGTH: usize = 100_000;
@@ -558,6 +560,7 @@ fn pero_memory_core(_py: Python, m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<SemanticVectorIndex>()?;
     m.add_class::<TextSanitizer>()?;
     m.add_class::<EngineManifest>()?;
+    m.add_class::<RetrievalMath>()?;
 
     // 辅助函数
     m.add_function(wrap_pyfunction!(sanitize_text_content, m)?)?;

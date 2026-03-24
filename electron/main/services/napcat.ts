@@ -18,25 +18,37 @@ function getRootPath() {
   }
 }
 
+/**
+ * 获取 NapCat 安装目录。
+ * 优先查找预捆绑的位置（source/resources），
+ * 用户安装时使用可写的 paths.data/tools/NapCat/ 目录。
+ */
 function getNapCatDir() {
   const root = getRootPath()
-  // 尝试多个位置 (Rust PeroLauncher 逻辑一致)
-  const trials = [
+  // 尝试预捆绑位置 (源码/资源目录)
+  const bundledPaths = [
     path.join(root, 'backend/nit_core/plugins/social_adapter/NapCat'),
     path.join(root, 'nit_core/plugins/social_adapter/NapCat'),
-    path.join(root, '_up_/backend/nit_core/plugins/social_adapter/NapCat'),
-    path.join(root, '_up_/nit_core/plugins/social_adapter/NapCat')
+    path.join(paths.resources, 'backend/nit_core/plugins/social_adapter/NapCat')
   ]
 
-  for (const trial of trials) {
+  for (const trial of bundledPaths) {
     if (fs.existsSync(trial)) {
       console.log(`[NapCat] 发现安装路径: ${trial}`)
       return trial
     }
   }
 
-  console.log(`[NapCat] 未找到安装，默认使用: ${trials[0]}`)
-  return trials[0]
+  // 用户安装位置（可写）
+  const userInstallDir = path.join(paths.data, 'tools', 'NapCat')
+  if (fs.existsSync(userInstallDir)) {
+    console.log(`[NapCat] 发现用户安装路径: ${userInstallDir}`)
+    return userInstallDir
+  }
+
+  // 后备：返回用户安装目录（供 installNapCat 写入）
+  console.log(`[NapCat] 未找到安装，默认使用: ${userInstallDir}`)
+  return userInstallDir
 }
 
 async function getQQPath(): Promise<string> {

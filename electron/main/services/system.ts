@@ -1,7 +1,27 @@
 import { paths } from '../utils/env'
-import si from 'systeminformation'
 import fs from 'fs-extra'
 import path from 'path'
+
+/**
+ * systeminformation 延迟加载。
+ * 该模块含有 native 绑定，如果在 ASAR 打包后加载失败，
+ * 不应影响整个应用启动。因此改为在第一次使用时才 require()。
+ */
+let _si: typeof import('systeminformation') | null = null
+let _siLoadFailed = false
+
+function getSI(): typeof import('systeminformation') | null {
+  if (_si) return _si
+  if (_siLoadFailed) return null
+  try {
+    _si = require('systeminformation')
+    return _si
+  } catch (e) {
+    _siLoadFailed = true
+    console.error('[System] systeminformation 模块加载失败，系统监控功能将不可用:', e)
+    return null
+  }
+}
 
 export interface SystemStats {
   cpu_usage: number
@@ -11,18 +31,28 @@ export interface SystemStats {
 
 // 缓存 CPU 负载 (定期更新以降低开销)
 let lastCpuLoad = 0
+let cpuMonitorStarted = false
 
-setInterval(async () => {
-  try {
-    const load = await si.currentLoad()
-    lastCpuLoad = load.currentLoad
-  } catch {
-    // 忽略
-  }
-}, 5000)
+function ensureCpuMonitor() {
+  if (cpuMonitorStarted) return
+  cpuMonitorStarted = true
+  const si = getSI()
+  if (!si) return
+  setInterval(async () => {
+    try {
+      const load = await si.currentLoad()
+      lastCpuLoad = load.currentLoad
+    } catch {
+      // 忽略
+    }
+  }, 5000)
+}
 
 export async function getSystemStats(): Promise<SystemStats> {
+  ensureCpuMonitor()
   try {
+    const si = getSI()
+    if (!si) return { cpu_usage: 0, memory_used: 0, memory_total: 0 }
     const mem = await si.mem()
     return {
       cpu_usage: parseFloat(lastCpuLoad.toFixed(1)),
@@ -71,12 +101,9 @@ export function saveConfig(config: any) {
 }
 
 export function getGatewayToken(): string {
-  // 开发环境路径
-  const devPath = path.join(process.cwd(), 'data/gateway_token.json')
-  // 生产环境路径 (在 exe 旁边或 userData 中)
-  const prodPath = path.join(paths.userData, 'data/gateway_token.json')
+  const tokenPath = path.join(paths.data, 'gateway_token.json')
 
-  // 首先检查 ENV (如果由 startGateway 在同一进程中设置，但此处不太可能)
+  // 首先检查 ENV (如果由 startGateway 在同一进程中设置)
   if (process.env.GATEWAY_TOKEN_PATH && fs.existsSync(process.env.GATEWAY_TOKEN_PATH)) {
     try {
       const data = fs.readJsonSync(process.env.GATEWAY_TOKEN_PATH)
@@ -85,8 +112,6 @@ export function getGatewayToken(): string {
       // 忽略
     }
   }
-
-  const tokenPath = fs.existsSync(devPath) ? devPath : prodPath
 
   if (fs.existsSync(tokenPath)) {
     try {

@@ -164,12 +164,15 @@ process.env['ELECTRON_DISABLE_SECURITY_WARNINGS'] = 'true'
 try {
   const steamStatus = initSteam()
   if (steamStatus === 'restarting') {
-    logger.info('Main', '正在通过 Steam 重启应用...')
+    logger.info('Main', '正在通过 Steam 重启应用，当前进程将退出...')
     app.quit()
-    process.exit(0)
+    // 注意: 不使用 process.exit(0)，让 Electron 优雅退出
+  } else {
+    logger.info('Main', `Steam 初始化结果: ${steamStatus}`)
   }
 } catch (e) {
-  logger.error('Main', `Steam 初始化发生异常: ${e}`)
+  logger.error('Main', `Steam 初始化发生异常 (已跳过): ${e}`)
+  // 异常不阻塞应用启动
 }
 
 const createWindow = async () => {
@@ -270,6 +273,7 @@ ipcMain.handle('get-model-load-path', async (_, model: AssetInfo) => {
 // 注册 Native 模块处理程序
 ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, filterPatterns?: string[]) => {
   try {
+    if (!native) throw new Error('Native 渲染核心尚未加载')
     return native.loadPeroModel(buffer, filterPatterns)
   } catch (e) {
     logger.error('Native', `Failed to load pero model: ${e}`)
@@ -281,6 +285,7 @@ ipcMain.handle(
   'native-load-standard-model',
   async (_, buffer: Buffer, filterPatterns?: string[]) => {
     try {
+      if (!native) throw new Error('Native 渲染核心尚未加载')
       return native.loadStandardModel(buffer, filterPatterns)
     } catch (e) {
       logger.error('Native', `Failed to load standard model: ${e}`)
@@ -619,7 +624,7 @@ ipcMain.handle('download_models', async (event) => {
       throw new Error('Python environment not found')
     }
 
-    const workspaceRoot = isDev ? path.resolve(__dirname, '../../..') : paths.app
+    const workspaceRoot = isDev ? path.resolve(__dirname, '../../..') : paths.resources
 
     let cliScript = path.join(workspaceRoot, 'backend/utils/model_cli.py')
     // 生产环境资源目录逻辑
@@ -946,6 +951,7 @@ ipcMain.handle('open-win', (_, arg) => {
   if (process.env.VITE_DEV_SERVER_URL) {
     childWindow.loadURL(`${process.env.VITE_DEV_SERVER_URL}#${arg}`)
   } else {
-    childWindow.loadFile(join(__dirname, '../../dist/index.html'), { hash: arg })
+    // 使用 app.getAppPath() 以确保在 ASAR 打包后路径正确
+    childWindow.loadFile(join(app.getAppPath(), 'dist', 'index.html'), { hash: arg })
   }
 })

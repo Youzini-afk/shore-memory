@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -11,6 +12,21 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from models import ConversationLog, Memory, MemoryRelation
 
 logger = logging.getLogger("pero.memory")
+
+# [Global] Tag cloud TTL 缓存 (避免高频全表扫描)
+# 结构: {agent_id: {"data": [...], "expires_at": float}}
+_tag_cloud_cache: Dict[str, Any] = {}
+_TAG_CLOUD_TTL = 300  # 5 分钟
+
+
+def _invalidate_tag_cloud_cache(agent_id: str = None):
+    """使指定 agent（或全部）的 tag cloud 缓存立即失效。
+    在写入/删除记忆后调用，保证下次 get_tag_cloud 能得到最新数据。
+    """
+    if agent_id:
+        _tag_cloud_cache.pop(agent_id, None)
+    else:
+        _tag_cloud_cache.clear()
 
 # [Global] Rust 引擎单例 (PEDSA 算法核心)
 _rust_engine = None
@@ -393,6 +409,9 @@ class MemoryService:
         # [钩子] memory.save.post
         await EventBus.publish("memory.save.post", memory)
 
+        # [缓存失效] 新记忆写入会改变 tag 分布，使缓存立即过期
+        _invalidate_tag_cloud_cache(agent_id)
+
         return memory
 
     @staticmethod
@@ -651,10 +670,12 @@ class MemoryService:
         return log
 
     @staticmethod
-    async def delete_by_msg_timestamp(session: AsyncSession, msg_timestamp: str):
+    async def delete_by_msg_timestamp(session: AsyncSession, msg_timestamp: str, agent_id: str = None):
         statement = delete(Memory).where(Memory.msgTimestamp == msg_timestamp)
         await session.exec(statement)
         await session.commit()
+        # [缓存失效] 删除记忆后使 tag cloud 缓存过期
+        _invalidate_tag_cloud_cache(agent_id)
 
     @staticmethod
     async def mark_memories_accessed(session: AsyncSession, memories: List[Memory]):
@@ -821,7 +842,7 @@ class MemoryService:
                         keywords.add(word)
         except ImportError:
             # jieba 未安装时回退到正则
-            keywords = {w for w in re.findall(r"[\w]{2,}", text)}
+            keywords = set(re.findall(r"[\w]{2,}", text))
 
         # 查找匹配的 Entity Node
         entity_anchors = []
@@ -1346,26 +1367,54 @@ class MemoryService:
     ) -> List[Dict[str, Any]]:
         """
         获取标签云数据 (Top 20 tags)
+
+        优化点:
+        1. 只 SELECT tags 列，避免加载 content/embedding_json 等大字段
+        2. TTL=5min 内存缓存：同一 agent 短时间内重复调用直接返回缓存
         """
-        # 简单实现：取出所有 Memory 的 tags 字段，在内存中统计
-        # TODO: 后期可以使用 SQL group by 优化
-        statement = select(Memory)
+        global _tag_cloud_cache
+
+        cache_key = agent_id or "pero"
+        now = time.monotonic()
+
+        # 命中缓存则直接返回
+        cached = _tag_cloud_cache.get(cache_key)
+        if cached and now < cached["expires_at"]:
+            return cached["data"]
+
+        # 只查 tags 列，大幅减少 I/O（跳过 content、embedding_json 等大字段）
+        statement = select(Memory.tags)
         if agent_id:
-            statement = statement.where(Memory.agent_id == agent_id)
+            statement = statement.where(
+                Memory.agent_id == agent_id,
+                Memory.tags != "",
+                Memory.tags.is_not(None),
+            )
+        else:
+            statement = statement.where(
+                Memory.tags != "",
+                Memory.tags.is_not(None),
+            )
 
-        memories = (await session.exec(statement)).all()
-        tag_counts = {}
+        rows = (await session.exec(statement)).all()
 
-        for m in memories:
-            if not m.tags:
+        tag_counts: Dict[str, int] = {}
+        for tags_str in rows:
+            # rows 返回标量列表 (str | None)
+            if not tags_str:
                 continue
-            tags = [t.strip() for t in m.tags.split(",") if t.strip()]
-            for t in tags:
-                tag_counts[t] = tag_counts.get(t, 0) + 1
+            for t in tags_str.split(","):
+                t = t.strip()
+                if t:
+                    tag_counts[t] = tag_counts.get(t, 0) + 1
 
-        # 排序并取前 20
         sorted_tags = sorted(tag_counts.items(), key=lambda x: x[1], reverse=True)[:20]
-        return [{"tag": t, "count": c} for t, c in sorted_tags]
+        result = [{"tag": t, "count": c} for t, c in sorted_tags]
+
+        # 写入缓存
+        _tag_cloud_cache[cache_key] = {"data": result, "expires_at": now + _TAG_CLOUD_TTL}
+
+        return result
 
     @staticmethod
     async def delete_orphaned_edges(session: AsyncSession) -> int:
