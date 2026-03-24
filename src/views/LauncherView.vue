@@ -1808,7 +1808,8 @@
           </PTooltip>
         </div>
 
-        <!-- EULA 最终用户许可协议弹窗 -->
+        <!-- EULA 最终用户许可协议弹窗（Teleport 到 body，绕过 zoom stacking context） -->
+        <Teleport to="body">
         <div
           v-if="showEulaModal"
           class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-all duration-500 animate-in fade-in duration-300"
@@ -1912,6 +1913,7 @@
             </div>
           </div>
         </div>
+        </Teleport>
       </div>
     </div>
   </div>

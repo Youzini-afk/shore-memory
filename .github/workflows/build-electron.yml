@@ -253,37 +253,37 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
-          # electron-builder --win --dir 的输出目录
+          # Locate the unpacked directory from electron-builder
           $UNPACKED_DIR = "PeroCore-Electron/dist_electron/win-unpacked"
 
           if (!(Test-Path $UNPACKED_DIR)) {
-            echo "未找到 win-unpacked 目录，尝试查找..."
+            echo "win-unpacked directory not found, searching..."
             $candidates = Get-ChildItem "PeroCore-Electron/dist_electron" -Directory | Where-Object { $_.Name -like "*unpacked*" }
             if ($candidates.Count -gt 0) {
               $UNPACKED_DIR = $candidates[0].FullName
-              echo "找到: $UNPACKED_DIR"
+              echo "Found: $UNPACKED_DIR"
             } else {
-              Write-Error "找不到 unpacked 目录！electron-builder 可能未生成 dir 格式输出。"
+              Write-Error "Cannot find unpacked directory! electron-builder may not have produced dir output."
               exit 1
             }
           }
 
-          # 1. 创建 .portable 标记文件（激活便携数据路径）
+          # 1. Create .portable marker file (activates portable data path)
           New-Item -ItemType File -Force -Path "$UNPACKED_DIR/.portable" | Out-Null
-          echo "已创建 .portable 标记文件"
+          echo "Created .portable marker file"
 
-          # 2. 创建 data 目录（用户数据将存储于此）
+          # 2. Create data directory (user data will be stored here)
           New-Item -ItemType Directory -Force -Path "$UNPACKED_DIR/data" | Out-Null
-          echo "已创建 data/ 目录"
+          echo "Created data/ directory"
 
-          # 3. 获取版本号用于文件名
+          # 3. Get version number for filename
           $VERSION = (Get-Content "PeroCore-Electron/package.json" | ConvertFrom-Json).version
           $ZIP_NAME = "PeroCore-Portable-v${VERSION}.zip"
 
-          # 4. 打包为 zip
-          echo "正在压缩便携版..."
+          # 4. Compress into zip
+          echo "Compressing portable version..."
           Compress-Archive -Path "$UNPACKED_DIR/*" -DestinationPath $ZIP_NAME -Force
-          echo "便携版打包完成: $ZIP_NAME"
+          echo "Portable version packaged: $ZIP_NAME"
 
       - name: Package Browser Extension
         shell: powershell

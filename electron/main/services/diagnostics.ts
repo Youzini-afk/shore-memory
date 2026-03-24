@@ -177,16 +177,9 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     errors.push('端口 9120 已被占用，请检查是否有其他 PeroCore 实例在运行')
   }
 
-  // 4. 数据目录
-  let dataDir = ''
-  if (!devVenvPythonExists) {
-    dataDir = path.join(paths.userData, 'data')
-    logger.info('Main', `[诊断] 使用生产环境数据目录: ${dataDir}`)
-  } else {
-    dataDir = path.join(workspaceRoot, 'backend/data')
-    logger.info('Main', `[诊断] 使用开发环境数据目录: ${dataDir}`)
-  }
-  dataDir = fixPath(dataDir)
+  // 4. 数据目录（paths.data 已根据环境自动选择正确路径）
+  const dataDir = fixPath(paths.data)
+  logger.info('Main', `[诊断] 数据目录: ${dataDir}`)
   await fs.ensureDir(dataDir)
 
   let dataDirWritable = false
