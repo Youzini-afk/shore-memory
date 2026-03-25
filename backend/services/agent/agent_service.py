@@ -25,11 +25,11 @@ from sqlmodel import desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from core.component_container import ComponentContainer
+from core.event_bus import EventBus
 from core.nit_manager import get_nit_manager
-from interfaces.core import (
+from core.interfaces import (
     IPostprocessorManager,
     IPreprocessorManager,
-    IPromptManager,
 )
 from models import ConversationLog, PetState, ScheduledTask
 from nit_core.security import NITSecurityManager
@@ -41,6 +41,7 @@ from services.agent._tool_executor import AgentToolExecutor
 from services.agent._tool_policy import ToolPolicyEngine
 from services.agent.task_manager import task_manager
 from services.core.llm_service import LLMService
+from services.core.prompt_service import PromptManager
 from services.core.session_service import set_current_session_context
 from services.memory.memory_service import MemoryService
 from services.memory.scorer_service import ScorerService
@@ -69,7 +70,7 @@ class AgentService:
         self.memory_service = MemoryService()
         self.scorer_service = ScorerService(session)
 
-        self.prompt_manager = ComponentContainer.get(IPromptManager)
+        self.prompt_manager = PromptManager()
         self.mdp = self.prompt_manager.mdp
 
         self.preprocessor_manager = ComponentContainer.get(IPreprocessorManager)
@@ -168,6 +169,26 @@ class AgentService:
             "allowed_tool_names": allowed_tool_names,
         }
 
+        # ── 4.5 Hook: chat.request.pre ──
+        # MOD 可修改 context（如注入变量、过滤输入、添加审计日志）
+        # 设置 ctx["cancel"] = True 可中止整个对话
+        chat_ctx = {
+            "messages": messages,
+            "source": source,
+            "session_id": session_id,
+            "agent_id": current_agent_id,
+            "is_voice_mode": is_voice_mode,
+            "user_text_override": user_text_override,
+            "variables": context.get("variables", {}),
+            "cancel": False,
+        }
+        await EventBus.publish("chat.request.pre", chat_ctx)
+        if chat_ctx.get("cancel"):
+            print("[Agent] chat.request.pre Hook 取消了本次对话")
+            return
+        # 合并 Hook 修改回 context
+        context["variables"] = chat_ctx.get("variables", context.get("variables", {}))
+
         # ── 5. 运行预处理器管道 ──
         if on_status:
             await on_status("thinking", "正在整理记忆和思绪...")
@@ -247,6 +268,17 @@ class AgentService:
 
             full_response_text = "".join(accumulated_text)
             raw_full_text = full_response_text
+
+            # ── Hook: chat.response.post ──
+            # 通知 MOD 完整响应已生成（不可修改，仅供审计/统计）
+            await EventBus.publish("chat.response.post", {
+                "response": full_response_text,
+                "user_message": user_message,
+                "source": source,
+                "session_id": session_id,
+                "agent_id": current_agent_id,
+                "pair_id": pair_id,
+            })
 
         except Exception as e:
             import traceback

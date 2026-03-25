@@ -17,6 +17,8 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from core.event_bus import EventBus
+
 # 移动端敏感工具关键词（统一定义，避免散布在多处）
 MOBILE_SENSITIVE_KEYWORDS = [
     "screenshot",
@@ -68,6 +70,23 @@ class AgentToolExecutor:
         if arg_error:
             return f"错误: {arg_error}。请确保参数是有效的 JSON。", False, None
 
+        # --- Hook: tool.execute.pre ---
+        # MOD 可检查/修改参数、拦截工具调用
+        tool_ctx = {
+            "function_name": function_name,
+            "function_args": function_args,
+            "source": source,
+            "cancel": False,
+            "cancel_reason": "",
+        }
+        await EventBus.publish("tool.execute.pre", tool_ctx)
+        if tool_ctx.get("cancel"):
+            reason = tool_ctx.get("cancel_reason", "被 MOD 拦截")
+            print(f"[ToolExecutor] tool.execute.pre Hook 拦截了 {function_name}: {reason}")
+            return f"工具调用被拦截: {reason}", False, None
+        # 合并 Hook 修改
+        function_args = tool_ctx.get("function_args", function_args)
+
         # --- 移动端安全门控（硬拦截）---
         if source == "mobile" and any(
             kw in function_name.lower() for kw in MOBILE_SENSITIVE_KEYWORDS
@@ -83,19 +102,25 @@ class AgentToolExecutor:
 
         # 1. 完成任务
         if function_name == "finish_task":
-            return await self._handle_finish_task(function_args)
+            result = await self._handle_finish_task(function_args)
+            await self._publish_tool_post(function_name, function_args, result[0])
+            return result
 
         # 2. search_files（需要 UI 注入 + 辅助模型分析）
         if function_name == "search_files":
-            return await self._handle_search_files(
+            result = await self._handle_search_files(
                 function_args, on_status, tool_policy_engine, user_message
             )
+            await self._publish_tool_post(function_name, function_args, result[0])
+            return result
 
         # 3. take_screenshot / see_screen（多模态处理）
         if function_name in ("take_screenshot", "see_screen"):
-            return await self._handle_screenshot(
+            result = await self._handle_screenshot(
                 function_name, function_args, config, on_status, final_messages
             )
+            await self._publish_tool_post(function_name, function_args, result[0])
+            return result
 
         # 4. NIT 调度器统一执行
         from nit_core.dispatcher import get_dispatcher
@@ -104,15 +129,19 @@ class AgentToolExecutor:
         normalized_name = nit_dispatcher.parser.normalize_key(function_name)
 
         if normalized_name in nit_dispatcher.list_plugins():
-            return await self._handle_nit_tool(
+            result = await self._handle_nit_tool(
                 function_name, function_args, nit_dispatcher, on_status
             )
+            await self._publish_tool_post(function_name, function_args, result[0])
+            return result
 
         # 5. MCP 工具
         if function_name.startswith("mcp_") and mcp_tool_map:
-            return await self._handle_mcp_tool(
+            result = await self._handle_mcp_tool(
                 function_name, function_args, mcp_tool_map, on_status
             )
+            await self._publish_tool_post(function_name, function_args, result[0])
+            return result
 
         # 6. 回退
         print(f"[ToolExecutor] 未找到工具 {function_name}。")
@@ -186,6 +215,19 @@ class AgentToolExecutor:
     # ─────────────────────────────────────────────
     # 私有处理方法
     # ─────────────────────────────────────────────
+
+    async def _publish_tool_post(
+        self, function_name: str, function_args: Dict, result_preview: str
+    ):
+        """发布 tool.execute.post 事件（fire-and-forget，不阻塞主流程）"""
+        import contextlib
+
+        with contextlib.suppress(Exception):
+            await EventBus.publish("tool.execute.post", {
+                "function_name": function_name,
+                "function_args": function_args,
+                "result_preview": result_preview[:500] if result_preview else "",
+            })
 
     def _parse_args(
         self, args_str: str, function_name: str

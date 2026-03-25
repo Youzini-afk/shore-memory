@@ -32,6 +32,19 @@ onMounted(() => {
       window.$notify(msg, type, title, 10000)
     }
   })
+
+  // 监听 MOD / 外部插件的通用通知推送 🔌
+  gatewayClient.on('action:mod_notification', (payload) => {
+    console.log('[Gateway] 收到 MOD 通知:', payload)
+    if (window.$notify) {
+      const params = payload.params || payload
+      const title = params.title || 'MOD 通知'
+      const body = params.body || ''
+      const level = params.level || 'info'
+      const duration = parseInt(params.duration || '5000', 10)
+      window.$notify(body, level, title, duration)
+    }
+  })
 })
 
 // 全局 JS 错误捕获

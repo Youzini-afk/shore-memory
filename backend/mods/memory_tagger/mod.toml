@@ -1,0 +1,13 @@
+[mod]
+asset_id = "com.perocore.mod.memory_tagger"
+type = "mod"
+display_name = "记忆标注器"
+version = "1.0.0"
+description = "自动为记忆添加时间标签，演示三层扩展体系的统一用法"
+author = "PeroCore Community"
+
+[layers]
+eventbus = true         # 使用了 EventBus Hook
+pipeline = true         # 使用了管道注册
+external = true         # 有配套的外部插件服务
+external_url = "http://localhost:9527"

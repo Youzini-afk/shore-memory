@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 @dataclass
 class AssetMetadata:
     asset_id: str
-    type: str  # plugin | persona | model_3d | mod | interface
+    type: str  # plugin | persona | model_3d | mod
     source: str  # official | local | workshop
     display_name: str
     version: str
@@ -89,11 +89,12 @@ class AssetRegistry:
             self.asset_type_index[meta.type].append(meta.asset_id)
 
     def _load_asset_json(self, dir_path: Path, source: str) -> Optional[AssetMetadata]:
-        """尝试从目录加载 asset.json 或 manifest.json 或 description.json"""
+        """尝试从目录加载 asset.json 或 manifest.json 或 description.json 或 mod.toml"""
         # 优先查找 asset.json (新标准)
         asset_json_path = dir_path / "asset.json"
         manifest_path = dir_path / "manifest.json"  # 兼容旧版
         description_path = dir_path / "description.json"  # 兼容现有插件
+        mod_toml_path = dir_path / "mod.toml"  # MOD 元数据
 
         data = None
 
@@ -153,6 +154,34 @@ class AssetRegistry:
             except Exception as e:
                 logger.warning(
                     f"无法解析 description.json: {description_path}, error: {e}"
+                )
+                return None
+        elif mod_toml_path.exists():
+            # MOD 资产：从 mod.toml 的 [mod] section 读取
+            # 字段已与 asset.json 对齐：asset_id, type, display_name, version
+            try:
+                try:
+                    import tomllib
+                except ImportError:
+                    import tomli as tomllib  # type: ignore
+
+                with open(mod_toml_path, "rb") as f:
+                    raw = tomllib.load(f)
+
+                mod_section = raw.get("mod", {})
+                if "asset_id" in mod_section:
+                    data = {
+                        "asset_id": mod_section["asset_id"],
+                        "type": mod_section.get("type", "mod"),
+                        "display_name": mod_section.get("display_name", dir_path.name),
+                        "version": mod_section.get("version", "1.0.0"),
+                        "description": mod_section.get("description", ""),
+                        "author": mod_section.get("author", ""),
+                        "config": raw,  # 完整 toml 数据作为 config
+                    }
+            except Exception as e:
+                logger.warning(
+                    f"无法解析 mod.toml: {mod_toml_path}, error: {e}"
                 )
                 return None
 

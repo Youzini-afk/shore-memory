@@ -223,6 +223,40 @@ class GatewayHub:
         await self.broadcast_envelope(envelope)
         logger.debug(f"广播错误通知: {title} - {message}")
 
+    async def broadcast_notification(
+        self,
+        title: str,
+        body: str = "",
+        level: str = "info",
+        duration: int = 5000,
+        actions: list = None,
+        source: str = "mod",
+    ):
+        """
+        向前端广播通用通知（供 MOD / 外部插件使用）。
+
+        Args:
+            title: 通知标题
+            body: 通知正文
+            level: 级别 — info | success | warning | error
+            duration: 显示时长(ms)，0 = 不自动关闭
+            actions: 可选操作按钮 [{"label": "查看", "url": "/memory"}]
+            source: 来源标识
+        """
+        import json
+
+        envelope = self._make_broadcast_envelope()
+        envelope.request.action_name = "mod_notification"
+        envelope.request.params["title"] = title
+        envelope.request.params["body"] = body
+        envelope.request.params["level"] = level
+        envelope.request.params["duration"] = str(duration)
+        envelope.request.params["source"] = source
+        if actions:
+            envelope.request.params["actions"] = json.dumps(actions, ensure_ascii=False)
+        await self.broadcast_envelope(envelope)
+        logger.debug(f"广播 MOD 通知: [{level}] {title}")
+
     async def send_response(self, target_id: str, request_id: str, data: str):
         """向指定节点发送响应"""
         envelope = perolink_pb2.Envelope()

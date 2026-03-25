@@ -806,6 +806,10 @@ async def lifespan(app: FastAPI):
         pass
     await companion_service.stop()
 
+    # 关闭外部插件注册表
+    from mods._external_plugins.service import get_external_plugin_registry
+    await get_external_plugin_registry().shutdown()
+
 
 app = FastAPI(
     title="萌动链接：PeroperoChat！ 后端服务",
@@ -855,6 +859,10 @@ app.include_router(system_router)
 app.include_router(pet_router)
 app.include_router(maintenance_router)
 app.include_router(chat_router)
+
+# [插件] 外部插件管理路由
+from mods._external_plugins.router import router as external_plugin_router
+app.include_router(external_plugin_router)
 
 
 dist_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "dist")

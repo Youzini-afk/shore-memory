@@ -67,5 +67,23 @@ class GatewayClient:
         except Exception as e:
             logger.error(f"广播错误失败: {e}")
 
+    async def broadcast_notification(
+        self,
+        title: str,
+        body: str = "",
+        level: str = "info",
+        duration: int = 5000,
+        actions: list = None,
+        source: str = "mod",
+    ):
+        """向前端广播通用通知（供 MOD / 外部插件使用）"""
+        try:
+            await gateway_hub.broadcast_notification(
+                title=title, body=body, level=level,
+                duration=duration, actions=actions, source=source,
+            )
+        except Exception as e:
+            logger.error(f"广播通知失败: {e}")
+
 
 gateway_client = GatewayClient()
