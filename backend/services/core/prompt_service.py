@@ -2,7 +2,7 @@ import logging
 import os
 import re
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -95,7 +95,8 @@ class PromptManager:
         variables.setdefault("owner_name", owner_name)
         # 统一 user 别名，用于模板中的 {{user}}
         variables["user"] = variables["owner_name"]
-
+        # 统一 char 别名，用于模板中的 {{char}}（兼容角色卡片约定）
+        variables["char"] = variables.get("agent_name", "")
         variables.setdefault("user_persona", "未设定")
         variables.setdefault("mood", "开心")
         variables.setdefault("vibe", "活泼")
@@ -643,7 +644,7 @@ class PromptManager:
         session: AsyncSession,
         is_social_mode: bool = False,
         is_work_mode: bool = False,
-        extra_variables: Dict[str, Any] = None,
+        extra_variables: Optional[Dict[str, Any]] = None,
     ) -> str:
         """
         获取渲染后的完整系统提示词。
