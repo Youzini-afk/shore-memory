@@ -32,29 +32,54 @@
 
 为了确保资产加载的统一性，我们将对以下类型的资源进行联邦化管理。**注意：** 此处的“模型”指 Bedrock 3D 渲染资源（如 Rossi 形象），而非 AI 语言模型权重。
 
-| 资产类型 (Type)        | 物理位置 (Physical Path)        | 说明                                       |
-| :--------------------- | :------------------------------ | :----------------------------------------- |
-| **3D 模型 (model_3d)** | `public/assets/3d/`             | Bedrock 3D 模型文件夹 (含 `manifest.json`) |
-| **人设 (persona)**     | `backend/services/mdp/(xxx...)` | 包含提示词组件、Agent 专属配置等           |
-| **插件 (plugin)**      | `backend/nit_core/plugins/`     | 具有独立功能的 Python 插件                 |
-| **模组 (mod)**         | `backend/mods/`                 | 用户自定义的功能扩展                       |
-| **接口 (interface)**   | `backend/interfaces/`           | 系统核心接口定义与扩展                     |
+| 资产类型 (Type) | 内置位置 (Official Path) | 标识文件 | 说明 |
+| :--- | :--- | :--- | :--- |
+| **人设 (persona)** | `@app/backend/services/mdp/agents/<name>/` | `asset.json` + `config.json` | 提示词、模式 Persona、碎碎念、头像 |
+| **插件 (plugin)** | `@app/backend/nit_core/plugins/<name>/` | `description.json` + `schema.json` | Python 插件入口 + OpenAI Tool 定义 |
+| **3D 模型 (model_3d)** | `@app/public/assets/3d/` | `manifest.json` 或 `.pero` | Bedrock 3D 模型，支持加密容器 |
+| **模组 (mod)** | `@app/backend/mods/<name>/` | `mod.toml` | 三层扩展体系 (EventBus/Pipeline/External) |
+
+每种类型在用户覆盖层也有对应位置：`@data/custom/<type>/<name>/`。
 
 ### 3.2 统一资产定义 (`asset.json`)
 
-所有资产（无论是内置、本地还是创意工坊下载）均需在根目录包含一个 `manifest.json`（如果是 Bedrock 模型，则在现有 `manifest.json` 中嵌入元数据）：
+新建资产的标准元数据文件为 `asset.json`。`AssetRegistry` 也兼容以下格式（按检测优先级排列）：
+
+| 优先级 | 文件名 | 适用类型 | 说明 |
+| :----- | :----- | :------- | :--- |
+| 1 | `asset.json` | 所有类型 | **标准格式**，新资产必须使用 |
+| 2 | `manifest.json` | model_3d | 兼容旧版 Bedrock 模型清单 |
+| 3 | `description.json` | plugin | 兼容现有插件格式（含 `entryPoint` 字段） |
+| 4 | `mod.toml` | mod | TOML 格式，从 `[mod]` section 读取 |
+
+#### `asset.json` 标准格式
 
 ```json
 {
-  "asset_id": "com.user.cute_pero_model",
-  "type": "model_3d", // plugin | persona | model_3d | mod | interface
-  "source": "workshop", // official | local | workshop
-  "display_name": "超级可爱的 Pero 模型",
-  "version": "1.0.2",
-  "workshop_id": "123456789", // 仅当 source 为 workshop 时存在
-  "config": {} // 特定资产配置
+  "asset_id": "com.perocore.persona.pero",
+  "type": "persona",
+  "source": "official",
+  "display_name": "Pero",
+  "version": "1.0.0",
+  "description": "看板娘Pero! 核心桌宠角色",
+  "author": "PeroCore",
+  "config": {
+    "agent_id": "pero",
+    "personas": ["work", "social", "group"],
+    "social_enabled": true
+  }
 }
 ```
+
+#### Asset ID 命名规范
+
+采用反向域名格式：`<scope>.<type>.<name>`
+
+| scope | 含义 | 示例 |
+| :---- | :--- | :--- |
+| `com.perocore` | 官方内置 | `com.perocore.persona.pero` |
+| `com.workshop` | 创意工坊 | `com.workshop.model.123456` |
+| `com.user` | 用户自定义 | `com.user.plugin.my_tool` |
 
 ---
 
@@ -90,7 +115,16 @@
 
 ### 4.3 资产注册表 (Asset Registry)
 
-系统维护一个全局单例 `AssetRegistry`，负责扫描并注册所有可用资产。程序逻辑（如前端加载模型、后端加载人设）通过 `asset_id` 进行资源请求，由注册表根据虚拟路径解析出真实的物理地址。
+系统维护一个全局单例 `AssetRegistry` (`core/asset_registry.py`)，负责扫描并注册所有可用资产。
+
+**扫描顺序与冲突策略**：按 `official → workshop → local` 顺序扫描，**后者覆盖前者**（同 `asset_id` 时）。这意味着用户可以在 `@data/custom/` 中放置与官方同 ID 的资产来实现覆盖。
+
+**关键 API**：
+- `scan_all()` — 全量扫描所有来源目录
+- `get_asset(asset_id)` — 按 ID 检索已注册资产
+- `get_assets_by_type(type)` — 按类型查询所有资产
+
+**代码位置**: [`asset_registry.py`](file:///c:/Users/Administrator/OneDrive/桌面/workspace/PeroCore/backend/core/asset_registry.py) | [`path_resolver.py`](file:///c:/Users/Administrator/OneDrive/桌面/workspace/PeroCore/backend/core/path_resolver.py)
 
 ---
 
@@ -109,17 +143,23 @@
 
 ---
 
-## 6. 后续行动计划 (Action Plan)
+## 6. 行动计划 (Action Plan)
 
-1.  **[Backend] 虚拟路径适配**:
-    - 实现 `core/path_resolver.py`，支持环境感知和逻辑路径转换。
-    - 在 Python 端，识别 `sys.frozen` 或打包环境，动态调整 `@app` 路径。
-2.  **[Backend] 资产加载重构**:
-    - 将 `MDPManager` (人设)、`PluginManager` (插件) 接入 `PathResolver`。
-    - 实现 `AssetRegistry` 统一管理 `backend/mods` 和 `backend/interfaces` 目录。
-3.  **[Frontend] 模型加载适配**:
-    - 更新 Bedrock 加载逻辑，支持从外部目录（如 `@workshop`）加载 3D 模型资产。
-4.  **[DevOps] 目录规范化**:
-    - 统一 `data` 目录入口，支持通过环境变量 `PERO_DATA_DIR` 迁移，为云同步做准备。
-5.  **[Steam] 功能接入**:
-    - 接入 Steamworks SDK 正式 App ID，测试 Overlay 弹出与云存档上传。
+### ✅ 已完成
+
+1.  **[Backend] 虚拟路径适配**: `core/path_resolver.py` 已实现，支持 `@app`/`@data`/`@workshop`/`@temp` 四个逻辑前缀，支持 `sys.frozen` 打包环境检测和 `PERO_DATA_DIR` 环境变量。
+2.  **[Backend] AssetRegistry**: `core/asset_registry.py` 已实现全量扫描与冲突覆盖，支持 `asset.json`、`manifest.json`、`description.json`、`mod.toml` 四种元数据格式。
+3.  **[Backend] 管理器接入**: `PluginManager`、`ModelManager` 均已通过 `get_asset_registry()` 查询资产，不再硬编码路径。
+4.  **[Frontend] 模型联邦加载**: Electron 端 `assets.ts` 支持 `official`/`workshop`/`local` 三源扫描与 `asset://` 协议。
+5.  **[DevOps] 目录规范**: `@data` 默认为 `@app/data`，可通过 `PERO_DATA_DIR` 环境变量迁移。
+6.  **[Tool] PeroClawd!**: 资产创建工具已实现人设编辑器、插件工作台、3D 资产打包，含 `asset.json` 自动生成和 asset_id 规范校验。
+
+### 🚧 进行中
+
+7.  **[Tool] PeroClawd! 资源管理器联动**: 将 PeroClawd! 的文件资源管理器与 `AssetRegistry` 的扫描逻辑对齐，实现从磁盘打开现有资产到工作台编辑的双向流程。
+8.  **[Steam] 功能接入**: 接入 Steamworks SDK 正式 App ID (4457100)，测试 Overlay 弹出与云存档上传。
+
+### 📋 待规划
+
+9.  **[Tool] Mod 工作台**: 在 PeroClawd! 中新增 `mod.toml` 编辑器，覆盖三层扩展体系 (EventBus/Pipeline/External)。
+10. **[Workshop] 上传流程**: 从 PeroClawd! 直接发布资产到 Steam 创意工坊。

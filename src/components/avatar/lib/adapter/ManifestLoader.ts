@@ -1,5 +1,4 @@
-import { IAvatarManifest, FeatureButton, PartDefinition } from './IAvatarManifest'
-import { IRetargetingMap } from '../retargeting/RetargetingConfig'
+import { IAvatarManifest } from './IAvatarManifest'
 import { resolveAssetUrl } from '../../../../utils/assetUrl'
 
 /**

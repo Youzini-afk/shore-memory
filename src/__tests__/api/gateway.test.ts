@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { GatewayClient } from '@/api/gateway'
-import { Envelope, Hello, Heartbeat, ActionResponse } from '@/api/proto/perolink'
+import { Envelope } from '@/api/proto/perolink'
 import * as IPCAdapter from '@/utils/ipcAdapter'
 
 // Mock IPCAdapter
@@ -80,7 +80,7 @@ describe('GatewayClient', () => {
     vi.mocked(IPCAdapter.invoke).mockResolvedValue('test-token')
 
     // Start connection
-    const connectPromise = client.connect()
+    client.connect()
 
     // Allow async tasks (token fetch) to proceed
     await vi.runAllTicks() // Process microtasks

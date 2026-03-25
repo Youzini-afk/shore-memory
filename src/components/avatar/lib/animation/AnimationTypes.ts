@@ -1,5 +1,3 @@
-import * as THREE from 'three'
-
 /**
  * 动画数据接口
  * 描述一段标准动画的数据结构

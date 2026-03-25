@@ -1,7 +1,7 @@
 {
   "name": "peropero-chat",
   "private": true,
-  "version": "0.8.3",
+  "version": "0.8.4",
   "description": "萌动链接：PeroperoChat！- 一个充满活力的 3D 桌面宠物应用",
   "author": "YoKONCy",
   "license": "Apache-2.0",
@@ -11,6 +11,11 @@
   },
   "main": "dist-electron/main/index.js",
   "scripts": {
+    "sync-version": "node scripts/sync-version.js",
+    "predev:electron": "npm run sync-version",
+    "prebuild:electron": "npm run sync-version",
+    "prebuild:steam": "npm run sync-version",
+    "prebuild:portable": "npm run sync-version",
     "dev:electron": "concurrently -k \"tsc -p electron/tsconfig.json -w\" \"vite\" \"wait-on tcp:127.0.0.1:5173 && cross-env VITE_DEV_SERVER_URL=http://127.0.0.1:5173 electron .\"",
     "build:backend": "node scripts/build-backend.js",
     "build:docker": "vite build --mode docker",
@@ -175,6 +180,10 @@
           "!**/*.pdb",
           "!**/nit_core/plugins/social_adapter/NapCat"
         ]
+      },
+      {
+        "from": "public/Logo.png",
+        "to": "Logo.png"
       }
     ],
     "win": {

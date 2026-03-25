@@ -277,7 +277,7 @@
               @click="
                 () => {
                   if (memoryFilterTags.includes(tag))
-                    memoryFilterTags = memoryFilterTags.filter((t) => t !== tag)
+                    memoryFilterTags = memoryFilterTags.filter((t: string) => t !== tag)
                   else memoryFilterTags.push(tag)
                   fetchMemories()
                 }
@@ -524,8 +524,7 @@ const {
   triggerScanLonely,
   triggerMaintenance,
   triggerDream,
-  getMemoryTypeLabel,
-  getSentimentColor
+  getMemoryTypeLabel
 } = inject(MEMORIES_KEY)!
 const { activeAgent, availableAgents, isSwitchingAgent, switchAgent } = inject(AGENT_CONFIG_KEY)!
 

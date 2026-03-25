@@ -18,7 +18,7 @@ const PixelIcon = {
 
 describe('TerminalPanel.vue', () => {
   let wrapper: any
-  let listeners: Record<string, Function> = {}
+  let listeners: Record<string, (...args: any[]) => any> = {}
 
   beforeEach(() => {
     vi.useFakeTimers()
@@ -27,7 +27,7 @@ describe('TerminalPanel.vue', () => {
 
     // 默认 mock 实现
     ;(invoke as any).mockResolvedValue([])
-    ;(listen as any).mockImplementation((event: string, callback: Function) => {
+    ;(listen as any).mockImplementation((event: string, callback: (...args: any[]) => any) => {
       listeners[event] = callback
       return Promise.resolve(() => {}) // 返回 unlisten 函数
     })

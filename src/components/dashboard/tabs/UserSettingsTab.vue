@@ -116,11 +116,7 @@ import PButton from '@/components/ui/PButton.vue'
 import PInput from '@/components/ui/PInput.vue'
 import PTextarea from '@/components/ui/PTextarea.vue'
 import PixelIcon from '@/components/ui/PixelIcon.vue'
-import {
-  MODEL_CONFIG_KEY,
-  AGENT_CONFIG_KEY,
-  DASHBOARD_KEY
-} from '@/composables/dashboard/injectionKeys'
+import { MODEL_CONFIG_KEY, AGENT_CONFIG_KEY } from '@/composables/dashboard/injectionKeys'
 
 const { userSettings, saveUserSettings, isSaving } = inject(MODEL_CONFIG_KEY)!
 const { activeAgent } = inject(AGENT_CONFIG_KEY)!

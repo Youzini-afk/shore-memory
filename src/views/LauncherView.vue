@@ -250,7 +250,7 @@
             <h1 class="text-2xl font-bold text-slate-800 tracking-tight">Pero Launcher</h1>
             <p class="text-xs text-slate-400 mt-1 font-mono tracking-wider flex items-center gap-2">
               <PixelIcon name="mood-happy" class="w-2.5 h-2.5 text-sky-500 animate-pixel-float" />
-              版本 0.8.0 • 系统就绪
+              版本 {{ appVersion }} • 系统就绪
             </p>
           </div>
 
@@ -1810,109 +1810,129 @@
 
         <!-- EULA 最终用户许可协议弹窗（Teleport 到 body，绕过 zoom stacking context） -->
         <Teleport to="body">
-        <div
-          v-if="showEulaModal"
-          class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-all duration-500 animate-in fade-in duration-300"
-        >
           <div
-            class="w-[540px] bg-white p-10 pixel-border-pink flex flex-col gap-8 relative overflow-hidden shadow-2xl scale-in-center animate-in zoom-in-95 duration-300"
+            v-if="showEulaModal"
+            class="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm transition-all duration-500 animate-in fade-in duration-300"
           >
-            <!-- 背景装饰 -->
-            <div class="absolute -top-10 -right-10 text-pink-50/50 pointer-events-none rotate-12">
-              <PixelIcon name="heart" class="w-40 h-40" />
-            </div>
-
-            <div class="flex items-center gap-6 relative z-10">
-              <div
-                class="w-16 h-16 pixel-border-pink bg-pink-500 flex items-center justify-center text-white animate-pixel-float shadow-lg"
-              >
-                <PixelIcon name="shield" size="xl" />
-              </div>
-              <div>
-                <h2
-                  class="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3"
-                >
-                  用户许可协议
-                  <span class="text-[10px] bg-pink-100 text-pink-500 px-2 py-1 pixel-border-pink"
-                    >REQUIRED</span
-                  >
-                </h2>
-                <p
-                  class="text-[11px] text-slate-400 mt-1.5 uppercase tracking-[0.3em] font-mono opacity-80"
-                >
-                  End User License Agreement
-                </p>
-              </div>
-            </div>
-
             <div
-              class="max-h-[320px] overflow-y-auto pr-4 text-slate-600 text-sm leading-relaxed custom-scrollbar bg-pink-50/30 p-6 pixel-border-pink relative z-10"
+              class="w-[540px] bg-white p-10 pixel-border-pink flex flex-col gap-8 relative overflow-hidden shadow-2xl scale-in-center animate-in zoom-in-95 duration-300"
             >
-              <div class="space-y-5">
-                <p class="font-bold text-pink-600 flex items-center gap-2">
-                  <PixelIcon name="heart" class="w-3.5 h-3.5" />
-                  欢迎使用 萌动链接：PeroperoChat！ (以下简称“本软件”)。
-                </p>
-                <p>
-                  在使用本软件之前，请您务必仔细阅读并理解《最终用户许可协议》（以下简称“本协议”）。
-                </p>
+              <!-- 背景装饰 -->
+              <div class="absolute -top-10 -right-10 text-pink-50/50 pointer-events-none rotate-12">
+                <PixelIcon name="heart" class="w-40 h-40" />
+              </div>
 
-                <div class="space-y-4">
-                  <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
-                    <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
-                    1. 软件许可
-                  </h4>
-                  <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
-                    本软件授予您一项个人的、不可转让性、非排他性的许可，以在符合本协议条件的情况下使用本软件。
-                  </p>
-
-                  <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
-                    <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
-                    2. 使用限制
-                  </h4>
-                  <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
-                    您不得对本软件进行反向工程、反向编译或反汇编。您不得删除、修改或掩盖本软件中的任何版权声明或标签。
-                  </p>
-
-                  <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
-                    <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
-                    3. 隐私与数据
-                  </h4>
-                  <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
-                    本软件的部分功能可能需要连接互联网。我们尊重您的隐私，并承诺不会未经授权收集或分发您的个人信息。
+              <div class="flex items-center gap-6 relative z-10">
+                <div
+                  class="w-16 h-16 pixel-border-pink bg-pink-500 flex items-center justify-center text-white animate-pixel-float shadow-lg"
+                >
+                  <PixelIcon name="shield" size="xl" />
+                </div>
+                <div>
+                  <h2
+                    class="text-3xl font-black text-slate-800 tracking-tight flex items-center gap-3"
+                  >
+                    用户许可协议
+                    <span class="text-[10px] bg-pink-100 text-pink-500 px-2 py-1 pixel-border-pink"
+                      >REQUIRED</span
+                    >
+                  </h2>
+                  <p
+                    class="text-[11px] text-slate-400 mt-1.5 uppercase tracking-[0.3em] font-mono opacity-80"
+                  >
+                    End User License Agreement
                   </p>
                 </div>
+              </div>
 
-                <p
-                  class="text-[11px] text-slate-400 pt-6 border-t-2 border-pink-100 flex items-center gap-2"
+              <div
+                class="max-h-[320px] overflow-y-auto pr-4 text-slate-600 text-sm leading-relaxed custom-scrollbar bg-pink-50/30 p-6 pixel-border-pink relative z-10"
+              >
+                <div class="space-y-5">
+                  <p class="font-bold text-pink-600 flex items-center gap-2">
+                    <PixelIcon name="heart" class="w-3.5 h-3.5" />
+                    欢迎使用 萌动链接：PeroperoChat！ (以下简称“本软件”)。
+                  </p>
+                  <p>
+                    在使用本软件之前，请您务必仔细阅读并理解《最终用户许可协议》（以下简称"本协议"）。本软件是一个开源项目，我们鼓励社区共建与共享。
+                  </p>
+
+                  <div class="space-y-4">
+                    <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                      <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                      1. 开源许可与分发
+                    </h4>
+                    <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                      本软件基于开源协议发布，您可以自由地查看、修改和分发源代码，但须遵守对应的开源许可条款。再分发时请保留原始版权声明与许可信息。
+                    </p>
+
+                    <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                      <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                      2. AI 生成内容免责声明
+                    </h4>
+                    <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                      本软件作为工具平台，集成并调用第三方大语言模型（LLM）服务。所有由 AI
+                      生成的文字、图像及其他内容均由模型自动产出，不代表开发者的观点或立场。开发者不对
+                      AI 生成内容的准确性、合法性或适用性承担任何责任。您应自行甄别并审慎使用 AI
+                      生成的内容，因使用 AI 输出内容所产生的一切后果由用户自行承担。
+                    </p>
+
+                    <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                      <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                      3. 隐私与数据安全
+                    </h4>
+                    <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                      本软件高度重视您的隐私。您的对话记录、角色配置和个人数据默认仅存储在本地设备上，不会被上传至开发者的服务器。若您配置了第三方
+                      API（如 LLM 接口），相关数据将依据该第三方服务的隐私政策进行处理，请知悉。
+                    </p>
+
+                    <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                      <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                      4. 使用规范
+                    </h4>
+                    <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                      您不得利用本软件从事任何违反所在地区法律法规的活动，包括但不限于生成和传播违法有害信息。请遵守社区公约，共同维护友善、健康的使用环境。
+                    </p>
+
+                    <h4 class="font-black text-slate-800 mt-6 flex items-center gap-2">
+                      <div class="w-2 h-2 pixel-border-pink bg-pink-400"></div>
+                      5. 免责与风险提示
+                    </h4>
+                    <p class="pl-4 border-l-2 border-pink-100 text-slate-500">
+                      本软件按"原样"提供，不附带任何形式的明示或暗示担保。开发者不对因使用或无法使用本软件而导致的任何直接或间接损失承担责任。本软件可能集成第三方组件，其稳定性与安全性由各自维护者负责。
+                    </p>
+                  </div>
+
+                  <p
+                    class="text-[11px] text-slate-400 pt-6 border-t-2 border-pink-100 flex items-center gap-2"
+                  >
+                    <PixelIcon name="mood-happy" class="w-3.5 h-3.5" />
+                    点击“同意并继续”即表示您已阅读并同意上述所有条款喵~
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex gap-5 relative z-10">
+                <button
+                  class="flex-1 px-8 py-4 pixel-border-pink bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all font-black text-xs tracking-widest pixel-hover-lift press-effect"
+                  @click="handleDeclineEula"
                 >
-                  <PixelIcon name="mood-happy" class="w-3.5 h-3.5" />
-                  点击“同意并继续”即表示您已阅读并同意上述所有条款喵~
-                </p>
+                  拒绝并退出
+                </button>
+                <button
+                  class="flex-[2] px-8 py-4 pixel-btn-pink text-white font-black text-sm tracking-[0.2em] shadow-lg flex items-center justify-center gap-3 pixel-hover-lift press-effect group"
+                  @click="handleAcceptEula"
+                >
+                  <PixelIcon name="check" size="md" />
+                  同意并继续
+                  <PixelIcon
+                    name="flash"
+                    class="group-hover:translate-x-1 transition-transform w-4 h-4"
+                  />
+                </button>
               </div>
             </div>
-
-            <div class="flex gap-5 relative z-10">
-              <button
-                class="flex-1 px-8 py-4 pixel-border-pink bg-slate-50 hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-all font-black text-xs tracking-widest pixel-hover-lift press-effect"
-                @click="handleDeclineEula"
-              >
-                拒绝并退出
-              </button>
-              <button
-                class="flex-[2] px-8 py-4 pixel-btn-pink text-white font-black text-sm tracking-[0.2em] shadow-lg flex items-center justify-center gap-3 pixel-hover-lift press-effect group"
-                @click="handleAcceptEula"
-              >
-                <PixelIcon name="check" size="md" />
-                同意并继续
-                <PixelIcon
-                  name="flash"
-                  class="group-hover:translate-x-1 transition-transform w-4 h-4"
-                />
-              </button>
-            </div>
           </div>
-        </div>
         </Teleport>
       </div>
     </div>
@@ -1921,7 +1941,7 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { AGENT_NAME, APP_TITLE } from '../config'
+import { AGENT_NAME } from '../config'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import PTooltip from '../components/ui/PTooltip.vue'
 import { invoke, listen, isElectron } from '@/utils/ipcAdapter'
@@ -1929,6 +1949,7 @@ import PixelIcon from '../components/ui/PixelIcon.vue'
 import OnboardingOverlay from '../components/onboarding/OnboardingOverlay.vue'
 
 const scale = ref(1)
+const appVersion = ref('...')
 const updateScale = () => {
   const width = window.innerWidth
   if (width < 1200) {
@@ -2076,6 +2097,13 @@ const toggleSocialMode = async () => {
 }
 
 onMounted(async () => {
+  try {
+    const v = await invoke('get_app_version')
+    if (v) appVersion.value = v
+  } catch {
+    /* ignore */
+  }
+
   // 初始化缩放
   updateScale()
   window.addEventListener('resize', updateScale)
@@ -2125,7 +2153,7 @@ onMounted(async () => {
   })
 
   // 并行执行所有 IPC 调用以加速启动
-  const [_configResult, pluginsResult, esResult, envResult] = await Promise.allSettled([
+  const [, pluginsResult, esResult, envResult] = await Promise.allSettled([
     loadConfig(),
     invoke('get_plugins'),
     invoke('check_es'),

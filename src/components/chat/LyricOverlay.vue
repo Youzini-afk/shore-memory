@@ -185,7 +185,7 @@ onUnmounted(() => {
   font-weight: 400; /* ZCOOL KuaiLe 不需要太粗，本身就很圆润 */
   color: #ffffff;
   /* 融合 Wiki 的描边阴影与歌词的外发光 */
-  text-shadow: 
+  text-shadow:
     0 0 15px rgba(249, 168, 212, 0.8),
     0 0 30px rgba(249, 168, 212, 0.4),
     3px 3px 0 rgba(45, 27, 30, 0.2);

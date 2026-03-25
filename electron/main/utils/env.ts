@@ -40,7 +40,7 @@ if (isElectron) {
   } else if (!app.isPackaged) {
     // 开发模式：数据统一存放在项目的 backend/ 目录下
     // 这样 paths.data = {project}/backend/data/ 与 Python 后端数据位于同一目录
-    const projectRoot = path.resolve(__dirname, '../../..')   // dist-electron/main -> electron -> 项目根
+    const projectRoot = path.resolve(__dirname, '../../..') // dist-electron/main -> electron -> 项目根
     appUserData = path.join(projectRoot, 'backend')
     console.log(`[Env] 开发模式，数据目录: ${appUserData}/data/`)
   } else {
@@ -75,7 +75,13 @@ export const isPortable = isElectron && isPackaged && detectPortableMode(appExe)
  * 用于 Logger 的双写：开发模式下日志同时存在项目目录 + 系统目录。
  */
 export const systemUserData: string = isElectron
-  ? (() => { try { return require('electron').app.getPath('userData') } catch { return appUserData } })()
+  ? (() => {
+      try {
+        return require('electron').app.getPath('userData')
+      } catch {
+        return appUserData
+      }
+    })()
   : appUserData
 
 export const paths = {

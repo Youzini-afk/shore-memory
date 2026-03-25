@@ -1,6 +1,4 @@
 <script setup lang="ts">
-import { Calendar } from 'lucide-vue-next'
-
 defineProps<{
   modelValue: string
   placeholder?: string

@@ -58,7 +58,7 @@ const isSessionReady = ref(false)
 const errorMessage = ref('')
 
 // 动态获取后端基础 URL 喵~ 🌸
-const BACKEND_HOST = (window.location.hostname || 'localhost')
+const BACKEND_HOST = window.location.hostname || 'localhost'
 const API_BASE = window.location.protocol + '//' + BACKEND_HOST + ':9120'
 
 // 在 Electron 中，窗口管理通过 IPC 由主进程处理

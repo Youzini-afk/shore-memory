@@ -162,5 +162,5 @@ import PTooltip from '@/components/ui/PTooltip.vue'
 import PixelIcon from '@/components/ui/PixelIcon.vue'
 import { MODEL_CONFIG_KEY } from '@/composables/dashboard/injectionKeys'
 
-const { mcps, openMcpEditor, deleteMcp, toggleMcpEnabled, isSaving } = inject(MODEL_CONFIG_KEY)!
+const { mcps, openMcpEditor, deleteMcp, toggleMcpEnabled } = inject(MODEL_CONFIG_KEY)!
 </script>

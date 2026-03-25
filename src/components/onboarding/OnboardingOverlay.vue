@@ -1,5 +1,6 @@
 <template>
   <div
+    v-if="isVisible"
     class="fixed inset-0 z-[10000] flex flex-col items-center p-12 transition-all duration-1000 overflow-hidden pointer-events-none"
     :class="[
       isVisible && isAppearing ? 'opacity-100' : 'opacity-0',

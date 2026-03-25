@@ -40,8 +40,6 @@ export function createTray() {
 
   try {
     const icon = nativeImage.createFromPath(iconPath)
-    // 如需调整大小
-    // icon.resize({ width: 16, height: 16 })
 
     tray = new Tray(icon)
 

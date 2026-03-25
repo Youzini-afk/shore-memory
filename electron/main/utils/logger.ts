@@ -19,7 +19,7 @@ export type LogSource =
 class Logger {
   private static instance: Logger
   private logFile: string | null = null
-  private secondaryLogFile: string | null = null   // 开发模式下同时写入 %APPDATA%
+  private secondaryLogFile: string | null = null // 开发模式下同时写入 %APPDATA%
 
   // 隐藏模式 (降噪)
   // 优化: 组合正则以获得更好的性能
@@ -100,7 +100,7 @@ class Logger {
       // 动态获取路径，避免循环依赖
       // 注意: logger 在 env.ts 之前被加载，不能直接 import paths，需自行检测模式
       let primaryDir = ''
-      let systemDir = ''   // %APPDATA% 路径（用于开发模式双写）
+      let systemDir = '' // %APPDATA% 路径（用于开发模式双写）
 
       try {
         const { app } = require('electron')
@@ -115,7 +115,7 @@ class Logger {
             // 开发模式：主日志在 backend/data/logs/，同时写 %APPDATA% 副本
             const projectRoot = path.resolve(__dirname, '../../..')
             primaryDir = path.join(projectRoot, 'backend')
-            systemDir = app.getPath('userData')   // %APPDATA%/...
+            systemDir = app.getPath('userData') // %APPDATA%/...
           } else {
             // 发行模式
             primaryDir = app.getPath('userData')
@@ -143,7 +143,10 @@ class Logger {
           fs.mkdirSync(sysLogDir, { recursive: true })
         }
         this.secondaryLogFile = path.join(sysLogDir, 'main.log')
-        fs.writeFileSync(this.secondaryLogFile, `--- Log started at ${new Date().toISOString()} (dev secondary) ---\n`)
+        fs.writeFileSync(
+          this.secondaryLogFile,
+          `--- Log started at ${new Date().toISOString()} (dev secondary) ---\n`
+        )
       }
     } catch (e) {
       console.error('[Logger] 初始化日志文件失败:', e)

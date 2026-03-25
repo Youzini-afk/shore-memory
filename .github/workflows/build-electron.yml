@@ -312,35 +312,51 @@ jobs:
             PeroCore-Electron/dist_electron/*.exe
             PeroCore-Portable-*.zip
             PeroCore-Browser-Extension.zip
-          name: 'PeroCore ${{ github.ref_name }}'
+          name: '萌动链接：PeroperoChat！ ${{ github.ref_name }}'
           body: |
-            ## ${{ github.ref_name }} Release Notes
+            ## 🎉 ${{ github.ref_name }} 版本更新
 
-            ### Downloads
-            - **Setup 安装版** (`.exe`): 推荐大多数用户使用，数据存储在系统用户目录
-            - **Portable 便携版** (`.zip`): 解压即用，数据存储在程序目录下的 `data/` 文件夹中
-            - **Browser Extension** (`.zip`): 浏览器扩展插件
+            > 萌动链接：PeroperoChat！是一款开源的 AI 桌面伴侣应用，集成本地大模型、3D 桌宠、Plugin 系统与多智能体框架。
 
-            ### Architecture
-            - Gateway embedded into Python backend (removed Go dependency)
-            - Agent service refactored into 6 submodules
-            - Build pipeline cleaned up (removed copy-gateway.js)
+            ---
 
-            ### Features
-            - Auto-hide launcher after startup
-            - 3D character system improvements
-            - Pixel-style UI enhancements
-            - **NEW: Portable version support**
+            ### 📦 下载说明
 
-            ### Stability
-            - Fixed file:// URL format issue causing production build to not launch
-            - Steam module lazy loading to prevent native crashes
-            - Google Fonts localized for offline/China network support
-            - Global exception handling improvements
-            - TypeScript type fixes
+            | 文件 | 说明 | 推荐人群 |
+            |------|------|----------|
+            | `*-Setup-*.exe` | 安装版 | 普通用户，数据存储在系统用户目录 |
+            | `PeroCore-Portable-*.zip` | 便携版（解压即用） | 随身携带或多设备使用，数据存储于 `data/` 文件夹 |
+            | `PeroCore-Browser-Extension.zip` | 浏览器扩展 | 配合主程序在浏览器中使用 |
 
-            Automated release by GitHub Actions
+            > ⚠️ Windows 可能弹出 SmartScreen 警告，点击"仍要运行"即可。本软件为开源项目，源码可在仓库中查阅。
+
+            ---
+
+            ### 🆕 本版本更新内容
+
+            #### ✨ 新特性
+            - 请查阅本次 Commit 记录了解具体变更
+
+            #### 🐛 问题修复
+            - 请查阅本次 Commit 记录了解具体变更
+
+            #### 🏗️ 架构优化
+            - 请查阅本次 Commit 记录了解具体变更
+
+            ---
+
+            ### 🚀 快速开始
+
+            1. 下载并安装（安装版）或解压（便携版）
+            2. 首次启动需同意《用户许可协议》
+            3. 在启动器中配置 LLM API Key 后即可使用
+            4. 详细使用文档请参阅 [项目 Wiki](https://github.com/${{ github.repository }}/wiki)
+
+            ---
+
+            *由 GitHub Actions 自动构建发布 · 构建时间：${{ github.event.head_commit.timestamp }}*
           draft: false
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+

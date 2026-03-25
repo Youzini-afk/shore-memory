@@ -415,12 +415,22 @@
         <PCard pixel class="!p-8 !overflow-visible" :class="{ 'opacity-60': !rerankerEnabled }">
           <div class="flex items-center justify-between mb-8">
             <div class="flex items-center gap-4">
-              <div class="p-3 rounded-2xl" :class="rerankerEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'">
+              <div
+                class="p-3 rounded-2xl"
+                :class="
+                  rerankerEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'
+                "
+              >
                 <PixelIcon name="sparkle" size="md" />
               </div>
               <div>
                 <div class="flex items-center gap-3">
-                  <h4 class="text-lg font-bold" :class="rerankerEnabled ? 'text-slate-800' : 'text-slate-400'">Reranker 重排序模型</h4>
+                  <h4
+                    class="text-lg font-bold"
+                    :class="rerankerEnabled ? 'text-slate-800' : 'text-slate-400'"
+                  >
+                    Reranker 重排序模型
+                  </h4>
                   <span
                     v-if="rerankerEnabled"
                     class="px-2.5 py-0.5 text-[9px] font-black tracking-widest uppercase rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100"
@@ -435,9 +445,11 @@
             <!-- 开关 -->
             <button
               class="relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-inner"
-              :class="rerankerEnabled
-                ? 'bg-amber-400 focus:ring-amber-300'
-                : 'bg-slate-200 focus:ring-slate-300'"
+              :class="
+                rerankerEnabled
+                  ? 'bg-amber-400 focus:ring-amber-300'
+                  : 'bg-slate-200 focus:ring-slate-300'
+              "
               @click="rerankerEnabled = !rerankerEnabled"
             >
               <span
@@ -450,11 +462,17 @@
           </div>
 
           <!-- 关闭时的提示 -->
-          <div v-if="!rerankerEnabled" class="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center">
+          <div
+            v-if="!rerankerEnabled"
+            class="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center"
+          >
             <p class="text-sm text-slate-400">
-              Reranker 已关闭。<span class="text-amber-500 font-bold">建议开启</span>以获得更精准的记忆检索效果。
+              Reranker 已关闭。<span class="text-amber-500 font-bold">建议开启</span
+              >以获得更精准的记忆检索效果。
             </p>
-            <p class="text-xs text-slate-300 mt-1">开启后，检索结果将经过二次精排，显著提升回答的相关性和准确度。</p>
+            <p class="text-xs text-slate-300 mt-1">
+              开启后，检索结果将经过二次精排，显著提升回答的相关性和准确度。
+            </p>
           </div>
 
           <!-- 开启时的配置表单 -->
@@ -554,7 +572,7 @@ import PInputNumber from '@/components/ui/PInputNumber.vue'
 import PSelect from '@/components/ui/PSelect.vue'
 import PTooltip from '@/components/ui/PTooltip.vue'
 import PixelIcon from '@/components/ui/PixelIcon.vue'
-import { MODEL_CONFIG_KEY, DASHBOARD_KEY } from '@/composables/dashboard/injectionKeys'
+import { MODEL_CONFIG_KEY } from '@/composables/dashboard/injectionKeys'
 
 const {
   models,

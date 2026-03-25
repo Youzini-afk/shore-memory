@@ -162,7 +162,10 @@ export class WindowManager {
   }
 
   public hideLauncherWindow() {
-    logger.info('Main', `hideLauncherWindow 被调用, 当前窗口状态: ${this.launcherWin ? '存在' : '不存在'}, 销毁状态: ${this.launcherWin?.isDestroyed()}`)
+    logger.info(
+      'Main',
+      `hideLauncherWindow 被调用, 当前窗口状态: ${this.launcherWin ? '存在' : '不存在'}, 销毁状态: ${this.launcherWin?.isDestroyed()}`
+    )
     if (this.launcherWin && !this.launcherWin.isDestroyed()) {
       this.launcherWin.hide()
       logger.info('Main', '已执行 launcherWin.hide()')

@@ -178,7 +178,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
       embeddingModelId.value = data.embedding_model_id ?? ''
       embeddingApiBase.value = data.embedding_api_base ?? ''
       embeddingApiKey.value = data.embedding_api_key ?? ''
-      rerankerEnabled.value = data.reranker_enabled !== 'false'  // 默认开启
+      rerankerEnabled.value = data.reranker_enabled !== 'false' // 默认开启
       rerankerProvider.value = data.reranker_provider ?? 'local'
       rerankerModelId.value = data.reranker_model_id ?? ''
       rerankerApiBase.value = data.reranker_api_base ?? ''

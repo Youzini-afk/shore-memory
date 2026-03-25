@@ -1,5 +1,5 @@
 import * as THREE from 'three'
-import { IModelProvider, ParsedModelData, ParsedBone } from './adapter/IModelProvider'
+import { IModelProvider, ParsedBone } from './adapter/IModelProvider'
 
 /**
  * 虚拟人渲染器

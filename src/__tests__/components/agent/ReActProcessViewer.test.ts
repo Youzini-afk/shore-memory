@@ -80,7 +80,7 @@ describe('ReActProcessViewer.vue', () => {
       json: () => Promise.resolve({ status: 'running' })
     })
 
-    const wrapper = mount(ReActProcessViewer, {
+    mount(ReActProcessViewer, {
       props: { segments: [], isLive: true }
     })
 

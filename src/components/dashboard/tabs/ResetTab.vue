@@ -5,7 +5,7 @@
       glass
       soft3d
       pixel
-      variant="rose"
+      variant="pink"
       class="max-w-lg w-full !p-8 !rounded-[2.5rem] relative overflow-hidden group/reset-card"
     >
       <!-- 背景装饰 ✨ -->
@@ -118,12 +118,7 @@ import { inject } from 'vue'
 import PCard from '@/components/ui/PCard.vue'
 import PButton from '@/components/ui/PButton.vue'
 import PixelIcon from '@/components/ui/PixelIcon.vue'
-import {
-  MODEL_CONFIG_KEY,
-  AGENT_CONFIG_KEY,
-  DASHBOARD_KEY
-} from '@/composables/dashboard/injectionKeys'
+import { MODEL_CONFIG_KEY } from '@/composables/dashboard/injectionKeys'
 
 const { handleSystemReset, isSaving } = inject(MODEL_CONFIG_KEY)!
-const { activeAgent } = inject(AGENT_CONFIG_KEY)!
 </script>
