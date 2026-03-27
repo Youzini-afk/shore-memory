@@ -100,7 +100,12 @@ export function initSteam(): 'restarting' | 'success' | 'failed' {
   try {
     // 为 Electron 启用 Steam 覆盖层 (Overlay)
     // 必须在应用 ready 之前调用
-    steamworks.electronEnableSteamOverlay()
+    // [优化] 开发模式下跳过 Overlay 注入，避免产生幽灵窗口
+    if (app.isPackaged) {
+      steamworks.electronEnableSteamOverlay()
+    } else {
+      console.log('[Steam] 开发模式，跳过 Overlay 注入')
+    }
 
     // 初始化 Steamworks
     client = steamworks.init(appId)

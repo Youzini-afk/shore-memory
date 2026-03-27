@@ -1,0 +1,154 @@
+{
+	"format_version": "1.12.0",
+	"minecraft:geometry": [
+		{
+			"description": {
+				"identifier": "geometry.unknown",
+				"texture_width": 64,
+				"texture_height": 64,
+				"visible_bounds_width": 56,
+				"visible_bounds_height": 58,
+				"visible_bounds_offset": [0, -2, 0]
+			},
+			"bones": [
+				{
+					"name": "Arm",
+					"pivot": [0, 26.70777, 1.54325],
+					"rotation": [1.5, 0, 0]
+				},
+				{
+					"name": "LeftArm",
+					"parent": "Arm",
+					"pivot": [1.05883, 25.96597, 0.20252],
+					"rotation": [0.08681, -3.21132, 4.65993],
+					"cubes": [
+						{
+							"origin": [0.78233, 22.58568, -0.58294],
+							"size": [1.5, 4.15, 1.7],
+							"uv": {
+								"north": {"uv": [0, 35], "uv_size": [1.5, 4]},
+								"east": {"uv": [2, 35], "uv_size": [1.5, 4]},
+								"south": {"uv": [35, 6], "uv_size": [1.5, 4]},
+								"west": {"uv": [10, 35], "uv_size": [1.5, 4]},
+								"up": {"uv": [45, 3], "uv_size": [1.5, 1.5]},
+								"down": {"uv": [14, 46.5], "uv_size": [1.5, -1.5]}
+							}
+						}
+					]
+				},
+				{
+					"name": "LeftForeArm",
+					"parent": "LeftArm",
+					"pivot": [1.53233, 23.25952, 0.17922],
+					"rotation": [-3, 0, 0],
+					"cubes": [
+						{
+							"origin": [0.73233, 18.47687, -0.56574],
+							"size": [1.6, 4.75, 1.75],
+							"uv": {
+								"north": {"uv": [24, 29], "uv_size": [1.5, 5]},
+								"east": {"uv": [12, 5], "uv_size": [2, 5]},
+								"south": {"uv": [26, 29], "uv_size": [1.5, 5]},
+								"west": {"uv": [12, 15], "uv_size": [2, 5]},
+								"up": {"uv": [42, 13], "uv_size": [1.5, 2]},
+								"down": {"uv": [42, 17], "uv_size": [1.5, -2]}
+							}
+						}
+					]
+				},
+				{
+					"name": "LeftHand",
+					"parent": "LeftForeArm",
+					"pivot": [1.28109, 19.32377, 0.55926]
+				},
+				{
+					"name": "LeftHandLocator",
+					"parent": "LeftHand",
+					"pivot": [1.28109, 19.32377, 0.55926]
+				},
+				{
+					"name": "BladeLocator",
+					"parent": "LeftHand",
+					"pivot": [1.41959, 19.09751, 0.36933]
+				},
+				{
+					"name": "RightWaistLocator",
+					"parent": "LeftHand",
+					"pivot": [1.31959, 19.09751, 0.36933]
+				},
+				{
+					"name": "RightArm",
+					"parent": "Arm",
+					"pivot": [-1.05883, 25.96597, 0.20252],
+					"rotation": [0.08681, 3.21132, -4.65993],
+					"cubes": [
+						{
+							"origin": [-2.28233, 22.58568, -0.58294],
+							"size": [1.5, 4.15, 1.7],
+							"uv": {
+								"north": {"uv": [35, 10], "uv_size": [1.5, 4]},
+								"east": {"uv": [35, 29], "uv_size": [1.5, 4]},
+								"south": {"uv": [32, 35], "uv_size": [1.5, 4]},
+								"west": {"uv": [35, 33], "uv_size": [1.5, 4]},
+								"up": {"uv": [45, 14], "uv_size": [1.5, 1.5]},
+								"down": {"uv": [16, 46.5], "uv_size": [1.5, -1.5]}
+							}
+						}
+					]
+				},
+				{
+					"name": "RightForeArm",
+					"parent": "RightArm",
+					"pivot": [-1.53233, 23.25952, 0.17922],
+					"rotation": [-3, 0, 0],
+					"cubes": [
+						{
+							"origin": [-2.33233, 18.47687, -0.56574],
+							"size": [1.6, 4.75, 1.75],
+							"uv": {
+								"north": {"uv": [28, 29], "uv_size": [1.5, 5]},
+								"east": {"uv": [6, 26], "uv_size": [2, 5]},
+								"south": {"uv": [10, 30], "uv_size": [1.5, 5]},
+								"west": {"uv": [8, 26], "uv_size": [2, 5]},
+								"up": {"uv": [42, 17], "uv_size": [1.5, 2]},
+								"down": {"uv": [42, 24], "uv_size": [1.5, -2]}
+							}
+						}
+					]
+				},
+				{
+					"name": "RightHand",
+					"parent": "RightForeArm",
+					"pivot": [-1.28109, 19.32377, 0.55926]
+				},
+				{
+					"name": "RightHandLocator",
+					"parent": "RightHand",
+					"pivot": [-1.28109, 19.32377, 0.55926]
+				},
+				{
+					"name": "BladeLocator2",
+					"parent": "RightHand",
+					"pivot": [-1.41959, 19.09751, 0.36933]
+				},
+				{
+					"name": "LeftWaistLocator",
+					"parent": "RightHand",
+					"pivot": [-1.31959, 19.09751, 0.36933]
+				},
+				{
+					"name": "molang",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "molang2",
+					"pivot": [0, 0, 0]
+				},
+				{
+					"name": "molang3",
+					"pivot": [0, 0, 0]
+				}
+			]
+		}
+	]
+}

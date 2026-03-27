@@ -276,7 +276,7 @@ let bubbleTimer = null
 
 // 模型选择相关函数
 const isModelActive = (model) => {
-  if (!currentManifestPath.value && model.asset_id.includes('rossi')) {
+  if (!currentManifestPath.value && model.asset_id.includes('pero')) {
     return true
   }
   return (

@@ -20,6 +20,20 @@ export default defineConfig(({ command }) => ({
     }
   },
   optimizeDeps: {
-    include: ['vue', 'vue-router', 'echarts', 'marked', 'dompurify']
+    force: true,
+    include: [
+      'vue',
+      'vue-router',
+      'echarts',
+      'marked',
+      'dompurify',
+      'three',
+      'three/addons/controls/OrbitControls.js',
+      'axios',
+      'dayjs',
+      'highlight.js',
+      'lucide-vue-next',
+      'qrcode.vue'
+    ]
   }
 }))

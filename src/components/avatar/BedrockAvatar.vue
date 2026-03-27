@@ -206,6 +206,8 @@ const mouseNDC = new THREE.Vector2(999, 999) // 默认在屏幕外
 let isHovering = false
 let isPetting = false
 let currentSquint = 1.0
+let initialEyelidScaleY = 1.0 // 睫毛骨骼初始 scale.y（不同模型不一样）
+let eyelidInitialized = false
 let initialEyebrowY = 0
 let currentEyebrowOffset = 0
 // 口型同步状态
@@ -603,38 +605,44 @@ async function loadDefaultManifest() {
 
   const isElectron = (window as any).electron !== undefined
   const prefix = isElectron ? 'assets/' : '/assets/'
+  const isDev = !!import.meta.env.DEV
 
-  // 优先使用 .pero 加密容器（走 PeroContainerProvider / Rust 路径），
-  // 加载失败时再回退到 manifest.json（走 StandardBedrockProvider / TS 路径）
-  const containerPath = `${prefix}3d/Rossi.pero`
-  const defaultManifest: IAvatarManifest = {
-    metadata: {
-      name: 'Rossi',
-      version: '3.0.0'
-    },
-    resources: {
-      model: containerPath,
-      texture: containerPath,
-      animations: []
-    },
-    featureButtons: [],
-    parts: [],
-    retargetingMap: { mapping: {} }
-  }
+  const containerPath = `${prefix}3d/Pero.pero`
+  const manifestJsonPath = `${prefix}3d/Pero/manifest.json`
 
-  try {
+  // 开发模式：优先 manifest.json（散文件夹），容器作为后备
+  // 生产模式：优先 .pero 容器（加密打包），manifest 作为后备
+  const loadContainer = async () => {
+    const defaultManifest: IAvatarManifest = {
+      metadata: { name: 'Pero', version: '1.0.0' },
+      resources: { model: containerPath, texture: containerPath, animations: [] },
+      featureButtons: [],
+      parts: [],
+      retargetingMap: { mapping: {} }
+    }
     await loadAvatar(defaultManifest)
-    return
-  } catch (e) {
-    console.warn('.pero 容器加载失败，尝试 manifest.json:', e)
   }
 
-  // 回退到 manifest.json（非加密模型）
-  const manifestJsonPath = `${prefix}3d/Rossi/manifest.json`
-  try {
-    console.log('回退加载 manifest.json（TS 路径）...')
+  const loadManifest = async () => {
+    console.log('加载 Pero manifest.json...')
     const manifest = await ManifestLoader.fromJson(manifestJsonPath)
     await loadAvatar(manifest)
+  }
+
+  const [primary, fallback] = isDev
+    ? [loadManifest, loadContainer]
+    : [loadContainer, loadManifest]
+
+  try {
+    await primary()
+    return
+  } catch (e) {
+    console.warn('主路径加载失败，尝试备用路径:', e)
+  }
+
+  try {
+    await fallback()
+    return
   } catch (e2) {
     console.error('所有加载路径均失败:', e2)
     errorMsg.value = `加载模型失败: 无可用的模型文件`
@@ -904,7 +912,13 @@ function animate() {
       retargetingManager.getBone('RightEyelid') || retargetingManager.getBone('RightEyelidBase')
     const eyeBrow = retargetingManager.getBone('EyeBrow')
 
-    // 目标缩放：抚摸时 0.1 (眯眼)，否则 1.0 (睁眼)
+    // 首帧记录睫毛骨骼初始 scale.y（不同模型默认值不同）
+    if (!eyelidInitialized && (leftEyelid || rightEyelid)) {
+      initialEyelidScaleY = leftEyelid?.scale.y ?? rightEyelid?.scale.y ?? 1.0
+      eyelidInitialized = true
+    }
+
+    // 目标缩放比例：1.0=正常, <1=眯眼, >1=睁大
     // 如果害羞，使用部分眯眼 (例如 0.8) 表现“害羞/尴尬”的样子
     // 如果拖拽中，睁大眼睛（惊讶）
     let targetSquint = isPetting ? 0.7 : isShy.value ? 0.85 : 1.0
@@ -912,11 +926,15 @@ function animate() {
 
     currentSquint += (targetSquint - currentSquint) * 0.2
 
-    if (leftEyelid) leftEyelid.scale.y = currentSquint
-    if (rightEyelid) rightEyelid.scale.y = currentSquint
+    if (leftEyelid) leftEyelid.scale.y = initialEyelidScaleY * currentSquint
+    if (rightEyelid) rightEyelid.scale.y = initialEyelidScaleY * currentSquint
 
     // 眉毛动画 (抚摸时下拉)
     if (eyeBrow) {
+      // 首帧记录眉毛骨骼真实初始 Y 位置
+      if (initialEyebrowY === 0 && eyeBrow.position.y !== 0) {
+        initialEyebrowY = eyeBrow.position.y
+      }
       // 抚摸优先级高于害羞
       const targetOffset = isPetting ? -1.5 : isShy.value ? 0.5 : 0
       currentEyebrowOffset += (targetOffset - currentEyebrowOffset) * 0.2

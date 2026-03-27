@@ -36,13 +36,17 @@ router.beforeEach((to, from, next) => {
 })
 
 // [优化] 后台预取其他路由 chunk，预热 Vite 编译缓存和 Electron HTTP 缓存
-// 这样后续打开 Dashboard / Pet3DView 等窗口时可以秒开
+// [注意] 开发模式下禁用预取，避免同时加载多个重型组件抢占 Vite 编译线程
 router.isReady().then(() => {
+  if (import.meta.env.DEV) {
+    console.log('[路由预取] 开发模式，跳过预取')
+    return
+  }
+
   setTimeout(() => {
     const currentPath = router.currentRoute.value.path
     console.log(`[路由预取] 当前路由: ${currentPath}，开始后台预取其他路由...`)
 
-    // 预取当前路由以外的重型组件
     const prefetchMap: Record<string, () => Promise<any>> = {
       '/dashboard': DashboardView,
       '/pet-3d': Pet3DView,
@@ -53,12 +57,10 @@ router.isReady().then(() => {
 
     for (const [path, loader] of Object.entries(prefetchMap)) {
       if (path !== currentPath) {
-        loader().catch(() => {
-          // 静默忽略预取失败（可能是网络问题或模块不存在）
-        })
+        loader().catch(() => {})
       }
     }
-  }, 3000) // 延迟 3 秒，避免与初始加载抢资源
+  }, 3000)
 })
 
 export default router

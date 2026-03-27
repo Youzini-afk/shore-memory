@@ -212,7 +212,7 @@
               : 'min-height: 100%;'
           "
         >
-          <Transition name="fade-slide" mode="out-in">
+          <div>
             <!-- 选项卡组件 (通过 provide/inject 传递状态) -->
             <OverviewTab v-if="currentTab === 'overview'" key="overview" />
             <LogsTab v-else-if="currentTab === 'logs'" key="logs" />
@@ -225,7 +225,7 @@
             <ResetTab v-else-if="currentTab === 'system_reset'" key="system_reset" />
             <NapCatTab v-else-if="currentTab === 'napcat'" key="napcat" />
             <TerminalTab v-else-if="currentTab === 'terminal'" key="terminal" />
-          </Transition>
+          </div>
         </div>
       </main>
     </div>
@@ -869,6 +869,9 @@ import PInput from '../components/ui/PInput.vue'
 import PSelect from '../components/ui/PSelect.vue'
 import PTextarea from '../components/ui/PTextarea.vue'
 import PTooltip from '../components/ui/PTooltip.vue'
+import PCheckbox from '../components/ui/PCheckbox.vue'
+import PSwitch from '../components/ui/PSwitch.vue'
+import PInputNumber from '../components/ui/PInputNumber.vue'
 import PixelIcon from '../components/ui/PixelIcon.vue'
 import logoImg from '../assets/logo.png'
 import { gatewayClient } from '../api/gateway'

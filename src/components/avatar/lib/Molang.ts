@@ -155,8 +155,11 @@ export class Molang {
       this.cache.set(expression, func)
       return func
     } catch (e) {
-      console.warn(`编译 Molang 失败: ${expression}`, e)
-      return () => 0
+      // 只警告一次，然后缓存返回 0 的函数，避免每帧重复编译+报错
+      console.warn(`编译 Molang 失败 (已静默): ${expression}`, e)
+      const fallback = () => 0
+      this.cache.set(expression, fallback)
+      return fallback
     }
   }
 

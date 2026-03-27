@@ -84,6 +84,7 @@
 <script setup>
 import { computed, onMounted, onUnmounted, reactive } from 'vue'
 import { API_BASE } from '../../config'
+import PixelIcon from '../ui/PixelIcon.vue'
 
 const props = defineProps({
   visible: {

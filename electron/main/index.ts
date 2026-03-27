@@ -300,6 +300,10 @@ ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
     if (!native) {
       throw new Error('Native 渲染核心尚未加载')
     }
+    // [调试] 打印接收到的数据信息
+    const hex = Buffer.from(buffer).subarray(0, 16).toString('hex')
+    const ascii = Buffer.from(buffer).subarray(0, 4).toString('ascii')
+    logger.info('Native', `[DEBUG] pero-container 收到数据: ${buffer.length} 字节, 前16字节hex: ${hex}, magic: "${ascii}"`)
     if (typeof native.loadPeroContainer !== 'function') {
       logger.error('Native', 'Native 模块中缺失 loadPeroContainer 函数')
       throw new Error('渲染核心功能不完整')
