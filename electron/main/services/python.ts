@@ -7,6 +7,15 @@ import { logger } from '../utils/logger'
 import { getGatewayToken } from './system'
 import { getWorkshopInstallPath } from './steam'
 import { appEvents } from '../events'
+import { isDev, paths } from '../utils/env'
+
+const workspaceRoot = isDev
+  ? path.resolve(__dirname, '../../..')
+  : paths.resources
+
+function fixPath(p: string): string {
+  return path.normalize(p)
+}
 
 let backendProcess: ChildProcess | null = null
 const logHistory: string[] = []
@@ -48,29 +57,42 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
   }
 
   // 环境变量设置
-  const pythonPathEnv = process.env.PYTHONPATH
-    ? `${backendRoot}${path.delimiter}${process.env.PYTHONPATH}`
-    : backendRoot
+  const env = { ...process.env }
+  
+  // [环境隔离] 移除可能污染我们嵌入式 Python 实例的系统或用户环境变量
+  Object.keys(env).forEach(key => {
+    if (key.startsWith('PYTHON') && key !== 'PATH' && key !== 'PYTHONPATH') {
+      delete env[key]
+    }
+  })
+  
+  // 核心 Python 环境设置
+  const pythonDir = path.dirname(pythonPath)
+  const resourceDir = fixPath(isDev ? workspaceRoot : process.resourcesPath)
+  
+  env['PYTHONHOME'] = pythonDir
+  if (isDev) {
+    env['PYTHONPATH'] = workspaceRoot
+  } else {
+    // 同时包含 resources 和 resources/backend，以支持两种导入风格 (from backend.xxx 和 from xxx)
+    env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
+  }
 
   const workshopPath = getWorkshopInstallPath()
-
+  
   logger.info('Backend', `Workshop Path: ${workshopPath || 'Not Found (Steam not running?)'}`)
-
-  const env = {
-    ...process.env,
-    PYTHONPATH: pythonPathEnv,
-    PYTHONNOUSERSITE: '1',
-    PYTHONUNBUFFERED: '1',
-    PYTHONUTF8: '1',
-    PORT: '9120',
-    ENABLE_SOCIAL_MODE: enableSocialMode.toString(),
-    PERO_DATA_DIR: dataDir,
-    PERO_WORKSHOP_DIR: workshopPath || '',
-    PERO_DATABASE_PATH: dbPath,
-    PERO_CONFIG_PATH: configPath,
-    PERO_LOG_FILE: logFile,
-    GATEWAY_TOKEN: getGatewayToken()
-  }
+  
+  env['PYTHONNOUSERSITE'] = '1'
+  env['PYTHONUNBUFFERED'] = '1'
+  env['PYTHONUTF8'] = '1'
+  env['PORT'] = '9120'
+  env['ENABLE_SOCIAL_MODE'] = enableSocialMode.toString()
+  env['PERO_DATA_DIR'] = dataDir
+  env['PERO_WORKSHOP_DIR'] = workshopPath || ''
+  env['PERO_DATABASE_PATH'] = dbPath
+  env['PERO_CONFIG_PATH'] = configPath
+  env['PERO_LOG_FILE'] = logFile
+  env['GATEWAY_TOKEN'] = getGatewayToken()
 
   // 启动子进程
   const child = spawn(pythonPath, ['-u', scriptPath], {

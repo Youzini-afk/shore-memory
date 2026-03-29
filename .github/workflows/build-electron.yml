@@ -119,19 +119,7 @@ jobs:
 
           $TARGET_LIB = "PeroCore-Electron/resources/python/Lib/site-packages"
 
-          # 1. Build and Install pero_memory_core
-          echo "Building pero_memory_core..."
-          maturin build --release --manifest-path PeroCore-Electron/backend/rust_core/Cargo.toml --out dist
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $MEMORY_WHEEL = Get-ChildItem dist/pero_memory_core*.whl | Select-Object -First 1
-          if ($MEMORY_WHEEL) {
-              echo "Installing $($MEMORY_WHEEL.Name)..."
-              pip install $MEMORY_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } else {
-              Write-Error "Failed to build pero_memory_core wheel"
-              exit 1
-          }
+
 
           # 2. Build and Install pero_vision_core
           echo "Building pero_vision_core..."
@@ -161,19 +149,6 @@ jobs:
               exit 1
           }
 
-          # 4. Build and Install pero_social_core
-          echo "Building pero_social_core..."
-          maturin build --release --manifest-path PeroCore-Electron/backend/social_core/Cargo.toml --out dist
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $SOCIAL_WHEEL = Get-ChildItem dist/pero_social_core*.whl | Select-Object -First 1
-          if ($SOCIAL_WHEEL) {
-              echo "Installing $($SOCIAL_WHEEL.Name)..."
-              pip install $SOCIAL_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } else {
-              Write-Error "Failed to build pero_social_core wheel"
-              exit 1
-          }
 
       - name: Build Binary Tools
         shell: powershell

@@ -239,11 +239,6 @@ function buildRustExtensions() {
 
   const extensions = [
     {
-      name: 'pero_memory_core',
-      path: path.join(BACKEND_DIR, 'rust_core', 'Cargo.toml'),
-      dir: path.join(BACKEND_DIR, 'rust_core')
-    },
-    {
       name: 'pero_vision_core',
       path: path.join(BACKEND_DIR, 'vision_core', 'Cargo.toml'),
       dir: path.join(BACKEND_DIR, 'vision_core')
@@ -252,11 +247,6 @@ function buildRustExtensions() {
       name: 'nit_rust_runtime',
       path: path.join(BACKEND_DIR, 'nit_core', 'interpreter', 'rust_binding', 'Cargo.toml'),
       dir: path.join(BACKEND_DIR, 'nit_core', 'interpreter', 'rust_binding')
-    },
-    {
-      name: 'pero_social_core',
-      path: path.join(BACKEND_DIR, 'social_core', 'Cargo.toml'),
-      dir: path.join(BACKEND_DIR, 'social_core')
     }
   ]
 

@@ -11,7 +11,7 @@ backend_dir = os.path.dirname(current_dir)
 sys.path.append(backend_dir)
 sys.path.append(os.path.dirname(backend_dir))  # 添加项目根目录
 
-from backend.core.model_manager import model_manager  # noqa: E402
+from core.model_manager import model_manager  # noqa: E402
 
 
 def check_models() -> Dict[str, Any]:

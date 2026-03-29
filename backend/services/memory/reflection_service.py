@@ -14,7 +14,6 @@ from models import (
     ConversationLog,
     MaintenanceRecord,
     Memory,
-    MemoryRelation,
 )
 from services.core.llm_service import LLMService
 from services.mdp.manager import mdp
@@ -629,9 +628,9 @@ class ReflectionService:
 
                             # [Fix] 同步删除向量
                             try:
-                                from services.core.vector_service import vector_service
+                                from services.memory.trivium_store import trivium_store
 
-                                vector_service.delete_memory(mem.id, agent_id=agent_id)
+                                await trivium_store.delete_memory(mem.id, agent_id=agent_id)
                             except Exception as ve:
                                 print(f"[Reflection] 向量删除失败: {ve}")
 
@@ -828,7 +827,7 @@ class ReflectionService:
                 if changed:
                     try:
                         from services.core.embedding_service import embedding_service
-                        from services.core.vector_service import vector_service
+                        from services.memory.trivium_store import trivium_store
 
                         enriched = (
                             f"{m.tags} {m.tags} {m.content}" if m.tags else m.content
@@ -849,7 +848,7 @@ class ReflectionService:
                                     if clean_c:
                                         metadata_dict[f"cluster_{clean_c}"] = True
 
-                            vector_service.add_memory(
+                            await trivium_store.add_memory(
                                 memory_id=m.id,
                                 content=m.content,
                                 embedding=new_vec,
@@ -957,7 +956,7 @@ class ReflectionService:
                     # [修复] 立即生成并同步向量，确保新节点可被检索
                     try:
                         from services.core.embedding_service import embedding_service
-                        from services.core.vector_service import vector_service
+                        from services.memory.trivium_store import trivium_store
 
                         # 生成向量
                         content_vec = await embedding_service.encode_one(
@@ -973,7 +972,7 @@ class ReflectionService:
                                 final_vec = await embedding_service.encode_one(enriched)
 
                             # 写入 VectorDB
-                            vector_service.add_memory(
+                            await trivium_store.add_memory(
                                 memory_id=new_mem.id,
                                 content=new_mem.content,
                                 embedding=final_vec,
@@ -988,59 +987,44 @@ class ReflectionService:
                     except Exception as ve:
                         print(f"[Reflection] 警告: 新合并记忆向量生成失败: {ve}")
 
-                    # [增强] 关系迁移：将旧节点的连接继承给新节点
+                    # [增强] 图谱边继承：将旧节点的连接迁移给新合并节点 (TriviumDB)
                     try:
-                        # 1. 查找所有涉及 valid_ids 的关系
-                        stmt_rel = select(MemoryRelation).where(
-                            (col(MemoryRelation.source_id).in_(valid_ids))
-                            | (col(MemoryRelation.target_id).in_(valid_ids))
-                        )
-                        existing_relations = (await self.session.exec(stmt_rel)).all()
+                        from services.memory.trivium_store import trivium_store
+                        processed_pairs = set()
 
-                        processed_pairs = set()  # (source, target) 用于去重
+                        # 1. 获取所有旧节点的邻居
+                        for old_id in valid_ids:
+                            neighbors = await trivium_store.get_neighbors(old_id)
+                            for nbr in neighbors:
+                                # 解析邻居 ID
+                                if hasattr(nbr, 'id'):
+                                    nbr_id = nbr.id
+                                elif isinstance(nbr, tuple):
+                                    nbr_id = nbr[0]
+                                elif isinstance(nbr, int):
+                                    nbr_id = nbr
+                                elif isinstance(nbr, dict):
+                                    nbr_id = nbr.get('id')
+                                else:
+                                    continue
 
-                        for rel in existing_relations:
-                            # Case 1: 内部关系 (Source 和 Target 都在合并范围内) -> 丢弃 (已内化)
-                            if (
-                                rel.source_id in valid_ids
-                                and rel.target_id in valid_ids
-                            ):
-                                continue
+                                # 内部关系（Source 和 Target 都在合并范围内）→ 丢弃（已内化）
+                                if nbr_id in valid_ids:
+                                    continue
 
-                            # Case 2: 对外关系 (Source 在范围内 -> 变为 New -> Target)
-                            if rel.source_id in valid_ids:
-                                new_source = new_mem.id
-                                new_target = rel.target_id
-                            # Case 3: 被引用关系 (Target 在范围内 -> 变为 Source -> New)
-                            else:  # rel.target_id in valid_ids
-                                new_source = rel.source_id
-                                new_target = new_mem.id
-
-                            # 去重检查
-                            if (new_source, new_target) not in processed_pairs:
-                                processed_pairs.add((new_source, new_target))
-                                self.session.add(
-                                    MemoryRelation(
-                                        source_id=new_source,
-                                        target_id=new_target,
-                                        relation_type=rel.relation_type,
-                                        strength=rel.strength,
-                                        description=rel.description,
+                                # 对外关系 → 将边继承到新节点
+                                pair = (new_mem.id, nbr_id)
+                                if pair not in processed_pairs:
+                                    processed_pairs.add(pair)
+                                    await trivium_store.link(
+                                        src=new_mem.id,
+                                        dst=nbr_id,
+                                        label="inherited",
+                                        weight=0.6
                                     )
-                                )
-
-                        # 显式删除旧关系 (防止僵尸数据)
-                        if existing_relations:
-                            rel_ids = [r.id for r in existing_relations]
-                            if rel_ids:
-                                await self.session.exec(
-                                    delete(MemoryRelation).where(
-                                        col(MemoryRelation.id).in_(rel_ids)
-                                    )
-                                )
 
                     except Exception as e:
-                        print(f"[Reflection] 关系迁移失败: {e}")
+                        print(f"[Reflection] 图谱边继承失败 (非致命): {e}")
 
                     for mid in valid_ids:
                         m_obj = next(m for m in batch_memories if m.id == mid)
@@ -1049,9 +1033,9 @@ class ReflectionService:
 
                         # [Fix] 同步删除向量
                         try:
-                            from services.core.vector_service import vector_service
+                            from services.memory.trivium_store import trivium_store
 
-                            vector_service.delete_memory(mid, agent_id=agent_id)
+                            await trivium_store.delete_memory(mid, agent_id=agent_id)
                         except Exception as ve:
                             print(f"[Reflection] 向量删除失败: {ve}")
 
@@ -1102,9 +1086,9 @@ class ReflectionService:
 
                         # [Fix] 同步删除向量
                         try:
-                            from services.core.vector_service import vector_service
+                            from services.memory.trivium_store import trivium_store
 
-                            vector_service.delete_memory(mem.id, agent_id=agent_id)
+                            await trivium_store.delete_memory(mem.id, agent_id=agent_id)
                         except Exception as ve:
                             print(f"[Reflection] 向量删除失败: {ve}")
 
@@ -1143,9 +1127,9 @@ class ReflectionService:
 
                     # 同步删除向量
                     try:
-                        from services.core.vector_service import vector_service
+                        from services.memory.trivium_store import trivium_store
 
-                        vector_service.delete_memory(mem.id, agent_id=agent_id)
+                        await trivium_store.delete_memory(mem.id, agent_id=agent_id)
                     except Exception as ve:
                         print(f"[Reflection] 向量删除失败: {ve}")
 
@@ -1216,37 +1200,23 @@ class ReflectionService:
                     continue
                 processed_pairs.add(pair_key)
 
-                # 检查数据库中是否已经存在关联
-                existing = await self.session.exec(
-                    select(MemoryRelation).where(
-                        (
-                            (MemoryRelation.source_id == target_memory.id)
-                            & (MemoryRelation.target_id == candidate.id)
-                        )
-                        | (
-                            (MemoryRelation.source_id == candidate.id)
-                            & (MemoryRelation.target_id == target_memory.id)
-                        )
-                    )
-                )
-                if existing.first():
+                # 检查数据库中是否已经存在关联 (由 TriviumDB 处理)
+                from services.memory.trivium_store import trivium_store
+                if await trivium_store.has_link(target_memory.id, candidate.id) or await trivium_store.has_link(candidate.id, target_memory.id):
                     continue  # 已关联，跳过
 
                 # 3. 调用 LLM 判断关联
                 relation = await self._analyze_relation(llm, target_memory, candidate)
 
                 if relation:
-                    # 4. 写入数据库
-                    new_relation = MemoryRelation(
-                        source_id=target_memory.id,
-                        target_id=candidate.id,
-                        relation_type=relation["type"],
-                        strength=relation["strength"],
-                        description=relation["description"],
-                        agent_id=agent_id,
+                    # 4. 写入原生的 TriviumDB 高速图谱
+                    await trivium_store.link(
+                        src=target_memory.id,
+                        dst=candidate.id,
+                        label=relation["type"],
+                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5))))
                     )
-                    self.session.add(new_relation)
-                    await self.session.commit()  # 发现一个关联就提交一个，避免长事务
+                    # Trivium 写入非阻塞，无长事务困扰
                     print(
                         f"[Reflection] 发现新关联: {relation['description']} (强度: {relation['strength']})"
                     )
@@ -1264,29 +1234,15 @@ class ReflectionService:
     ) -> dict:
         """
         [孤独记忆扫描器]
-        寻找那些没有关联 (MemoryRelation) 的孤立记忆，并尝试将它们织入关系网。
+        寻找那些没有关联 (TriviumDB 图谱边为空) 的孤立记忆，并尝试将它们织入关系网。
         """
         from services.memory.memory_service import MemoryService
 
         print(f"[Reflection] 正在扫描孤独记忆 (agent_id={agent_id})...", flush=True)
 
-        # 1. 查找孤立记忆 (没有作为 source 或 target 出现在 Relation 表中)
-        # 优化: 使用 SQL 过滤而非 Python 内存过滤，避免全量加载 Memory 表导致阻塞
-
-        # 获取所有有关系的 ID (仅限当前 Agent)
-        rel_statement = select(
-            MemoryRelation.source_id, MemoryRelation.target_id
-        ).where(MemoryRelation.agent_id == agent_id)
-        relations = (await self.session.exec(rel_statement)).all()
-        connected_ids = set()
-        for src, tgt in relations:
-            connected_ids.add(src)
-            connected_ids.add(tgt)
-
-        # 查找不在 connected_ids 中的最近记忆
-        # SQLModel/SQLAlchemy 不直接支持 "NOT IN" 大集合的高效查询，
-        # 我们使用 LEFT OUTER JOIN 或者 NOT EXISTS 子查询会更好。
-        # 但为了简单，我们先获取一批最近的记忆，然后在内存中过滤 (因为 limit 很小)
+        # 1. 查找孤立记忆 (没有相连的边)
+        # 优化: 我们先获取最近一批事件，然后在 TriviumDB 中判断邻居是否为空！
+        from services.memory.trivium_store import trivium_store
 
         # 获取最近 100 条 event 记忆
         mem_statement = (
@@ -1300,7 +1256,8 @@ class ReflectionService:
 
         lonely_memories = []
         for mem in recent_memories:
-            if mem.id not in connected_ids:
+            neighbors = await trivium_store.get_neighbors(mem.id)
+            if not neighbors:
                 lonely_memories.append(mem)
                 if len(lonely_memories) >= limit:
                     break
@@ -1332,36 +1289,20 @@ class ReflectionService:
                 if candidate.id == target_memory.id:
                     continue
 
-                # 检查重复
-                existing = await self.session.exec(
-                    select(MemoryRelation).where(
-                        (
-                            (MemoryRelation.source_id == target_memory.id)
-                            & (MemoryRelation.target_id == candidate.id)
-                        )
-                        | (
-                            (MemoryRelation.source_id == candidate.id)
-                            & (MemoryRelation.target_id == target_memory.id)
-                        )
-                    )
-                )
-                if existing.first():
+                # 检查重复 (TriviumDB)
+                if await trivium_store.has_link(target_memory.id, candidate.id) or await trivium_store.has_link(candidate.id, target_memory.id):
                     continue
 
                 relation = await self._analyze_relation(llm, target_memory, candidate)
 
                 if relation:
-                    new_relation = MemoryRelation(
-                        source_id=target_memory.id,
-                        target_id=candidate.id,
-                        relation_type=relation["type"],
-                        strength=relation["strength"],
-                        description=relation["description"],
-                        agent_id=agent_id,
+                    await trivium_store.link(
+                        src=target_memory.id,
+                        dst=candidate.id,
+                        label=relation["type"],
+                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5))))
                     )
-                    self.session.add(new_relation)
-                    await self.session.commit()
-                    print(f"[Reflection] 孤独记忆已连接: {relation['description']}")
+                    print(f"[Reflection] 孤独记忆已由于 TriviumDB 扩散接入图谱: {relation['description']}")
                     new_relations_count += 1
                     break  # 找到一个连接就够了，脱离孤独状态
 
@@ -1484,13 +1425,13 @@ class ReflectionService:
                     # 立即生成向量 (实体的向量只编码名字和类型)
                     try:
                         from services.core.embedding_service import embedding_service
-                        from services.core.vector_service import vector_service
+                        from services.memory.trivium_store import trivium_store
 
                         vec = await embedding_service.encode_one(
                             f"{name} {entity.get('type', '')}"
                         )
                         if vec:
-                            vector_service.add_memory(
+                            await trivium_store.add_memory(
                                 memory_id=new_entity.id,
                                 content=new_entity.content,
                                 embedding=vec,
@@ -1519,25 +1460,16 @@ class ReflectionService:
                     continue
 
                 # 检查重复关系
-                existing_rel = (
-                    await self.session.exec(
-                        select(MemoryRelation).where(
-                            (MemoryRelation.source_id == event_id)
-                            & (MemoryRelation.target_id == entity_id)
-                            & (MemoryRelation.relation_type == rel_type)
-                        )
-                    )
-                ).first()
+                from services.memory.trivium_store import trivium_store
+                has_rel = await trivium_store.has_link(event_id, entity_id)
 
-                if not existing_rel:
-                    new_rel = MemoryRelation(
-                        source_id=event_id,
-                        target_id=entity_id,
-                        relation_type=rel_type,
-                        strength=weight,
-                        agent_id=agent_id,
+                if not has_rel:
+                    await trivium_store.link(
+                        src=event_id,
+                        dst=entity_id,
+                        label=rel_type,
+                        weight=float(weight)
                     )
-                    self.session.add(new_rel)
                     new_relations_count += 1
 
             # 4.3 维护 Entity 共现统计 (纯统计，不涉及 LLM)
@@ -1601,9 +1533,9 @@ class ReflectionService:
 
             # [P1b] 持久化图谱引擎到磁盘
             try:
-                from services.memory.memory_service import persist_engine_graph
+                from services.memory.trivium_store import trivium_store
 
-                persist_engine_graph()
+                await trivium_store.flush()
             except Exception as pe:
                 print(f"[Reflection] 图谱持久化失败 (非致命): {pe}")
 
@@ -1680,9 +1612,9 @@ class ReflectionService:
                         await self.session.delete(mem)
                         # 同步删除向量
                         try:
-                            from services.core.vector_service import vector_service
+                            from services.memory.trivium_store import trivium_store
 
-                            vector_service.delete_memory(mem.id, agent_id=mem.agent_id)
+                            await trivium_store.delete_memory(mem.id, agent_id=mem.agent_id)
                         except Exception:
                             pass
                     print(f"[Reflection] 已撤销创建的 {len(created_memories)} 条记忆。")
@@ -1714,7 +1646,7 @@ class ReflectionService:
                             from services.core.embedding_service import (
                                 embedding_service,
                             )
-                            from services.core.vector_service import vector_service
+                            from services.memory.trivium_store import trivium_store
 
                             enriched = (
                                 f"{mem.tags} {mem.tags} {mem.content}"
@@ -1723,7 +1655,7 @@ class ReflectionService:
                             )
                             vec = await embedding_service.encode_one(enriched)
                             if vec:
-                                vector_service.add_memory(
+                                await trivium_store.add_memory(
                                     memory_id=mem.id,
                                     content=mem.content,
                                     embedding=vec,
@@ -1758,7 +1690,7 @@ class ReflectionService:
                             from services.core.embedding_service import (
                                 embedding_service,
                             )
-                            from services.core.vector_service import vector_service
+                            from services.memory.trivium_store import trivium_store
 
                             enriched = (
                                 f"{new_mem.tags} {new_mem.tags} {new_mem.content}"
@@ -1767,7 +1699,7 @@ class ReflectionService:
                             )
                             vec = await embedding_service.encode_one(enriched)
                             if vec:
-                                vector_service.add_memory(
+                                await trivium_store.add_memory(
                                     memory_id=new_mem.id,
                                     content=new_mem.content,
                                     embedding=vec,

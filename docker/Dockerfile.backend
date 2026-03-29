@@ -24,9 +24,7 @@ COPY backend/ backend/
 
 # 1. 构建 Maturin 扩展 (Python 绑定)
 # 使用 --out 明确指定输出路径，避免 workspace 路径不确定性
-RUN maturin build --release -m backend/rust_core/Cargo.toml --out /tmp/wheels
 RUN maturin build --release -m backend/nit_core/interpreter/rust_binding/Cargo.toml --out /tmp/wheels
-RUN maturin build --release -m backend/social_core/Cargo.toml --out /tmp/wheels
 RUN maturin build --release -m backend/vision_core/Cargo.toml --out /tmp/wheels
 
 # 2. 构建 WASM 模块 (nit_terminal_auditor)

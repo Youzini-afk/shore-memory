@@ -92,7 +92,7 @@ class TestAssetRegistry(unittest.TestCase):
             version="1.0.0",
         )
 
-        self.registry.scan_all()
+        self.registry.scan_all(force=True)
         asset = self.registry.get_asset(asset_id)
         self.assertIsNotNone(asset)
         self.assertEqual(asset.version, "1.0.0")
@@ -108,7 +108,7 @@ class TestAssetRegistry(unittest.TestCase):
             extra={"workshop_id": "12345"},
         )
 
-        self.registry.scan_all()
+        self.registry.scan_all(force=True)
         asset = self.registry.get_asset(asset_id)
         self.assertEqual(asset.version, "1.1.0")
         self.assertEqual(asset.source, "workshop")
@@ -118,7 +118,7 @@ class TestAssetRegistry(unittest.TestCase):
         # 模拟 Local 路径: @data/custom/my_plugin
         self._create_asset(self.data_dir, "custom/my_plugin", asset_id, version="1.2.0")
 
-        self.registry.scan_all()
+        self.registry.scan_all(force=True)
         asset = self.registry.get_asset(asset_id)
         self.assertEqual(asset.version, "1.2.0")
         self.assertEqual(asset.source, "local")

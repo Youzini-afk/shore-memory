@@ -1,8 +1,9 @@
 {
   "typeCheckingMode": "off",
+  "pythonPath": "backend/.venv/Scripts/python.exe",
   "include": ["backend"],
-  "venvPath": "backend",
-  "venv": ".venv",
+  "venvPath": ".",
+  "venv": "backend/.venv",
   "extraPaths": ["backend"],
   "exclude": [
     "**/node_modules",
@@ -12,10 +13,8 @@
     "**/build",
     "**/.git",
     "**/.vscode",
-    "**/.venv",
     "**/venv",
     "**/env",
-    "**/site-packages",
     "**/.ruff_cache",
     "**/.pytest_cache",
     "**/.mypy_cache",
@@ -35,10 +34,8 @@
   "ignore": [
     "**/node_modules",
     "**/target",
-    "**/.venv",
     "**/venv",
     "**/env",
-    "**/site-packages",
     "**/*.egg-info"
   ],
   "reportMissingImports": "warning",

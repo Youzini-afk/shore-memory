@@ -165,25 +165,46 @@ async def lifespan(app: FastAPI):
     registry.scan_all()
     print(f"📦 资产注册表: [就绪] (已索引 {len(registry.assets)} 个资产)")
 
-    # 检查 Rust 核心
+    # 检查 TriviumDB 核心
     try:
-        import pero_memory_core  # noqa: F401
+        import triviumdb  # noqa: F401
 
-        print("🧠 记忆引擎: [就绪] (pero_memory_core 已加载)")
+        print("🧠 统一记忆引擎: [就绪] (TriviumDB 高性能版已加载)")
     except ImportError:
-        print("🧠 记忆引擎: [禁用] (未找到 pero_memory_core)")
+        print("🧠 统一记忆引擎: [禁用] (未找到 TriviumDB)")
 
-    # 检查向量存储
-    from services.core.vector_store_service import VectorStoreService
+    # 检查向量图谱存储
+    from services.memory.trivium_store import trivium_store
 
-    vs = VectorStoreService()
     print(
-        f"📊 记忆节点数: {vs.count_memories() if hasattr(vs, 'count_memories') else 'N/A'}"
+        f"📊 记忆节点总数: {trivium_store.count()}"
     )
     print("=" * 50)
 
     # 启动初始化
-    await init_db()
+    try:
+        await init_db()
+    except Exception as e:
+        print(f"❌ 数据库初始化致命错误: {e}")
+        # 如果是数据库损坏，尝试备份并重置
+        if "malformed" in str(e).lower() or "not a database" in str(e).lower() or "no such table" in str(e).lower():
+            print("⚠️ 检测到数据库文件可能已损坏，正在尝试自动恢复...")
+            try:
+                db_path = os.environ.get("PERO_DATABASE_PATH")
+                if db_path and os.path.exists(db_path):
+                    backup_path = f"{db_path}.corrupt_{int(time.time())}"
+                    import shutil
+                    # 由于异步引擎可能持有锁，尝试强制重命名
+                    shutil.move(db_path, backup_path)
+                    print(f"✅ 已备份损坏的数据库到: {backup_path}")
+                    print("🔄 重新初始化空数据库...")
+                    await init_db()
+            except Exception as backup_error:
+                print(f"❌ 自动恢复失败: {backup_error}")
+                # 如果重铸失败，则不吞弃异常，让开发者可见
+                raise e
+        else:
+            raise e
 
     # 从数据库加载配置
     await get_config_manager().load_from_db()
@@ -257,7 +278,7 @@ async def lifespan(app: FastAPI):
     if config_mgr.get("aura_vision_enabled", False):
         from services.perception.aura_vision_service import aura_vision_service
 
-        if aura_vision_service.initialize():
+        if await aura_vision_service.initialize():
             asyncio.create_task(aura_vision_service.start_vision_loop())
         else:
             print("[Main] 初始化 AuraVision 服务失败。")

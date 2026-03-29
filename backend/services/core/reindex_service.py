@@ -5,7 +5,7 @@ from sqlmodel import select
 
 from models import Memory
 from services.core.embedding_service import embedding_service
-from services.core.vector_store_service import vector_service
+from services.memory.trivium_store import trivium_store
 
 
 class ReindexService:
@@ -68,7 +68,7 @@ class ReindexService:
                                 if clean_c:
                                     metadata_dict[f"cluster_{clean_c}"] = True
 
-                        vector_service.add_memory(
+                        await trivium_store.add_memory(
                             memory_id=mem.id,
                             content=mem.content,
                             embedding=embeddings[j],
@@ -93,5 +93,5 @@ class ReindexService:
                 continue
 
         # 3. 保存向量库
-        vector_service.save()
+        await trivium_store.flush()
         print(f"[Reindex] Agent {agent_id} 的重新索引任务圆满完成！喵~ ✨", flush=True)

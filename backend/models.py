@@ -46,22 +46,7 @@ class Memory(SQLModel, table=True):
     embedding_json: str = Field(default="[]", sa_column=Column(Text))
 
 
-class MemoryRelation(SQLModel, table=True):
-    """
-    记忆关联表 (The Chain-Net)
-    存储记忆之间的动态关联，构成知识图谱
-    """
 
-    id: Optional[int] = Field(default=None, primary_key=True)
-    source_id: int = Field(foreign_key="memory.id", index=True)
-    target_id: int = Field(foreign_key="memory.id", index=True)
-
-    relation_type: str = "associative"  # associative(联想), causal(因果), thematic(主题), temporal(时序), contradictory(矛盾)
-    strength: float = 0.5  # 关联强度 (0.0 - 1.0)
-    description: Optional[str] = None  # 关联描述 (例如 "都提到了喜欢吃拉面")
-    agent_id: str = Field(default="pero", index=True)  # 所属 Agent ID
-
-    created_at: datetime = Field(default_factory=get_local_now)
 
 
 class EntityCooccurrence(SQLModel, table=True):

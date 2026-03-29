@@ -2,8 +2,8 @@
 多模态主动触发协调器 (Multimodal Trigger Coordinator)
 
 第三阶段核心组件：统一调度三个感知维度
-1. 视觉意图 (Visual Intent) - 来自 VisionIntentMemoryManager
-2. 语义扩散 (Semantic Spreading) - 来自 CognitiveGraphEngine
+1. 视觉意图 (Visual Intent) - 来自 AuraVision (pero_vision_core + TriviumDB)
+2. 语义扩散 (Semantic Spreading) - 来自 TriviumDB
 3. 时间感知 (Time Awareness) - 来自 TimeAwarenessService
 
 设计原则:
@@ -11,7 +11,7 @@
 - 自适应采样：根据用户状态动态调整采样频率
 - 协同决策：单一维度高分可触发，多维度共振时增强
 
-版本: 1.0.0
+版本: 1.1.0
 """
 
 from dataclasses import dataclass, field
@@ -142,7 +142,7 @@ class MultimodalTriggerCoordinator:
         计算多模态融合决策
 
         Args:
-            visual_result: 来自 VisionIntentMemoryManager.process_visual_input 的结果
+            visual_result: 来自 AuraVision (pero_vision_core + TriviumDB) 的结果
             semantic_memories: 语义扩散唤醒的记忆 ID 列表
             semantic_scores: 记忆 ID -> 激活分数的映射
             force_time_check: 是否强制进行时间检查

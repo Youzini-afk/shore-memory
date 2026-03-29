@@ -8,8 +8,9 @@ name = "pero_vision_core"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-# 依赖核心扩散激活引擎
-pero_memory_core = { path = "../rust_core" }
+# 内部序列化依赖
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
 
 # Python 绑定
 pyo3 = { version = "0.21", features = ["extension-module"] }

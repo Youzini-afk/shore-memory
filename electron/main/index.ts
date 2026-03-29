@@ -659,13 +659,27 @@ ipcMain.handle('download_models', async (event) => {
 
     // 构造环境变量
     const env = { ...process.env }
+    
+    // [环境隔离] 移除可能污染我们嵌入式 Python 实例的系统或用户环境变量
+    Object.keys(env).forEach(key => {
+      if (key.startsWith('PYTHON') && key !== 'PATH' && key !== 'PYTHONPATH') {
+        delete env[key]
+      }
+    })
+    
     env['HF_ENDPOINT'] = 'https://hf-mirror.com' // 强制使用 HF 镜像
     env['PYTHONUNBUFFERED'] = '1' // 强制 Python 输出不缓冲，防止下载大文件时日志卡住
+    
+    const pythonDir = path.dirname(pythonPath)
+    env['PYTHONHOME'] = pythonDir
     if (isDev) {
-      env['PYTHONPATH'] = path.join(workspaceRoot)
+      env['PYTHONPATH'] = workspaceRoot
     } else {
-      env['PYTHONPATH'] = path.dirname(path.dirname(cliScript))
+      // 同时包含 resources 和 resources/backend，以支持两种导入风格 (from backend.xxx 和 from xxx)
+      env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
     }
+    env['PYTHONNOUSERSITE'] = '1'
+    env['PYTHONUTF8'] = '1'
 
     return new Promise((resolve, reject) => {
       const child = spawn(pythonPath, [cliScript, 'download', '--model', 'all'], {

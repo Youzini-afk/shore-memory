@@ -1343,13 +1343,13 @@
                         <div
                           class="font-bold text-xl text-slate-700 group-hover:text-indigo-600 transition-colors"
                         >
-                          Pero Memory Core
+                          TriviumDB Core
                         </div>
                         <div class="text-xs text-slate-400 mt-1.5 flex items-center gap-2">
                           <span
                             class="w-1.5 h-1.5 bg-indigo-400 pixel-border-indigo animate-pixel-float"
                           ></span>
-                          Rust 核心加速引擎
+                          极速向量与图谱引擎
                         </div>
                       </div>
                     </div>

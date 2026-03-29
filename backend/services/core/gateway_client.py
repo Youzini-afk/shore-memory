@@ -19,9 +19,21 @@ class GatewayClient:
     保留原有的公开接口，所有调用方无需改动。
     """
 
-    def __init__(self):
+    def __init__(self, uri: str = None, token: str = None):
         self.running = False
-        self.device_id = "python-backend"
+        self._device_id = "python-backend"
+        if token:
+            self.set_token(token)
+        if uri:
+            logger.info(f"[GatewayClient] 正在以外部连接模式初始化: {uri}")
+
+    @property
+    def device_id(self):
+        return self._device_id
+
+    @device_id.setter
+    def device_id(self, value):
+        self._device_id = value
 
     def set_token(self, token: str):
         """设置认证令牌 — 直接设置到 Hub"""
@@ -39,6 +51,13 @@ class GatewayClient:
     def start_background(self):
         """后台启动 — Hub 模式下无需操作"""
         self.running = True
+
+    async def send(self, envelope):
+        """发送封包 — 委托给 Hub 广播"""
+        try:
+            await gateway_hub.broadcast(envelope)
+        except Exception as e:
+            logger.error(f"发送封包失败: {e}")
 
     async def stop(self):
         """停止"""

@@ -6,10 +6,10 @@ import time
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
-from sqlmodel import delete, desc, select
+from sqlmodel import desc, select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from models import ConversationLog, Memory, MemoryRelation
+from models import ConversationLog, Memory
 
 logger = logging.getLogger("pero.memory")
 
@@ -28,181 +28,8 @@ def _invalidate_tag_cloud_cache(agent_id: str = None):
     else:
         _tag_cloud_cache.clear()
 
-# [Global] Rust 引擎单例 (PEDSA 算法核心)
-_rust_engine = None
-
-RELATION_TYPE_MAP = {
-    "associative": 0,
-    "is_instance_of": 1,
-    "inhibits": 255,
-    "causes": 2,
-    "involves": 0,
-    "mentions": 0,
-    "expresses": 0,
-}
-
-
-async def get_rust_engine(session: AsyncSession):
-    global _rust_engine
-    if _rust_engine is not None:
-        return _rust_engine
-
-    try:
-        from pero_memory_core import CognitiveGraphEngine
-
-        print("[Memory] 初始化 Rust 图遍历引擎...", flush=True)
-
-        # [P1b 优化] 优先从持久化文件加载图谱 (毫秒级)
-        env_data_dir = os.environ.get("PERO_DATA_DIR")
-        if env_data_dir:
-            graph_dir = os.path.join(env_data_dir, "memory")
-        else:
-            base_dir = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            graph_dir = os.path.join(base_dir, "data", "memory")
-
-        os.makedirs(graph_dir, exist_ok=True)
-        graph_path = os.path.join(graph_dir, "graph.json")
-
-        if os.path.exists(graph_path):
-            try:
-                import time as _time
-
-                t0 = _time.perf_counter()
-                _rust_engine = CognitiveGraphEngine.load_graph(graph_path)
-                _rust_engine.configure(max_active_nodes=10000, max_fan_out=20)
-                elapsed = (_time.perf_counter() - t0) * 1000
-                print(
-                    f"[Memory] ✅ 从持久化文件加载图谱: {_rust_engine.node_count()} 节点, "
-                    f"{_rust_engine.edge_count()} 边 ({elapsed:.1f}ms)",
-                    flush=True,
-                )
-
-                # 增量同步：加载持久化之后新增的 MemoryRelation
-                # 查找比图谱文件更新的关系
-                graph_mtime = os.path.getmtime(graph_path)
-                from datetime import datetime
-
-                cutoff = datetime.fromtimestamp(graph_mtime)
-                new_rels_stmt = select(MemoryRelation).where(
-                    MemoryRelation.created_at > cutoff
-                )
-                new_rels = (await session.exec(new_rels_stmt)).all()
-                if new_rels:
-                    chunk = []
-                    for rel in new_rels:
-                        type_id = RELATION_TYPE_MAP.get(rel.relation_type, 0)
-                        chunk.append(
-                            (rel.source_id, rel.target_id, rel.strength, type_id)
-                        )
-                    _rust_engine.batch_add_connections(chunk)
-                    print(
-                        f"[Memory] 增量同步 {len(new_rels)} 条新关系到图谱",
-                        flush=True,
-                    )
-
-                return _rust_engine
-            except Exception as e:
-                print(f"[Memory] 持久化文件加载失败，回退到 SQL 加载: {e}")
-                _rust_engine = None
-
-        # 回退路径：从 SQL 逐行加载 (首次启动或文件损坏时)
-        _rust_engine = CognitiveGraphEngine()
-        _rust_engine.configure(max_active_nodes=10000, max_fan_out=20)
-
-        # 预加载关系 (分批)
-        BATCH_SIZE = 5000
-        total_loaded = 0
-
-        # 1. 加载 MemoryRelation
-        mr_offset = 0
-        while True:
-            statement = select(MemoryRelation).offset(mr_offset).limit(BATCH_SIZE)
-            relations = (await session.exec(statement)).all()
-            if not relations:
-                break
-
-            chunk_relations = []
-            for rel in relations:
-                type_id = RELATION_TYPE_MAP.get(rel.relation_type, 0)
-                chunk_relations.append(
-                    (rel.source_id, rel.target_id, rel.strength, type_id)
-                )
-
-            _rust_engine.batch_add_connections(chunk_relations)
-            total_loaded += len(relations)
-            mr_offset += BATCH_SIZE
-
-        # 2. 加载时间链表关系
-        mem_offset = 0
-        while True:
-            statement_mem = (
-                select(Memory.id, Memory.prev_id, Memory.next_id)
-                .where((Memory.prev_id != None) | (Memory.next_id != None))  # noqa: E711
-                .offset(mem_offset)
-                .limit(BATCH_SIZE)
-            )
-            mem_links = (await session.exec(statement_mem)).all()
-            if not mem_links:
-                break
-
-            chunk_links = []
-            for mid, prev_id, next_id in mem_links:
-                # 时间关系默认类型为 0 (associative)
-                if prev_id:
-                    chunk_links.append((mid, prev_id, 0.2, 0))
-                if next_id:
-                    chunk_links.append((mid, next_id, 0.2, 0))
-
-            if chunk_links:
-                _rust_engine.batch_add_connections(chunk_links)
-                total_loaded += len(chunk_links)
-            mem_offset += BATCH_SIZE
-
-        print(f"[Memory] Rust 引擎已从 SQL 加载 {total_loaded} 个连接。", flush=True)
-
-        # 持久化图谱供下次快速启动
-        try:
-            _rust_engine.persist_graph(graph_path)
-            print(f"[Memory] 图谱已持久化到 {graph_path}", flush=True)
-        except Exception as pe:
-            print(f"[Memory] 图谱持久化失败 (非致命): {pe}")
-
-    except Exception as e:
-        print(f"[Memory] Rust 引擎初始化失败: {e}")
-        _rust_engine = False
-
-    return _rust_engine
-
-
-def persist_engine_graph():
-    """[P1b] 将当前 Rust 图谱引擎持久化到磁盘。
-    应在图谱发生较大变更后调用（如 build_ontology_graph 之后）。
-    """
-    global _rust_engine
-    if _rust_engine is None or _rust_engine is False:
-        return
-
-    try:
-        env_data_dir = os.environ.get("PERO_DATA_DIR")
-        if env_data_dir:
-            graph_dir = os.path.join(env_data_dir, "memory")
-        else:
-            base_dir = os.path.dirname(
-                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            )
-            graph_dir = os.path.join(base_dir, "data", "memory")
-
-        graph_path = os.path.join(graph_dir, "graph.json")
-        _rust_engine.persist_graph(graph_path)
-        print(
-            f"[Memory] 图谱已持久化: {_rust_engine.node_count()} 节点, "
-            f"{_rust_engine.edge_count()} 边",
-            flush=True,
-        )
-    except Exception as e:
-        print(f"[Memory] 图谱持久化失败 (非致命): {e}")
+# Graph engine 已完全被 TriviumDB 替代
+# 已移除过时的 CognitiveGraphEngine 及相关加载逻辑
 
 
 class MemoryService:
@@ -226,7 +53,7 @@ class MemoryService:
 
         from core.event_bus import EventBus
         from services.core.embedding_service import embedding_service
-        from services.core.vector_service import vector_service
+        from services.memory.trivium_store import trivium_store
 
         # [钩子] memory.save.pre
         # 允许 MOD 修改参数或取消保存
@@ -304,28 +131,13 @@ class MemoryService:
         await session.commit()
         await session.refresh(memory)
 
-        # 3. 同步写入向量数据库
+        # 3. 同步写入向量数据库 (TriviumDB)
         if embedding_vec:
             try:
-                # [特性] 标签加权向量
-                # 如果有 tags，生成混合文本 "tags tags content" 增强权重
-                final_embedding = embedding_vec
-                if tags:
-                    enriched_text = f"{tags} {tags} {content}"
-                    final_embedding = await embedding_service.encode_one(enriched_text)
-
-                    # [特性] 标签记忆索引 - 独立索引标签
-                    tag_list = [t.strip() for t in tags.split(",") if t.strip()]
-                    if tag_list:
-                        try:
-                            tag_embeddings = await embedding_service.encode(tag_list)
-                            for i, tag_name in enumerate(tag_list):
-                                vector_service.add_tag(tag_name, tag_embeddings[i])
-                        except Exception as tag_e:
-                            print(f"[MemoryService] 索引标签失败: {tag_e}")
-
-                # 构建元数据
-                metadata_dict = {
+                # 构建元数据 Payload
+                payload = {
+                    "id": memory.id,
+                    "content": content,
                     "type": memory_type,
                     "timestamp": memory.timestamp,
                     "importance": float(importance),
@@ -333,58 +145,15 @@ class MemoryService:
                     "clusters": clusters,
                     "agent_id": agent_id,
                 }
-
-                # [特性] 簇过滤支持
-                if clusters:
-                    cluster_list = [c.strip() for c in clusters.split(",") if c.strip()]
-                    for c in cluster_list:
-                        clean_c = c.replace("[", "").replace("]", "")
-                        if clean_c:
-                            metadata_dict[f"cluster_{clean_c}"] = True
-
-                vector_service.add_memory(
-                    memory_id=memory.id,
-                    content=content,
-                    embedding=final_embedding,
-                    metadata=metadata_dict,
-                )
+                
+                # 写入 TriviumDB
+                from services.memory.trivium_store import trivium_store
+                await trivium_store.insert(memory.id, embedding_vec, payload)
+                
             except Exception as e:
-                print(f"[MemoryService] 同步到向量数据库失败: {e}")
+                print(f"[MemoryService] 同步到 TriviumDB 失败: {e}")
         else:
-            # Embedding 为空时的同步重试策略
-            print(
-                f"[MemoryService] Embedding 为空，正在对 Memory ID {memory.id} 进行同步重试..."
-            )
-            try:
-                # 强制重新加载模型并编码
-                retry_vec = await embedding_service.encode_one(content)
-                if retry_vec:
-                    # 更新 SQL
-                    memory.embedding_json = json.dumps(retry_vec)
-                    session.add(memory)
-                    await session.commit()
-
-                    # 写入向量数据库
-                    vector_service.add_memory(
-                        memory_id=memory.id,
-                        content=content,
-                        embedding=retry_vec,
-                        metadata={
-                            "type": memory_type,
-                            "timestamp": memory.timestamp,
-                            "importance": float(importance),
-                            "tags": tags,
-                            "clusters": clusters,
-                            "agent_id": agent_id,
-                        },
-                    )
-                    print(f"[MemoryService] Memory ID {memory.id} 重试成功。")
-                else:
-                    print(
-                        f"[MemoryService] 严重错误: 重试失败。Memory {memory.id} 已存储但无向量索引。"
-                    )
-            except Exception as retry_e:
-                print(f"[MemoryService] 重试异常: {retry_e}")
+            print(f"[MemoryService] 警告: Embedding 为空，未写入 TriviumDB (Memory ID {memory.id})")
 
         # 4. 更新上一条记忆的 next_id (双向链表维护)
         if last_memory:
@@ -392,19 +161,13 @@ class MemoryService:
             session.add(last_memory)
             await session.commit()
 
-            # [优化] 同步更新全局 Rust 引擎单例
+            # TriviumDB 建立双向时间链接 (默认 label="associative")
             try:
-                engine = await get_rust_engine(session)
-                if engine:
-                    # 添加 prev/next 双向链接权重 (type=0)
-                    engine.batch_add_connections(
-                        [
-                            (memory.id, last_memory.id, 0.2, 0),
-                            (last_memory.id, memory.id, 0.2, 0),
-                        ]
-                    )
-            except Exception:
-                pass
+                from services.memory.trivium_store import trivium_store
+                await trivium_store.link(memory.id, last_memory.id, label="associative", weight=0.2)
+                await trivium_store.link(last_memory.id, memory.id, label="associative", weight=0.2)
+            except Exception as e:
+                print(f"[MemoryService] TriviumDB 时间图谱连接失败: {e}")
 
         # [钩子] memory.save.post
         await EventBus.publish("memory.save.post", memory)
@@ -715,70 +478,47 @@ class MemoryService:
             return []
 
         from services.core.embedding_service import embedding_service
-        from services.core.vector_service import vector_service
+        from services.memory.trivium_store import trivium_store
 
         try:
-            # 1. 向量搜索获取锚点
+            # 1. 直接通过 TriviumDB 的高级检索（图谱扩散已内置于底层 L4-L6）
             query_vec = await embedding_service.encode_one(text)
             if not query_vec:
                 return []
 
-            vector_results = vector_service.search(
-                query_vec, limit=10, agent_id=agent_id
+            hits = await trivium_store.search(
+                query_vec, 
+                top_k=limit, 
+                expand_depth=2, # 开启图谱游走扩散
+                agent_id=agent_id,
+                query_text=text,
+                enable_dpp=True, # 增加联想多样性
+                enable_text_hybrid=True
             )
-            if not vector_results:
+            
+            if not hits:
                 return []
 
-            anchor_ids = [res["id"] for res in vector_results]
-            sim_map = {res["id"]: res["score"] for res in vector_results}
-
-            # 2. 关联检索
-            activation_scores = {aid: sim_map.get(aid, 0.5) for aid in anchor_ids}
-
-            engine = await get_rust_engine(session)
-            if engine:
-                flashback_scores = engine.propagate_activation(
-                    activation_scores, steps=2, decay=0.7, min_threshold=0.05
-                )
-            else:
-                flashback_scores = activation_scores
-
-            # 3. 提取关联结果 (排除锚点)
-            associated_ids = [mid for mid in flashback_scores if mid not in anchor_ids]
-            if not associated_ids:
-                associated_ids = anchor_ids
-
-            sorted_ids = sorted(
-                associated_ids, key=lambda x: flashback_scores.get(x, 0), reverse=True
-            )[:limit]
-
-            if not sorted_ids:
-                return []
-
-            # 获取详情
-            statement = (
-                select(Memory)
-                .where(Memory.id.in_(sorted_ids))
-                .where(Memory.agent_id == agent_id)
-            )
-            memories = (await session.exec(statement)).all()
-
-            # 转换为碎片格式
             results = []
             seen_tags = set()
-            for m in memories:
-                if m.tags:
-                    tags = [t.strip() for t in m.tags.split(",") if t.strip()]
+            for h in hits:
+                payload = h.get("payload") or {}
+                mid = h["id"]
+                content = payload.get("content", "")
+                
+                tags_str = payload.get("tags", "")
+                if tags_str:
+                    tags = [t.strip() for t in tags_str.split(",") if t.strip()]
                     for tag in tags:
                         if tag not in seen_tags:
-                            results.append({"id": m.id, "name": tag, "type": "tag"})
+                            results.append({"id": mid, "name": tag, "type": "tag"})
                             seen_tags.add(tag)
 
                 if len(results) < limit:
                     summary = (
-                        m.content[:20] + "..." if len(m.content) > 20 else m.content
+                        content[:20] + "..." if len(content) > 20 else content
                     )
-                    results.append({"id": m.id, "name": summary, "type": "memory"})
+                    results.append({"id": mid, "name": summary, "type": "memory"})
 
             return results[:limit]
 
@@ -797,356 +537,56 @@ class MemoryService:
         agent_id: str = "pero",
     ) -> List[Memory]:
         """
-        [混合检索策略 v2 - 增强版]
-        1. 锚点定位: 使用关键词/标签命中实体节点
-        2. 向量召回: Top-20 初步候选
-        2.5 稀疏编码残差: 发现被遮蔽的弱信号 (FISTA/LASSO)
-        3. 扩散激活: 利用 Rust 引擎进行能量扩散
-        3.5 共现增益: Entity 统计共现增强
-        4. 多维重排: 扩散分 + 向量分 + 重要性 + 时间衰减
-        4.5 DPP 多样性采样: 行列式点过程去冗余
+        [混合检索策略 v3 - TriviumDB 原生引擎版]
+        TriviumDB 已经在 Rust 底层原生实现了完整的高级认知管线：
+        L1-L2 基础向量召回 -> L3 NMF+FISTA意图拆解与稀疏拓展 -> L4-L6 图谱扩散传播 -> L8 DPP去冗余
         """
-        import math
-
-        import numpy as np
-        from sqlmodel import or_
-
         from services.core.embedding_service import embedding_service
-        from services.core.vector_service import vector_service
+        from services.memory.trivium_store import trivium_store
 
-        # 加载增强参数（支持热更新）
-        try:
-            from services.memory.retrieval_enhancer import get_params
-
-            params = get_params()
-        except Exception:
-            params = {}
-
-        # --- 1. 意图拆分 + 关键词提取 ---
-        # [v2.1] 多意图拆分: 按标点/转折词断句, 每段独立检索
-        intent_segments = re.split(
-            r'[，,。.；;！!？?\n]+|(?:顺便|另外|还有|对了|然后)', text
-        )
-        intent_segments = [s.strip() for s in intent_segments if len(s.strip()) > 2]
-        if not intent_segments:
-            intent_segments = [text]
-
-        # [v2.1] jieba 分词 (替代单字 re.findall)
-        try:
-            import jieba
-            keywords = set()
-            for seg in intent_segments:
-                for word in jieba.cut(seg):
-                    word = word.strip()
-                    if len(word) > 1:  # 忽略单字和标点
-                        keywords.add(word)
-        except ImportError:
-            # jieba 未安装时回退到正则
-            keywords = set(re.findall(r"[\w]{2,}", text))
-
-        # 查找匹配的 Entity Node
-        entity_anchors = []
-        if keywords:
-            # 构造 SQL OR 查询
-            conditions = []
-            for kw in keywords:
-                conditions.append(Memory.content == kw)
-
-            if conditions:
-                stmt = select(Memory).where(
-                    Memory.type == "entity",
-                    Memory.agent_id == agent_id,
-                    or_(*conditions),
-                )
-                entity_anchors = (await session.exec(stmt)).all()
-
-        # --- 2. 多意图向量检索 ---
         if query_vec is None:
             query_vec = await embedding_service.encode_one(text)
-
         if not query_vec:
             return []
 
-        # [v2.1] 多段并行检索: 每个意图片段独立搜索, 合并去重
-        vector_candidates = []
-        seen_ids = set()
+        # 直接调用 TriviumDB 高级查询管道
+        hits = await trivium_store.search(
+            query_vector=query_vec,
+            top_k=limit,
+            expand_depth=2,      # 开启图谱游走扩散
+            agent_id=agent_id,
+            query_text=text,     # 用于混合搜索
+            enable_dpp=True,     # 开启 DPP 多样性
+            dpp_weight=1.2,      # 质量权重
+            enable_text_hybrid=True
+        )
 
-        if len(intent_segments) > 1:
-            # 多意图: 每段分配配额
-            per_segment_limit = max(8, 20 // len(intent_segments))
-            for seg in intent_segments:
-                seg_vec = await embedding_service.encode_one(seg)
-                if seg_vec:
-                    seg_results = vector_service.search(
-                        seg_vec, limit=per_segment_limit, agent_id=agent_id
-                    )
-                    for r in seg_results:
-                        if r["id"] not in seen_ids:
-                            vector_candidates.append(r)
-                            seen_ids.add(r["id"])
-
-            # 补充: 整句向量也搜一次 (捕获跨意图关联)
-            full_results = vector_service.search(
-                query_vec, limit=10, agent_id=agent_id
-            )
-            for r in full_results:
-                if r["id"] not in seen_ids:
-                    vector_candidates.append(r)
-                    seen_ids.add(r["id"])
-
-            logger.info(
-                f"多意图检索: {len(intent_segments)} 段, "
-                f"共召回 {len(vector_candidates)} 个候选"
-            )
-        else:
-            # 单意图: 走原路径
-            vector_candidates = vector_service.search(
-                query_vec, limit=20, agent_id=agent_id
-            )
-        # --- 2.3 NMF 语义分解 ---
-        nmf_result = None
-        if params.get("enable_nmf", False) and entity_anchors:
-            try:
-                from services.memory.retrieval_enhancer import nmf_query_analysis
-
-                # 收集 Entity 嵌入
-                nmf_vecs = []
-                nmf_ids = []
-                for ent in entity_anchors:
-                    if ent.embedding_json and ent.embedding_json != "[]":
-                        try:
-                            vec = json.loads(ent.embedding_json)
-                            if vec and len(vec) > 0:
-                                nmf_vecs.append(vec)
-                                nmf_ids.append(ent.id)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-                if len(nmf_vecs) >= 2:
-                    nmf_result = nmf_query_analysis(
-                        query_vec=np.array(query_vec, dtype=np.float32),
-                        entity_vecs=np.array(nmf_vecs, dtype=np.float32),
-                        entity_ids=nmf_ids,
-                        agent_id=agent_id,
-                        n_topics=params.get("nmf_n_topics", 15),
-                    )
-                    logger.debug(
-                        f"NMF: depth={nmf_result['semantic_depth']:.2f}, "
-                        f"coverage={nmf_result['topic_coverage']}, "
-                        f"novelty={nmf_result['novelty']:.2f}"
-                    )
-            except Exception as e:
-                logger.warning(f"NMF 语义分解跳过: {e}")
-
-        # --- 2.5 稀疏编码残差发现 (FISTA/LASSO) ---
-        # 触发条件: NMF novelty 超过阈值（查询中有显著的未解释成分）
-        nmf_novelty = nmf_result["novelty"] if nmf_result else 1.0
-        sparse_threshold = params.get("nmf_novelty_threshold", 0.4)
-        should_sparse = nmf_novelty >= sparse_threshold
-
-        if params.get("enable_sparse_coding", False) and entity_anchors and should_sparse:
-            try:
-                from services.memory.retrieval_enhancer import sparse_code_residual
-
-                # 收集 Entity 嵌入
-                entity_vecs_list = []
-                valid_entities = []
-                for ent in entity_anchors:
-                    if ent.embedding_json and ent.embedding_json != "[]":
-                        try:
-                            vec = json.loads(ent.embedding_json)
-                            if vec and len(vec) > 0:
-                                entity_vecs_list.append(vec)
-                                valid_entities.append(ent)
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-                if len(entity_vecs_list) >= 2:
-                    q_np = np.array(query_vec, dtype=np.float32)
-                    e_np = np.array(entity_vecs_list, dtype=np.float32)
-
-                    _, residual, residual_norm = sparse_code_residual(
-                        q_np,
-                        e_np,
-                        lambda_=params.get("sparse_coding_lambda", 0.1),
-                        max_iter=params.get("sparse_coding_iterations", 80),
-                    )
-
-                    threshold = params.get("residual_threshold", 0.30)
-                    if residual_norm > threshold:
-                        # 残差足够大 → 二次检索
-                        residual_list = residual.tolist()
-                        topk = params.get("residual_topk", 5)
-                        secondary = vector_service.search(
-                            residual_list, limit=topk, agent_id=agent_id
-                        )
-                        # 合并（去重）
-                        existing_ids = {r["id"] for r in vector_candidates}
-                        for r in secondary:
-                            if r["id"] not in existing_ids:
-                                vector_candidates.append(r)
-                                existing_ids.add(r["id"])
-
-            except Exception as e:
-                logger.warning(f"稀疏编码残差发现跳过: {e}")
-
-        # --- 3. 扩散激活 ---
-        # 初始能量源:
-        # - Vector Top-N: 能量 = score
-        # - Entity Anchors: 能量 = 2.0 (最大值，因为是精确匹配)
-
-        initial_energy = {}
-
-        # 注入向量候选能量
-        for res in vector_candidates:
-            initial_energy[res["id"]] = res["score"]
-
-        # 注入实体锚点能量
-        for ent in entity_anchors:
-            initial_energy[ent.id] = 2.0
-
-        # 调用 Rust 引擎扩散
-        engine = await get_rust_engine(session)
-        final_scores = initial_energy
-
-        if engine and initial_energy:
-            # 扩散 2 步，衰减 0.6，阈值 0.05
-            # PPR 回家概率 (防止在大图谱中能量发散)
-            teleport = params.get("teleport_alpha", 0.0)
-            final_scores = engine.propagate_activation(
-                initial_scores=initial_energy,
-                steps=2,
-                decay=0.6,
-                min_threshold=0.05,
-                teleport_alpha=teleport,
-            )
-
-        # --- 3.5 共现增益 ---
-        if params.get("enable_cooccurrence_boost", False) and entity_anchors:
-            try:
-                from models import EntityCooccurrence
-                from services.memory.retrieval_enhancer import (
-                    apply_cooccurrence_boost,
-                )
-
-                # 构建当前 Entity 的共现映射
-                anchor_ids = [e.id for e in entity_anchors]
-                cooccur_stmt = select(EntityCooccurrence).where(
-                    EntityCooccurrence.entity_a_id.in_(anchor_ids),
-                    EntityCooccurrence.agent_id == agent_id,
-                )
-                cooccur_rows = (await session.exec(cooccur_stmt)).all()
-
-                if cooccur_rows:
-                    cooccur_map: Dict[int, List] = {}
-                    for row in cooccur_rows:
-                        if row.entity_a_id not in cooccur_map:
-                            cooccur_map[row.entity_a_id] = []
-                        cooccur_map[row.entity_a_id].append(
-                            (row.entity_b_id, row.co_count)
-                        )
-
-                    final_scores = apply_cooccurrence_boost(
-                        final_scores,
-                        cooccur_map,
-                        scale=params.get("cooccurrence_bonus_scale", 0.10),
-                        max_neighbors=params.get("cooccurrence_max_neighbors", 10),
-                    )
-            except Exception as e:
-                logger.warning(f"共现增益跳过: {e}")
-
-        # --- 4. 结果重排 ---
-        # 结合: 扩散分数 + 向量相似度 (如果存在) + 时间衰减 + 重要性
-
-        # 获取所有涉及的记忆 ID
-        all_candidate_ids = list(final_scores.keys())
-        if not all_candidate_ids:
+        if not hits:
             return []
 
-        # 批量获取 Memory 对象
-        stmt = select(Memory).where(Memory.id.in_(all_candidate_ids))
-        if exclude_after_time:
-            stmt = stmt.where(Memory.timestamp < exclude_after_time.timestamp() * 1000)
-
-        memories = (await session.exec(stmt)).all()
-
-        ranked_results = []
-        for mem in memories:
-            # 跳过 Entity 节点本身 (我们只返回 Event 给 LLM，除非用户明确问定义)
-            if mem.type == "entity":
-                continue
-
-            # 基础分 = 扩散分
-            score = final_scores.get(mem.id, 0.0)
-
-            # 向量分修正 (如果在向量结果里)
-            vec_score = next(
-                (x["score"] for x in vector_candidates if x["id"] == mem.id), 0.0
-            )
-            if vec_score > 0:
-                score = score * 0.7 + vec_score * 0.3  # 扩散分主导
-
-            # 重要性加权 (1-10 -> 1.0-2.0)
-            importance_weight = 1.0 + (mem.importance / 10.0)
-            score *= importance_weight
-
-            # 时间衰减 (Ebbinghaus) - 简单的线性衰减
-            # 越近越好，但如果是很久以前的高分记忆也保留
-            days_diff = (datetime.now().timestamp() * 1000 - mem.timestamp) / (
-                1000 * 3600 * 24
-            )
-            time_decay = 1.0 / (1.0 + math.log(1 + days_diff))  # 对数衰减
-            score *= 0.8 + 0.2 * time_decay  # 时间影响占 20%
-
-            ranked_results.append((mem, score))
-
-        # 排序
-        ranked_results.sort(key=lambda x: x[1], reverse=True)
-
-        # --- 4.5 DPP 多样性采样 ---
-        if params.get("enable_dpp", False) and len(ranked_results) > limit:
-            try:
-                from services.memory.retrieval_enhancer import dpp_greedy_select
-
-                # 取 limit * multiplier 个候选做 DPP
-                multiplier = params.get("dpp_candidate_multiplier", 3)
-                pool_size = min(len(ranked_results), limit * multiplier)
-                pool = ranked_results[:pool_size]
-
-                # 构建候选向量和分数
-                pool_vecs = []
-                pool_scores = []
-                pool_valid = []
-                for mem, score in pool:
-                    if mem.embedding_json and mem.embedding_json != "[]":
-                        try:
-                            vec = json.loads(mem.embedding_json)
-                            if vec and len(vec) > 0:
-                                pool_vecs.append(vec)
-                                pool_scores.append(score)
-                                pool_valid.append((mem, score))
-                        except (json.JSONDecodeError, TypeError):
-                            pass
-
-                if len(pool_valid) > limit:
-                    vecs_np = np.array(pool_vecs, dtype=np.float32)
-                    scores_np = np.array(pool_scores, dtype=np.float32)
-
-                    selected_indices = dpp_greedy_select(
-                        vecs_np,
-                        scores_np,
-                        k=limit,
-                        quality_weight=params.get("dpp_quality_weight", 1.0),
-                    )
-
-                    final_memories = [pool_valid[i][0] for i in selected_indices]
-                else:
-                    final_memories = [m for m, s in pool_valid[:limit]]
-            except Exception as e:
-                logger.warning(f"DPP 多样性采样跳过: {e}")
-                final_memories = [m for m, s in ranked_results[:limit]]
-        else:
-            final_memories = [m for m, s in ranked_results[:limit]]
+        # 过滤时间 (exclude_after_time) 及组装 Memory 模型
+        final_memories = []
+        exclude_ts = exclude_after_time.timestamp() * 1000 if exclude_after_time else None
+        
+        hit_ids = [h["id"] for h in hits]
+        if hit_ids:
+            # 去数据库捞一下完整的 ORM 对象 (包含完整长文本等字段)
+            stmt = select(Memory).where(Memory.id.in_(hit_ids))
+            memories_db = (await session.exec(stmt)).all()
+            
+            # 建立 ID 到对象的映射，保证顺序与打分一致
+            mem_map = {m.id: m for m in memories_db}
+            
+            for h in hits:
+                mid = h["id"]
+                if mid in mem_map:
+                    m = mem_map[mid]
+                    # 跳过 Entity 节点本身
+                    if m.type == "entity":
+                        continue
+                    if exclude_ts and m.timestamp >= exclude_ts:
+                        continue
+                    final_memories.append(m)
 
         # [强化] 更新访问统计
         if update_access_stats and final_memories:
@@ -1213,17 +653,23 @@ class MemoryService:
         """
         简单的向量搜索 + Metadata 过滤 (用于 ChainService 查找历史)
         """
-        from services.core.vector_service import vector_service
+        from services.memory.trivium_store import trivium_store
 
         # 1. 搜索 VectorDB (获取更多候选以允许过滤)
-        candidates = vector_service.search(
-            query_vec, limit=limit * 5, agent_id=agent_id
+        # TriviumDB 默认支持 payload_filter，但这里为了兼容后续逻辑，可以先调 search
+        hits = await trivium_store.search(
+            query_vector=query_vec,
+            top_k=limit * 5,
+            expand_depth=0, # 简单搜索不需要图谱扩散
+            agent_id=agent_id,
+            enable_dpp=False,
+            enable_text_hybrid=False
         )
-        if not candidates:
+        if not hits:
             return []
 
-        ids = [c["id"] for c in candidates]
-        score_map = {c["id"]: c["score"] for c in candidates}
+        ids = [h["id"] for h in hits]
+        score_map = {h["id"]: h["score"] for h in hits}
 
         # 2. 从带过滤器的 DB 中获取
         statement = (
@@ -1362,6 +808,74 @@ class MemoryService:
         return (await session.exec(statement)).all()
 
     @staticmethod
+    async def delete_orphaned_edges(session: AsyncSession) -> int:
+        """
+        清除孤立的边
+        (TriviumDB 会依靠后台引擎的 Auto Compaction 清理过期悬空边，此处改为空操作)
+        """
+        return 0
+
+    @staticmethod
+    async def get_memory_graph(
+        session: AsyncSession, limit: int = 200, agent_id: str = "pero"
+    ) -> Dict[str, Any]:
+        """返回用于图形可视化的节点和边 (基于 TriviumDB)"""
+        # 获取最近 N 条记忆
+        statement = select(Memory).order_by(desc(Memory.timestamp)).limit(limit)
+        if agent_id:
+            statement = statement.where(Memory.agent_id == agent_id)
+
+        memories = (await session.exec(statement)).all()
+        if not memories:
+            return {"nodes": [], "edges": []}
+
+        memory_ids = {m.id for m in memories}
+        nodes = []
+        for m in memories:
+            nodes.append({
+                "id": str(m.id),
+                "name": m.content[:15] + "..." if len(m.content) > 15 else m.content,
+                "category": m.type,
+                "value": m.importance,
+            })
+
+        edges = []
+        from services.memory.trivium_store import trivium_store
+        for mem_id in memory_ids:
+            neighbors = await trivium_store.get_neighbors(mem_id)
+            if not neighbors:
+                continue
+                
+            for nbr in neighbors:
+                # 兼容可能的返回格式 (hit) 或者 tuple(id, weight, label)
+                tgt_id = None
+                weight = 0.5
+                label = "related"
+                
+                if hasattr(nbr, 'id'):
+                    tgt_id = nbr.id
+                    weight = getattr(nbr, 'score', 0.5)
+                elif isinstance(nbr, tuple):
+                    tgt_id = nbr[0]
+                    weight = nbr[1] if len(nbr) > 1 else 0.5
+                elif isinstance(nbr, dict):
+                    tgt_id = nbr.get("id")
+                    weight = nbr.get("weight", 0.5)
+                elif isinstance(nbr, int):
+                    tgt_id = nbr
+                
+                # 双向边可能导致 Echarts 重复, 但这里如果 target 也在 limit 节点内我们就展示
+                if tgt_id and tgt_id in memory_ids:
+                    edges.append({
+                        "source": str(mem_id),
+                        "target": str(tgt_id),
+                        "value": float(weight),
+                        "label": label
+                    })
+
+        return {"nodes": nodes, "edges": edges}
+
+    @staticmethod
     async def get_tag_cloud(
         session: AsyncSession, agent_id: str = "pero"
     ) -> List[Dict[str, Any]]:
@@ -1416,138 +930,3 @@ class MemoryService:
 
         return result
 
-    @staticmethod
-    async def delete_orphaned_edges(session: AsyncSession) -> int:
-        """
-        清除孤立的边（即源节点或目标节点不存在的边）
-        """
-        # 使用子查询查找不存在的节点引用
-        # DELETE FROM memoryrelation WHERE source_id NOT IN (SELECT id FROM memory) OR target_id NOT IN (SELECT id FROM memory)
-
-        # SQLModel 的 delete 支持 where 子句，但对 subquery 支持视方言而定
-        # 这里使用标准 SQLAlchemy 风格
-
-        subquery = select(Memory.id)
-
-        statement = delete(MemoryRelation).where(
-            (MemoryRelation.source_id.not_in(subquery))
-            | (MemoryRelation.target_id.not_in(subquery))
-        )
-
-        result = await session.exec(statement)
-        await session.commit()
-
-        # 如果有 Rust Engine 且已加载，可能需要重新加载或同步删除
-        # 简单起见，这里假设 Rust Engine 会在下次启动或定期刷新时同步
-        # 或者我们可以尝试从 Rust Engine 中移除（如果支持）
-        # 目前 Rust Engine 是只读/追加为主，暂时忽略实时同步
-
-        return result.rowcount
-
-    @staticmethod
-    async def get_memory_graph(
-        session: AsyncSession, limit: int = 200, agent_id: str = "pero"
-    ) -> Dict[str, Any]:
-        """返回用于图形可视化的节点和边 (针对酷炫 UI 增强)"""
-        # 获取最近 N 条记忆
-        statement = select(Memory).order_by(desc(Memory.timestamp)).limit(limit)
-        if agent_id:
-            statement = statement.where(Memory.agent_id == agent_id)
-
-        memories = (await session.exec(statement)).all()
-        if not memories:
-            return {"nodes": [], "edges": []}
-
-        memory_ids = [m.id for m in memories]
-
-        # 获取连接这些记忆的关系
-        rel_statement = select(MemoryRelation).where(
-            (MemoryRelation.source_id.in_(memory_ids))
-            | (MemoryRelation.target_id.in_(memory_ids))
-        )
-        # 关系表也有 agent_id，增加过滤更严谨，虽然基于 memory_ids 过滤已经隐含了隔离
-        if agent_id:
-            rel_statement = rel_statement.where(MemoryRelation.agent_id == agent_id)
-
-        relations = (await session.exec(rel_statement)).all()
-
-        # 格式化为前端格式 (ECharts 力导向图)
-        nodes = []
-        for m in memories:
-            # 根据重要性和访问计数计算符号大小
-            # 基础大小 10，最大重要性 10 -> +20，最大访问对数刻度 -> +10
-            import math
-
-            size = 10 + (m.importance * 2) + (math.log(m.access_count + 1) * 5)
-            size = min(size, 60)  # 限制大小
-
-            nodes.append(
-                {
-                    "id": m.id,
-                    "name": str(m.id),  # ECharts 的唯一名称
-                    "label": {
-                        "show": size > 15,  # 仅显示重要节点的标签
-                        "formatter": (
-                            m.content[:10] + "..." if len(m.content) > 10 else m.content
-                        ),
-                    },
-                    "full_content": m.content,
-                    "category": m.type,  # 事件、事实等
-                    "value": m.importance,
-                    "symbolSize": size,
-                    "sentiment": m.sentiment,
-                    "tags": m.tags,
-                    "realTime": m.realTime,
-                    "access_count": m.access_count,
-                    # 如果需要，可以在此处添加每个节点的 ECharts 特定样式，
-                    # 但最好在前端使用 categories/visualMap 处理
-                }
-            )
-
-        edges = []
-        added_edges = set()
-
-        for r in relations:
-            if r.source_id in memory_ids and r.target_id in memory_ids:
-                edge_key = f"{r.source_id}-{r.target_id}"
-                if edge_key not in added_edges:
-                    edges.append(
-                        {
-                            "source": str(r.source_id),
-                            "target": str(r.target_id),
-                            "value": r.strength,
-                            "relation_type": r.relation_type,
-                            "lineStyle": {
-                                "width": 1 + (r.strength * 4),  # 1px 到 5px
-                                "curveness": 0.2,
-                            },
-                            "tooltip": {
-                                "formatter": f"{r.relation_type}: {r.description or 'No desc'}"
-                            },
-                        }
-                    )
-                    added_edges.add(edge_key)
-
-        # 时间顺序边 (Next/Prev) - 使它们变得微妙
-        for m in memories:
-            if m.prev_id and m.prev_id in memory_ids:
-                edge_key = f"{m.prev_id}-{m.id}"
-                if edge_key not in added_edges:
-                    edges.append(
-                        {
-                            "source": str(m.prev_id),
-                            "target": str(m.id),
-                            "value": 1,
-                            "relation_type": "temporal",
-                            "lineStyle": {
-                                "width": 1,
-                                "color": "#cccccc",
-                                "opacity": 0.3,
-                                "type": "dashed",
-                                "curveness": 0.1,
-                            },
-                        }
-                    )
-                    added_edges.add(edge_key)
-
-        return {"nodes": nodes, "edges": edges}

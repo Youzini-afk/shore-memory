@@ -453,28 +453,21 @@ class RAGPreprocessor(BasePreprocessor):
                     def purify(text):
                         if not isinstance(text, str):
                             return ""
-                        # 使用 Rust Core 进行高性能清洗
-                        try:
-                            from pero_memory_core import clean_text
+                        # 直接采用 Python 正则清洗逻辑 (因过时的 Rust 引擎已移除)
+                        import re
 
-                            return clean_text(text)
-                        except ImportError:
-                            # 回退到 Python 实现
-                            # 移除 base64 图片和大型技术标签
-                            import re
-
-                            text = re.sub(
-                                r'data:image/[^;]+;base64,[^"\'\s>]+',
-                                "[IMAGE_DATA]",
-                                text,
-                            )
-                            text = re.sub(
-                                r"<([A-Z_]+)>.*?</\1>",
-                                r"<\1>[OMITTED]</\1>",
-                                text,
-                                flags=re.S,
-                            )
-                            return text[:2000].strip()
+                        text = re.sub(
+                            r'data:image/[^;]+;base64,[^"\'\s>]+',
+                            "[IMAGE_DATA]",
+                            text,
+                        )
+                        text = re.sub(
+                            r"<([A-Z_]+)>.*?</\1>",
+                            r"<\1>[OMITTED]</\1>",
+                            text,
+                            flags=re.S,
+                        )
+                        return text[:2000].strip()
 
                     # 查找候选
                     last_user = ""

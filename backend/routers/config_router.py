@@ -111,7 +111,7 @@ async def set_aura_vision_mode(enabled: bool = Body(..., embed=True)):
 
     if enabled:
         if not aura_vision_service.is_running:
-            if aura_vision_service.initialize():
+            if await aura_vision_service.initialize():
                 asyncio.create_task(aura_vision_service.start_vision_loop())
             else:
                 return {

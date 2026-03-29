@@ -12,35 +12,39 @@ import {
 
 /**
  * 云同步配置
- * 方案 B: 完整同步 (包含向量索引)
+ * 方案 B: 完整同步 (包含向量索引 + TriviumDB 记忆库)
  */
 const SYNC_CONFIG = {
   // 需要同步的文件列表 (相对于 data 目录)
   files: [
-    // 数据库文件
+    // SQLite 数据库文件
     'perocore.db',
     'social_storage_v2.db',
     'pero.db',
     // 配置文件
     'agent_launch_config.json',
-    // 记忆索引
+    // 旧版记忆索引 (向下兼容)
     'memory/tags.json',
-    'memory/tags.index'
-    // Agent 记忆索引 (动态扫描)
-    // 'memory/agents/{agent_id}/memory.index'
+    'memory/tags.index',
+    // TriviumDB 记忆库 (新架构)
+    // 路径约定: data/<store_name>/<store_name>.tdb
+    'memory/memory.tdb',   // 主角色记忆库 (含视觉锚点)
+    'social/social.tdb'    // 社交记忆库 (QQ / 群聊)
   ],
   // 需要同步的目录 (递归)
   directories: [
-    'workspace', // 日记、周报等用户生成内容
-    'memory/agents' // Agent 记忆索引
+    'workspace',     // 日记、周报等用户生成内容
+    'memory/agents'  // Agent 独立记忆索引
   ],
   // 排除的文件模式
   excludePatterns: [
-    /\.db-shm$/, // SQLite 共享内存文件
-    /\.db-wal$/, // SQLite 预写日志
-    /gateway_token\.json$/, // 网关 Token (敏感信息)
-    /models_cache/, // 模型缓存 (太大)
-    /sandbox/ // 沙盒临时文件
+    /\.db-shm$/,     // SQLite 共享内存文件
+    /\.db-wal$/,     // SQLite 预写日志
+    /\.tdb-shm$/,    // TriviumDB 共享内存文件
+    /\.tdb-wal$/,    // TriviumDB 预写日志
+    /gateway_token\.json$/,  // 网关 Token (敏感信息，不上云)
+    /models_cache/,  // 模型缓存 (体积过大，不同步)
+    /sandbox/        // 沙盒临时文件
   ]
 }
 

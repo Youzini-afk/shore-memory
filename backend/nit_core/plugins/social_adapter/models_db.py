@@ -57,39 +57,4 @@ class SocialMemory(SQLModel, table=True):
     agent_id: str = Field(default="pero", index=True)  # 所属 Agent ID
 
 
-class SocialMemoryRelation(SQLModel, table=True):
-    """
-    社交记忆关联表（社交网络）
-    """
 
-    id: Optional[int] = Field(default=None, primary_key=True)
-    source_id: int = Field(foreign_key="socialmemory.id", index=True)
-    target_id: int = Field(foreign_key="socialmemory.id", index=True)
-
-    relation_type: str = (
-        "thematic"  # thematic(主题关联), temporal(时序), mentioned(提及)
-    )
-    strength: float = 0.5  # 关联强度
-
-    created_at: datetime = Field(default_factory=datetime.now)
-
-
-class SocialDailyReport(SQLModel, table=True):
-    """
-    社交日报归档
-    [Deprecated] 此表不再使用。所有日报现已存储为 Markdown 文件。
-    保留此定义以防旧代码引用，但不要向其中写入新数据。
-    """
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-    date_str: str = Field(index=True)  # YYYY-MM-DD
-    content: str  # 日报全文 (Markdown)
-
-    # 统计数据
-    total_messages: int = 0
-    active_groups: str = ""  # 活跃群组列表
-    new_friends: int = 0
-
-    agent_id: str = Field(default="pero", index=True)  # 所属 Agent ID
-
-    created_at: datetime = Field(default_factory=datetime.now)

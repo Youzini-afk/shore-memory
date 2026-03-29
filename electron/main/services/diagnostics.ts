@@ -128,19 +128,19 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     }
 
     try {
-      const coreCheck = execSync(`"${pythonPath}" -c "import pero_memory_core; print('OK')"`, {
+      const coreCheck = execSync(`"${pythonPath}" -c "import triviumdb; print('OK')"`, {
         encoding: 'utf8',
         stdio: 'pipe'
       }).trim()
       if (coreCheck.includes('OK')) {
         coreAvailable = true
       } else {
-        logger.warn('Main', `[诊断] pero_memory_core 导入失败: 输出未包含 OK`)
-        // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // 不阻塞启动
+        logger.warn('Main', `[诊断] triviumdb 导入失败: 输出未包含 OK`)
+        // errors.push('关键核心组件 triviumdb 未找到，记忆功能将受限') // 不阻塞启动
       }
     } catch (e: any) {
-      logger.warn('Main', `[诊断] pero_memory_core 检查失败: ${e.message}`)
-      // errors.push('关键核心组件 pero_memory_core 未找到，记忆功能将受限') // 不阻塞启动
+      logger.warn('Main', `[诊断] triviumdb 检查失败: ${e.message}`)
+      // errors.push('关键核心组件 triviumdb 未找到，记忆功能将受限') // 不阻塞启动
     }
   } else {
     logger.error('Main', `[诊断] 未找到 Python。`)
@@ -289,21 +289,40 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
 
       if (await fs.pathExists(cliScript)) {
         logger.info('Main', `[诊断] 正在检查模型状态: ${cliScript}`)
-        // 确保设置 PYTHONPATH 以便脚本能找到 backend 包
-        // 注意：在 execSync 中设置 env 可能会覆盖其他 env，所以我们要合并
+        const { spawnSync } = require('child_process')
         const env = { ...process.env }
+        
+        // [环境隔离] 移除可能污染我们嵌入式 Python 实例的系统或用户环境变量
+        Object.keys(env).forEach(key => {
+          if (key.startsWith('PYTHON') && key !== 'PATH' && key !== 'PYTHONPATH') {
+            delete env[key]
+          }
+        })
+        
+        // 核心 Python 环境设置
+        const pythonDir = path.dirname(pythonPath)
+        env['PYTHONHOME'] = pythonDir
         if (isDev) {
-          env['PYTHONPATH'] = path.join(workspaceRoot)
+          env['PYTHONPATH'] = workspaceRoot
         } else {
-          // 生产环境通常不需要，因为相对导入会工作，或者我们已经打包了
-          env['PYTHONPATH'] = path.dirname(path.dirname(cliScript))
+          // 同时包含 resources 和 resources/backend，以支持两种导入风格 (from backend.xxx 和 from xxx)
+          env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
         }
+        env['PYTHONNOUSERSITE'] = '1'
+        env['PYTHONUTF8'] = '1'
+        env['PYTHONUNBUFFERED'] = '1'
 
-        const statusJson = execSync(`"${pythonPath}" "${cliScript}" check`, {
+        const result = spawnSync(pythonPath, [cliScript, 'check'], {
           encoding: 'utf8',
-          stdio: 'pipe',
           env: env
-        }).trim()
+        })
+
+        const statusJson = (result.stdout || '').toString().trim()
+        
+        if (result.error || result.status !== 0) {
+          const errorMsg = result.stderr ? result.stderr.toString() : (result.error ? result.error.message : 'Unknown error')
+          throw new Error(`Command failed with status ${result.status}: ${errorMsg}`)
+        }
 
         try {
           const status = JSON.parse(statusJson)

@@ -75,54 +75,53 @@ PEDSA 通过图结构和权重传播，天然解决了上述问题，实现了 *
 
 ---
 
-## 3. 核心库：pero-memory-core
+## 3. 核心引擎：TriviumDB
 
-我们将 PeroCore 的图遍历引擎封装为了独立的 Python 库 `pero-memory-core`，底层由 Rust 编写，兼具 Python 的易用性和 Rust 的极致性能。
+我们将图遍历、向量检索和属性图谱统一封装为了三位一体的 AI 原生嵌入式引擎 **TriviumDB**。底层由 Rust 编写，兼具 Python 的易用性和 Rust 的极致性能。
 
 ### 3.1 安装
 
 ```bash
-pip install pero-memory-core
+pip install triviumdb
 ```
 
 ### 3.2 快速上手示例
 
-以下代码展示了如何初始化引擎、构建简单的关联网络并执行传播：
+以下代码展示了如何初始化引擎、构建简单的关联网络并执行检索传播：
 
 ```python
-from pero_memory_core import CognitiveGraphEngine
+import triviumdb
 
 # 1. 初始化引擎
-engine = CognitiveGraphEngine(max_active_nodes=10000, max_fan_out=20)
+db = triviumdb.TriviumDB("demo.tdb", dim=1536)
 
-# 2. 注入记忆 (源ID, 目标ID, 关联权重)
-connections = [
-    (101, 102, 0.9),  # "Apple" -> "Steve Jobs"
-    (102, 103, 0.85), # "Steve Jobs" -> "Pixar"
-    (103, 104, 0.7)   # "Pixar" -> "Toy Story"
-]
-engine.batch_add_connections(connections)
+# 2. 注入关联关系 (结合具体的向量与属性)
+# 假定节点已经通过 db.insert([...], payload) 录入
+db.link(101, 102, label="associative", weight=0.9)  # "Apple" -> "Steve Jobs"
+db.link(102, 103, label="associative", weight=0.85) # "Steve Jobs" -> "Pixar"
+db.link(103, 104, label="associative", weight=0.7)  # "Pixar" -> "Toy Story"
 
-# 3. 执行加权传播 (PEDSA + PPR)
-results = engine.propagate_activation(
-    initial_scores={101: 1.0},  # 从 "Apple" 开始关联
-    steps=3,
-    decay=0.8,
-    teleport_alpha=0.15,        # PPR 回家概率 (v2 新增, 默认 0.0)
+# 3. 执行高级检索 (向量召回 + PEDSA 图扩散 + PPR + 多样性采样)
+results = db.search_advanced(
+    query_vector=[0.1, ...], 
+    top_k=5, 
+    expand_depth=3,      # 扩散 3 跳
+    teleport_alpha=0.15, # PPR 回家概率 (防止过度扩散发散)
+    enable_dpp=True      # 开启行列式点过程质量多样性采样
 )
 
 # 4. 输出结果
-print("关联结果 (按分数排序):")
-for node_id, score in sorted(results.items(), key=lambda x: x[1], reverse=True):
-    print(f"节点 ID: {node_id}, 传播分数: {score:.4f}")
+print("关联结果:")
+for hit in results:
+    print(f"节点 ID: {hit.id}, 综合分数: {hit.score:.4f}")
 ```
 
 ### 3.3 性能指标
 
-在百万级边（Edges）的测试环境下：
+在千万级边（Edges）的测试环境下：
 
 - **单步检索延迟**: < 3ms
 - **11步深层逻辑穿透**: < 5ms
-- **内存占用**: 相比传统向量索引降低 70%
+- **内存占用**: 相比传统向量索引+独立图数据库降低 70%
 
-> 引擎已针对 AVX2/AVX-512 指令集进行优化，在现代 CPU 上可获得最佳性能。
+> 引擎已针对多线程 Mmap / Rayon 并行进行深度优化，在现代 CPU 系统中可以做到零拷贝极速热启动。

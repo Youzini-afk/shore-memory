@@ -22,7 +22,6 @@ from models import (
     Config,
     ConversationLog,
     Memory,
-    MemoryRelation,
     PetState,
     ScheduledTask,
 )
@@ -252,7 +251,6 @@ async def get_waifu_texts(session: AsyncSession = Depends(get_session)):  # noqa
 async def reset_system(session: AsyncSession = Depends(get_session)):  # noqa: B008
     """一键恢复出厂设置：清理所有记忆、对话记录、状态和任务，但保留模型配置"""
     try:
-        await session.exec(delete(MemoryRelation))
         await session.exec(delete(ConversationLog))
         await session.exec(delete(ScheduledTask))
         await session.exec(delete(Memory))
