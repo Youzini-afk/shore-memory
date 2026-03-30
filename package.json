@@ -1,7 +1,7 @@
 {
   "name": "peropero-chat",
   "private": true,
-  "version": "0.8.5",
+  "version": "0.8.51",
   "description": "萌动链接：PeroperoChat！- 一个充满活力的 3D 桌面宠物应用",
   "author": "YoKONCy",
   "license": "Apache-2.0",
@@ -122,6 +122,7 @@
   "overrides": {},
   "build": {
     "npmRebuild": false,
+    "afterPack": "scripts/after-pack-portable.js",
     "publish": [
       {
         "provider": "github",
@@ -168,6 +169,7 @@
         "filter": [
           "**/*",
           "!**/venv",
+          "!**/.venv",
           "!**/__pycache__",
           "!**/*.pyc",
           "!**/.git*",

@@ -199,16 +199,22 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     const vcRuntime = path.join(systemRoot, 'System32/vcruntime140.dll')
     const vcRuntime1 = path.join(systemRoot, 'System32/vcruntime140_1.dll') // Python 3.10+ 需要此文件
     const sysWow64 = path.join(systemRoot, 'SysWOW64/vcruntime140.dll')
+    const sysWow64_1 = path.join(systemRoot, 'SysWOW64/vcruntime140_1.dll')
 
-    vcRedistInstalled = (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
-    const vcRedist1Installed = await fs.pathExists(vcRuntime1)
+    vcRedistInstalled =
+      (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
+
+    const vcRedist1Installed =
+      (await fs.pathExists(vcRuntime1)) || (await fs.pathExists(sysWow64_1))
 
     if (!vcRedistInstalled) {
+      // vcruntime140.dll 是必须的，缺少才阻塞启动
       errors.push('关键系统组件缺失: VCRUNTIME140.dll。请安装 Visual C++ Redistributable。')
     }
     if (!vcRedist1Installed) {
-      logger.warn('Main', '[诊断] 在 System32 中未找到 vcruntime140_1.dll')
-      errors.push('关键系统组件缺失: VCRUNTIME140_1.dll。请安装最新版 Visual C++ Redistributable。')
+      // vcruntime140_1.dll 仅 Python 3.10+ 需要，缺少时仅记录警告，不阻断启动
+      // 让 Python 进程自己决定是否能正常运行，而不是在诊断阶段就阻塞
+      logger.warn('Main', '[诊断] 未找到 vcruntime140_1.dll (仅影响 Python 3.10+，否则可忽略)')
     }
   }
 
@@ -301,11 +307,18 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         
         // 核心 Python 环境设置
         const pythonDir = path.dirname(pythonPath)
-        env['PYTHONHOME'] = pythonDir
+        const isEmbeddedPython = pythonPath.includes(path.join('resources', 'python')) ||
+          pythonPath.includes(path.join('resources\\python'))
+
         if (isDev) {
+          env['PYTHONHOME'] = pythonDir
           env['PYTHONPATH'] = workspaceRoot
+        } else if (isEmbeddedPython) {
+          // 嵌入式 Python 不设 PYTHONHOME，避免干扰其通过 .pth 的自我发现
+          delete env['PYTHONHOME']
+          env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
         } else {
-          // 同时包含 resources 和 resources/backend，以支持两种导入风格 (from backend.xxx 和 from xxx)
+          env['PYTHONHOME'] = pythonDir
           env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
         }
         env['PYTHONNOUSERSITE'] = '1'

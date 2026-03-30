@@ -69,12 +69,22 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
   // 核心 Python 环境设置
   const pythonDir = path.dirname(pythonPath)
   const resourceDir = fixPath(isDev ? workspaceRoot : process.resourcesPath)
-  
-  env['PYTHONHOME'] = pythonDir
+  const isEmbeddedPython = pythonPath.includes(path.join('resources', 'python')) ||
+    pythonPath.includes(path.join('resources\\python'))
+
   if (isDev) {
+    // 开发模式：使用 venv，需要设置 PYTHONHOME
+    env['PYTHONHOME'] = pythonDir
     env['PYTHONPATH'] = workspaceRoot
+  } else if (isEmbeddedPython) {
+    // 嵌入式 Python：不设置 PYTHONHOME！
+    // 嵌入式 Python 通过 ._pth 文件自我配置，外部的 PYTHONHOME 会干扰其内部路径发现机制
+    delete env['PYTHONHOME']
+    // PYTHONPATH 指向 resources/ 和 resources/backend/，扯展两种导入风格
+    env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
   } else {
-    // 同时包含 resources 和 resources/backend，以支持两种导入风格 (from backend.xxx 和 from xxx)
+    // 系统 Python 回退：与开发模式相同处理
+    env['PYTHONHOME'] = pythonDir
     env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
   }
 

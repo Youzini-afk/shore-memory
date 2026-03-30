@@ -138,8 +138,13 @@ export class WindowManager {
       }
     }, 5000)
 
-    this.launcherWin.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-      logger.error('Main', `Failed to load: ${errorDescription} (${errorCode})`)
+    this.launcherWin.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL) => {
+      logger.error('Main', `页面加载失败: ${errorDescription} (错误码: ${errorCode}), URL: ${validatedURL}`)
+      // 即使加载失败也要强制显示窗口，避免"无反应"的静默失败
+      // 渲染进程会展示白屏或错误页，至少用户能看到窗口
+      if (this.launcherWin && !this.launcherWin.isDestroyed() && !this.launcherWin.isVisible()) {
+        this.launcherWin.show()
+      }
     })
 
     // 处理外部链接

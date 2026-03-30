@@ -71,47 +71,45 @@ import path from 'path'
 import { isDev, paths } from './utils/env'
 import fs from 'fs-extra'
 
-// 加载 Native 渲染核心
-let native: any
-try {
-  if (isDev) {
-    // 开发环境：直接 require 源码目录
-    // @ts-ignore
-    native = require('../../src/components/avatar/native')
-    logger.info('Main', 'Native 核心加载成功 (开发环境)')
-  } else {
-    // 生产环境：尝试从 resources/native 加载
-    // 在 Electron 中，resources 路径为 process.resourcesPath
-    const nativePath = path.join(process.resourcesPath, 'native')
-    const nativeFile = path.join(nativePath, 'pero-render-core.win32-x64-msvc.node')
+// 加载 Native 渲染核心 (懒加载策略)
+// 关键安全改动：不在模块顶层同步 require .node 文件！
+// 原生 .node 模块的 segfault 无法被 try/catch 捕获，会直接杀死主进程导致"静默失败"
+// 改为在第一次实际调用时才加载，任何崩溃只影响 IPC 调用，不影响 Electron 窗口的显示
+let native: any = null
+let nativeLoadAttempted = false
 
-    if (fs.existsSync(nativeFile)) {
-      native = require(nativeFile)
-      logger.info('Main', `Native 核心加载成功 (生产环境): ${nativeFile}`)
-    } else if (fs.existsSync(nativePath)) {
-      native = require(nativePath)
-      logger.info('Main', `Native 核心加载成功 (生产环境目录): ${nativePath}`)
+function loadNativeModule(): any {
+  if (nativeLoadAttempted) return native
+  nativeLoadAttempted = true
+
+  try {
+    if (isDev) {
+      // @ts-ignore
+      native = require('../../src/components/avatar/native')
+      logger.info('Main', 'Native 核心加载成功 (开发环境)')
     } else {
-      // 回退方案：尝试相对于 appRoot
+      const nativePath = path.join(process.resourcesPath, 'native')
+      const nativeFile = path.join(nativePath, 'pero-render-core.win32-x64-msvc.node')
       const fallbackPath = path.join(app.getAppPath(), '..', 'native')
       const fallbackFile = path.join(fallbackPath, 'pero-render-core.win32-x64-msvc.node')
 
-      if (fs.existsSync(fallbackFile)) {
-        native = require(fallbackFile)
-        logger.info('Main', `Native 核心加载成功 (生产环境回退文件): ${fallbackFile}`)
-      } else if (fs.existsSync(fallbackPath)) {
-        native = require(fallbackPath)
-        logger.info('Main', `Native 核心加载成功 (生产环境回退目录): ${fallbackPath}`)
-      } else {
-        logger.warn('Main', 'Native 核心在生产环境路径中未找到')
-        // 关键失败：如果不在这里报错，后面调用 native 会崩溃
-        // throw new Error('渲染核心组件缺失')
+      const candidates = [nativeFile, nativePath, fallbackFile, fallbackPath]
+      for (const candidate of candidates) {
+        if (fs.existsSync(candidate)) {
+          native = require(candidate)
+          logger.info('Main', `Native 核心加载成功: ${candidate}`)
+          break
+        }
+      }
+      if (!native) {
+        logger.warn('Main', 'Native 核心在所有候选路径中均未找到，3D 渲染功能不可用')
       }
     }
+  } catch (e: any) {
+    logger.error('Main', `Native 核心加载失败: ${e.message}`)
+    native = null
   }
-} catch (e: any) {
-  logger.error('Main', `Native 核心加载失败: ${e.message}`)
-  // 如果加载失败，应用仍会启动，但在渲染 .pero 模型时会报错
+  return native
 }
 
 import { registerAssetProtocol } from './services/assets.js'
@@ -142,9 +140,8 @@ app.commandLine.appendSwitch('disable-renderer-backgrounding')
 // app.commandLine.appendSwitch('disable-software-rasterizer')
 // app.commandLine.appendSwitch('disable-gpu-compositing')
 
-// 禁用自动填充和原生窗口遮挡计算
-app.commandLine.appendSwitch('disable-features', 'Autofill')
-app.commandLine.appendSwitch('disable-features', 'CalculateNativeWinOcclusion')
+// 禁用自动填充和原生窗口遗掘计算（两个功能必须在同一条 disable-features 里逗号分隔，否则后者会覆盖前者）
+app.commandLine.appendSwitch('disable-features', 'Autofill,CalculateNativeWinOcclusion')
 
 // 为 Windows 10+ 通知设置应用程序名称
 if (process.platform === 'win32') {
@@ -273,8 +270,9 @@ ipcMain.handle('get-model-load-path', async (_, model: AssetInfo) => {
 // 注册 Native 模块处理程序
 ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, filterPatterns?: string[]) => {
   try {
-    if (!native) throw new Error('Native 渲染核心尚未加载')
-    return native.loadPeroModel(buffer, filterPatterns)
+    const nativeMod = loadNativeModule()
+    if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
+    return nativeMod.loadPeroModel(buffer, filterPatterns)
   } catch (e) {
     logger.error('Native', `Failed to load pero model: ${e}`)
     throw e
@@ -285,8 +283,9 @@ ipcMain.handle(
   'native-load-standard-model',
   async (_, buffer: Buffer, filterPatterns?: string[]) => {
     try {
-      if (!native) throw new Error('Native 渲染核心尚未加载')
-      return native.loadStandardModel(buffer, filterPatterns)
+      const nativeMod = loadNativeModule()
+      if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
+      return nativeMod.loadStandardModel(buffer, filterPatterns)
     } catch (e) {
       logger.error('Native', `Failed to load standard model: ${e}`)
       throw e
@@ -297,18 +296,15 @@ ipcMain.handle(
 // 加载 .pero 容器（tar 格式打包的文件夹）
 ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
   try {
-    if (!native) {
-      throw new Error('Native 渲染核心尚未加载')
-    }
-    // [调试] 打印接收到的数据信息
+    const nativeMod = loadNativeModule()
+    if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
     const hex = Buffer.from(buffer).subarray(0, 16).toString('hex')
     const ascii = Buffer.from(buffer).subarray(0, 4).toString('ascii')
-    logger.info('Native', `[DEBUG] pero-container 收到数据: ${buffer.length} 字节, 前16字节hex: ${hex}, magic: "${ascii}"`)
-    if (typeof native.loadPeroContainer !== 'function') {
-      logger.error('Native', 'Native 模块中缺失 loadPeroContainer 函数')
-      throw new Error('渲染核心功能不完整')
+    logger.info('Native', `pero-container 收到数据: ${buffer.length} 字节, hex前缀: ${hex}, magic: "${ascii}"`)
+    if (typeof nativeMod.loadPeroContainer !== 'function') {
+      throw new Error('渲染核心功能不完整: 缺少 loadPeroContainer')
     }
-    return native.loadPeroContainer(buffer)
+    return nativeMod.loadPeroContainer(buffer)
   } catch (e: any) {
     logger.error('Native', `Failed to load pero container: ${e.message || e}`)
     throw e
