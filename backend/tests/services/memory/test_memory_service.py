@@ -1,5 +1,4 @@
-import sys
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 import pytest_asyncio
@@ -9,6 +8,7 @@ from sqlmodel import SQLModel
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from services.memory.memory_service import MemoryService
+
 
 class TestMemoryService:
     @pytest_asyncio.fixture(name="session")
@@ -24,12 +24,15 @@ class TestMemoryService:
             yield session
 
     @pytest.mark.asyncio
-    @patch("services.core.embedding_service.embedding_service.encode_one", new_callable=AsyncMock)
+    @patch(
+        "services.core.embedding_service.embedding_service.encode_one",
+        new_callable=AsyncMock,
+    )
     @patch("core.event_bus.EventBus.publish", new_callable=AsyncMock)
     async def test_save_memory_success(self, mock_publish, mock_encode, session):
         """测试成功保存记忆"""
-        mock_encode.return_value = [0.1] * 384
-        
+        mock_encode.return_value = [0.1] * 512
+
         memory = await MemoryService.save_memory(
             session, content="Test memory", tags="test", agent_id="agent1"
         )
@@ -47,19 +50,20 @@ class TestMemoryService:
         assert args[1]["content"] == "Test memory"
 
     @pytest.mark.asyncio
-    @patch("services.core.embedding_service.embedding_service.encode_one", new_callable=AsyncMock)
+    @patch(
+        "services.core.embedding_service.embedding_service.encode_one",
+        new_callable=AsyncMock,
+    )
     @patch("core.event_bus.EventBus.publish", new_callable=AsyncMock)
     async def test_save_memory_cancelled(self, mock_publish, mock_encode, session):
         """测试记忆保存被 hook 取消"""
-        
+
         async def cancel_hook(event, ctx):
             ctx["cancel"] = True
 
         mock_publish.side_effect = cancel_hook
 
-        memory = await MemoryService.save_memory(
-            session, content="Cancelled memory"
-        )
+        memory = await MemoryService.save_memory(session, content="Cancelled memory")
 
         assert memory is None
 
@@ -70,12 +74,15 @@ class TestMemoryService:
         assert len(memories) == 0
 
     @pytest.mark.asyncio
-    @patch("services.core.embedding_service.embedding_service.encode_one", new_callable=AsyncMock)
+    @patch(
+        "services.core.embedding_service.embedding_service.encode_one",
+        new_callable=AsyncMock,
+    )
     @patch("core.event_bus.EventBus.publish", new_callable=AsyncMock)
     async def test_memory_chaining(self, mock_publish, mock_encode, session):
         """测试新记忆链接到前一个记忆"""
-        mock_encode.return_value = [0.1] * 384
-        
+        mock_encode.return_value = [0.1] * 512
+
         # 1. 保存第一个记忆
         mem1 = await MemoryService.save_memory(session, "First", agent_id="agent1")
         assert mem1.prev_id is None

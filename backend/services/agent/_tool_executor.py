@@ -82,7 +82,9 @@ class AgentToolExecutor:
         await EventBus.publish("tool.execute.pre", tool_ctx)
         if tool_ctx.get("cancel"):
             reason = tool_ctx.get("cancel_reason", "被 MOD 拦截")
-            print(f"[ToolExecutor] tool.execute.pre Hook 拦截了 {function_name}: {reason}")
+            print(
+                f"[ToolExecutor] tool.execute.pre Hook 拦截了 {function_name}: {reason}"
+            )
             return f"工具调用被拦截: {reason}", False, None
         # 合并 Hook 修改
         function_args = tool_ctx.get("function_args", function_args)
@@ -223,11 +225,14 @@ class AgentToolExecutor:
         import contextlib
 
         with contextlib.suppress(Exception):
-            await EventBus.publish("tool.execute.post", {
-                "function_name": function_name,
-                "function_args": function_args,
-                "result_preview": result_preview[:500] if result_preview else "",
-            })
+            await EventBus.publish(
+                "tool.execute.post",
+                {
+                    "function_name": function_name,
+                    "function_args": function_args,
+                    "result_preview": result_preview[:500] if result_preview else "",
+                },
+            )
 
     def _parse_args(
         self, args_str: str, function_name: str

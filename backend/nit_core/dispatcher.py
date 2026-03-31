@@ -523,7 +523,7 @@ class NITDispatcher:
             async def runtime_tool_executor(name: str, params: Dict[str, Any]):
                 # --- 中断检查 ---
                 if stop_check_func and stop_check_func():
-                    logger.warning(f"NIT 脚本执行被外部中断。")
+                    logger.warning("NIT 脚本执行被外部中断。")
                     raise asyncio.CancelledError("NIT execution interrupted")
 
                 # --- 白名单检查 ---

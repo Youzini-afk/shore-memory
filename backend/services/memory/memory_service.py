@@ -1,6 +1,5 @@
 import json
 import logging
-import os
 import re
 import time
 from datetime import datetime
@@ -27,6 +26,7 @@ def _invalidate_tag_cloud_cache(agent_id: str = None):
         _tag_cloud_cache.pop(agent_id, None)
     else:
         _tag_cloud_cache.clear()
+
 
 # Graph engine 已完全被 TriviumDB 替代
 # 已移除过时的 CognitiveGraphEngine 及相关加载逻辑
@@ -145,15 +145,18 @@ class MemoryService:
                     "clusters": clusters,
                     "agent_id": agent_id,
                 }
-                
+
                 # 写入 TriviumDB
                 from services.memory.trivium_store import trivium_store
+
                 await trivium_store.insert(memory.id, embedding_vec, payload)
-                
+
             except Exception as e:
                 print(f"[MemoryService] 同步到 TriviumDB 失败: {e}")
         else:
-            print(f"[MemoryService] 警告: Embedding 为空，未写入 TriviumDB (Memory ID {memory.id})")
+            print(
+                f"[MemoryService] 警告: Embedding 为空，未写入 TriviumDB (Memory ID {memory.id})"
+            )
 
         # 4. 更新上一条记忆的 next_id (双向链表维护)
         if last_memory:
@@ -164,8 +167,13 @@ class MemoryService:
             # TriviumDB 建立双向时间链接 (默认 label="associative")
             try:
                 from services.memory.trivium_store import trivium_store
-                await trivium_store.link(memory.id, last_memory.id, label="associative", weight=0.2)
-                await trivium_store.link(last_memory.id, memory.id, label="associative", weight=0.2)
+
+                await trivium_store.link(
+                    memory.id, last_memory.id, label="associative", weight=0.2
+                )
+                await trivium_store.link(
+                    last_memory.id, memory.id, label="associative", weight=0.2
+                )
             except Exception as e:
                 print(f"[MemoryService] TriviumDB 时间图谱连接失败: {e}")
 
@@ -403,6 +411,8 @@ class MemoryService:
     @staticmethod
     async def delete_log(session: AsyncSession, log_id: int):
         """删除指定的对话记录 (如果属于成对记录，则成对删除)"""
+        from sqlmodel import delete
+
         log = await session.get(ConversationLog, log_id)
         if not log:
             return
@@ -433,7 +443,11 @@ class MemoryService:
         return log
 
     @staticmethod
-    async def delete_by_msg_timestamp(session: AsyncSession, msg_timestamp: str, agent_id: str = None):
+    async def delete_by_msg_timestamp(
+        session: AsyncSession, msg_timestamp: str, agent_id: str = None
+    ):
+        from sqlmodel import delete
+
         statement = delete(Memory).where(Memory.msgTimestamp == msg_timestamp)
         await session.exec(statement)
         await session.commit()
@@ -487,15 +501,15 @@ class MemoryService:
                 return []
 
             hits = await trivium_store.search(
-                query_vec, 
-                top_k=limit, 
-                expand_depth=2, # 开启图谱游走扩散
+                query_vec,
+                top_k=limit,
+                expand_depth=2,  # 开启图谱游走扩散
                 agent_id=agent_id,
                 query_text=text,
-                enable_dpp=True, # 增加联想多样性
-                enable_text_hybrid=True
+                enable_dpp=True,  # 增加联想多样性
+                enable_text_hybrid=True,
             )
-            
+
             if not hits:
                 return []
 
@@ -505,7 +519,7 @@ class MemoryService:
                 payload = h.get("payload") or {}
                 mid = h["id"]
                 content = payload.get("content", "")
-                
+
                 tags_str = payload.get("tags", "")
                 if tags_str:
                     tags = [t.strip() for t in tags_str.split(",") if t.strip()]
@@ -515,9 +529,7 @@ class MemoryService:
                             seen_tags.add(tag)
 
                 if len(results) < limit:
-                    summary = (
-                        content[:20] + "..." if len(content) > 20 else content
-                    )
+                    summary = content[:20] + "..." if len(content) > 20 else content
                     results.append({"id": mid, "name": summary, "type": "memory"})
 
             return results[:limit]
@@ -553,12 +565,12 @@ class MemoryService:
         hits = await trivium_store.search(
             query_vector=query_vec,
             top_k=limit,
-            expand_depth=2,      # 开启图谱游走扩散
+            expand_depth=2,  # 开启图谱游走扩散
             agent_id=agent_id,
-            query_text=text,     # 用于混合搜索
-            enable_dpp=True,     # 开启 DPP 多样性
-            dpp_weight=1.2,      # 质量权重
-            enable_text_hybrid=True
+            query_text=text,  # 用于混合搜索
+            enable_dpp=True,  # 开启 DPP 多样性
+            dpp_weight=1.2,  # 质量权重
+            enable_text_hybrid=True,
         )
 
         if not hits:
@@ -566,17 +578,19 @@ class MemoryService:
 
         # 过滤时间 (exclude_after_time) 及组装 Memory 模型
         final_memories = []
-        exclude_ts = exclude_after_time.timestamp() * 1000 if exclude_after_time else None
-        
+        exclude_ts = (
+            exclude_after_time.timestamp() * 1000 if exclude_after_time else None
+        )
+
         hit_ids = [h["id"] for h in hits]
         if hit_ids:
             # 去数据库捞一下完整的 ORM 对象 (包含完整长文本等字段)
             stmt = select(Memory).where(Memory.id.in_(hit_ids))
             memories_db = (await session.exec(stmt)).all()
-            
+
             # 建立 ID 到对象的映射，保证顺序与打分一致
             mem_map = {m.id: m for m in memories_db}
-            
+
             for h in hits:
                 mid = h["id"]
                 if mid in mem_map:
@@ -660,10 +674,10 @@ class MemoryService:
         hits = await trivium_store.search(
             query_vector=query_vec,
             top_k=limit * 5,
-            expand_depth=0, # 简单搜索不需要图谱扩散
+            expand_depth=0,  # 简单搜索不需要图谱扩散
             agent_id=agent_id,
             enable_dpp=False,
-            enable_text_hybrid=False
+            enable_text_hybrid=False,
         )
         if not hits:
             return []
@@ -832,29 +846,34 @@ class MemoryService:
         memory_ids = {m.id for m in memories}
         nodes = []
         for m in memories:
-            nodes.append({
-                "id": str(m.id),
-                "name": m.content[:15] + "..." if len(m.content) > 15 else m.content,
-                "category": m.type,
-                "value": m.importance,
-            })
+            nodes.append(
+                {
+                    "id": str(m.id),
+                    "name": m.content[:15] + "..."
+                    if len(m.content) > 15
+                    else m.content,
+                    "category": m.type,
+                    "value": m.importance,
+                }
+            )
 
         edges = []
         from services.memory.trivium_store import trivium_store
+
         for mem_id in memory_ids:
             neighbors = await trivium_store.get_neighbors(mem_id)
             if not neighbors:
                 continue
-                
+
             for nbr in neighbors:
                 # 兼容可能的返回格式 (hit) 或者 tuple(id, weight, label)
                 tgt_id = None
                 weight = 0.5
                 label = "related"
-                
-                if hasattr(nbr, 'id'):
+
+                if hasattr(nbr, "id"):
                     tgt_id = nbr.id
-                    weight = getattr(nbr, 'score', 0.5)
+                    weight = getattr(nbr, "score", 0.5)
                 elif isinstance(nbr, tuple):
                     tgt_id = nbr[0]
                     weight = nbr[1] if len(nbr) > 1 else 0.5
@@ -863,15 +882,17 @@ class MemoryService:
                     weight = nbr.get("weight", 0.5)
                 elif isinstance(nbr, int):
                     tgt_id = nbr
-                
+
                 # 双向边可能导致 Echarts 重复, 但这里如果 target 也在 limit 节点内我们就展示
                 if tgt_id and tgt_id in memory_ids:
-                    edges.append({
-                        "source": str(mem_id),
-                        "target": str(tgt_id),
-                        "value": float(weight),
-                        "label": label
-                    })
+                    edges.append(
+                        {
+                            "source": str(mem_id),
+                            "target": str(tgt_id),
+                            "value": float(weight),
+                            "label": label,
+                        }
+                    )
 
         return {"nodes": nodes, "edges": edges}
 
@@ -926,7 +947,9 @@ class MemoryService:
         result = [{"tag": t, "count": c} for t, c in sorted_tags]
 
         # 写入缓存
-        _tag_cloud_cache[cache_key] = {"data": result, "expires_at": now + _TAG_CLOUD_TTL}
+        _tag_cloud_cache[cache_key] = {
+            "data": result,
+            "expires_at": now + _TAG_CLOUD_TTL,
+        }
 
         return result
-

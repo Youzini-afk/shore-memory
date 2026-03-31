@@ -1405,7 +1405,7 @@
                             <span
                               class="w-1.5 h-1.5 bg-indigo-400 pixel-border-indigo animate-pixel-float"
                             ></span>
-                            Embedding / Reranker / Whisper
+                            Embedding / Whisper
                           </div>
                         </div>
                       </div>
@@ -1441,7 +1441,7 @@
                     </div>
 
                     <!-- 模型详细状态 -->
-                    <div class="grid grid-cols-3 gap-6 mt-2 relative z-10">
+                    <div class="grid grid-cols-2 gap-6 mt-2 relative z-10">
                       <div
                         class="flex flex-col items-center gap-3 text-[10px] bg-white p-4 pixel-border-mint hover:bg-emerald-50 transition-all group/model pixel-hover-lift"
                       >
@@ -1459,25 +1459,6 @@
                             envReport.embedding_model_exists ? 'text-slate-600' : 'text-slate-400'
                           "
                           >EMBEDDING</span
-                        >
-                      </div>
-                      <div
-                        class="flex flex-col items-center gap-3 text-[10px] bg-white p-4 pixel-border-yellow hover:bg-amber-50 transition-all group/model pixel-hover-lift"
-                      >
-                        <div
-                          class="w-2.5 h-2.5 pixel-border-yellow mb-1 transition-transform"
-                          :class="
-                            envReport.reranker_model_exists
-                              ? 'bg-emerald-400 animate-pixel-bounce'
-                              : 'bg-rose-300'
-                          "
-                        ></div>
-                        <span
-                          class="font-bold tracking-[0.1em] transition-colors"
-                          :class="
-                            envReport.reranker_model_exists ? 'text-slate-600' : 'text-slate-400'
-                          "
-                          >RERANKER</span
                         >
                       </div>
                       <div
@@ -2291,7 +2272,6 @@ const checkEnvironment = async () => {
     // 模型检查
     if (
       report.embedding_model_exists &&
-      report.reranker_model_exists &&
       report.whisper_model_exists
     ) {
       allModelsExist.value = true

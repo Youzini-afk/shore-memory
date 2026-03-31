@@ -19,7 +19,6 @@ import httpx
 import uvicorn
 from fastapi import FastAPI
 
-
 # ─── 配置 ───
 PLUGIN_ID = "memory_tagger_ext"
 PLUGIN_NAME = "记忆标注器-外部服务"
@@ -32,6 +31,7 @@ sync_log: List[Dict] = []
 
 
 # ─── 生命周期 ───
+
 
 @app.on_event("startup")
 async def register_to_pero():
@@ -61,20 +61,24 @@ async def register_to_pero():
 
 # ─── 事件端点（PeroCore 会调用这些）───
 
+
 @app.post("/event/memory.save.post")
 async def on_memory_saved(body: dict):
     """事件通知：记忆保存后"""
     ctx = body.get("ctx", {})
-    sync_log.append({
-        "action": "memory_saved",
-        "content_preview": str(ctx)[:100],
-        "timestamp": time.time(),
-    })
+    sync_log.append(
+        {
+            "action": "memory_saved",
+            "content_preview": str(ctx)[:100],
+            "timestamp": time.time(),
+        }
+    )
     print(f"[{PLUGIN_NAME}] 收到记忆保存通知")
     return {"status": "ok"}
 
 
 # ─── 插件自己的独立功能 ───
+
 
 @app.get("/health")
 async def health():

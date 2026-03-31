@@ -55,6 +55,3 @@ class SocialMemory(SQLModel, table=True):
     msg_start_id: Optional[int] = None  # 对应 QQMessage.id
     msg_end_id: Optional[int] = None
     agent_id: str = Field(default="pero", index=True)  # 所属 Agent ID
-
-
-

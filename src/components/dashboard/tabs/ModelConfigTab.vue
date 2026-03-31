@@ -56,7 +56,7 @@
                 {{
                   currentModelTab === 'llm'
                     ? '配置 Pero 的大脑，支持多模型协作'
-                    : '配置记忆系统的 Embedding 与 Reranker 模型'
+                    : '配置记忆系统的 Embedding 模型'
                 }}
                 <span class="group-hover/mtoolbar:animate-pulse">✨ 🐾</span>
               </p>
@@ -332,7 +332,7 @@
               <PSelect
                 v-model="embeddingProvider"
                 :options="[
-                  { label: '本地内置 (MiniLM-384)', value: 'local' },
+                  { label: '本地内置 (BGE-512)', value: 'local' },
                   { label: '在线 API (OpenAI 兼容)', value: 'api' }
                 ]"
                 @change="handleEmbeddingProviderChange"
@@ -353,7 +353,7 @@
                 v-if="embeddingProvider === 'local'"
                 class="text-[10px] text-slate-400 mt-1 italic"
               >
-                * 本地模型固定为 384 维
+                * 本地模型固定为 512 维
               </p>
             </div>
 
@@ -412,91 +412,56 @@
         </PCard>
 
         <!-- 重排序模型部分 -->
-        <PCard pixel class="!p-8 !overflow-visible" :class="{ 'opacity-60': !rerankerEnabled }">
+        <PCard pixel class="!p-8 !overflow-visible border border-slate-100/50" :class="{ 'opacity-60': !rerankerEnabled }">
           <div class="flex items-center justify-between mb-8">
             <div class="flex items-center gap-4">
-              <div
-                class="p-3 rounded-2xl"
-                :class="
-                  rerankerEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'
-                "
-              >
+              <div class="p-3 rounded-2xl" :class="rerankerEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'">
                 <PixelIcon name="sparkle" size="md" />
               </div>
               <div>
                 <div class="flex items-center gap-3">
-                  <h4
-                    class="text-lg font-bold"
-                    :class="rerankerEnabled ? 'text-slate-800' : 'text-slate-400'"
-                  >
-                    Reranker 重排序模型
-                  </h4>
+                  <h4 class="text-lg font-bold" :class="rerankerEnabled ? 'text-slate-800' : 'text-slate-400'">Reranker 重排序模型</h4>
                   <span
                     v-if="rerankerEnabled"
                     class="px-2.5 py-0.5 text-[9px] font-black tracking-widest uppercase rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100"
                   >
-                    ✨ 推荐开启
+                    ✨ 在线 API
                   </span>
                 </div>
-                <p class="text-sm text-slate-500">对初步检索的结果进行精排，大幅提升回答准确度</p>
+                <p class="text-sm text-slate-500">对初步检索的结果进行精排，大幅提升检索准确度</p>
               </div>
             </div>
 
             <!-- 开关 -->
             <button
               class="relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-inner"
-              :class="
-                rerankerEnabled
-                  ? 'bg-amber-400 focus:ring-amber-300'
-                  : 'bg-slate-200 focus:ring-slate-300'
-              "
+              :class="rerankerEnabled
+                ? 'bg-amber-400 focus:ring-amber-300'
+                : 'bg-slate-200 focus:ring-slate-300'"
               @click="rerankerEnabled = !rerankerEnabled"
             >
               <span
                 class="absolute top-0.5 w-6 h-6 bg-white rounded-full shadow-md transition-all duration-300 flex items-center justify-center"
                 :class="rerankerEnabled ? 'left-[calc(100%-26px)]' : 'left-0.5'"
               >
-                <span class="text-[10px]">{{ rerankerEnabled ? '✓' : '' }}</span>
+                <span class="text-[10px]">{{ rerankerEnabled ? '✨' : '' }}</span>
               </span>
             </button>
           </div>
 
-          <!-- 关闭时的提示 -->
-          <div
-            v-if="!rerankerEnabled"
-            class="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center"
-          >
+          <div v-if="!rerankerEnabled" class="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center">
             <p class="text-sm text-slate-400">
-              Reranker 已关闭。<span class="text-amber-500 font-bold">建议开启</span
-              >以获得更精准的记忆检索效果。
-            </p>
-            <p class="text-xs text-slate-300 mt-1">
-              开启后，检索结果将经过二次精排，显著提升回答的相关性和准确度。
+              Reranker 已关闭。<span class="text-amber-500 font-bold">建议开启</span>以获得更精准的记忆检索效果。
             </p>
           </div>
 
           <!-- 开启时的配置表单 -->
           <div v-if="rerankerEnabled" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
-            <div class="space-y-2 relative z-40">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
-                >模型来源 Provider</label
-              >
-              <PSelect
-                v-model="rerankerProvider"
-                :options="[
-                  { label: '本地内置 (BGE-M3)', value: 'local' },
-                  { label: '在线 API (SiliconFlow等)', value: 'api' }
-                ]"
-              />
-            </div>
-
-            <div v-if="rerankerProvider === 'api'" class="space-y-2 md:col-span-2">
-              <label
-                class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between"
-              >
+            <div class="space-y-2 md:col-span-2">
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
                 <span>模型 ID Model ID</span>
                 <button
-                  class="text-sky-500 hover:text-sky-600 transition-colors flex items-center gap-1 active:scale-95"
+                  class="text-amber-500 hover:text-amber-600 transition-colors flex items-center gap-1 active:scale-95"
                   :disabled="isFetchingRerankerModels"
                   @click="fetchRemoteVectorModels('reranker')"
                 >
@@ -508,19 +473,14 @@
                   {{ isFetchingRerankerModels ? '获取中...' : '查询模型' }}
                 </button>
               </label>
-              <PInput v-model="rerankerModelId" placeholder="例如: BAAI/bge-reranker-v2-m3" />
-              <!-- 可选模型列表 🐈 -->
-              <div
-                v-if="availableRerankerModels.length > 0"
-                class="flex flex-wrap gap-2 mt-2 max-h-[100px] overflow-y-auto custom-scrollbar p-1"
-              >
+              <PInput v-model="rerankerModelId" placeholder="例如: bge-reranker-v2-m3" />
+              <!-- 可选模型列表 -->
+              <div v-if="availableRerankerModels?.length > 0" class="flex flex-wrap gap-2 mt-2 max-h-[100px] overflow-y-auto custom-scrollbar p-1">
                 <button
                   v-for="m in availableRerankerModels"
                   :key="m"
-                  class="px-3 py-1 text-[10px] rounded-full border border-sky-100 bg-sky-50 text-sky-600 hover:bg-sky-500 hover:text-white transition-all active:scale-90"
-                  :class="{
-                    '!bg-sky-500 !text-white !border-sky-500': rerankerModelId === m
-                  }"
+                  class="px-3 py-1 text-[10px] rounded-full border border-amber-100 bg-amber-50 text-amber-600 hover:bg-amber-500 hover:text-white transition-all active:scale-90"
+                  :class="{ '!bg-amber-500 !text-white !border-amber-500': rerankerModelId === m }"
                   @click="rerankerModelId = m"
                 >
                   {{ m }}
@@ -528,17 +488,13 @@
               </div>
             </div>
 
-            <div v-if="rerankerProvider === 'api'" class="space-y-2">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
-                >API Base URL (可选)</label
-              >
+            <div class="space-y-2">
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">API Base URL (可选)</label>
               <PInput v-model="rerankerApiBase" placeholder="留空则使用全局配置" />
             </div>
 
-            <div v-if="rerankerProvider === 'api'" class="space-y-2">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
-                >API Key (可选)</label
-              >
+            <div class="space-y-2">
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">API Key (可选)</label>
               <PInput v-model="rerankerApiKey" type="password" placeholder="留空则使用全局配置" />
             </div>
           </div>
@@ -592,17 +548,17 @@ const {
   embeddingModelId,
   embeddingApiBase,
   embeddingApiKey,
+  embeddingDimension,
   rerankerEnabled,
   rerankerProvider,
   rerankerModelId,
   rerankerApiBase,
   rerankerApiKey,
-  embeddingDimension,
+  availableRerankerModels,
+  isFetchingRerankerModels,
   isReindexing,
   availableEmbeddingModels,
   isFetchingEmbeddingModels,
-  availableRerankerModels,
-  isFetchingRerankerModels,
   handleEmbeddingProviderChange,
   fetchRemoteVectorModels,
   saveVectorConfig,

@@ -1,16 +1,17 @@
 import json
 import os
 from datetime import datetime
-from typing import Dict, List, Set, Tuple
+from typing import List, Tuple
 
 from sqlmodel import col, select
 
-from .database import get_social_db_session
-from .models_db import QQMessage, SocialDailyReport, SocialMemory
+from services.core.embedding_service import embedding_service
 
 # 引入 TriviumDB 异步适配层，使用独立命名的实例空间
 from services.memory.trivium_store import TriviumMemoryStore
-from services.core.embedding_service import embedding_service
+
+from .database import get_social_db_session
+from .models_db import QQMessage, SocialDailyReport, SocialMemory
 
 
 class SocialMemoryService:
@@ -26,7 +27,7 @@ class SocialMemoryService:
         if self._initialized:
             return
         self._initialized = True
-        
+
         # 初始化独立的 TriviumDB 向量空间: social_memory.tdb
         self._store = TriviumMemoryStore(store_name="social")
         print("[SocialMemory] 基于 TriviumDB 的独立社交记忆图谱已加载。", flush=True)
@@ -38,7 +39,9 @@ class SocialMemoryService:
         # 如果当前 db_path 在 TriviumDB 已经持久化，则无需每次重新加载！
         # 但如果是新创建的数据库，我们可以加一个异步索引重建任务。
         # 暂时只做打印：TriviumDB 负责在后台持久化。
-        print(f"[SocialMemory] TriviumDB (social) 已自动恢复，共有 {self._store.count()} 个记忆节点。")
+        print(
+            f"[SocialMemory] TriviumDB (social) 已自动恢复，共有 {self._store.count()} 个记忆节点。"
+        )
 
     async def add_summary(
         self,
@@ -66,7 +69,7 @@ class SocialMemoryService:
                 keywords=",".join(keywords),
                 source_session_id=str(session_id),
                 source_session_type=session_type,
-                embedding_json=json.dumps(vec), # 暂时保留 JSON 用于后备兼容
+                embedding_json=json.dumps(vec),  # 暂时保留 JSON 用于后备兼容
                 msg_start_id=msg_range[0] if msg_range else None,
                 msg_end_id=msg_range[1] if msg_range else None,
                 agent_id=agent_id,
@@ -82,12 +85,12 @@ class SocialMemoryService:
                 "created_at": memory.created_at.timestamp(),
                 "agent_id": memory.agent_id,
                 "content": memory.content,  # 建立文本搜索索引
-                "clusters": memory.keywords  # 建立关键词聚类索引
+                "clusters": memory.keywords,  # 建立关键词聚类索引
             }
             try:
                 # 放入独立空间
                 await self._store.insert(memory.id, vec, payload)
-                
+
                 # 同步更新关系的旧表逻辑 (P2之后会移除，目前保留兼容查询如果需要)
                 # 后续可以用 self._store.link() 代替。
             except Exception as e:
@@ -107,25 +110,25 @@ class SocialMemoryService:
             query_vec = await embedding_service.encode_one(query)
         except Exception:
             # 防止空向量报错
-            query_vec = [0.0] * 384
-            
+            query_vec = [0.0] * 512
+
         try:
             # 利用 TriviumDB 内置的图谱深度扩散 + 文本混合检索
             hits = await self._store.search(
                 query_vector=query_vec,
                 top_k=limit,
-                expand_depth=2,          # 图谱扩散深度
-                agent_id=agent_id,       # payload 空间隔离
-                query_text=query,        # 引入混合关键字
-                enable_dpp=True,         # 多样性采样
-                enable_text_hybrid=True, # 开启混合
+                expand_depth=2,  # 图谱扩散深度
+                agent_id=agent_id,  # payload 空间隔离
+                query_text=query,  # 引入混合关键字
+                enable_dpp=True,  # 多样性采样
+                enable_text_hybrid=True,  # 开启混合
             )
-            
+
             if not hits:
                 return []
-                
+
             activated_ids = [int(hit["id"]) for hit in hits]
-            
+
             # 查库返回实体
             async for session in get_social_db_session():
                 statement = (
@@ -136,9 +139,11 @@ class SocialMemoryService:
                 memories = (await session.exec(statement)).all()
                 # 按照 hit 得分排序返回
                 memories_dict = {m.id: m for m in memories}
-                ordered_memories = [memories_dict[mid] for mid in activated_ids if mid in memories_dict]
+                ordered_memories = [
+                    memories_dict[mid] for mid in activated_ids if mid in memories_dict
+                ]
                 return ordered_memories
-                
+
         except Exception as e:
             print(f"[SocialMemory] Trivium 搜索失败: {e}")
             return []
@@ -170,7 +175,6 @@ class SocialMemoryService:
         if not date_str:
             date_str = datetime.now().strftime("%Y-%m-%d")
 
-        import os
         from utils.workspace_utils import get_workspace_root
 
         agent_workspace = get_workspace_root(agent_id)
@@ -226,12 +230,14 @@ class SocialMemoryService:
 
             try:
                 from core.config_manager import get_config_manager
+
                 config = get_config_manager()
                 bot_name = config.get("bot_name", "Pero")
             except Exception:
                 bot_name = "Pero"
 
             from services.mdp.manager import mdp
+
             report_prompt = mdp.render(
                 "social/reporting/daily_report_generator",
                 {
@@ -244,6 +250,7 @@ class SocialMemoryService:
             )
 
             from services.core.llm_service import llm_service
+
             report_text = await llm_service.chat_completion(
                 messages=[{"role": "user", "content": report_prompt}], temperature=0.7
             )

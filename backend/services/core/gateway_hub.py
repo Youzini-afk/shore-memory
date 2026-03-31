@@ -123,9 +123,7 @@ class GatewayHub:
                 # 处理 request — 触发内部事件
                 if envelope.HasField("request"):
                     self._emit("request", envelope)
-                    self._emit(
-                        f"action:{envelope.request.action_name}", envelope
-                    )
+                    self._emit(f"action:{envelope.request.action_name}", envelope)
 
                 # 路由逻辑
                 if envelope.target_id == "broadcast":

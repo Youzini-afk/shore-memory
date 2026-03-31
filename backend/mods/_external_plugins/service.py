@@ -147,9 +147,7 @@ class ExternalPluginRegistry:
             EventBus.subscribe(event_name, handler)
             self._proxy_handlers.setdefault(event_name, []).append(handler)
 
-    def _make_hook_proxy(
-        self, plugin: ExternalPluginInfo, event_name: str
-    ) -> Callable:
+    def _make_hook_proxy(self, plugin: ExternalPluginInfo, event_name: str) -> Callable:
         """
         创建 Hook 代理：调用外部插件并将返回的 ctx 修改合并回主流程。
         外部插件应返回 {"ctx": {modified fields...}}
@@ -216,9 +214,7 @@ class ExternalPluginRegistry:
         proxy_handler.__name__ = f"event_proxy_{plugin.plugin_id}_{event_name}"
         return proxy_handler
 
-    async def _fire_event(
-        self, url: str, ctx: dict, plugin_name: str, event_name: str
-    ):
+    async def _fire_event(self, url: str, ctx: dict, plugin_name: str, event_name: str):
         """异步发送事件通知（不阻塞主流程）"""
         try:
             await self.http_client.post(url, json={"ctx": ctx})

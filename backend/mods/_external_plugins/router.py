@@ -100,7 +100,9 @@ class NotificationRequest(BaseModel):
 
     title: str = Field(..., description="通知标题")
     body: str = Field(default="", description="通知正文")
-    level: str = Field(default="info", description="级别: info | success | warning | error")
+    level: str = Field(
+        default="info", description="级别: info | success | warning | error"
+    )
     duration: int = Field(default=5000, description="显示时长(ms)，0 = 不自动关闭")
     actions: List[dict] = Field(
         default_factory=list,

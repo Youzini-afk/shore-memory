@@ -22,8 +22,8 @@ import numpy as np
 from loguru import logger
 
 from services.mdp.manager import mdp
-from services.perception.screenshot_service import screenshot_manager
 from services.memory.trivium_store import trivium_store
+from services.perception.screenshot_service import screenshot_manager
 
 # 多模态协调器(V3.0)
 try:
@@ -41,6 +41,7 @@ except ImportError as e:
 # 尝试导入Rust核心模块 (仅包含视频预处理和ONNX编码)
 try:
     from pero_vision_core import VisionEncoderManager
+
     RUST_VISION_AVAILABLE = True
 except ImportError as e:
     logger.warning(f"[AuraVision] Rust 视觉模块不可用: {e}")
@@ -49,7 +50,15 @@ except ImportError as e:
 
 
 class VisionProcessResult:
-    def __init__(self, triggered: bool, top_anchor_id: int, top_similarity: float, top_description: str, activated_memory_ids: List[int], saturation: float):
+    def __init__(
+        self,
+        triggered: bool,
+        top_anchor_id: int,
+        top_similarity: float,
+        top_description: str,
+        activated_memory_ids: List[int],
+        saturation: float,
+    ):
         self.triggered = triggered
         self.top_anchor_id = top_anchor_id
         self.top_similarity = top_similarity
@@ -75,7 +84,7 @@ class AuraVisionService:
 
         self.is_running = False
         self.manager: Optional[VisionEncoderManager] = None
-        
+
         # 直接复用主记忆库：视觉锚点本就是角色的记忆节点
         self.trivium_store = trivium_store
 
@@ -84,17 +93,26 @@ class AuraVisionService:
 
         # 模型路径
         self.model_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
-            "models", "AuraVision", "weights", "auravision_v1.onnx",
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            ),
+            "models",
+            "AuraVision",
+            "weights",
+            "auravision_v1.onnx",
         )
 
         # 旧版锚点数据路径 (用于兼容迁移)
         base_dir = os.environ.get(
             "PERO_DATA_DIR",
-            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            os.path.dirname(
+                os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            ),
         )
-        self.legacy_anchors_path = os.path.join(base_dir, "data", "rust_db", "intent_anchors.json")
-        self.dim = 384  # 视觉向量维度，AuraVision ONNX 输出
+        self.legacy_anchors_path = os.path.join(
+            base_dir, "data", "rust_db", "intent_anchors.json"
+        )
+        self.dim = 512  # TriviumDB的联合维度，AuraVision原输出为384，后台强制补齐为512
 
         self.observation_interval = 30  # 秒
         self.ema_alpha = 0.3
@@ -136,26 +154,29 @@ class AuraVisionService:
         """兼容性机制：将 JSON 迁移至 TriviumDB"""
         if self.trivium_store.count() > 0:
             return  # TriviumDB 已经有数据了
-            
+
         if not os.path.exists(self.legacy_anchors_path):
             return
-            
-        logger.info("[AuraVision] 检测到旧版 intent_anchors.json，准备迁移至 TriviumDB...")
+
+        logger.info(
+            "[AuraVision] 检测到旧版 intent_anchors.json，准备迁移至 TriviumDB..."
+        )
         try:
             with open(self.legacy_anchors_path, "r", encoding="utf-8") as f:
                 anchors = json.load(f)
-            
+
             count = 0
             for item in anchors:
                 await self.trivium_store.insert(
                     memory_id=item["id"],
-                    vector=item["vector"],
+                    vector=item["vector"]
+                    + [0.0] * 128,  # [零填充兼容] 将旧版384维灌满至512
                     payload={
                         "agent_id": "pero",
                         "description": item.get("description", ""),
                         "importance": item.get("importance", 1.0),
-                        "tags": item.get("tags", "")
-                    }
+                        "tags": item.get("tags", ""),
+                    },
                 )
                 count += 1
             logger.info(f"[AuraVision] 成功迁移了 {count} 个视觉意图锚点！")
@@ -169,18 +190,18 @@ class AuraVisionService:
             try:
                 await self.trivium_store.insert(
                     memory_id=anchor["id"],
-                    vector=anchor["vector"],
+                    vector=anchor["vector"] + [0.0] * 128,  # [零填充兼容] 384补齐至512
                     payload={
                         "agent_id": "pero",
                         "description": anchor["description"],
                         "importance": anchor.get("importance", 1.0),
-                        "tags": anchor.get("tags", "")
-                    }
+                        "tags": anchor.get("tags", ""),
+                    },
                 )
                 count += 1
             except Exception as e:
                 logger.warning(f"[AuraVision] 添加锚点 {anchor.get('id')} 失败: {e}")
-                
+
         # 强制落盘并备份回 JSON
         await self.trivium_store.flush()
         logger.info(f"[AuraVision] 当前总锚点数量: {self.trivium_store.count()}")
@@ -219,15 +240,18 @@ class AuraVisionService:
             # 2. 预处理
             pixels = self._preprocess_screenshot(img)
 
-            # 3. Rust进行极速视觉嵌入提取 + EMA自适应平滑
-            vector = self.manager.encode_and_smooth_pixels(pixels)
+            # 3. Rust进行极速视觉嵌入提取 + EMA自适应平滑 (输出384维)
+            vector_384 = self.manager.encode_and_smooth_pixels(pixels)
+
+            # 魔法缝合：用 128 个零把它强行塞满 512 维的空间，以便和文字的 bge 兼容！
+            vector = vector_384 + [0.0] * 128
 
             # 4. 在 TriviumDB 视觉库中比对搜索最相关的锚点
             hits = await self.trivium_store.search(
-                query_vector=vector, 
+                query_vector=vector,
                 top_k=3,
-                expand_depth=2, # TriviumDB自带扩散唤醒特性替代了原来的 ActivationGraph
-                dpp_weight=0.0
+                expand_depth=2,  # TriviumDB自带扩散唤醒特性替代了原来的 ActivationGraph
+                dpp_weight=0.0,
             )
 
             if not hits:
@@ -238,7 +262,7 @@ class AuraVisionService:
             top_sim = top_hit["score"]
             top_id = top_hit["id"]
             top_desc = top_hit["payload"].get("description", "")
-            
+
             if top_sim < self.similarity_threshold:
                 return VisionProcessResult(False, top_id, top_sim, top_desc, [], 0.0)
 
@@ -257,7 +281,7 @@ class AuraVisionService:
                 top_similarity=top_sim,
                 top_description=top_desc,
                 activated_memory_ids=activated_ids,
-                saturation=saturation
+                saturation=saturation,
             )
 
         except Exception as e:
@@ -281,7 +305,9 @@ class AuraVisionService:
         if MULTIMODAL_AVAILABLE:
             multimodal_coordinator.update_session_start()
 
-        logger.info(f"[AuraVision] 视觉感知循环已启动 (初始间隔: {self.observation_interval}s, 多模态: {MULTIMODAL_AVAILABLE})")
+        logger.info(
+            f"[AuraVision] 视觉感知循环已启动 (初始间隔: {self.observation_interval}s, 多模态: {MULTIMODAL_AVAILABLE})"
+        )
 
         try:
             while self.is_running:
@@ -290,16 +316,26 @@ class AuraVisionService:
                 if result and MULTIMODAL_AVAILABLE:
                     decision = await self._multimodal_decision(result)
                     if decision.should_trigger:
-                        logger.info(f"[AuraVision] 🎯 多模态触发! 模式: {decision.mode.value}, 得分: {decision.final_score:.4f}, 理由: {decision.reasoning}")
-                        asyncio.create_task(self._trigger_proactive_dialogue_v3(decision))
+                        logger.info(
+                            f"[AuraVision] 🎯 多模态触发! 模式: {decision.mode.value}, 得分: {decision.final_score:.4f}, 理由: {decision.reasoning}"
+                        )
+                        asyncio.create_task(
+                            self._trigger_proactive_dialogue_v3(decision)
+                        )
                     elif decision.mode == TriggerMode.INTERNAL:
-                        logger.debug(f"[AuraVision] 📝 感知已记录 (得分: {decision.final_score:.4f})")
+                        logger.debug(
+                            f"[AuraVision] 📝 感知已记录 (得分: {decision.final_score:.4f})"
+                        )
 
-                    current_interval = multimodal_coordinator.get_current_sample_interval()
+                    current_interval = (
+                        multimodal_coordinator.get_current_sample_interval()
+                    )
 
                 elif result:
                     if result.triggered:
-                        logger.info(f"[AuraVision] 🎯 触发主动感知! 锚点: {result.top_description[:30]}... (相似度: {result.top_similarity:.4f})")
+                        logger.info(
+                            f"[AuraVision] 🎯 触发主动感知! 锚点: {result.top_description[:30]}... (相似度: {result.top_similarity:.4f})"
+                        )
                         asyncio.create_task(self._trigger_proactive_dialogue(result))
                     current_interval = self.observation_interval
                 else:
@@ -340,14 +376,19 @@ class AuraVisionService:
                 agent = AgentService(session)
                 response_text = ""
                 async for chunk in agent.chat(
-                    messages=[], source="vision", session_id="proactive", system_trigger_instruction=internal_prompt,
+                    messages=[],
+                    source="vision",
+                    session_id="proactive",
+                    system_trigger_instruction=internal_prompt,
                 ):
                     response_text += chunk
 
                 if "<NOTHING>" in response_text.upper():
                     logger.info("[AuraVision] Agent 选择保持沉默")
                 else:
-                    logger.info(f"[AuraVision] Agent 主动发言: {response_text[:100]}...")
+                    logger.info(
+                        f"[AuraVision] Agent 主动发言: {response_text[:100]}..."
+                    )
                     if MULTIMODAL_AVAILABLE:
                         multimodal_coordinator.clear_perception_log()
                 break
@@ -360,7 +401,9 @@ class AuraVisionService:
             from database import get_session
             from services.agent.agent_service import AgentService
 
-            memory_ids_str = ", ".join(str(id) for id in result.activated_memory_ids[:5])
+            memory_ids_str = ", ".join(
+                str(id) for id in result.activated_memory_ids[:5]
+            )
             internal_prompt = mdp.render(
                 "tasks/perception/aura",
                 {
@@ -375,14 +418,19 @@ class AuraVisionService:
                 agent = AgentService(session)
                 response_text = ""
                 async for chunk in agent.chat(
-                    messages=[], source="vision", session_id="proactive", system_trigger_instruction=internal_prompt,
+                    messages=[],
+                    source="vision",
+                    session_id="proactive",
+                    system_trigger_instruction=internal_prompt,
                 ):
                     response_text += chunk
 
                 if "<NOTHING>" in response_text.upper():
                     logger.info("[AuraVision] Agent 选择保持沉默")
                 else:
-                    logger.info(f"[AuraVision] Agent 主动发言: {response_text[:100]}...")
+                    logger.info(
+                        f"[AuraVision] Agent 主动发言: {response_text[:100]}..."
+                    )
                 break
         except Exception as e:
             logger.error(f"[AuraVision] 触发对话失败: {e}")
@@ -390,12 +438,22 @@ class AuraVisionService:
     def stop(self):
         self.is_running = False
 
-    def configure(self, observation_interval: int = None, ema_alpha: float = None, similarity_threshold: float = None, saturation_threshold: float = None):
-        if observation_interval is not None: self.observation_interval = observation_interval
-        if ema_alpha is not None: self.ema_alpha = ema_alpha
-        if similarity_threshold is not None: self.similarity_threshold = similarity_threshold
-        if saturation_threshold is not None: self.saturation_threshold = saturation_threshold
-        
+    def configure(
+        self,
+        observation_interval: int = None,
+        ema_alpha: float = None,
+        similarity_threshold: float = None,
+        saturation_threshold: float = None,
+    ):
+        if observation_interval is not None:
+            self.observation_interval = observation_interval
+        if ema_alpha is not None:
+            self.ema_alpha = ema_alpha
+        if similarity_threshold is not None:
+            self.similarity_threshold = similarity_threshold
+        if saturation_threshold is not None:
+            self.saturation_threshold = saturation_threshold
+
         if self.manager and ema_alpha is not None:
             self.manager.configure(ema_alpha=ema_alpha)
 
@@ -412,5 +470,6 @@ class AuraVisionService:
                 "saturation_threshold": self.saturation_threshold,
             },
         }
+
 
 aura_vision_service = AuraVisionService()

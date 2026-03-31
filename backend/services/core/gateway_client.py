@@ -98,8 +98,12 @@ class GatewayClient:
         """向前端广播通用通知（供 MOD / 外部插件使用）"""
         try:
             await gateway_hub.broadcast_notification(
-                title=title, body=body, level=level,
-                duration=duration, actions=actions, source=source,
+                title=title,
+                body=body,
+                level=level,
+                duration=duration,
+                actions=actions,
+                source=source,
             )
         except Exception as e:
             logger.error(f"广播通知失败: {e}")

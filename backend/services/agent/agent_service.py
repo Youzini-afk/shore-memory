@@ -26,11 +26,11 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from core.component_container import ComponentContainer
 from core.event_bus import EventBus
-from core.nit_manager import get_nit_manager
 from core.interfaces import (
     IPostprocessorManager,
     IPreprocessorManager,
 )
+from core.nit_manager import get_nit_manager
 from models import ConversationLog, PetState, ScheduledTask
 from nit_core.security import NITSecurityManager
 from nit_core.tools.core.WindowsOps.windows_ops import get_active_windows
@@ -271,14 +271,17 @@ class AgentService:
 
             # ── Hook: chat.response.post ──
             # 通知 MOD 完整响应已生成（不可修改，仅供审计/统计）
-            await EventBus.publish("chat.response.post", {
-                "response": full_response_text,
-                "user_message": user_message,
-                "source": source,
-                "session_id": session_id,
-                "agent_id": current_agent_id,
-                "pair_id": pair_id,
-            })
+            await EventBus.publish(
+                "chat.response.post",
+                {
+                    "response": full_response_text,
+                    "user_message": user_message,
+                    "source": source,
+                    "session_id": session_id,
+                    "agent_id": current_agent_id,
+                    "pair_id": pair_id,
+                },
+            )
 
         except Exception as e:
             import traceback

@@ -52,17 +52,17 @@ async def _try_register_external():
         from mods._external_plugins.service import get_external_plugin_registry
 
         registry = get_external_plugin_registry()
-        await registry.register({
-            "plugin_id": "memory_tagger_ext",
-            "name": "记忆标注器-外部服务",
-            "url": "http://localhost:9527",
-            "description": "记忆标注器的外部数据同步服务",
-            "version": "1.0.0",
-            "hooks": [],
-            "events": ["memory.save.post"],  # 只监听保存后事件
-        })
+        await registry.register(
+            {
+                "plugin_id": "memory_tagger_ext",
+                "name": "记忆标注器-外部服务",
+                "url": "http://localhost:9527",
+                "description": "记忆标注器的外部数据同步服务",
+                "version": "1.0.0",
+                "hooks": [],
+                "events": ["memory.save.post"],  # 只监听保存后事件
+            }
+        )
         logger.info("[MemoryTagger] 外部插件已注册")
     except Exception as e:
-        logger.debug(
-            f"[MemoryTagger] 外部插件注册跳过 (可能未启动): {e}"
-        )
+        logger.debug(f"[MemoryTagger] 外部插件注册跳过 (可能未启动): {e}")

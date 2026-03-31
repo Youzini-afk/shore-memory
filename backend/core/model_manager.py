@@ -3,8 +3,6 @@ import os
 from enum import Enum
 from typing import Dict, List, Optional
 
-from huggingface_hub import snapshot_download
-
 # 配置日志
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("ModelManager")
@@ -13,7 +11,6 @@ logger = logging.getLogger("ModelManager")
 class ModelType(Enum):
     WHISPER = "whisper"
     EMBEDDING = "embedding"
-    RERANKER = "reranker"
 
 
 class ModelInfo:
@@ -60,43 +57,37 @@ class ModelManager:
             "tiny": ModelInfo(
                 "tiny",
                 ModelType.WHISPER,
-                "systran/faster-whisper-tiny",
+                "pengzhendong/faster-whisper-tiny",
                 ["model.bin", "config.json"],
             ),
             "base": ModelInfo(
                 "base",
                 ModelType.WHISPER,
-                "systran/faster-whisper-base",
+                "pengzhendong/faster-whisper-base",
                 ["model.bin", "config.json"],
             ),
             "small": ModelInfo(
                 "small",
                 ModelType.WHISPER,
-                "systran/faster-whisper-small",
+                "pengzhendong/faster-whisper-small",
                 ["model.bin", "config.json"],
             ),
             "medium": ModelInfo(
                 "medium",
                 ModelType.WHISPER,
-                "systran/faster-whisper-medium",
+                "pengzhendong/faster-whisper-medium",
                 ["model.bin", "config.json"],
             ),
             "large-v3": ModelInfo(
                 "large-v3",
                 ModelType.WHISPER,
-                "systran/faster-whisper-large-v3",
+                "pengzhendong/faster-whisper-large-v3",
                 ["model.bin", "config.json"],
             ),
             "embedding": ModelInfo(
                 "embedding",
                 ModelType.EMBEDDING,
-                "sentence-transformers/all-MiniLM-L6-v2",
-                ["config.json", "pytorch_model.bin", "tokenizer.json"],
-            ),
-            "reranker": ModelInfo(
-                "reranker",
-                ModelType.RERANKER,
-                "BAAI/bge-reranker-v2-m3",
+                "BAAI/bge-small-zh-v1.5",
                 ["config.json", "pytorch_model.bin", "tokenizer.json"],
             ),
         }
@@ -117,9 +108,8 @@ class ModelManager:
             raise ValueError(f"Unknown model key: {model_key}")
 
         model = self.models[model_key]
-        # 使用 HuggingFace 标准的缓存结构
-        # models--owner--repo_name
-        repo_dir_name = f"models--{model.repo_id.replace('/', '--')}"
+        # 使用 ModelScope 的缓存结构 (默认直接是 repo_id)
+        repo_dir_name = model.repo_id
         return os.path.join(self.models_cache_dir, repo_dir_name)
 
     def check_model_exists(self, model_key: str) -> bool:
@@ -141,31 +131,20 @@ class ModelManager:
                 return False
 
             path = self.get_model_path(model_key)
-
-            # 检查快照目录
-            snapshots_dir = os.path.join(path, "snapshots")
-            if not os.path.exists(snapshots_dir):
+            if not os.path.exists(path):
                 return False
-
-            # 获取最新的快照
-            snapshots = os.listdir(snapshots_dir)
-            if not snapshots:
-                return False
-
-            # 假设最新的快照是有效的
-            latest_snapshot = os.path.join(snapshots_dir, snapshots[0])
 
             # 检查关键文件
             model_info = self.models[model_key]
             for file in model_info.files:
-                if not os.path.exists(os.path.join(latest_snapshot, file)):
+                if not os.path.exists(os.path.join(path, file)):
                     # 尝试查找 .safetensors 版本
                     if file == "pytorch_model.bin" and os.path.exists(
-                        os.path.join(latest_snapshot, "model.safetensors")
+                        os.path.join(path, "model.safetensors")
                     ):
                         continue
                     if file == "model.bin" and os.path.exists(
-                        os.path.join(latest_snapshot, "model.safetensors")
+                        os.path.join(path, "model.safetensors")
                     ):
                         continue
                     return False
@@ -191,17 +170,7 @@ class ModelManager:
         if not self.check_model_exists(model_key):
             return None
 
-        path = self.get_model_path(model_key)
-        snapshots_dir = os.path.join(path, "snapshots")
-
-        if not os.path.exists(snapshots_dir):
-            return None
-
-        snapshots = os.listdir(snapshots_dir)
-        if not snapshots:
-            return None
-
-        return os.path.join(snapshots_dir, snapshots[0])
+        return self.get_model_path(model_key)
 
     def download_model(self, model_key: str, force: bool = False) -> str:
         """下载模型"""
@@ -228,12 +197,22 @@ class ModelManager:
         logger.info(f"Downloading model {model_key} from {model.repo_id}...")
 
         try:
-            # 使用 huggingface_hub 下载
+            # 使用 modelscope_hub 下载
+            try:
+                from modelscope.hub.snapshot_download import snapshot_download
+            except ImportError:
+                import subprocess
+                import sys
+
+                logger.info("Installing modelscope...")
+                subprocess.check_call(
+                    [sys.executable, "-m", "pip", "install", "modelscope"]
+                )
+                from modelscope.hub.snapshot_download import snapshot_download
+
             path = snapshot_download(
-                repo_id=model.repo_id,
+                model_id=model.repo_id,
                 cache_dir=self.models_cache_dir,
-                local_files_only=False,
-                # resume_download=True,  # 新版本中已弃用
             )
             logger.info(f"Model {model_key} downloaded successfully to {path}")
             return path

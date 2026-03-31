@@ -44,7 +44,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         self._model = None
         self._cross_encoder = None
         self.model_manager = model_manager
-        self.dimension = 384
+        self.dimension = 512
 
     def _resolve_local_path(self, model_name: str) -> Optional[str]:
         """
@@ -60,31 +60,20 @@ class LocalEmbeddingProvider(EmbeddingProvider):
             if hf_home and hf_home not in search_dirs:
                 search_dirs.append(hf_home)
 
-            repo_id = "models--" + model_name.replace("/", "--")
+            # 改为支持 ModelScope 的直接路径
+            repo_id = model_name
 
             for cache_dir in search_dirs:
                 if not os.path.exists(cache_dir):
                     continue
 
-                candidate_base_paths = [
-                    os.path.join(cache_dir, repo_id),
-                    os.path.join(cache_dir, "hub", repo_id),
-                ]
+                base_path = os.path.join(cache_dir, repo_id)
+                if not os.path.exists(base_path):
+                    continue
 
-                for base_path in candidate_base_paths:
-                    if not os.path.exists(base_path):
-                        continue
-
-                    snapshots_dir = os.path.join(base_path, "snapshots")
-                    if os.path.exists(snapshots_dir):
-                        snapshots = os.listdir(snapshots_dir)
-                        if snapshots:
-                            snapshot_path = os.path.join(snapshots_dir, snapshots[0])
-                            config_path = os.path.join(snapshot_path, "config.json")
-                            if os.path.isdir(snapshot_path) and os.path.exists(
-                                config_path
-                            ):
-                                return snapshot_path
+                config_path = os.path.join(base_path, "config.json")
+                if os.path.isdir(base_path) and os.path.exists(config_path):
+                    return base_path
         except Exception as e:
             print(f"[Embedding] 手动路径解析失败: {e}", flush=True)
         return None
@@ -124,33 +113,7 @@ class LocalEmbeddingProvider(EmbeddingProvider):
         if self._model:
             self.dimension = self._model.get_sentence_embedding_dimension()
 
-    def _load_reranker(self):
-        if self._cross_encoder is None:
-            print("[Embedding] 正在加载本地重排序模型...", flush=True)
-            from sentence_transformers import CrossEncoder
-
-            model_key = "reranker"
-            repo_id = self.model_manager.models[model_key].repo_id
-
-            try:
-                if self.model_manager.check_model_exists(model_key):
-                    local_path = self.model_manager.get_actual_model_path(model_key)
-                    self._cross_encoder = CrossEncoder(local_path)
-                else:
-                    local_path = self._resolve_local_path(repo_id)
-                    if local_path:
-                        self._cross_encoder = CrossEncoder(local_path)
-                    else:
-                        print(
-                            f"[Embedding] 重排序模型 {repo_id} 未找到，尝试下载...",
-                            flush=True,
-                        )
-                        local_path = self.model_manager.download_model(model_key)
-                        self._cross_encoder = CrossEncoder(local_path)
-            except Exception as e:
-                print(f"[Embedding] 加载本地重排序模型失败: {e}", flush=True)
-                self._cross_encoder = CrossEncoder(repo_id, trust_remote_code=True)
-
+    # (已彻底移除本地 Reranker 逻辑)
     async def encode(self, texts: List[str]) -> List[List[float]]:
         self._load_model()
         if not texts or self._model is None:
@@ -165,22 +128,14 @@ class LocalEmbeddingProvider(EmbeddingProvider):
     async def rerank(
         self, query: str, docs: List[str], top_k: int = None
     ) -> List[dict]:
-        self._load_reranker()
-        if not docs or self._cross_encoder is None:
+        # 已弃用本地 Reranker，直接按照原顺序假装打分返回
+        if not docs:
             return []
 
-        max_rerank_docs = 15
-        if len(docs) > max_rerank_docs:
-            docs = docs[:max_rerank_docs]
-
-        pairs = [[query, doc] for doc in docs]
-        scores = self._cross_encoder.predict(pairs)
-
         results = []
-        for i, score in enumerate(scores):
-            results.append({"index": i, "score": float(score), "doc": docs[i]})
+        for i, doc in enumerate(docs):
+            results.append({"index": i, "score": 1.0 - (i * 0.01), "doc": doc})
 
-        results.sort(key=lambda x: x["score"], reverse=True)
         return results[:top_k] if top_k else results
 
 
@@ -229,7 +184,6 @@ class ApiEmbeddingProvider(EmbeddingProvider):
         self, query: str, docs: List[str], top_k: int = None
     ) -> List[dict]:
         if not self.reranker_model_id or not docs:
-            # 降级：如果未配置在线重排，返回原始分数
             return [
                 {"index": i, "score": 1.0, "doc": doc}
                 for i, doc in enumerate(docs[:top_k] if top_k else docs)
@@ -244,17 +198,14 @@ class ApiEmbeddingProvider(EmbeddingProvider):
         }
 
         async with httpx.AsyncClient() as client:
-            # 注意：SiliconFlow 或其他厂商的 rerank 接口可能不完全遵循标准，
-            # 常见路径是 /rerank 或 /v1/rerank
-            url = f"{self.reranker_api_base.rstrip('/')}/rerank"
             try:
+                url = f"{self.reranker_api_base.rstrip('/')}/rerank"
                 response = await client.post(
                     url, json=payload, headers=headers, timeout=30.0
                 )
                 response.raise_for_status()
                 data = response.json()
 
-                # SiliconFlow 格式: data['results'] -> [{"index": 0, "relevance_score": 0.9, "document": {...}}]
                 results = []
                 for item in data.get("results", []):
                     results.append(

@@ -176,9 +176,7 @@ async def lifespan(app: FastAPI):
     # 检查向量图谱存储
     from services.memory.trivium_store import trivium_store
 
-    print(
-        f"📊 记忆节点总数: {trivium_store.count()}"
-    )
+    print(f"📊 记忆节点总数: {trivium_store.count()}")
     print("=" * 50)
 
     # 启动初始化
@@ -187,13 +185,18 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         print(f"❌ 数据库初始化致命错误: {e}")
         # 如果是数据库损坏，尝试备份并重置
-        if "malformed" in str(e).lower() or "not a database" in str(e).lower() or "no such table" in str(e).lower():
+        if (
+            "malformed" in str(e).lower()
+            or "not a database" in str(e).lower()
+            or "no such table" in str(e).lower()
+        ):
             print("⚠️ 检测到数据库文件可能已损坏，正在尝试自动恢复...")
             try:
                 db_path = os.environ.get("PERO_DATABASE_PATH")
                 if db_path and os.path.exists(db_path):
                     backup_path = f"{db_path}.corrupt_{int(time.time())}"
                     import shutil
+
                     # 由于异步引擎可能持有锁，尝试强制重命名
                     shutil.move(db_path, backup_path)
                     print(f"✅ 已备份损坏的数据库到: {backup_path}")
@@ -202,9 +205,9 @@ async def lifespan(app: FastAPI):
             except Exception as backup_error:
                 print(f"❌ 自动恢复失败: {backup_error}")
                 # 如果重铸失败，则不吞弃异常，让开发者可见
-                raise e
+                raise e from backup_error
         else:
-            raise e
+            raise e from None
 
     # 从数据库加载配置
     await get_config_manager().load_from_db()
@@ -743,7 +746,7 @@ async def lifespan(app: FastAPI):
         print("[Main] 开始后台模型预热...", flush=True)
         loop = asyncio.get_event_loop()
 
-        # 1. 预热 Embedding 服务 (Embedding + Reranker)
+        # 1. 预热 Embedding 服务
         try:
             # 在线程中运行，因为它是阻塞的
             await loop.run_in_executor(None, embedding_service.warm_up)
@@ -829,6 +832,7 @@ async def lifespan(app: FastAPI):
 
     # 关闭外部插件注册表
     from mods._external_plugins.service import get_external_plugin_registry
+
     await get_external_plugin_registry().shutdown()
 
 
@@ -883,6 +887,7 @@ app.include_router(chat_router)
 
 # [插件] 外部插件管理路由
 from mods._external_plugins.router import router as external_plugin_router
+
 app.include_router(external_plugin_router)
 
 

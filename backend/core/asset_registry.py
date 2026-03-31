@@ -180,9 +180,7 @@ class AssetRegistry:
                         "config": raw,  # 完整 toml 数据作为 config
                     }
             except Exception as e:
-                logger.warning(
-                    f"无法解析 mod.toml: {mod_toml_path}, error: {e}"
-                )
+                logger.warning(f"无法解析 mod.toml: {mod_toml_path}, error: {e}")
                 return None
 
         if data and "asset_id" in data:

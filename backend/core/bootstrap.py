@@ -1,10 +1,9 @@
 from core.component_container import ComponentContainer
-from core.mod_manager import ModManager
-
 from core.interfaces import (
     IPostprocessorManager,
     IPreprocessorManager,
 )
+from core.mod_manager import ModManager
 
 # 导入默认实现类
 from services.postprocessor.manager import PostprocessorManager

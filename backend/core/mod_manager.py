@@ -38,8 +38,8 @@ class ModInfo:
 
     id: str
     name: str
-    asset_id: str = ""          # 资产联邦 ID (如 com.perocore.mod.xxx)
-    display_name: str = ""      # 显示名称
+    asset_id: str = ""  # 资产联邦 ID (如 com.perocore.mod.xxx)
+    display_name: str = ""  # 显示名称
     version: str = "0.0.1"
     description: str = ""
     author: str = ""
@@ -163,7 +163,9 @@ class ModManager:
                 data = tomllib.load(f)
 
             mod_section = data.get("mod", {})
-            info.id = mod_section.get("asset_id", mod_name).split(".")[-1]  # 从 asset_id 提取短 ID
+            info.id = mod_section.get("asset_id", mod_name).split(".")[
+                -1
+            ]  # 从 asset_id 提取短 ID
             info.asset_id = mod_section.get("asset_id", "")
             info.name = mod_section.get("display_name", mod_name)
             info.display_name = mod_section.get("display_name", mod_name)

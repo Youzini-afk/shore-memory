@@ -117,11 +117,11 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
   const embeddingApiBase = ref<string>('')
   const embeddingApiKey = ref<string>('')
   const rerankerEnabled = ref<boolean>(true)
-  const rerankerProvider = ref<string>('local')
+  const rerankerProvider = ref<string>('api')
   const rerankerModelId = ref<string>('')
   const rerankerApiBase = ref<string>('')
   const rerankerApiKey = ref<string>('')
-  const embeddingDimension = ref<string>('384')
+  const embeddingDimension = ref<string>('512')
   const isReindexing = ref<boolean>(false)
   const availableEmbeddingModels = ref<string[]>([])
   const isFetchingEmbeddingModels = ref<boolean>(false)
@@ -178,12 +178,12 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
       embeddingModelId.value = data.embedding_model_id ?? ''
       embeddingApiBase.value = data.embedding_api_base ?? ''
       embeddingApiKey.value = data.embedding_api_key ?? ''
-      rerankerEnabled.value = data.reranker_enabled !== 'false' // 默认开启
-      rerankerProvider.value = data.reranker_provider ?? 'local'
+      rerankerEnabled.value = data.reranker_enabled !== 'false'
+      rerankerProvider.value = 'api' // 强制转为 api
       rerankerModelId.value = data.reranker_model_id ?? ''
       rerankerApiBase.value = data.reranker_api_base ?? ''
       rerankerApiKey.value = data.reranker_api_key ?? ''
-      embeddingDimension.value = data.embedding_dimension ?? '384'
+      embeddingDimension.value = data.embedding_dimension ?? '512'
 
       userSettings.value.owner_name = data.owner_name ?? '主人'
       userSettings.value.user_persona = data.user_persona ?? '未设定'
@@ -446,7 +446,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
 
   // ─── 向量模型 ─────────────────────────────────────────────────────────────
   const handleEmbeddingProviderChange = (val: string): void => {
-    embeddingDimension.value = val === 'local' ? '384' : '1536'
+    embeddingDimension.value = val === 'local' ? '512' : '1536'
   }
 
   const fetchRemoteVectorModels = async (type: 'embedding' | 'reranker'): Promise<void> => {
@@ -525,7 +525,6 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
             embedding_api_base: embeddingApiBase.value,
             embedding_api_key: embeddingApiKey.value,
             reranker_enabled: rerankerEnabled.value ? 'true' : 'false',
-            // 当 reranker 关闭时，清空配置以通知后端不使用 reranker
             reranker_provider: rerankerEnabled.value ? rerankerProvider.value : '',
             reranker_model_id: rerankerEnabled.value ? rerankerModelId.value : '',
             reranker_api_base: rerankerEnabled.value ? rerankerApiBase.value : '',

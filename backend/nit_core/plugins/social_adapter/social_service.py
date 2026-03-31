@@ -1708,9 +1708,7 @@ class SocialService:
                                 xml_context += (
                                     f"      [{time_str}] {gm.sender_name}: {content}\n"
                                 )
-                                injected_ids.add(
-                                    str(gm.msg_id)
-                                )  # 添加到去重集合
+                                injected_ids.add(str(gm.msg_id))  # 添加到去重集合
 
                             xml_context += "    </session>\n"
                             xml_context += "  </related_group_contexts>\n"

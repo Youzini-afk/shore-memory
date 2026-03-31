@@ -16,6 +16,7 @@ class TriviumMemoryStore:
     TriviumDB 数据访问的异步封装层。
     统一管理内存节点、向量、图谱关系及元数据流。
     """
+
     _instances = {}
 
     def __new__(cls, store_name: str = "memory"):
@@ -57,13 +58,14 @@ class TriviumMemoryStore:
                 )
             except Exception as e:
                 print(f"[TriviumStore] ⚠️ 加载失败，检测到文件可能损坏: {e}")
-                print(f"[TriviumStore] 正在备份受损数据并自动恢复底层引擎...")
+                print("[TriviumStore] 正在备份受损数据并自动恢复底层引擎...")
                 import shutil
                 import time
-                backup_path = f"{self.data_dir}_corrupt_{int(time.time())}"
+
                 try:
                     # 备份整个目录然后重建它
                     from pathlib import Path
+
                     parent_dir = Path(self.data_dir).parent
                     new_rel = Path(self.data_dir).name + f"_corrupt_{int(time.time())}"
                     backup_dir = parent_dir / new_rel
@@ -72,11 +74,13 @@ class TriviumMemoryStore:
                     self._db = triviumdb.TriviumDB(
                         self.db_path, dim=dim, dtype="f32", sync_mode="normal"
                     )
-                    print(f"[TriviumStore] ✅ 已完成自动重置恢复。受损数据已备份至: {backup_dir}")
+                    print(
+                        f"[TriviumStore] ✅ 已完成自动重置恢复。受损数据已备份至: {backup_dir}"
+                    )
                 except Exception as backup_error:
                     print(f"[TriviumStore] ❌ 底层恢复失败: {backup_error}")
-                    raise e
-            
+                    raise e from backup_error
+
             if self._db:
                 self._db.enable_auto_compaction(interval_secs=300)
 
@@ -86,25 +90,29 @@ class TriviumMemoryStore:
         pfunc = partial(fn, *args, **kwargs)
         return await loop.run_in_executor(_executor, pfunc)
 
-    async def insert(self, memory_id: int, vector: List[float], payload: Dict[str, Any]):
+    async def insert(
+        self, memory_id: int, vector: List[float], payload: Dict[str, Any]
+    ):
         """异步插入/更新向量与属性"""
         if self._db is None:
             self._ensure_loaded(len(vector))
         # TriviumDB 的 insert_with_id 支持精确指定 ID（兼容 SQLite 的 ID）
         await self._run(self._db.insert_with_id, memory_id, vector, payload)
-        
+
         # 为了兼容纯文本检索，如果有 content 则索引它
         content = payload.get("content")
         if content:
             await self._run(self._db.index_text, memory_id, content)
-            
+
         # 如果有 clusters 标签等也可以放入 keyword 索引
         clusters = payload.get("clusters")
         if clusters:
             for c in clusters.split(","):
                 clean_c = c.replace("[", "").replace("]", "").strip()
                 if clean_c:
-                    await self._run(self._db.index_keyword, memory_id, f"cluster_{clean_c}")
+                    await self._run(
+                        self._db.index_keyword, memory_id, f"cluster_{clean_c}"
+                    )
 
     async def search(
         self,
@@ -137,32 +145,30 @@ class TriviumMemoryStore:
             top_k,
             expand_depth,
             0.05,  # min_score
-            0.0,   # teleport_alpha (不需要随机游走回家)
+            0.0,  # teleport_alpha (不需要随机游走回家)
             True,  # enable_advanced_pipeline (走L3~L6深度流形)
-            enable_sparse, # 语义残差稀疏化开关
-            0.1,   # fista_lambda
-            0.3,   # fista_threshold
-            enable_dpp, 
-            dpp_weight, 
+            enable_sparse,  # 语义残差稀疏化开关
+            0.1,  # fista_lambda
+            0.3,  # fista_threshold
+            enable_dpp,
+            dpp_weight,
             enable_text_hybrid,
             text_boost,
             query_text,
             payload_filter,
         )
-        
+
         # 组装返回结果
         results = []
         for h in hits:
             # h 是 PySearchHit: {id, score, payload}
-            results.append({
-                "id": h.id,
-                "score": h.score,
-                "payload": h.payload
-            })
-            
+            results.append({"id": h.id, "score": h.score, "payload": h.payload})
+
         return results
 
-    async def link(self, src: int, dst: int, label: str = "associative", weight: float = 0.5):
+    async def link(
+        self, src: int, dst: int, label: str = "associative", weight: float = 0.5
+    ):
         """建立时间链接或概念链接"""
         if self._db is None:
             self._ensure_loaded()
@@ -185,18 +191,18 @@ class TriviumMemoryStore:
         neighbors = await self.get_neighbors(src)
         if not neighbors:
             return False
-            
+
         # 视返回类型而定，如果是 PySearchHit 或者带 ID 的元组
         for nbr in neighbors:
-            if hasattr(nbr, 'id') and nbr.id == dst:
+            if hasattr(nbr, "id") and nbr.id == dst:
                 return True
             if isinstance(nbr, tuple) and nbr[0] == dst:
                 return True
-            if isinstance(nbr, dict) and nbr.get('id') == dst:
+            if isinstance(nbr, dict) and nbr.get("id") == dst:
                 return True
             if isinstance(nbr, int) and nbr == dst:
                 return True
-                
+
         return False
 
     async def delete(self, memory_id: int):
@@ -217,7 +223,13 @@ class TriviumMemoryStore:
         return self._db.node_count()
 
     # --- 兼容模式接口 ---
-    async def add_memory(self, memory_id: int, content: str, embedding: List[float], metadata: Dict[str, Any]):
+    async def add_memory(
+        self,
+        memory_id: int,
+        content: str,
+        embedding: List[float],
+        metadata: Dict[str, Any],
+    ):
         """兼容旧的 VectorStoreService 接口"""
         payload = {"id": memory_id, "content": content}
         payload.update(metadata)
@@ -231,6 +243,6 @@ class TriviumMemoryStore:
         """空实现兼容打标签"""
         pass
 
+
 # 全局单例
 trivium_store = TriviumMemoryStore()
-

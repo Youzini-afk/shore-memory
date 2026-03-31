@@ -46,9 +46,6 @@ class Memory(SQLModel, table=True):
     embedding_json: str = Field(default="[]", sa_column=Column(Text))
 
 
-
-
-
 class EntityCooccurrence(SQLModel, table=True):
     """
     Entity 共现统计表

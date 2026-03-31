@@ -5,7 +5,7 @@ const envPath = path.join(__dirname, '../.env')
 const pkgPath = path.join(__dirname, '../package.json')
 const pyTomlPath = path.join(__dirname, '../backend/pyproject.toml')
 
-let version = '0.8.51' // Default fallback
+let version = '0.8.52' // Default fallback
 
 // 1. Read version from .env
 if (fs.existsSync(envPath)) {
@@ -35,14 +35,27 @@ function updateVersion() {
     }
   }
 
-  // 3. Update backend/pyproject.toml
-  if (fs.existsSync(pyTomlPath)) {
-    let pyToml = fs.readFileSync(pyTomlPath, 'utf8')
-    const replaced = pyToml.replace(/^version\s*=\s*".*"/m, `version = "${version}"`)
-    if (pyToml !== replaced) {
-      fs.writeFileSync(pyTomlPath, replaced)
-      console.log(`[Version Sync] backend/pyproject.toml updated to ${version}`)
-      updated = true
+  // 3. Update TOML configs (Python and Rust)
+  const tomlPaths = [
+    '../backend/pyproject.toml',
+    '../backend/vision_core/pyproject.toml',
+    '../backend/vision_core/Cargo.toml',
+    '../backend/nit_core/interpreter/rust_binding/Cargo.toml',
+    '../backend/nit_core/nit_terminal_auditor/Cargo.toml',
+    '../backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml'
+  ]
+
+  for (const relPath of tomlPaths) {
+    const fullPath = path.join(__dirname, relPath)
+    if (fs.existsSync(fullPath)) {
+      let content = fs.readFileSync(fullPath, 'utf8')
+      // 匹配行首的 version = "..."
+      const replaced = content.replace(/^version\s*=\s*".*"/m, `version = "${version}"`)
+      if (content !== replaced) {
+        fs.writeFileSync(fullPath, replaced)
+        console.log(`[Version Sync] ${relPath.replace('../', '')} updated to ${version}`)
+        updated = true
+      }
     }
   }
 

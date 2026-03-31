@@ -110,7 +110,7 @@ jobs:
         with:
           workspaces: 'PeroCore-Electron -> target'
 
-      - name: Build and Install Rust Core Extensions
+      - name: Build and Install Rust Python Extensions (maturin)
         shell: powershell
         run: |
           $ErrorActionPreference = 'Stop'
@@ -119,36 +119,25 @@ jobs:
 
           $TARGET_LIB = "PeroCore-Electron/resources/python/Lib/site-packages"
 
-
-
-          # 2. Build and Install pero_vision_core
+          # Build pero_vision_core (.pyd Python extension)
           echo "Building pero_vision_core..."
           maturin build --release --manifest-path PeroCore-Electron/backend/vision_core/Cargo.toml --out dist
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $VISION_WHEEL = Get-ChildItem dist/pero_vision_core*.whl | Select-Object -First 1
-          if ($VISION_WHEEL) {
-              echo "Installing $($VISION_WHEEL.Name)..."
-              pip install $VISION_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } else {
-              Write-Error "Failed to build pero_vision_core wheel"
-              exit 1
-          }
+          if (-not $VISION_WHEEL) { Write-Error "pero_vision_core wheel not found"; exit 1 }
+          pip install $VISION_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          echo "pero_vision_core installed."
 
-          # 3. Build and Install nit_rust_runtime
+          # Build nit_rust_runtime (.pyd Python extension)
           echo "Building nit_rust_runtime..."
           maturin build --release --manifest-path PeroCore-Electron/backend/nit_core/interpreter/rust_binding/Cargo.toml --out dist
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           $NIT_WHEEL = Get-ChildItem dist/nit_rust_runtime*.whl | Select-Object -First 1
-          if ($NIT_WHEEL) {
-              echo "Installing $($NIT_WHEEL.Name)..."
-              pip install $NIT_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
-              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          } else {
-              Write-Error "Failed to build nit_rust_runtime wheel"
-              exit 1
-          }
-
+          if (-not $NIT_WHEEL) { Write-Error "nit_rust_runtime wheel not found"; exit 1 }
+          pip install $NIT_WHEEL.FullName --target $TARGET_LIB --no-deps --force-reinstall
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          echo "nit_rust_runtime installed."
 
       - name: Build Binary Tools
         shell: powershell
@@ -159,49 +148,20 @@ jobs:
           cargo build --release --manifest-path PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-          $SEARCHER_SRC_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/src"
-          $SEARCHER_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher"
+          # Root Workspace always outputs to PeroCore-Electron/target/
+          $BIN = "PeroCore-Electron/target/release/CodeSearcher.exe"
+          if (!(Test-Path $BIN)) { Write-Error "CodeSearcher.exe not found at $BIN"; exit 1 }
+          Copy-Item $BIN "PeroCore-Electron/backend/nit_core/tools/work/CodeSearcher/CodeSearcher.exe" -Force
+          echo "CodeSearcher installed."
 
-          # Try to find the built binary.
-          # Cargo workspace outputs to workspace root target/ by default
-          $SEARCHER_BIN = Get-ChildItem -Path "PeroCore-Electron/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
-          if (-not $SEARCHER_BIN) {
-               $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
-          }
-          if (-not $SEARCHER_BIN) {
-               $SEARCHER_BIN = Get-ChildItem -Path "$SEARCHER_SRC_DIR/../target/release/CodeSearcher.exe" -ErrorAction SilentlyContinue
-          }
-
-          if ($SEARCHER_BIN) {
-              echo "Found CodeSearcher binary at $($SEARCHER_BIN.FullName)"
-              Copy-Item -Path $SEARCHER_BIN.FullName -Destination "$SEARCHER_TARGET_DIR/CodeSearcher.exe" -Force
-          } else {
-              Write-Error "CodeSearcher binary not found after build!"
-              exit 1
-          }
-
-          # 2. Build nit_terminal_auditor (Wasm)
-          echo "Building nit_terminal_auditor..."
+          # 2. nit_terminal_auditor -- WASM module
+          echo "Building nit_terminal_auditor (wasm32)..."
           cargo build --release --target wasm32-unknown-unknown --manifest-path PeroCore-Electron/backend/nit_core/nit_terminal_auditor/Cargo.toml
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-          $WASM_SRC = "PeroCore-Electron/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
-          if (!(Test-Path $WASM_SRC)) {
-              $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
-          }
-          if (!(Test-Path $WASM_SRC)) {
-              $WASM_SRC = "PeroCore-Electron/backend/nit_core/nit_terminal_auditor/target/release/nit_terminal_auditor.wasm" 
-          }
-
-          $WASM_TARGET_DIR = "PeroCore-Electron/backend/nit_core/tools/work/TerminalExecutor"
-
-          if (Test-Path $WASM_SRC) {
-              echo "Found Wasm binary at $WASM_SRC"
-              Copy-Item -Path $WASM_SRC -Destination "$WASM_TARGET_DIR/auditor.wasm" -Force
-          } else {
-              Write-Error "nit_terminal_auditor.wasm not found after build!"
-              exit 1
-          }
+          $WASM = "PeroCore-Electron/target/wasm32-unknown-unknown/release/nit_terminal_auditor.wasm"
+          if (!(Test-Path $WASM)) { Write-Error "nit_terminal_auditor.wasm not found at $WASM"; exit 1 }
+          Copy-Item $WASM "PeroCore-Electron/backend/nit_core/tools/work/TerminalExecutor/auditor.wasm" -Force
+          echo "auditor.wasm installed."
 
       - name: Install Dependencies
         run: |

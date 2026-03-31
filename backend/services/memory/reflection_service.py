@@ -465,7 +465,9 @@ class ReflectionService:
                 print(f"[Reflection] 正在处理代理: {agent_id}")
 
                 # [降本] 检查今日新增记忆数，不足阈值则跳过 LLM 密集型步骤
-                today_start = datetime.now().replace(hour=0, minute=0, second=0, microsecond=0)
+                today_start = datetime.now().replace(
+                    hour=0, minute=0, second=0, microsecond=0
+                )
                 today_start_ms = today_start.timestamp() * 1000
                 new_mem_stmt = (
                     select(Memory.id)
@@ -630,7 +632,9 @@ class ReflectionService:
                             try:
                                 from services.memory.trivium_store import trivium_store
 
-                                await trivium_store.delete_memory(mem.id, agent_id=agent_id)
+                                await trivium_store.delete_memory(
+                                    mem.id, agent_id=agent_id
+                                )
                             except Exception as ve:
                                 print(f"[Reflection] 向量删除失败: {ve}")
 
@@ -844,7 +848,9 @@ class ReflectionService:
                             }
                             if m.clusters:
                                 for c in m.clusters.split(","):
-                                    clean_c = c.strip().replace("[", "").replace("]", "")
+                                    clean_c = (
+                                        c.strip().replace("[", "").replace("]", "")
+                                    )
                                     if clean_c:
                                         metadata_dict[f"cluster_{clean_c}"] = True
 
@@ -869,6 +875,7 @@ class ReflectionService:
         except Exception as e:
             print(f"[Reflection] 合并标注+归簇时出错: {e}")
             import traceback
+
             traceback.print_exc()
         return 0, 0
 
@@ -990,6 +997,7 @@ class ReflectionService:
                     # [增强] 图谱边继承：将旧节点的连接迁移给新合并节点 (TriviumDB)
                     try:
                         from services.memory.trivium_store import trivium_store
+
                         processed_pairs = set()
 
                         # 1. 获取所有旧节点的邻居
@@ -997,14 +1005,14 @@ class ReflectionService:
                             neighbors = await trivium_store.get_neighbors(old_id)
                             for nbr in neighbors:
                                 # 解析邻居 ID
-                                if hasattr(nbr, 'id'):
+                                if hasattr(nbr, "id"):
                                     nbr_id = nbr.id
                                 elif isinstance(nbr, tuple):
                                     nbr_id = nbr[0]
                                 elif isinstance(nbr, int):
                                     nbr_id = nbr
                                 elif isinstance(nbr, dict):
-                                    nbr_id = nbr.get('id')
+                                    nbr_id = nbr.get("id")
                                 else:
                                     continue
 
@@ -1020,7 +1028,7 @@ class ReflectionService:
                                         src=new_mem.id,
                                         dst=nbr_id,
                                         label="inherited",
-                                        weight=0.6
+                                        weight=0.6,
                                     )
 
                     except Exception as e:
@@ -1202,7 +1210,10 @@ class ReflectionService:
 
                 # 检查数据库中是否已经存在关联 (由 TriviumDB 处理)
                 from services.memory.trivium_store import trivium_store
-                if await trivium_store.has_link(target_memory.id, candidate.id) or await trivium_store.has_link(candidate.id, target_memory.id):
+
+                if await trivium_store.has_link(
+                    target_memory.id, candidate.id
+                ) or await trivium_store.has_link(candidate.id, target_memory.id):
                     continue  # 已关联，跳过
 
                 # 3. 调用 LLM 判断关联
@@ -1214,7 +1225,7 @@ class ReflectionService:
                         src=target_memory.id,
                         dst=candidate.id,
                         label=relation["type"],
-                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5))))
+                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5)))),
                     )
                     # Trivium 写入非阻塞，无长事务困扰
                     print(
@@ -1290,7 +1301,9 @@ class ReflectionService:
                     continue
 
                 # 检查重复 (TriviumDB)
-                if await trivium_store.has_link(target_memory.id, candidate.id) or await trivium_store.has_link(candidate.id, target_memory.id):
+                if await trivium_store.has_link(
+                    target_memory.id, candidate.id
+                ) or await trivium_store.has_link(candidate.id, target_memory.id):
                     continue
 
                 relation = await self._analyze_relation(llm, target_memory, candidate)
@@ -1300,9 +1313,11 @@ class ReflectionService:
                         src=target_memory.id,
                         dst=candidate.id,
                         label=relation["type"],
-                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5))))
+                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5)))),
                     )
-                    print(f"[Reflection] 孤独记忆已由于 TriviumDB 扩散接入图谱: {relation['description']}")
+                    print(
+                        f"[Reflection] 孤独记忆已由于 TriviumDB 扩散接入图谱: {relation['description']}"
+                    )
                     new_relations_count += 1
                     break  # 找到一个连接就够了，脱离孤独状态
 
@@ -1461,6 +1476,7 @@ class ReflectionService:
 
                 # 检查重复关系
                 from services.memory.trivium_store import trivium_store
+
                 has_rel = await trivium_store.has_link(event_id, entity_id)
 
                 if not has_rel:
@@ -1468,7 +1484,7 @@ class ReflectionService:
                         src=event_id,
                         dst=entity_id,
                         label=rel_type,
-                        weight=float(weight)
+                        weight=float(weight),
                     )
                     new_relations_count += 1
 
@@ -1497,8 +1513,7 @@ class ReflectionService:
 
                     # 构建所有共现对 (规范化顺序: 小 ID 在前)
                     pairs = [
-                        (min(a, b), max(a, b))
-                        for a, b in combinations(entity_ids, 2)
+                        (min(a, b), max(a, b)) for a, b in combinations(entity_ids, 2)
                     ]
 
                     if pairs:
@@ -1513,16 +1528,13 @@ class ReflectionService:
 
                         # executemany 风格: 一次传入所有参数
                         params_list = [
-                            {"a": a, "b": b, "agent_id": agent_id}
-                            for a, b in pairs
+                            {"a": a, "b": b, "agent_id": agent_id} for a, b in pairs
                         ]
 
                         conn = await self.session.connection()
                         await conn.execute(upsert_sql, params_list)
 
-                        print(
-                            f"[GraphGardener] 共现统计批量更新: {len(pairs)} 对"
-                        )
+                        print(f"[GraphGardener] 共现统计批量更新: {len(pairs)} 对")
                 except Exception as co_e:
                     print(f"[GraphGardener] 共现统计更新失败 (非致命): {co_e}")
 
@@ -1614,7 +1626,9 @@ class ReflectionService:
                         try:
                             from services.memory.trivium_store import trivium_store
 
-                            await trivium_store.delete_memory(mem.id, agent_id=mem.agent_id)
+                            await trivium_store.delete_memory(
+                                mem.id, agent_id=mem.agent_id
+                            )
                         except Exception:
                             pass
                     print(f"[Reflection] 已撤销创建的 {len(created_memories)} 条记忆。")

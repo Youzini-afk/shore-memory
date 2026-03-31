@@ -363,46 +363,39 @@ function buildRustExtensions() {
 function buildBinaryTools() {
   log('步骤 4: 构建二进制工具...')
 
-  // 检查并复制现有二进制文件的辅助函数
-  const checkAndCopy = (srcDirs, dest, name) => {
-    for (const dir of srcDirs) {
-      const possiblePath = path.join(dir, name)
-      if (fs.existsSync(possiblePath)) {
-        log(`在 ${possiblePath} 发现 ${name} 的现有二进制文件。正在复用...`, 'success')
-        fs.copyFileSync(possiblePath, dest)
-        return true
-      }
-    }
-    return false
-  }
+  // 根 Workspace 统一将所有产物输出到 PROJECT_ROOT/target/
+  // (所有成员均已在根 Cargo.toml [workspace] 中声明)
+  const workspaceTarget = path.join(PROJECT_ROOT, 'target')
 
-  // 1. CodeSearcher（代码搜索器）
-  const codeSearcherSrc = path.join(BACKEND_DIR, 'nit_core/tools/work/CodeSearcher/src')
+  // 1. CodeSearcher -- 原生 Windows 二进制
+  const codeSearcherCargoToml = path.join(
+    BACKEND_DIR,
+    'nit_core/tools/work/CodeSearcher/src/Cargo.toml'
+  )
   const codeSearcherDest = path.join(
     BACKEND_DIR,
     'nit_core/tools/work/CodeSearcher/CodeSearcher.exe'
   )
 
-  if (fs.existsSync(path.join(codeSearcherSrc, 'Cargo.toml'))) {
-    // 首先检查现有的
-    const searchPaths = [
-      path.join(codeSearcherSrc, 'target/release'),
-      path.join(codeSearcherSrc, '../target/release'),
-      path.join(PROJECT_ROOT, 'target/release')
-    ]
-
-    if (!checkAndCopy(searchPaths, codeSearcherDest, 'CodeSearcher.exe')) {
+  if (fs.existsSync(codeSearcherCargoToml)) {
+    // 优先复用已有的构建产物
+    const builtBin = path.join(workspaceTarget, 'release', 'CodeSearcher.exe')
+    if (fs.existsSync(builtBin)) {
+      log(`复用已有 CodeSearcher.exe`, 'success')
+      fs.copyFileSync(builtBin, codeSearcherDest)
+    } else {
       log('正在构建 CodeSearcher...')
       try {
         execSync(
-          `cargo build --release --manifest-path "${path.join(codeSearcherSrc, 'Cargo.toml')}"`,
+          `cargo build --release --manifest-path "${codeSearcherCargoToml}"`,
           { stdio: 'inherit' }
         )
-        // 构建后再次尝试复制
-        if (!checkAndCopy(searchPaths, codeSearcherDest, 'CodeSearcher.exe')) {
-          log('构建后仍无法定位 CodeSearcher.exe', 'error')
+        if (!fs.existsSync(builtBin)) {
+          log(`构建后仍无法定位 CodeSearcher.exe at ${builtBin}`, 'error')
           process.exit(1)
         }
+        fs.copyFileSync(builtBin, codeSearcherDest)
+        log('CodeSearcher 构建完成', 'success')
       } catch (e) {
         log(`构建 CodeSearcher 失败: ${e.message}`, 'error')
         process.exit(1)
@@ -410,34 +403,42 @@ function buildBinaryTools() {
     }
   }
 
-  // 2. nit_terminal_auditor (Wasm 终端审计器)
-  const auditorSrc = path.join(BACKEND_DIR, 'nit_core/nit_terminal_auditor')
-  const auditorDest = path.join(BACKEND_DIR, 'nit_core/tools/work/TerminalExecutor/auditor.wasm')
+  // 2. nit_terminal_auditor -- WASM 模块
+  const auditorCargoToml = path.join(
+    BACKEND_DIR,
+    'nit_core/nit_terminal_auditor/Cargo.toml'
+  )
+  const auditorDest = path.join(
+    BACKEND_DIR,
+    'nit_core/tools/work/TerminalExecutor/auditor.wasm'
+  )
 
-  if (fs.existsSync(path.join(auditorSrc, 'Cargo.toml'))) {
-    const searchPaths = [
-      path.join(auditorSrc, 'target/wasm32-unknown-unknown/release'),
-      path.join(PROJECT_ROOT, 'target/wasm32-unknown-unknown/release')
-    ]
-
-    if (!checkAndCopy(searchPaths, auditorDest, 'nit_terminal_auditor.wasm')) {
-      log('正在构建 nit_terminal_auditor (Wasm)...')
+  if (fs.existsSync(auditorCargoToml)) {
+    const builtWasm = path.join(
+      workspaceTarget,
+      'wasm32-unknown-unknown/release/nit_terminal_auditor.wasm'
+    )
+    if (fs.existsSync(builtWasm)) {
+      log(`复用已有 nit_terminal_auditor.wasm`, 'success')
+      fs.copyFileSync(builtWasm, auditorDest)
+    } else {
+      log('正在构建 nit_terminal_auditor (wasm32)...')
       try {
         try {
           execSync('rustup target add wasm32-unknown-unknown', { stdio: 'ignore' })
         } catch {
-          // 忽略 target 已存在的错误
+          // target 已存在，忽略
         }
-
         execSync(
-          `cargo build --release --target wasm32-unknown-unknown --manifest-path "${path.join(auditorSrc, 'Cargo.toml')}"`,
+          `cargo build --release --target wasm32-unknown-unknown --manifest-path "${auditorCargoToml}"`,
           { stdio: 'inherit' }
         )
-
-        if (!checkAndCopy(searchPaths, auditorDest, 'nit_terminal_auditor.wasm')) {
-          log('无法定位已构建的 nit_terminal_auditor.wasm', 'error')
+        if (!fs.existsSync(builtWasm)) {
+          log(`构建后仍无法定位 nit_terminal_auditor.wasm at ${builtWasm}`, 'error')
           process.exit(1)
         }
+        fs.copyFileSync(builtWasm, auditorDest)
+        log('nit_terminal_auditor.wasm 构建完成', 'success')
       } catch (e) {
         log(`构建 nit_terminal_auditor 失败: ${e.message}`, 'error')
         process.exit(1)

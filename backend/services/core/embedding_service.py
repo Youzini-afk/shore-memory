@@ -42,7 +42,6 @@ class EmbeddingService:
 
             if provider_type == "api":
                 model_id = configs.get("embedding_model_id")
-                reranker_id = configs.get("reranker_model_id")
 
                 # Embedding 专属配置喵~ 🌸
                 emb_api_key = configs.get("embedding_api_key") or configs.get(
@@ -52,7 +51,8 @@ class EmbeddingService:
                     "global_llm_api_base", "https://api.openai.com"
                 )
 
-                # Reranker 专属配置喵~ 🎯
+                # Reranker 专属配置
+                reranker_id = configs.get("reranker_model_id")
                 rerank_api_key = configs.get("reranker_api_key") or configs.get(
                     "global_llm_api_key", ""
                 )
@@ -95,7 +95,6 @@ class EmbeddingService:
         if isinstance(self._provider, LocalEmbeddingProvider):
             print("[Embedding] 正在预热本地模型...", flush=True)
             self._provider._load_model()
-            self._provider._load_reranker()
             print("[Embedding] 预热流程结束。", flush=True)
 
     async def encode(self, texts: List[str]) -> List[List[float]]:
@@ -114,7 +113,7 @@ class EmbeddingService:
     def get_dimension(self) -> int:
         """获取当前模型的维度喵~ 📏"""
         if not self._provider:
-            return 384
+            return 512
         return self._provider.get_dimension()
 
     def get_model_key(self) -> str:
@@ -158,7 +157,7 @@ class EmbeddingService:
         self, query: str, docs: List[str], top_k: int = None
     ) -> List[dict]:
         """
-        使用重排序模型喵~ 🎯
+        使用重排序模型
         """
         if not self._provider:
             return []
