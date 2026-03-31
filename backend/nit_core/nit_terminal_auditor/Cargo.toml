@@ -1,6 +1,6 @@
 [package]
 name = "nit_terminal_auditor"
-version = "0.8.54"
+version = "0.8.51"
 edition = "2021"
 
 [lib]

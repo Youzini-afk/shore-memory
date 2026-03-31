@@ -75,7 +75,11 @@ jobs:
             "Lib/site-packages",
             "import site"
           )
-          $Content | Set-Content $PthFile -Encoding UTF8
+          # [关键修复] PowerShell 5 的 -Encoding UTF8 会写入 BOM 字符(\ufeff)
+          # Python 的 .pth 解析器不识别 BOM，导致路径变成 \ufeffpython310.zip，
+          # 进而使 encodings 模块找不到，Python 解释器完全无法启动！
+          # 必须使用 utf8NoBOM 写入纯净的 UTF-8 文件。
+          $Content | Set-Content $PthFile -Encoding utf8NoBOM
 
           # 3. Install Dependencies via uv
           echo "Installing dependencies..."

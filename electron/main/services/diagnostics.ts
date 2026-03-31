@@ -1,6 +1,6 @@
 import path from 'path'
 import fs from 'fs-extra'
-import { execSync } from 'child_process'
+import { execSync, spawnSync } from 'child_process'
 import which from 'which'
 import { checkNapCatInstalled } from './napcat.js'
 import { isDev, paths, isElectron } from '../utils/env'
@@ -128,19 +128,30 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     }
 
     try {
-      const coreCheck = execSync(`"${pythonPath}" -c "import triviumdb; print('OK')"`, {
+      // [修复] 为诊断检测构建隔离的 Python 环境，防止在 Portable 模式下命中系统 Python 环境导致误报
+      const coreEnv: Record<string, string | undefined> = { ...process.env }
+      delete coreEnv.PYTHONHOME
+      delete coreEnv.PYTHONPATH
+      coreEnv.PYTHONNOUSERSITE = '1'
+
+      // 如果检测到是便携路径，手动对齐 PYTHONPATH 以指向资源包内的 site-packages
+      if (pythonPath.includes('resources')) {
+        coreEnv.PYTHONPATH = path.join(path.dirname(pythonPath), 'Lib', 'site-packages')
+      }
+
+      const coreCheckResult = spawnSync(pythonPath, ['-c', "import triviumdb; print('OK')"], {
         encoding: 'utf8',
-        stdio: 'pipe'
-      }).trim()
+        env: coreEnv
+      })
+
+      const coreCheck = (coreCheckResult.stdout || '').toString().trim()
       if (coreCheck.includes('OK')) {
         coreAvailable = true
       } else {
-        logger.warn('Main', `[诊断] triviumdb 导入失败: 输出未包含 OK`)
-        // errors.push('关键核心组件 triviumdb 未找到，记忆功能将受限') // 不阻塞启动
+        logger.warn('Main', `[诊断] triviumdb 导入失败 (隔离模式): 输出为 [${coreCheck}]`)
       }
     } catch (e: any) {
-      logger.warn('Main', `[诊断] triviumdb 检查失败: ${e.message}`)
-      // errors.push('关键核心组件 triviumdb 未找到，记忆功能将受限') // 不阻塞启动
+      logger.warn('Main', `[诊断] triviumdb 检查异常: ${e.message}`)
     }
   } else {
     logger.error('Main', `[诊断] 未找到 Python。`)

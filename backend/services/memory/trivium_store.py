@@ -4,7 +4,14 @@ from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Dict, List, Optional
 
-import triviumdb
+try:
+    import triviumdb
+    _TRIVIUM_AVAILABLE = True
+except (ImportError, OSError) as _trivium_err:
+    triviumdb = None
+    _TRIVIUM_AVAILABLE = False
+    # 此处 log 极其关键，能直接告诉便携版用户是否缺少 VC++ 运行库 DLL
+    print(f"[TriviumStore] ⚠️ triviumdb 原生扩展加载失败（可能缺少 VC++ 运行库 DLL）: {_trivium_err}")
 
 # 创建全局线程池用于 TriviumDB 的同步调用，避免阻塞 FastAPI 事件循环
 # TriviumDB 内部并发安全，但 Python 侧包装尽量限制线程数以防暴涨
@@ -44,11 +51,14 @@ class TriviumMemoryStore:
         self.db_path = os.path.join(self.data_dir, f"{store_name}.tdb")
 
         # 尚未真正实例化 DB对象，采用延迟加载策略
-        self._db: Optional[triviumdb.TriviumDB] = None
+        self._db: Optional[Any] = None  # 支持 triviumdb 为 None 时的降级状态
         self._initialized = True
 
     def _ensure_loaded(self, dim: int = 1536):
         """确保 TriviumDB 已被加载"""
+        # 降级保护：triviumdb 模块未加载时直接返回，不报错
+        if not _TRIVIUM_AVAILABLE:
+            return
         if self._db is None:
             print(f"[TriviumStore] 初始化 TriviumDB，维度={dim}，路径={self.db_path}")
             # 捕获可能的损坏异常
@@ -218,9 +228,11 @@ class TriviumMemoryStore:
         await self._run(self._db.flush)
 
     def count(self) -> int:
+        if not _TRIVIUM_AVAILABLE:
+            return 0
         if self._db is None:
             self._ensure_loaded()
-        return self._db.node_count()
+        return self._db.node_count() if self._db else 0
 
     # --- 兼容模式接口 ---
     async def add_memory(

@@ -166,17 +166,24 @@ async def lifespan(app: FastAPI):
     print(f"📦 资产注册表: [就绪] (已索引 {len(registry.assets)} 个资产)")
 
     # 检查 TriviumDB 核心
+    # 同时捕获 ImportError 和 OSError 才能拦截 DLL 缺失导致的底层崩溃
     try:
         import triviumdb  # noqa: F401
 
         print("🧠 统一记忆引擎: [就绪] (TriviumDB 高性能版已加载)")
-    except ImportError:
-        print("🧠 统一记忆引擎: [禁用] (未找到 TriviumDB)")
+    except (ImportError, OSError) as e:
+        print(f"🧠 统一记忆引擎: [禁用] (TriviumDB 加载异常: {e})")
 
     # 检查向量图谱存储
-    from services.memory.trivium_store import trivium_store
+    # [修复] 用 try/except 包裹，trivium_store.py 内部的模块级 import triviumdb 如果失败，
+    #        将不会崩溃整个后端（此前为致命的隐性脆弱点）
+    try:
+        from services.memory.trivium_store import trivium_store
 
-    print(f"📊 记忆节点总数: {trivium_store.count()}")
+        print(f"📊 记忆节点总数: {trivium_store.count()}")
+    except Exception as e:
+        print(f"📊 记忆存储: [降级] TriviumStore 初始化失败，后端将以无记忆引擎模式运行 ({e})")
+        trivium_store = None  # type: ignore[assignment]
     print("=" * 50)
 
     # 启动初始化
