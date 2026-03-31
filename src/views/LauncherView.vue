@@ -2143,10 +2143,7 @@ onMounted(async () => {
 
   console.log('[DEBUG] Launcher 挂载，加载到的配置:', appConfig.value)
 
-  // 如果检测到引导未完成，立即强制开启 Launcher 引导喵~ 🌸
-  if (appConfig.value.onboarding_completed === false) {
-    showOnboarding.value = true
-  }
+  // 引导图层开启逻辑已安全迁移至 loadConfig()，确保只在接受 EULA 后才展现喵~ 🌸
 
   // 处理插件结果
   if (pluginsResult.status === 'fulfilled') {

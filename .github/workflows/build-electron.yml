@@ -78,27 +78,26 @@ jobs:
           $Content | Set-Content $PthFile -Encoding UTF8
 
           # 3. Install Dependencies via uv
-           echo "Installing dependencies..."
-           $SitePackages = "$Dest/Lib/site-packages"
-           New-Item -ItemType Directory -Force -Path $SitePackages
-           
-           # Use pip to install uv first
-           pip install uv
-           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          echo "Installing dependencies..."
+          $SitePackages = (New-Item -ItemType Directory -Force -Path "$Dest/Lib/site-packages").FullName
+          echo "Site-packages absolute path: $SitePackages"
 
-           # Install torch first (CPU only)
-           uv pip install --target $SitePackages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --system
-           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-           
-           # Install dependencies from pyproject.toml
-           # Note: uv pip install . needs to run where pyproject.toml is
-           cd PeroCore-Electron/backend
-           uv pip install --target $SitePackages . --system
-           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          # Use pip to install uv first
+          pip install uv
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Install torch first (CPU only)
+          uv pip install --target $SitePackages torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu --system
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+          # Install dependencies from pyproject.toml
+          Push-Location PeroCore-Electron/backend
+          uv pip install --target $SitePackages . --system
+          if ($LASTEXITCODE -ne 0) { Pop-Location; exit $LASTEXITCODE }
+          Pop-Location
 
           # Clean up
-           cd ../..
-           Remove-Item $ZipPath
+          Remove-Item $ZipPath
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@stable
