@@ -152,7 +152,7 @@ export function useDashboard() {
   }
 
   // --- App 版本 / 更新 ---
-  const appVersion = ref<string>('0.8.0')
+  const appVersion = ref<string>('...')
   const updateStatus = ref<UpdateStatus>({ type: 'idle' })
   const isCheckingUpdate = ref<boolean>(false)
 

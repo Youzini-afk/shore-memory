@@ -5,7 +5,7 @@ const envPath = path.join(__dirname, '../.env')
 const pkgPath = path.join(__dirname, '../package.json')
 const pyTomlPath = path.join(__dirname, '../backend/pyproject.toml')
 
-let version = '0.8.52' // Default fallback
+let version = '0.8.53' // Default fallback
 
 // 1. Read version from .env
 if (fs.existsSync(envPath)) {
@@ -40,6 +40,7 @@ function updateVersion() {
     '../backend/pyproject.toml',
     '../backend/vision_core/pyproject.toml',
     '../backend/vision_core/Cargo.toml',
+    '../backend/nit_core/interpreter/rust_binding/pyproject.toml',
     '../backend/nit_core/interpreter/rust_binding/Cargo.toml',
     '../backend/nit_core/nit_terminal_auditor/Cargo.toml',
     '../backend/nit_core/tools/work/CodeSearcher/src/Cargo.toml'
