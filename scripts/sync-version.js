@@ -5,7 +5,7 @@ const envPath = path.join(__dirname, '../.env')
 const pkgPath = path.join(__dirname, '../package.json')
 const pyTomlPath = path.join(__dirname, '../backend/pyproject.toml')
 
-let version = '0.8.54' // Default fallback
+let version = '0.8.56' // Default fallback
 
 // 1. Read version from .env
 if (fs.existsSync(envPath)) {
