@@ -52,6 +52,7 @@ import { StandardBones } from './lib/retargeting/RetargetingConfig'
 import { FeatureButton, IAvatarManifest } from './lib/adapter/IAvatarManifest'
 import { ManifestBasedAdapter } from './lib/adapter/ManifestBasedAdapter'
 import { ManifestLoader } from './lib/adapter/ManifestLoader'
+import { initAssetUrlCache } from '../../utils/assetUrl'
 
 const props = defineProps<{
   isDragging?: boolean
@@ -306,6 +307,8 @@ let animationFrameId: number
 let currentProvider: IModelProvider | undefined
 
 onMounted(async () => {
+  // [修复] 预热 appPath 缓存，确保 resolveAssetUrl 能将相对 assets/ 路径转为 asset:// 绝对路径
+  await initAssetUrlCache()
   initThree()
   await loadDefaultManifest()
   animate()

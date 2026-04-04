@@ -13,5 +13,7 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke('native-load-standard-model', buffer, filterPatterns),
   loadPeroContainer: (buffer: Uint8Array) =>
     ipcRenderer.invoke('native-load-pero-container', buffer),
-  scanLocalModels: () => ipcRenderer.invoke('scan-local-models')
+  scanLocalModels: () => ipcRenderer.invoke('scan-local-models'),
+  // 暴露应用根路径，供渲染进程将相对 assets/ 路径转换为 asset:// 绝对路径
+  appPath: () => ipcRenderer.invoke('get-app-path')
 })

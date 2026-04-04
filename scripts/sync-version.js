@@ -1,16 +1,20 @@
-const fs = require('fs')
-const path = require('path')
+import fs from 'fs'
+import path from 'path'
+import { fileURLToPath } from 'url'
+
+// ES Module 下没有 __dirname，需要手动构造
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = path.dirname(__filename)
 
 const envPath = path.join(__dirname, '../.env')
 const pkgPath = path.join(__dirname, '../package.json')
-const pyTomlPath = path.join(__dirname, '../backend/pyproject.toml')
 
-let version = '0.8.56' // Default fallback
+let version = '0.8.57' // Default fallback
 
-// 1. Read version from .env
+// 1. 从 .env 读取版本号
 if (fs.existsSync(envPath)) {
   const envContent = fs.readFileSync(envPath, 'utf-8')
-  // Match PERO_VERSION=x.y.z
+  // 匹配 PERO_VERSION=x.y.z
   const match = envContent.match(/^PERO_VERSION\s*=\s*(.+)$/m)
   if (match) {
     version = match[1].replace(/['"]/g, '').trim()
@@ -24,7 +28,7 @@ if (fs.existsSync(envPath)) {
 function updateVersion() {
   let updated = false
 
-  // 2. Update package.json
+  // 2. 更新 package.json
   if (fs.existsSync(pkgPath)) {
     const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
     if (pkg.version !== version) {
@@ -35,7 +39,7 @@ function updateVersion() {
     }
   }
 
-  // 3. Update TOML configs (Python and Rust)
+  // 3. 更新所有 TOML 配置（Python & Rust）
   const tomlPaths = [
     '../backend/pyproject.toml',
     '../backend/vision_core/pyproject.toml',
@@ -49,7 +53,7 @@ function updateVersion() {
   for (const relPath of tomlPaths) {
     const fullPath = path.join(__dirname, relPath)
     if (fs.existsSync(fullPath)) {
-      let content = fs.readFileSync(fullPath, 'utf8')
+      const content = fs.readFileSync(fullPath, 'utf8')
       // 匹配行首的 version = "..."
       const replaced = content.replace(/^version\s*=\s*".*"/m, `version = "${version}"`)
       if (content !== replaced) {
