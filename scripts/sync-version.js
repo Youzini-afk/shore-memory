@@ -9,32 +9,39 @@ const __dirname = path.dirname(__filename)
 const envPath = path.join(__dirname, '../.env')
 const pkgPath = path.join(__dirname, '../package.json')
 
-let version = '0.8.57' // Default fallback
-
-// 1. 从 .env 读取版本号
-if (fs.existsSync(envPath)) {
-  const envContent = fs.readFileSync(envPath, 'utf-8')
-  // 匹配 PERO_VERSION=x.y.z
-  const match = envContent.match(/^PERO_VERSION\s*=\s*(.+)$/m)
-  if (match) {
-    version = match[1].replace(/['"]/g, '').trim()
-  } else {
-    console.log('[Version Sync] PERO_VERSION not found in .env, using default version:', version)
-  }
-} else {
-  console.log('[Version Sync] .env not found, using default version:', version)
+// 1. 将 package.json 作为唯一的版本事实来源
+if (!fs.existsSync(pkgPath)) {
+  console.error('[Version Sync] package.json not found! Expected at:', pkgPath)
+  process.exit(1)
 }
+
+const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
+const version = pkg.version
+
+console.log(`[Version Sync] Source of truth -> package.json: ${version}`)
 
 function updateVersion() {
   let updated = false
 
-  // 2. 更新 package.json
-  if (fs.existsSync(pkgPath)) {
-    const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf8'))
-    if (pkg.version !== version) {
-      pkg.version = version
-      fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + '\n')
-      console.log(`[Version Sync] package.json updated to ${version}`)
+  // 2. 同步到 .env (让后端能读取到一致的环境变量)
+  if (fs.existsSync(envPath)) {
+    const envContent = fs.readFileSync(envPath, 'utf-8')
+    const match = envContent.match(/^PERO_VERSION\s*=\s*(.+)$/m)
+    if (match) {
+      const oldEnvVersion = match[1].replace(/['"]/g, '').trim()
+      if (oldEnvVersion !== version) {
+        const newEnvContent = envContent.replace(
+          /^PERO_VERSION\s*=\s*(.+)$/m,
+          `PERO_VERSION=${version}`
+        )
+        fs.writeFileSync(envPath, newEnvContent)
+        console.log(`[Version Sync] .env updated to ${version}`)
+        updated = true
+      }
+    } else {
+      // 如果没有这个字段，直接追加
+      fs.appendFileSync(envPath, `\nPERO_VERSION=${version}\n`)
+      console.log(`[Version Sync] .env updated to ${version} (appended)`)
       updated = true
     }
   }
