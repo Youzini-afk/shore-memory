@@ -31,13 +31,7 @@
     "**/resources",
     "**/backend/nit_core/plugins/social_adapter/NapCat"
   ],
-  "ignore": [
-    "**/node_modules",
-    "**/target",
-    "**/venv",
-    "**/env",
-    "**/*.egg-info"
-  ],
+  "ignore": ["**/node_modules", "**/target", "**/venv", "**/env", "**/*.egg-info"],
   "reportMissingImports": "warning",
   "reportMissingTypeStubs": false,
   "pythonVersion": "3.10",

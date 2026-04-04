@@ -32,12 +32,12 @@
 
 为了确保资产加载的统一性，我们将对以下类型的资源进行联邦化管理。**注意：** 此处的“模型”指 Bedrock 3D 渲染资源（如 Rossi 形象），而非 AI 语言模型权重。
 
-| 资产类型 (Type) | 内置位置 (Official Path) | 标识文件 | 说明 |
-| :--- | :--- | :--- | :--- |
-| **人设 (persona)** | `@app/backend/services/mdp/agents/<name>/` | `asset.json` + `config.json` | 提示词、模式 Persona、碎碎念、头像 |
-| **插件 (plugin)** | `@app/backend/nit_core/plugins/<name>/` | `description.json` + `schema.json` | Python 插件入口 + OpenAI Tool 定义 |
-| **3D 模型 (model_3d)** | `@app/public/assets/3d/` | `manifest.json` 或 `.pero` | Bedrock 3D 模型，支持加密容器 |
-| **模组 (mod)** | `@app/backend/mods/<name>/` | `mod.toml` | 三层扩展体系 (EventBus/Pipeline/External) |
+| 资产类型 (Type)        | 内置位置 (Official Path)                   | 标识文件                           | 说明                                      |
+| :--------------------- | :----------------------------------------- | :--------------------------------- | :---------------------------------------- |
+| **人设 (persona)**     | `@app/backend/services/mdp/agents/<name>/` | `asset.json` + `config.json`       | 提示词、模式 Persona、碎碎念、头像        |
+| **插件 (plugin)**      | `@app/backend/nit_core/plugins/<name>/`    | `description.json` + `schema.json` | Python 插件入口 + OpenAI Tool 定义        |
+| **3D 模型 (model_3d)** | `@app/public/assets/3d/`                   | `manifest.json` 或 `.pero`         | Bedrock 3D 模型，支持加密容器             |
+| **模组 (mod)**         | `@app/backend/mods/<name>/`                | `mod.toml`                         | 三层扩展体系 (EventBus/Pipeline/External) |
 
 每种类型在用户覆盖层也有对应位置：`@data/custom/<type>/<name>/`。
 
@@ -45,12 +45,12 @@
 
 新建资产的标准元数据文件为 `asset.json`。`AssetRegistry` 也兼容以下格式（按检测优先级排列）：
 
-| 优先级 | 文件名 | 适用类型 | 说明 |
-| :----- | :----- | :------- | :--- |
-| 1 | `asset.json` | 所有类型 | **标准格式**，新资产必须使用 |
-| 2 | `manifest.json` | model_3d | 兼容旧版 Bedrock 模型清单 |
-| 3 | `description.json` | plugin | 兼容现有插件格式（含 `entryPoint` 字段） |
-| 4 | `mod.toml` | mod | TOML 格式，从 `[mod]` section 读取 |
+| 优先级 | 文件名             | 适用类型 | 说明                                     |
+| :----- | :----------------- | :------- | :--------------------------------------- |
+| 1      | `asset.json`       | 所有类型 | **标准格式**，新资产必须使用             |
+| 2      | `manifest.json`    | model_3d | 兼容旧版 Bedrock 模型清单                |
+| 3      | `description.json` | plugin   | 兼容现有插件格式（含 `entryPoint` 字段） |
+| 4      | `mod.toml`         | mod      | TOML 格式，从 `[mod]` section 读取       |
 
 #### `asset.json` 标准格式
 
@@ -75,11 +75,11 @@
 
 采用反向域名格式：`<scope>.<type>.<name>`
 
-| scope | 含义 | 示例 |
-| :---- | :--- | :--- |
-| `com.perocore` | 官方内置 | `com.perocore.persona.pero` |
-| `com.workshop` | 创意工坊 | `com.workshop.model.123456` |
-| `com.user` | 用户自定义 | `com.user.plugin.my_tool` |
+| scope          | 含义       | 示例                        |
+| :------------- | :--------- | :-------------------------- |
+| `com.perocore` | 官方内置   | `com.perocore.persona.pero` |
+| `com.workshop` | 创意工坊   | `com.workshop.model.123456` |
+| `com.user`     | 用户自定义 | `com.user.plugin.my_tool`   |
 
 ---
 
@@ -120,6 +120,7 @@
 **扫描顺序与冲突策略**：按 `official → workshop → local` 顺序扫描，**后者覆盖前者**（同 `asset_id` 时）。这意味着用户可以在 `@data/custom/` 中放置与官方同 ID 的资产来实现覆盖。
 
 **关键 API**：
+
 - `scan_all()` — 全量扫描所有来源目录
 - `get_asset(asset_id)` — 按 ID 检索已注册资产
 - `get_assets_by_type(type)` — 按类型查询所有资产

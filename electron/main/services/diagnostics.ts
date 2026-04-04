@@ -212,8 +212,7 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
     const sysWow64 = path.join(systemRoot, 'SysWOW64/vcruntime140.dll')
     const sysWow64_1 = path.join(systemRoot, 'SysWOW64/vcruntime140_1.dll')
 
-    vcRedistInstalled =
-      (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
+    vcRedistInstalled = (await fs.pathExists(vcRuntime)) || (await fs.pathExists(sysWow64))
 
     const vcRedist1Installed =
       (await fs.pathExists(vcRuntime1)) || (await fs.pathExists(sysWow64_1))
@@ -308,17 +307,18 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         logger.info('Main', `[诊断] 正在检查模型状态: ${cliScript}`)
         const { spawnSync } = require('child_process')
         const env = { ...process.env }
-        
+
         // [环境隔离] 移除可能污染我们嵌入式 Python 实例的系统或用户环境变量
-        Object.keys(env).forEach(key => {
+        Object.keys(env).forEach((key) => {
           if (key.startsWith('PYTHON') && key !== 'PATH' && key !== 'PYTHONPATH') {
             delete env[key]
           }
         })
-        
+
         // 核心 Python 环境设置
         const pythonDir = path.dirname(pythonPath)
-        const isEmbeddedPython = pythonPath.includes(path.join('resources', 'python')) ||
+        const isEmbeddedPython =
+          pythonPath.includes(path.join('resources', 'python')) ||
           pythonPath.includes(path.join('resources\\python'))
 
         if (isDev) {
@@ -342,9 +342,13 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
         })
 
         const statusJson = (result.stdout || '').toString().trim()
-        
+
         if (result.error || result.status !== 0) {
-          const errorMsg = result.stderr ? result.stderr.toString() : (result.error ? result.error.message : 'Unknown error')
+          const errorMsg = result.stderr
+            ? result.stderr.toString()
+            : result.error
+              ? result.error.message
+              : 'Unknown error'
           throw new Error(`Command failed with status ${result.status}: ${errorMsg}`)
         }
 

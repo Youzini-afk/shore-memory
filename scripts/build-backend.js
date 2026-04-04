@@ -386,10 +386,9 @@ function buildBinaryTools() {
     } else {
       log('正在构建 CodeSearcher...')
       try {
-        execSync(
-          `cargo build --release --manifest-path "${codeSearcherCargoToml}"`,
-          { stdio: 'inherit' }
-        )
+        execSync(`cargo build --release --manifest-path "${codeSearcherCargoToml}"`, {
+          stdio: 'inherit'
+        })
         if (!fs.existsSync(builtBin)) {
           log(`构建后仍无法定位 CodeSearcher.exe at ${builtBin}`, 'error')
           process.exit(1)
@@ -404,14 +403,8 @@ function buildBinaryTools() {
   }
 
   // 2. nit_terminal_auditor -- WASM 模块
-  const auditorCargoToml = path.join(
-    BACKEND_DIR,
-    'nit_core/nit_terminal_auditor/Cargo.toml'
-  )
-  const auditorDest = path.join(
-    BACKEND_DIR,
-    'nit_core/tools/work/TerminalExecutor/auditor.wasm'
-  )
+  const auditorCargoToml = path.join(BACKEND_DIR, 'nit_core/nit_terminal_auditor/Cargo.toml')
+  const auditorDest = path.join(BACKEND_DIR, 'nit_core/tools/work/TerminalExecutor/auditor.wasm')
 
   if (fs.existsSync(auditorCargoToml)) {
     const builtWasm = path.join(

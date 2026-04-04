@@ -30,7 +30,7 @@ $$E_{t+1}(j) = (1-\alpha) \sum_{i \in Neighbors(j)} \left( E_t(i) \times W_{ij} 
 - **动态剪枝 (Dynamic Pruning)**: 为了在千万级节点中保持毫秒级响应，算法在每一步传播后，只保留分数最高的 **Top-K**（默认 10,000）个活跃节点继续下一轮传播。这有效抑制了“计算爆炸”，同时保留了最重要的信号。
 - **权重衰减 (Weight Decay)**: 分数随着传播距离指数级衰减，确保只有紧密相关的概念被检索，避免无关联想。
 - **并行计算 (Parallelization)**: 底层使用 Rust 的 `rayon` 库实现无锁并行计算，充分利用多核 CPU 性能。
-- **PPR 回家概率 (Teleport)** *(v2 新增)*: 引入 PageRank 中的 “回家”弹动机制。在每步传播中，传播能量乘以 `(1-α)`，并将种子节点的当前能量按 `α` 混合回初始値。当 `α=0` 时等价于原始 PEDSA；当 `α=0.15` 时扩散范围实现较弱的收敛，防止能量在大图谱中漂移到无关区域。
+- **PPR 回家概率 (Teleport)** _(v2 新增)_: 引入 PageRank 中的 “回家”弹动机制。在每步传播中，传播能量乘以 `(1-α)`，并将种子节点的当前能量按 `α` 混合回初始値。当 `α=0` 时等价于原始 PEDSA；当 `α=0.15` 时扩散范围实现较弱的收敛，防止能量在大图谱中漂移到无关区域。
 
 ### 1.3 为什么不是 RAG？
 
@@ -103,8 +103,8 @@ db.link(103, 104, label="associative", weight=0.7)  # "Pixar" -> "Toy Story"
 
 # 3. 执行高级检索 (向量召回 + PEDSA 图扩散 + PPR + 多样性采样)
 results = db.search_advanced(
-    query_vector=[0.1, ...], 
-    top_k=5, 
+    query_vector=[0.1, ...],
+    top_k=5,
     expand_depth=3,      # 扩散 3 跳
     teleport_alpha=0.15, # PPR 回家概率 (防止过度扩散发散)
     enable_dpp=True      # 开启行列式点过程质量多样性采样

@@ -1,6 +1,6 @@
 packages:
-  - "."
-  - "wiki"
+  - '.'
+  - 'wiki'
 
 ignoredBuiltDependencies:
   - electron

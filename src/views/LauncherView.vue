@@ -2267,10 +2267,7 @@ const checkEnvironment = async () => {
     if (isSocialEnabled.value && !report.node_exists) warning = true // Node.js required for NapCat
 
     // 模型检查
-    if (
-      report.embedding_model_exists &&
-      report.whisper_model_exists
-    ) {
+    if (report.embedding_model_exists && report.whisper_model_exists) {
       allModelsExist.value = true
     } else {
       allModelsExist.value = false

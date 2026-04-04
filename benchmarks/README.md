@@ -6,12 +6,12 @@
 
 我们已将测试项整合为四个核心脚本，涵盖从底层性能到高层逻辑与数学算法的全方位验证：
 
-| 脚本名称                                                                           | 核心关注点                   | 验证目标                                                                        |
-| :--------------------------------------------------------------------------------- | :--------------------------- | :------------------------------------------------------------------------------ |
-| [`benchmark_1_massive_scale.py`](./benchmark_1_massive_scale.py)                   | **极速吞吐与内存效率**       | 验证亿级关联下的写入速度（Million edges/sec）与 CSR 变体结构的内存压缩比。      |
-| [`benchmark_2_multi_hop_reasoning.py`](./benchmark_2_multi_hop_reasoning.py)       | **多跳逻辑穿透 (Anti-Bias)** | 在数十万随机噪音中隐藏长链逻辑，验证图扩散模型是否能精准捕捉非邻域逻辑目标。    |
-| [`benchmark_3_real_world_integration.py`](./benchmark_3_real_world_integration.py) | **非线性知识网集成**         | 模拟真实世界“幂律分布”的复杂知识图谱，验证在 Hub-and-Spoke 拓扑下的联想稳定性。 |
-| [`benchmark_4_math_ablation.py`](./benchmark_4_math_ablation.py)                   | **数学算法管道消融**         | FISTA/DPP/NMF 逐步开关消融、Rust vs Python 正确性与性能对比、全管道端到端加速比。|
+| 脚本名称                                                                           | 核心关注点                   | 验证目标                                                                          |
+| :--------------------------------------------------------------------------------- | :--------------------------- | :-------------------------------------------------------------------------------- |
+| [`benchmark_1_massive_scale.py`](./benchmark_1_massive_scale.py)                   | **极速吞吐与内存效率**       | 验证亿级关联下的写入速度（Million edges/sec）与 CSR 变体结构的内存压缩比。        |
+| [`benchmark_2_multi_hop_reasoning.py`](./benchmark_2_multi_hop_reasoning.py)       | **多跳逻辑穿透 (Anti-Bias)** | 在数十万随机噪音中隐藏长链逻辑，验证图扩散模型是否能精准捕捉非邻域逻辑目标。      |
+| [`benchmark_3_real_world_integration.py`](./benchmark_3_real_world_integration.py) | **非线性知识网集成**         | 模拟真实世界“幂律分布”的复杂知识图谱，验证在 Hub-and-Spoke 拓扑下的联想稳定性。   |
+| [`benchmark_4_math_ablation.py`](./benchmark_4_math_ablation.py)                   | **数学算法管道消融**         | FISTA/DPP/NMF 逐步开关消融、Rust vs Python 正确性与性能对比、全管道端到端加速比。 |
 
 ## 🛠️ 内部系统测试 (Internal Tests)
 

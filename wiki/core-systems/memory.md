@@ -102,27 +102,27 @@ PeroCore 实现了类似神经元突触强化的机制：
 2. **Vector Recall (向量召回)**:
    - 使用 Embedding 对用户输入编码，从 TriviumDB 召回 Top-20 语义相似候选节点，注入初始能量。
 
-3. **NMF Semantic Analysis (NMF 语义结构分析)** *(v2 新增)*:
+3. **NMF Semantic Analysis (NMF 语义结构分析)** _(v2 新增)_:
    - 对 Entity 嵌入矩阵执行非负矩阵分解（Multiplicative Update NMF），得到 k 个语义主题向量组成的基矩阵 H。
    - 将查询向量投影到主题空间，输出三个诊断指标：`semantic_depth`（聚焦度）、`topic_coverage`（主题覆盖数）、`novelty`（新颖度）。
    - 基矩阵按 Agent 缓存，Entity 集合不变时跳过重算。
 
-4. **Sparse Coding Residual (稀疏编码残差)** *(v2 新增, 由 NMF novelty 门控)*:
+4. **Sparse Coding Residual (稀疏编码残差)** _(v2 新增, 由 NMF novelty 门控)_:
    - `novelty` 超过阈值时触发：使用 FISTA 算法求解 LASSO 问题，得到查询的最稀疏 Entity 表示。
    - 计算残差向量 `R = query - reconstruction`，若残差范数足够大，以 R 为新查询发起二次向量检索，发现被主流结果逐蔽的次要意图。
 
-5. **PEDSA + PPR Graph Spreading (PEDSA + 回家概率图扩散 - TriviumDB)** *(v2 增强)*:
+5. **PEDSA + PPR Graph Spreading (PEDSA + 回家概率图扩散 - TriviumDB)** _(v2 增强)_:
    - 由 TriviumDB 原生负责，底层全自动执行 2 跳深度的 PEDSA 扩散。
    - 新增 `teleport_alpha` 回家概率：每步传播能量乘以 `(1-α)`，每步结束后将种子节点能量按 `α` 混合回初始値，防止能量在大图谱中发散到无关区域。
 
-6. **Co-occurrence Boost (共现增益)** *(v2 新增)*:
+6. **Co-occurrence Boost (共现增益)** _(v2 新增)_:
    - 查询 `EntityCooccurrence` 表，获取本次锁点 Entity 的历史共现邻居。
    - 对共现邻居施加对数阻尼增益：`bonus = score × log(1 + co_count) × scale`，叠加在 PEDSA 扩散分上。
 
 7. **Multi-dimensional Ranking (多维重排)**:
    - 应用混合评分公式，结合 GraphScore、VectorScore、Importance 和对数时间衰减，按综合分降序排列全部候选。
 
-8. **DPP Diversity Sampling (DPP 多样性采样)** *(v2 新增)*:
+8. **DPP Diversity Sampling (DPP 多样性采样)** _(v2 新增)_:
    - 从排序后取 `limit × multiplier` 个候选，构建质量加权 L-ensemble 核矩阵。
    - 使用贪心行列式点过程（DPP）选取 `limit` 个内容多样且质量高的记忆，避免语义重叠的记忆重复占位。
 
@@ -157,7 +157,7 @@ class Memory(SQLModel, table=True):
     embedding_json: str          # 向量数据
 ```
 
-*(注: 传统的 `MemoryRelation` 以及 `EntityCooccurrence` 表已在此次全面重构中被清理废弃，其复杂的拓扑关系和相关统计能力现在全部交由 TriviumDB 内部原生的底层边结构（Edges）直接处理。)*
+_(注: 传统的 `MemoryRelation` 以及 `EntityCooccurrence` 表已在此次全面重构中被清理废弃，其复杂的拓扑关系和相关统计能力现在全部交由 TriviumDB 内部原生的底层边结构（Edges）直接处理。)_
 
 ## 8. 开发者指南 (Developer Guide)
 

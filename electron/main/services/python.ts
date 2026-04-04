@@ -9,9 +9,7 @@ import { getWorkshopInstallPath } from './steam'
 import { appEvents } from '../events'
 import { isDev, paths } from '../utils/env'
 
-const workspaceRoot = isDev
-  ? path.resolve(__dirname, '../../..')
-  : paths.resources
+const workspaceRoot = isDev ? path.resolve(__dirname, '../../..') : paths.resources
 
 function fixPath(p: string): string {
   return path.normalize(p)
@@ -58,18 +56,19 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
 
   // 环境变量设置
   const env = { ...process.env }
-  
+
   // [环境隔离] 移除可能污染我们嵌入式 Python 实例的系统或用户环境变量
-  Object.keys(env).forEach(key => {
+  Object.keys(env).forEach((key) => {
     if (key.startsWith('PYTHON') && key !== 'PATH' && key !== 'PYTHONPATH') {
       delete env[key]
     }
   })
-  
+
   // 核心 Python 环境设置
   const pythonDir = path.dirname(pythonPath)
   const resourceDir = fixPath(isDev ? workspaceRoot : process.resourcesPath)
-  const isEmbeddedPython = pythonPath.includes(path.join('resources', 'python')) ||
+  const isEmbeddedPython =
+    pythonPath.includes(path.join('resources', 'python')) ||
     pythonPath.includes(path.join('resources\\python'))
 
   if (isDev) {
@@ -89,9 +88,9 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
   }
 
   const workshopPath = getWorkshopInstallPath()
-  
+
   logger.info('Backend', `Workshop Path: ${workshopPath || 'Not Found (Steam not running?)'}`)
-  
+
   env['PYTHONNOUSERSITE'] = '1'
   env['PYTHONUNBUFFERED'] = '1'
   env['PYTHONUTF8'] = '1'

@@ -229,7 +229,15 @@ async function loadModel() {
     }
 
     const provider = new WikiModelProvider(config, [
-      'GUI', 'HUD', 'PANEL', 'BUTTON', 'TEXT', 'START', 'END', 'BACKGROUND', 'MOLANG'
+      'GUI',
+      'HUD',
+      'PANEL',
+      'BUTTON',
+      'TEXT',
+      'START',
+      'END',
+      'BACKGROUND',
+      'MOLANG'
     ])
     const rootGroup = await avatarRenderer.build(provider)
     characterModel = rootGroup

@@ -11,9 +11,7 @@ const path = require('path')
 exports.default = async function (context) {
   // 只在 --dir (portable) 模式下写入标记文件
   // 在 nsis 安装模式下不需要这个文件
-  const isDir = context.targets?.some(
-    (t) => t.name === 'dir'
-  )
+  const isDir = context.targets?.some((t) => t.name === 'dir')
 
   if (!isDir) {
     console.log('[AfterPack] 非 dir 模式，跳过 .portable 标记注入')

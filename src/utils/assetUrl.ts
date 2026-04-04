@@ -1,7 +1,12 @@
 /**
  * 解析资产路径为可加载的 URL
  *
- * @param path 原始路径 (可能是相对路径 assets/..., 或绝对路径 C:/...，或已解析的 URL)
+ * 在 Electron 生产模式下，渲染进程的 fetch() 无法直接访问 asar 内的文件，
+ * 必须通过自定义 asset:// 协议转发给主进程的 net.fetch() 来读取。
+ * 静态资源（public/ 目录内容）在构建后位于 app.asar/dist/ 下，
+ * 因此需要在路径中插入 dist/ 段。
+ *
+ * @param path 原始路径（相对路径 assets/..., 绝对路径 C:/..., 或已解析的协议 URL）
  * @returns 可用于 fetch 或 img src 的 URL
  */
 
@@ -37,26 +42,29 @@ export function resolveAssetUrl(path: string): string {
 
   if (isElectron) {
     // 如果是绝对路径 (Windows 盘符或 Unix 根路径)
-    // Windows: C:\... -> asset://C:/...
+    // Windows: C:\... -> asset:///C:/...
     const isAbsolute = /^[a-zA-Z]:\\|^[a-zA-Z]:\/|^\//.test(path)
 
     if (isAbsolute) {
       const normalizedPath = path.replace(/\\/g, '/')
-      const pathPart = normalizedPath.startsWith('/') ? normalizedPath : '/' + normalizedPath
+      const pathPart = normalizedPath.startsWith('/')
+        ? normalizedPath
+        : '/' + normalizedPath
       return `asset://${pathPart}`
     }
 
-    // [修复] 相对路径 (如 assets/3d/Pero.pero) 在 Electron Portable 下走 file:// 会失败，
-    // 因为 fetch 的基准 URL 是 dist/index.html 所在目录，而非 asar 根目录。
-    // 需要将其转为 asset:// 绝对路径，基于已缓存的 appPath。
-    if (_cachedAppPath) {
+    // [修复] 相对路径 (如 assets/3d/Pero/models/main.json)
+    // 开发模式下：Vite Dev Server 通过 HTTP 自动处理 public/ 目录，直接返回原路径即可
+    // 生产模式下：文件在 app.asar/dist/ 内，需要通过 asset:// 协议 + 完整绝对路径访问
+    const isDev = !!(import.meta as any).env?.DEV
+    if (!isDev && _cachedAppPath) {
       const normalizedAppPath = _cachedAppPath.replace(/\\/g, '/')
-      const appPathPart = normalizedAppPath.startsWith('/') ? normalizedAppPath : '/' + normalizedAppPath
-      return `asset://${appPathPart}/${path}`
+      const appPathPart = normalizedAppPath.startsWith('/')
+        ? normalizedAppPath
+        : '/' + normalizedAppPath
+      // 关键：静态资源在 Vite 构建后位于 dist/ 目录下
+      return `asset://${appPathPart}/dist/${path}`
     }
-
-    // appPath 尚未缓存（首帧可能发生），降级保底返回原路径
-    console.warn(`[resolveAssetUrl] appPath 未缓存，无法解析相对路径: ${path}`)
   }
 
   return path
@@ -70,5 +78,6 @@ export async function initAssetUrlCache(): Promise<void> {
   const isElectron = (window as any).electron !== undefined
   if (isElectron && !_cachedAppPath) {
     await getAppPath()
+    console.log(`[resolveAssetUrl] appPath 已缓存: ${_cachedAppPath}`)
   }
 }

@@ -412,15 +412,29 @@
         </PCard>
 
         <!-- 重排序模型部分 -->
-        <PCard pixel class="!p-8 !overflow-visible border border-slate-100/50" :class="{ 'opacity-60': !rerankerEnabled }">
+        <PCard
+          pixel
+          class="!p-8 !overflow-visible border border-slate-100/50"
+          :class="{ 'opacity-60': !rerankerEnabled }"
+        >
           <div class="flex items-center justify-between mb-8">
             <div class="flex items-center gap-4">
-              <div class="p-3 rounded-2xl" :class="rerankerEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'">
+              <div
+                class="p-3 rounded-2xl"
+                :class="
+                  rerankerEnabled ? 'bg-amber-100 text-amber-600' : 'bg-slate-100 text-slate-400'
+                "
+              >
                 <PixelIcon name="sparkle" size="md" />
               </div>
               <div>
                 <div class="flex items-center gap-3">
-                  <h4 class="text-lg font-bold" :class="rerankerEnabled ? 'text-slate-800' : 'text-slate-400'">Reranker 重排序模型</h4>
+                  <h4
+                    class="text-lg font-bold"
+                    :class="rerankerEnabled ? 'text-slate-800' : 'text-slate-400'"
+                  >
+                    Reranker 重排序模型
+                  </h4>
                   <span
                     v-if="rerankerEnabled"
                     class="px-2.5 py-0.5 text-[9px] font-black tracking-widest uppercase rounded-full bg-emerald-50 text-emerald-600 border border-emerald-100"
@@ -435,9 +449,11 @@
             <!-- 开关 -->
             <button
               class="relative w-14 h-7 rounded-full transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-offset-2 shadow-inner"
-              :class="rerankerEnabled
-                ? 'bg-amber-400 focus:ring-amber-300'
-                : 'bg-slate-200 focus:ring-slate-300'"
+              :class="
+                rerankerEnabled
+                  ? 'bg-amber-400 focus:ring-amber-300'
+                  : 'bg-slate-200 focus:ring-slate-300'
+              "
               @click="rerankerEnabled = !rerankerEnabled"
             >
               <span
@@ -449,16 +465,22 @@
             </button>
           </div>
 
-          <div v-if="!rerankerEnabled" class="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center">
+          <div
+            v-if="!rerankerEnabled"
+            class="bg-slate-50 border border-slate-100 rounded-2xl p-5 text-center"
+          >
             <p class="text-sm text-slate-400">
-              Reranker 已关闭。<span class="text-amber-500 font-bold">建议开启</span>以获得更精准的记忆检索效果。
+              Reranker 已关闭。<span class="text-amber-500 font-bold">建议开启</span
+              >以获得更精准的记忆检索效果。
             </p>
           </div>
 
           <!-- 开启时的配置表单 -->
           <div v-if="rerankerEnabled" class="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-6">
             <div class="space-y-2 md:col-span-2">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between">
+              <label
+                class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 flex items-center justify-between"
+              >
                 <span>模型 ID Model ID</span>
                 <button
                   class="text-amber-500 hover:text-amber-600 transition-colors flex items-center gap-1 active:scale-95"
@@ -475,7 +497,10 @@
               </label>
               <PInput v-model="rerankerModelId" placeholder="例如: bge-reranker-v2-m3" />
               <!-- 可选模型列表 -->
-              <div v-if="availableRerankerModels?.length > 0" class="flex flex-wrap gap-2 mt-2 max-h-[100px] overflow-y-auto custom-scrollbar p-1">
+              <div
+                v-if="availableRerankerModels?.length > 0"
+                class="flex flex-wrap gap-2 mt-2 max-h-[100px] overflow-y-auto custom-scrollbar p-1"
+              >
                 <button
                   v-for="m in availableRerankerModels"
                   :key="m"
@@ -489,12 +514,16 @@
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">API Base URL (可选)</label>
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                >API Base URL (可选)</label
+              >
               <PInput v-model="rerankerApiBase" placeholder="留空则使用全局配置" />
             </div>
 
             <div class="space-y-2">
-              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1">API Key (可选)</label>
+              <label class="text-xs font-black text-slate-400 uppercase tracking-widest ml-1"
+                >API Key (可选)</label
+              >
               <PInput v-model="rerankerApiKey" type="password" placeholder="留空则使用全局配置" />
             </div>
           </div>

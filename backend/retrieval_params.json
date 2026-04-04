@@ -1,24 +1,24 @@
 {
-    "_comment": "PeroCore 检索增强参数 (运行时热更新，修改后自动重载)",
+  "_comment": "PeroCore 检索增强参数 (运行时热更新，修改后自动重载)",
 
-    "enable_sparse_coding": true,
-    "enable_dpp": true,
-    "enable_cooccurrence_boost": true,
-    "enable_nmf": true,
+  "enable_sparse_coding": true,
+  "enable_dpp": true,
+  "enable_cooccurrence_boost": true,
+  "enable_nmf": true,
 
-    "sparse_coding_lambda": 0.1,
-    "sparse_coding_iterations": 80,
-    "residual_threshold": 0.30,
-    "residual_topk": 5,
+  "sparse_coding_lambda": 0.1,
+  "sparse_coding_iterations": 80,
+  "residual_threshold": 0.3,
+  "residual_topk": 5,
 
-    "dpp_candidate_multiplier": 3,
-    "dpp_quality_weight": 1.0,
+  "dpp_candidate_multiplier": 3,
+  "dpp_quality_weight": 1.0,
 
-    "cooccurrence_bonus_scale": 0.10,
-    "cooccurrence_max_neighbors": 10,
+  "cooccurrence_bonus_scale": 0.1,
+  "cooccurrence_max_neighbors": 10,
 
-    "teleport_alpha": 0.15,
+  "teleport_alpha": 0.15,
 
-    "nmf_n_topics": 15,
-    "nmf_novelty_threshold": 0.4
+  "nmf_n_topics": 15,
+  "nmf_novelty_threshold": 0.4
 }

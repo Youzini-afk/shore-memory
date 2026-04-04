@@ -305,7 +305,10 @@ ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
     if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
     const hex = Buffer.from(buffer).subarray(0, 16).toString('hex')
     const ascii = Buffer.from(buffer).subarray(0, 4).toString('ascii')
-    logger.info('Native', `pero-container 收到数据: ${buffer.length} 字节, hex前缀: ${hex}, magic: "${ascii}"`)
+    logger.info(
+      'Native',
+      `pero-container 收到数据: ${buffer.length} 字节, hex前缀: ${hex}, magic: "${ascii}"`
+    )
     if (typeof nativeMod.loadPeroContainer !== 'function') {
       throw new Error('渲染核心功能不完整: 缺少 loadPeroContainer')
     }
@@ -660,17 +663,17 @@ ipcMain.handle('download_models', async (event) => {
 
     // 构造环境变量
     const env = { ...process.env }
-    
+
     // [环境隔离] 移除可能污染我们嵌入式 Python 实例的系统或用户环境变量
-    Object.keys(env).forEach(key => {
+    Object.keys(env).forEach((key) => {
       if (key.startsWith('PYTHON') && key !== 'PATH' && key !== 'PYTHONPATH') {
         delete env[key]
       }
     })
-    
+
     env['HF_ENDPOINT'] = 'https://hf-mirror.com' // 强制使用 HF 镜像
     env['PYTHONUNBUFFERED'] = '1' // 强制 Python 输出不缓冲，防止下载大文件时日志卡住
-    
+
     const pythonDir = path.dirname(pythonPath)
     env['PYTHONHOME'] = pythonDir
     if (isDev) {

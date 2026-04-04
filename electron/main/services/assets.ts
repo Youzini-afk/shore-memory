@@ -188,7 +188,10 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
  * 返回可直接用于 BedrockAvatar 的路径
  */
 export function getModelLoadPath(model: AssetInfo): string {
-  logger.info('Assets', `[DEBUG] getModelLoadPath 输入: path=${model.path}, display=${model.display_name}`)
+  logger.info(
+    'Assets',
+    `[DEBUG] getModelLoadPath 输入: path=${model.path}, display=${model.display_name}`
+  )
   // 如果是 .pero 文件，直接返回路径
   if (model.path.endsWith('.pero')) {
     logger.info('Assets', `[DEBUG] getModelLoadPath -> .pero 文件: ${model.path}`)

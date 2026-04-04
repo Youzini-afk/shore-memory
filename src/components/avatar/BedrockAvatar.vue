@@ -632,9 +632,9 @@ async function loadDefaultManifest() {
     await loadAvatar(manifest)
   }
 
-  const [primary, fallback] = isDev
-    ? [loadManifest, loadContainer]
-    : [loadContainer, loadManifest]
+  // 统一策略：优先 manifest.json（散目录），.pero 容器作为后备
+  // 因为 Pero 模型当前只有散目录格式，没有 .pero 容器
+  const [primary, fallback] = [loadManifest, loadContainer]
 
   try {
     await primary()

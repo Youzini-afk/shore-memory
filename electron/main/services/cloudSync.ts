@@ -28,23 +28,23 @@ const SYNC_CONFIG = {
     'memory/tags.index',
     // TriviumDB 记忆库 (新架构)
     // 路径约定: data/<store_name>/<store_name>.tdb
-    'memory/memory.tdb',   // 主角色记忆库 (含视觉锚点)
-    'social/social.tdb'    // 社交记忆库 (QQ / 群聊)
+    'memory/memory.tdb', // 主角色记忆库 (含视觉锚点)
+    'social/social.tdb' // 社交记忆库 (QQ / 群聊)
   ],
   // 需要同步的目录 (递归)
   directories: [
-    'workspace',     // 日记、周报等用户生成内容
-    'memory/agents'  // Agent 独立记忆索引
+    'workspace', // 日记、周报等用户生成内容
+    'memory/agents' // Agent 独立记忆索引
   ],
   // 排除的文件模式
   excludePatterns: [
-    /\.db-shm$/,     // SQLite 共享内存文件
-    /\.db-wal$/,     // SQLite 预写日志
-    /\.tdb-shm$/,    // TriviumDB 共享内存文件
-    /\.tdb-wal$/,    // TriviumDB 预写日志
-    /gateway_token\.json$/,  // 网关 Token (敏感信息，不上云)
-    /models_cache/,  // 模型缓存 (体积过大，不同步)
-    /sandbox/        // 沙盒临时文件
+    /\.db-shm$/, // SQLite 共享内存文件
+    /\.db-wal$/, // SQLite 预写日志
+    /\.tdb-shm$/, // TriviumDB 共享内存文件
+    /\.tdb-wal$/, // TriviumDB 预写日志
+    /gateway_token\.json$/, // 网关 Token (敏感信息，不上云)
+    /models_cache/, // 模型缓存 (体积过大，不同步)
+    /sandbox/ // 沙盒临时文件
   ]
 }
 

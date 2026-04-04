@@ -243,7 +243,6 @@ jobs:
             PeroCore-Portable-*.zip
             PeroCore-Browser-Extension.zip
 
-
       - name: Create Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v1
@@ -299,4 +298,3 @@ jobs:
           prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
