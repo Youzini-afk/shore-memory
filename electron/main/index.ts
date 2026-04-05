@@ -258,10 +258,6 @@ ipcMain.handle('scan-local-models', async () => {
   return await scanLocalModels()
 })
 
-// 暴露 app 根路径，供渲染进程将相对 assets/ 路径转换为 asset:// 绝对 URL
-ipcMain.handle('get-app-path', () => {
-  return app.getAppPath()
-})
 
 // 3D 模型资产扫描 (包括 Workshop)
 ipcMain.handle('scan-3d-models', async () => {

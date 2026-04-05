@@ -52,7 +52,6 @@ import { StandardBones } from './lib/retargeting/RetargetingConfig'
 import { FeatureButton, IAvatarManifest } from './lib/adapter/IAvatarManifest'
 import { ManifestBasedAdapter } from './lib/adapter/ManifestBasedAdapter'
 import { ManifestLoader } from './lib/adapter/ManifestLoader'
-import { initAssetUrlCache } from '../../utils/assetUrl'
 
 const props = defineProps<{
   isDragging?: boolean
@@ -307,8 +306,6 @@ let animationFrameId: number
 let currentProvider: IModelProvider | undefined
 
 onMounted(async () => {
-  // [修复] 预热 appPath 缓存，确保 resolveAssetUrl 能将相对 assets/ 路径转为 asset:// 绝对路径
-  await initAssetUrlCache()
   initThree()
   await loadDefaultManifest()
   animate()
@@ -610,14 +607,14 @@ async function loadDefaultManifest() {
   const prefix = isElectron ? 'assets/' : '/assets/'
   const isDev = !!import.meta.env.DEV
 
-  const containerPath = `${prefix}3d/Pero.pero`
-  const manifestJsonPath = `${prefix}3d/Pero/manifest.json`
+  const containerPath = `${prefix}3d/Rossi.pero`
+  const manifestJsonPath = `${prefix}3d/Rossi/manifest.json`
 
   // 开发模式：优先 manifest.json（散文件夹），容器作为后备
   // 生产模式：优先 .pero 容器（加密打包），manifest 作为后备
   const loadContainer = async () => {
     const defaultManifest: IAvatarManifest = {
-      metadata: { name: 'Pero', version: '1.0.0' },
+      metadata: { name: 'Rossi', version: '1.0.0' },
       resources: { model: containerPath, texture: containerPath, animations: [] },
       featureButtons: [],
       parts: [],
@@ -627,14 +624,14 @@ async function loadDefaultManifest() {
   }
 
   const loadManifest = async () => {
-    console.log('加载 Pero manifest.json...')
+    console.log('加载 Rossi manifest.json...')
     const manifest = await ManifestLoader.fromJson(manifestJsonPath)
     await loadAvatar(manifest)
   }
 
-  // 统一策略：优先 manifest.json（散目录），.pero 容器作为后备
-  // 因为 Pero 模型当前只有散目录格式，没有 .pero 容器
-  const [primary, fallback] = [loadManifest, loadContainer]
+  // 开发模式：优先 manifest.json（因为改动能热重载），.pero 作为后备
+  // 生产模式：优先 .pero 容器，没有再尝试 manifest
+  const [primary, fallback] = isDev ? [loadManifest, loadContainer] : [loadContainer, loadManifest]
 
   try {
     await primary()
