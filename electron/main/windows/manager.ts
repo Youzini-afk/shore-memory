@@ -290,6 +290,19 @@ export class WindowManager {
 
     this.startMouseTracking()
 
+    // [诊断] 渲染进程崩溃时记录日志并恢复 Launcher 可见性
+    this.petWin.webContents.on('render-process-gone', (_event, details) => {
+      logger.error('Main', `Pet 窗口渲染进程崩溃: reason=${details.reason}, exitCode=${details.exitCode}`)
+      // 恢复 Launcher 以免用户看到"闪退"
+      if (this.launcherWin && !this.launcherWin.isDestroyed()) {
+        this.launcherWin.show()
+      }
+    })
+
+    this.petWin.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
+      logger.error('Main', `Pet 窗口加载失败: ${errorDescription} (${errorCode}), URL: ${validatedURL}`)
+    })
+
     this.petWin.on('closed', () => {
       this.stopMouseTracking()
       this.petWin = null
