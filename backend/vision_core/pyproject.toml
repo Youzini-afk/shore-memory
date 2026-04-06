@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "pero_vision_core"
-version = "0.8.61"
+version = "0.8.62"
 description = "High-performance computer vision core for Pero using Rust"
 license = { text = "Apache-2.0" }
 authors = [
