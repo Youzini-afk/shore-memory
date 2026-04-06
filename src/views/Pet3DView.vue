@@ -1431,8 +1431,30 @@ const toggleAppearanceMenu = () => {
 
 const loadLocalTexts = async () => {
   try {
-    const response = await fetch('waifu-texts.json')
-    const baseTexts = await response.json()
+    let baseTexts = {}
+
+    // Electron 环境：通过 IPC 获取当前角色专属的台词
+    if (isElectron) {
+      const agentId = currentAgentName.value?.toLowerCase() || 'pero'
+      try {
+        baseTexts = await invoke('get_agent_waifu_texts', agentId)
+        console.log(`[Pet3D] 已加载角色 ${agentId} 的专属台词:`, Object.keys(baseTexts).length, '条')
+      } catch (e) {
+        console.warn(`[Pet3D] IPC 加载角色台词失败，回退到默认:`, e)
+      }
+    }
+
+    // 回退：从 public 目录加载默认台词（浏览器环境或 IPC 失败时）
+    if (Object.keys(baseTexts).length === 0) {
+      try {
+        const response = await fetch('waifu-texts.json')
+        baseTexts = await response.json()
+      } catch {
+        console.warn('[Pet3D] 默认 waifu-texts.json 加载失败')
+      }
+    }
+
+    // 合并 localStorage 中用户自定义的覆盖台词
     const storageKey = `ppc.waifu.texts.${currentAgentName.value || 'default'}`
     let dynamicTexts = {}
     try {

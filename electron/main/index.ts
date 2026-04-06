@@ -583,6 +583,18 @@ ipcMain.handle('get_backend_logs', () => getBackendLogs())
 ipcMain.handle('scan_local_agents', async () => {
   return await scanLocalAgents()
 })
+
+// 根据角色 ID 获取该角色的交互台词
+ipcMain.handle('get_agent_waifu_texts', async (_, agentId: string) => {
+  const root = isDev ? path.resolve(__dirname, '../../..') : paths.resources
+  const waifuPath = path.join(root, 'backend/services/mdp/agents', agentId, 'waifu_texts.json')
+  if (await fs.pathExists(waifuPath)) {
+    return await fs.readJson(waifuPath)
+  }
+  // 找不到角色台词时返回空对象，前端会使用默认台词
+  logger.warn('Main', `[Agents] 未找到角色 ${agentId} 的 waifu_texts.json: ${waifuPath}`)
+  return {}
+})
 ipcMain.handle('check_napcat', async () => {
   const diag = await getDiagnostics()
   return diag.napcat_installed
