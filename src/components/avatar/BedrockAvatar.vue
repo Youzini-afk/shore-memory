@@ -629,9 +629,9 @@ async function loadDefaultManifest() {
     await loadAvatar(manifest)
   }
 
-  // 开发模式：优先 manifest.json（因为改动能热重载），.pero 作为后备
-  // 生产模式：优先 .pero 容器，没有再尝试 manifest
-  const [primary, fallback] = isDev ? [loadManifest, loadContainer] : [loadContainer, loadManifest]
+  // 始终优先 manifest.json（散文件夹）：asar 环境对 JSON + 散文件支持最稳定
+  // .pero 容器仅作为后备，适用于 Workshop 等外部模型场景
+  const [primary, fallback] = [loadManifest, loadContainer]
 
   try {
     await primary()

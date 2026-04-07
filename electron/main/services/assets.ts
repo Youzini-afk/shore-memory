@@ -33,8 +33,12 @@ export async function scan3DModels(): Promise<AssetInfo[]> {
   const models: AssetInfo[] = []
   const root = getRootPath()
 
-  // 1. 优先扫描 .pero 加密容器 (public/assets/3d/*.pero)
-  const officialModelsDir = path.join(root, 'public/assets/3d')
+  // 1. 优先扫描 .pero 加密容器
+  // 开发环境: public/assets/3d (Vite 原始目录)
+  // 生产环境: app.asar/dist/assets/3d (Vite 构建后的输出)
+  const officialModelsDir = isDev
+    ? path.join(root, 'public/assets/3d')
+    : path.join(paths.app, 'dist/assets/3d')
   const allFiles = await fs.readdir(officialModelsDir).catch(() => [] as string[])
   for (const file of allFiles) {
     if (file.endsWith('.pero')) {
