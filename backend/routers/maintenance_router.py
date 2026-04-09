@@ -18,6 +18,7 @@ from models import (
     MaintenanceRecord,
     Memory,
     ScheduledTask,
+    TriviumSyncTask,
 )
 from services.memory.memory_service import MemoryService
 
@@ -321,7 +322,109 @@ async def trigger_reindex(
     try:
         from services.core.reindex_service import ReindexService
 
-        asyncio.create_task(ReindexService.reindex_all_memories(session, agent_id))
+        asyncio.create_task(ReindexService.reindex_memories_with_session(session, agent_id))
         return {"status": "success", "message": "重索引任务已在后台启动喵~ ✨"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"启动重索引失败: {str(e)}") from e
+
+
+@router.post("/api/memory/rebuild_trivium")
+async def trigger_rebuild_trivium(
+    agent_id: str = "pero", session: AsyncSession = Depends(get_session)
+):  # noqa: B008
+    """
+    手动触发 TriviumDB 全量重建。
+    用于 SQLite 与向量图谱脱节后的回放恢复。
+    """
+    try:
+        from services.core.reindex_service import ReindexService
+
+        result = await ReindexService.rebuild_trivium_store_with_session(session, agent_id)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TriviumDB 重建失败: {str(e)}") from e
+
+
+@router.post("/api/memory/retry_trivium_sync")
+async def retry_trivium_sync(
+    agent_id: Optional[str] = None,
+    store_name: Optional[str] = None,
+    limit: int = 100,
+    session: AsyncSession = Depends(get_session),
+):  # noqa: B008
+    """
+    手动触发 TriviumDB 补偿任务重试。
+    用于补写历史失败的节点或关系同步任务。
+    """
+    try:
+        from services.memory.trivium_sync_service import TriviumSyncService
+
+        return await TriviumSyncService.retry_pending_tasks(
+            session,
+            agent_id=agent_id,
+            store_name=store_name,
+            limit=limit,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"TriviumDB 补偿重试失败: {str(e)}") from e
+
+
+@router.get("/api/memory/trivium_sync_tasks", response_model=List[TriviumSyncTask])
+async def list_trivium_sync_tasks(
+    agent_id: Optional[str] = None,
+    store_name: Optional[str] = None,
+    status: Optional[str] = None,
+    operation: Optional[str] = None,
+    min_retry_count: Optional[int] = None,
+    max_retry_count: Optional[int] = None,
+    created_after: Optional[datetime] = None,
+    created_before: Optional[datetime] = None,
+    limit: int = 100,
+    offset: int = 0,
+    session: AsyncSession = Depends(get_session),
+):  # noqa: B008
+    """
+    获取 TriviumDB 补偿任务列表。
+    支持按 agent、store、状态、操作类型、重试次数和时间范围过滤，便于多 store 运维排障。
+    """
+    try:
+        from services.memory.trivium_sync_service import TriviumSyncService
+
+        return await TriviumSyncService.list_tasks(
+            session,
+            agent_id=agent_id,
+            store_name=store_name,
+            status=status,
+            operation=operation,
+            min_retry_count=min_retry_count,
+            max_retry_count=max_retry_count,
+            created_after=created_after,
+            created_before=created_before,
+            limit=limit,
+            offset=offset,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取 TriviumDB 补偿任务列表失败: {str(e)}") from e
+
+
+@router.get("/api/memory/trivium_sync_summary")
+async def get_trivium_sync_summary(
+    agent_id: Optional[str] = None,
+    store_name: Optional[str] = None,
+    session: AsyncSession = Depends(get_session),
+):  # noqa: B008
+    """
+    获取 TriviumDB 补偿任务摘要。
+    返回按状态、按 store、按操作类型的聚合情况、失败排行和健康标记，便于观察多 store 健康度。
+    """
+    try:
+        from services.memory.trivium_sync_service import TriviumSyncService
+
+        return await TriviumSyncService.get_task_summary(
+            session,
+            agent_id=agent_id,
+            store_name=store_name,
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"获取 TriviumDB 补偿任务摘要失败: {str(e)}") from e
+

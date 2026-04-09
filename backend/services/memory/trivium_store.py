@@ -1,5 +1,6 @@
 import asyncio
 import os
+import shutil
 from concurrent.futures import ThreadPoolExecutor
 from functools import partial
 from typing import Any, Dict, List, Optional
@@ -54,6 +55,13 @@ class TriviumMemoryStore:
         self._db: Optional[Any] = None  # 支持 triviumdb 为 None 时的降级状态
         self._initialized = True
 
+    def _open_db(self, dim: int = 1536):
+        return triviumdb.TriviumDB(self.db_path, dim=dim, dtype="f32", sync_mode="normal")
+
+    def _enable_auto_compaction(self):
+        if self._db:
+            self._db.enable_auto_compaction(interval_secs=300)
+
     def _ensure_loaded(self, dim: int = 1536):
         """确保 TriviumDB 已被加载"""
         # 降级保护：triviumdb 模块未加载时直接返回，不报错
@@ -63,13 +71,10 @@ class TriviumMemoryStore:
             print(f"[TriviumStore] 初始化 TriviumDB，维度={dim}，路径={self.db_path}")
             # 捕获可能的损坏异常
             try:
-                self._db = triviumdb.TriviumDB(
-                    self.db_path, dim=dim, dtype="f32", sync_mode="normal"
-                )
+                self._db = self._open_db(dim)
             except Exception as e:
                 print(f"[TriviumStore] ⚠️ 加载失败，检测到文件可能损坏: {e}")
                 print("[TriviumStore] 正在备份受损数据并自动恢复底层引擎...")
-                import shutil
                 import time
 
                 try:
@@ -81,9 +86,7 @@ class TriviumMemoryStore:
                     backup_dir = parent_dir / new_rel
                     shutil.move(self.data_dir, str(backup_dir))
                     os.makedirs(self.data_dir, exist_ok=True)
-                    self._db = triviumdb.TriviumDB(
-                        self.db_path, dim=dim, dtype="f32", sync_mode="normal"
-                    )
+                    self._db = self._open_db(dim)
                     print(
                         f"[TriviumStore] ✅ 已完成自动重置恢复。受损数据已备份至: {backup_dir}"
                     )
@@ -91,14 +94,111 @@ class TriviumMemoryStore:
                     print(f"[TriviumStore] ❌ 底层恢复失败: {backup_error}")
                     raise e from backup_error
 
-            if self._db:
-                self._db.enable_auto_compaction(interval_secs=300)
+            self._enable_auto_compaction()
 
     async def _run(self, fn, *args, **kwargs):
         """在线程池中运行同步函数"""
         loop = asyncio.get_event_loop()
         pfunc = partial(fn, *args, **kwargs)
         return await loop.run_in_executor(_executor, pfunc)
+
+    def _build_agent_filter(self, agent_id: str) -> Dict[str, Any]:
+        """构建 agent 隔离过滤条件"""
+        return {"agent_id": agent_id}
+
+    def _should_use_hybrid_search(
+        self,
+        query_text: Optional[str],
+        enable_text_hybrid: bool,
+        enable_dpp: bool,
+    ) -> bool:
+        """判断当前请求是否适合直接走 search_hybrid"""
+        return bool(query_text and enable_text_hybrid and not enable_dpp)
+
+    def _should_use_basic_search(
+        self,
+        query_text: Optional[str],
+        enable_text_hybrid: bool,
+        enable_dpp: bool,
+    ) -> bool:
+        """判断当前请求是否适合直接走基础 search"""
+        return bool(not query_text and not enable_text_hybrid and not enable_dpp)
+
+    async def _search_basic(
+        self,
+        query_vector: List[float],
+        top_k: int,
+        expand_depth: int,
+        payload_filter: Dict[str, Any],
+    ):
+        """基础向量召回：只走 search"""
+        return await self._run(
+            self._db.search,
+            query_vector,
+            top_k,
+            expand_depth,
+            0.05,
+            payload_filter,
+        )
+
+    async def _search_hybrid(
+        self,
+        query_vector: List[float],
+        query_text: str,
+        top_k: int,
+        expand_depth: int,
+        text_boost: float,
+        payload_filter: Dict[str, Any],
+    ):
+        """混合召回：优先走 search_hybrid"""
+        # search_hybrid 用 hybrid_alpha 控制向量占比，这里复用现有 text_boost 语义做近似映射
+        hybrid_alpha = max(0.1, min(0.95, 1.0 - text_boost / 3.0))
+        return await self._run(
+            self._db.search_hybrid,
+            query_vector,
+            query_text,
+            top_k,
+            expand_depth,
+            0.05,
+            hybrid_alpha,
+            payload_filter,
+        )
+
+    async def _search_advanced(
+        self,
+        query_vector: List[float],
+        top_k: int,
+        expand_depth: int,
+        query_text: Optional[str],
+        enable_text_hybrid: bool,
+        text_boost: float,
+        enable_sparse: bool,
+        enable_dpp: bool,
+        dpp_weight: float,
+        payload_filter: Dict[str, Any],
+    ):
+        """高级召回：显式走 0.5.0 的完整高级签名"""
+        return await self._run(
+            self._db.search_advanced,
+            query_vector,
+            top_k,
+            expand_depth,
+            0.05,
+            0.0,
+            True,
+            enable_sparse,
+            0.1,
+            0.3,
+            enable_dpp,
+            dpp_weight,
+            False,
+            bool(query_text and enable_text_hybrid),
+            text_boost,
+            0.05,
+            query_text,
+            payload_filter,
+            False,
+        )
 
     async def insert(
         self, memory_id: int, vector: List[float], payload: Dict[str, Any]
@@ -138,43 +238,51 @@ class TriviumMemoryStore:
         enable_sparse: bool = True,
     ) -> List[Dict]:
         """
-        全量图谱向量混合检索，自带 DPP 多样性和 FISTA 稀疏优化（PEDSA直接内置）
+        统一检索入口：按场景优先走 TriviumDB 更稳定的高层 API，
+        仅在需要 DPP / 稀疏残差等高级能力时回落到 search_advanced。
         """
         if self._db is None:
             self._ensure_loaded(len(query_vector))
 
-        # 构建隔离的 agent_id Payload 过滤条件
-        # TriviumDB 的 search_advanced 刚被我们添加了 payload_filter 支持
-        payload_filter = {"agent_id": {"$eq": agent_id}}
-
-        # 调用我们刚在 Rust 里扩展的 API
-        # search_advanced(query_vector, top_k, expand_depth, min_score, teleport_alpha, enable_advanced_pipeline, enable_sparse_residual, fista_lambda, fista_threshold, enable_dpp, dpp_quality_weight, enable_text_hybrid_search, text_boost, custom_query_text, payload_filter)
-        hits = await self._run(
-            self._db.search_advanced,
-            query_vector,
-            top_k,
-            expand_depth,
-            0.05,  # min_score
-            0.0,  # teleport_alpha (不需要随机游走回家)
-            True,  # enable_advanced_pipeline (走L3~L6深度流形)
-            enable_sparse,  # 语义残差稀疏化开关
-            0.1,  # fista_lambda
-            0.3,  # fista_threshold
-            enable_dpp,
-            dpp_weight,
-            enable_text_hybrid,
-            text_boost,
-            query_text,
-            payload_filter,
+        payload_filter = self._build_agent_filter(agent_id)
+        use_hybrid_search = self._should_use_hybrid_search(
+            query_text, enable_text_hybrid, enable_dpp
+        )
+        use_basic_search = self._should_use_basic_search(
+            query_text, enable_text_hybrid, enable_dpp
         )
 
-        # 组装返回结果
-        results = []
-        for h in hits:
-            # h 是 PySearchHit: {id, score, payload}
-            results.append({"id": h.id, "score": h.score, "payload": h.payload})
+        if use_hybrid_search:
+            hits = await self._search_hybrid(
+                query_vector,
+                query_text,
+                top_k,
+                expand_depth,
+                text_boost,
+                payload_filter,
+            )
+        elif use_basic_search:
+            hits = await self._search_basic(
+                query_vector,
+                top_k,
+                expand_depth,
+                payload_filter,
+            )
+        else:
+            hits = await self._search_advanced(
+                query_vector,
+                top_k,
+                expand_depth,
+                query_text,
+                enable_text_hybrid,
+                text_boost,
+                enable_sparse,
+                enable_dpp,
+                dpp_weight,
+                payload_filter,
+            )
 
-        return results
+        return [{"id": h.id, "score": h.score, "payload": h.payload} for h in hits]
 
     async def link(
         self, src: int, dst: int, label: str = "associative", weight: float = 0.5
@@ -189,9 +297,8 @@ class TriviumMemoryStore:
         if self._db is None:
             self._ensure_loaded()
         try:
-            # 根据测试 TriviumDB.neighbors 接收 node_id，返回邻居列表（可能包含ID、权重等）
-            results = await self._run(self._db.neighbors, node_id)
-            return results
+            # TriviumDB 0.5.0 的 Python 绑定明确返回邻居 ID 列表
+            return await self._run(self._db.neighbors, node_id)
         except Exception as e:
             print(f"[TriviumStore] 获取邻居失败: {e}")
             return []
@@ -202,18 +309,7 @@ class TriviumMemoryStore:
         if not neighbors:
             return False
 
-        # 视返回类型而定，如果是 PySearchHit 或者带 ID 的元组
-        for nbr in neighbors:
-            if hasattr(nbr, "id") and nbr.id == dst:
-                return True
-            if isinstance(nbr, tuple) and nbr[0] == dst:
-                return True
-            if isinstance(nbr, dict) and nbr.get("id") == dst:
-                return True
-            if isinstance(nbr, int) and nbr == dst:
-                return True
-
-        return False
+        return dst in neighbors
 
     async def delete(self, memory_id: int):
         """逻辑删除节点（随 compaction 物理清理）"""
@@ -226,6 +322,26 @@ class TriviumMemoryStore:
         if self._db is None:
             return
         await self._run(self._db.flush)
+
+    async def reset_storage(self, dim: int = 1536):
+        """重置底层存储，用于从 SQLite 全量回放重建 TriviumDB。"""
+        if not _TRIVIUM_AVAILABLE:
+            return
+
+        if self._db is not None:
+            try:
+                await self._run(self._db.flush)
+            except Exception as e:
+                print(f"[TriviumStore] 重置前 flush 失败，继续重建: {e}")
+
+        self._db = None
+
+        if os.path.isdir(self.data_dir):
+            shutil.rmtree(self.data_dir, ignore_errors=True)
+        os.makedirs(self.data_dir, exist_ok=True)
+
+        self._db = self._open_db(dim)
+        self._enable_auto_compaction()
 
     def count(self) -> int:
         if not _TRIVIUM_AVAILABLE:

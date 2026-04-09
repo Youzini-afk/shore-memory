@@ -1186,7 +1186,7 @@ wheels = [
 
 [[package]]
 name = "pero-backend"
-version = "0.8.51"
+version = "0.8.64"
 source = { virtual = "." }
 dependencies = [
     { name = "aiofiles" },
@@ -1310,7 +1310,7 @@ requires-dist = [
     { name = "tenacity", specifier = "~=9.1.2" },
     { name = "tiktoken", specifier = "~=0.12.0" },
     { name = "torch", specifier = ">=2.0.0" },
-    { name = "triviumdb", specifier = ">=0.4.41" },
+    { name = "triviumdb", specifier = ">=0.5.0" },
     { name = "uvicorn", specifier = "~=0.40.0" },
     { name = "wasmtime", specifier = ">=26.0.0" },
     { name = "websockets", specifier = "~=15.0.1" },
@@ -2395,13 +2395,13 @@ wheels = [
 
 [[package]]
 name = "triviumdb"
-version = "0.4.41"
+version = "0.5.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/51/23/36890a53f1754867fdda69549812c56671658eb34551495406b9cdf0e2e8/triviumdb-0.4.41.tar.gz", hash = "sha256:d8f0e1b12396b17ef026c5d1f25065880ca22f0a6a76bcd5bed290685e96e53f", size = 635245, upload-time = "2026-03-29T14:15:46.477Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/d4/64/cdd9b37e2183096bb6ff53e9cfa4a615e4cd3b1ee34906be1bd2137a1097/triviumdb-0.5.0.tar.gz", hash = "sha256:591587e4fc710613a6dc9d2cd9b19fc112543278d88b8fcaebde1eef7d2a9c77", size = 700472, upload-time = "2026-04-08T17:45:44.773Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/80/30/06b0d66fef9d1840b04f6724436878bd33cb0ae8d55ae9298525b5a6a341/triviumdb-0.4.41-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:790bb562669506e43287c9deeecd4fd17592a0210de680a5643e66db94892ad8", size = 1000313, upload-time = "2026-03-29T14:15:41.234Z" },
-    { url = "https://files.pythonhosted.org/packages/05/c2/e6d3f62ebd32528de9485b19fcdf72a8d48fed30362965b9708bee571e3b/triviumdb-0.4.41-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:3d4579fa44a8f7d3c77d1f0d3ffe749874f9c7b2ebaca40469d1bbca9e0ccc9a", size = 1154830, upload-time = "2026-03-29T14:15:42.95Z" },
-    { url = "https://files.pythonhosted.org/packages/55/f2/054ac0e1fbc367d09175047e81e93c8307d7812b663af317e0a89c4fa16d/triviumdb-0.4.41-cp39-abi3-win_amd64.whl", hash = "sha256:6ef148b8eb9fbd27c1a2621629d1df25c77076f45dd6ea2c9f05751d18e6492c", size = 1023150, upload-time = "2026-03-29T14:15:44.911Z" },
+    { url = "https://files.pythonhosted.org/packages/a9/bd/387eef4df8f29071a43fcc3b2c922f394a5e457642f499da1389af341a3a/triviumdb-0.5.0-cp39-abi3-macosx_11_0_arm64.whl", hash = "sha256:f2f901ff83e9f585e26d02ef2f7af91957fbd07527ca34d2dd91bffcb6be5572", size = 1027495, upload-time = "2026-04-08T17:45:39.017Z" },
+    { url = "https://files.pythonhosted.org/packages/77/18/ec941ec218e2d8b2df1cdde224c619372bf3d096b907fb68541b353f64e6/triviumdb-0.5.0-cp39-abi3-manylinux_2_34_x86_64.whl", hash = "sha256:4895950cffe7733fb6a774ef6664ff0349bc5c49e24d46720a41233c49a64ba8", size = 1192375, upload-time = "2026-04-08T17:45:41.049Z" },
+    { url = "https://files.pythonhosted.org/packages/b1/24/aa4721a188ea153e9d92b43589191250cdf16686027aba6a90839f09e74b/triviumdb-0.5.0-cp39-abi3-win_amd64.whl", hash = "sha256:6dad0765e1ae8ab559df47c9ed851aaa132acc0564c31c460645357574943d6d", size = 1058866, upload-time = "2026-04-08T17:45:42.651Z" },
 ]
 
 [[package]]

@@ -247,11 +247,14 @@ class AuraVisionService:
             vector = vector_384 + [0.0] * 128
 
             # 4. 在 TriviumDB 视觉库中比对搜索最相关的锚点
+            # 视觉召回只需要基础向量 + 图扩散，不需要 DPP / 文本混合
             hits = await self.trivium_store.search(
                 query_vector=vector,
                 top_k=3,
                 expand_depth=2,  # TriviumDB自带扩散唤醒特性替代了原来的 ActivationGraph
                 dpp_weight=0.0,
+                enable_dpp=False,
+                enable_text_hybrid=False,
             )
 
             if not hits:

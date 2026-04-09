@@ -120,6 +120,20 @@ async def check_and_migrate_db():
                         )
                     )
                     sync_conn.commit()
+
+                # 3. 修复 TriviumSyncTask 表缺失 store_name 列的问题
+                result = sync_conn.execute(text("PRAGMA table_info(triviumsynctask)"))
+                columns = [row[1] for row in result.fetchall()]
+                if columns and "store_name" not in columns:
+                    print(
+                        "[Database Migration] 正在添加 'store_name' 列到 'triviumsynctask' 表..."
+                    )
+                    sync_conn.execute(
+                        text(
+                            "ALTER TABLE triviumsynctask ADD COLUMN store_name VARCHAR DEFAULT 'memory'"
+                        )
+                    )
+                    sync_conn.commit()
             except Exception as e:
                 print(f"[Database Migration] 迁移 maintenancerecord 错误: {e}")
 

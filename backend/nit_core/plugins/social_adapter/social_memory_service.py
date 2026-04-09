@@ -5,10 +5,12 @@ from typing import List, Tuple
 
 from sqlmodel import col, select
 
+from database import get_session
 from services.core.embedding_service import embedding_service
 
 # 引入 TriviumDB 异步适配层，使用独立命名的实例空间
 from services.memory.trivium_store import TriviumMemoryStore
+from services.memory.trivium_sync_service import TriviumSyncService
 
 from .database import get_social_db_session
 from .models_db import QQMessage, SocialDailyReport, SocialMemory
@@ -95,6 +97,16 @@ class SocialMemoryService:
                 # 后续可以用 self._store.link() 代替。
             except Exception as e:
                 print(f"[SocialMemory] TriviumDB 插入失败: {e}")
+                async for sync_session in get_session():
+                    await TriviumSyncService.enqueue_upsert_payload(
+                        sync_session,
+                        memory_id=memory.id,
+                        agent_id=memory.agent_id,
+                        embedding=vec,
+                        payload=payload,
+                        content=memory.content,
+                        store_name="social",
+                    )
 
             return memory
 
@@ -113,14 +125,14 @@ class SocialMemoryService:
             query_vec = [0.0] * 512
 
         try:
-            # 利用 TriviumDB 内置的图谱深度扩散 + 文本混合检索
+            # 利用 TriviumDB 的高层混合检索入口：向量召回 + 文本增强 + 图扩散
             hits = await self._store.search(
                 query_vector=query_vec,
                 top_k=limit,
                 expand_depth=2,  # 图谱扩散深度
                 agent_id=agent_id,  # payload 空间隔离
                 query_text=query,  # 引入混合关键字
-                enable_dpp=True,  # 多样性采样
+                enable_dpp=False,  # 社交记忆优先稳定召回，直接走 search_hybrid
                 enable_text_hybrid=True,  # 开启混合
             )
 

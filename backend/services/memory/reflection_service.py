@@ -25,7 +25,7 @@ class ReflectionService:
         self.session = session
 
     async def _get_reflection_config(self):
-        """获取反思模型配置 (通常是更强大的模型，如 GPT-4/Claude-3.5)"""
+        """获取反思模型配置 (通常是更强大的模型，如 GPT-5/Claude-4.5)"""
         # 复用 AgentService 中的逻辑，或者直接查询 Config
         # 这里简化处理，直接查 Config
         configs = {
@@ -631,12 +631,20 @@ class ReflectionService:
                             # [Fix] 同步删除向量
                             try:
                                 from services.memory.trivium_store import trivium_store
+                                from services.memory.trivium_sync_service import (
+                                    TriviumSyncService,
+                                )
 
                                 await trivium_store.delete_memory(
                                     mem.id, agent_id=agent_id
                                 )
                             except Exception as ve:
                                 print(f"[Reflection] 向量删除失败: {ve}")
+                                await TriviumSyncService.enqueue_delete(
+                                    self.session,
+                                    mem.id,
+                                    agent_id=agent_id,
+                                )
 
                             count += 1
                     except ValueError:
@@ -832,6 +840,9 @@ class ReflectionService:
                     try:
                         from services.core.embedding_service import embedding_service
                         from services.memory.trivium_store import trivium_store
+                        from services.memory.trivium_sync_service import (
+                            TriviumSyncService,
+                        )
 
                         enriched = (
                             f"{m.tags} {m.tags} {m.content}" if m.tags else m.content
@@ -860,8 +871,15 @@ class ReflectionService:
                                 embedding=new_vec,
                                 metadata=metadata_dict,
                             )
+                        else:
+                            raise ValueError("embedding 为空，无法同步到 TriviumDB")
                     except Exception as e:
                         print(f"[Reflection] 更新向量失败: {e}")
+                        await TriviumSyncService.enqueue_insert(
+                            self.session,
+                            m,
+                            new_vec if "new_vec" in locals() else None,
+                        )
 
                     self.session.add(m)
 
@@ -964,6 +982,9 @@ class ReflectionService:
                     try:
                         from services.core.embedding_service import embedding_service
                         from services.memory.trivium_store import trivium_store
+                        from services.memory.trivium_sync_service import (
+                            TriviumSyncService,
+                        )
 
                         # 生成向量
                         content_vec = await embedding_service.encode_one(
@@ -991,31 +1012,28 @@ class ReflectionService:
                                     "agent_id": agent_id,
                                 },
                             )
+                        else:
+                            raise ValueError("embedding 为空，无法同步到 TriviumDB")
                     except Exception as ve:
                         print(f"[Reflection] 警告: 新合并记忆向量生成失败: {ve}")
+                        await TriviumSyncService.enqueue_insert(
+                            self.session,
+                            new_mem,
+                            final_vec if "final_vec" in locals() else None,
+                        )
 
                     # [增强] 图谱边继承：将旧节点的连接迁移给新合并节点 (TriviumDB)
+                    processed_pairs = set()
                     try:
                         from services.memory.trivium_store import trivium_store
-
-                        processed_pairs = set()
+                        from services.memory.trivium_sync_service import (
+                            TriviumSyncService,
+                        )
 
                         # 1. 获取所有旧节点的邻居
                         for old_id in valid_ids:
                             neighbors = await trivium_store.get_neighbors(old_id)
-                            for nbr in neighbors:
-                                # 解析邻居 ID
-                                if hasattr(nbr, "id"):
-                                    nbr_id = nbr.id
-                                elif isinstance(nbr, tuple):
-                                    nbr_id = nbr[0]
-                                elif isinstance(nbr, int):
-                                    nbr_id = nbr
-                                elif isinstance(nbr, dict):
-                                    nbr_id = nbr.get("id")
-                                else:
-                                    continue
-
+                            for nbr_id in neighbors:
                                 # 内部关系（Source 和 Target 都在合并范围内）→ 丢弃（已内化）
                                 if nbr_id in valid_ids:
                                     continue
@@ -1033,6 +1051,15 @@ class ReflectionService:
 
                     except Exception as e:
                         print(f"[Reflection] 图谱边继承失败 (非致命): {e}")
+                        for _, nbr_id in processed_pairs:
+                            await TriviumSyncService.enqueue_time_link(
+                                self.session,
+                                new_mem.id,
+                                nbr_id,
+                                agent_id=agent_id,
+                                label="inherited",
+                                weight=0.6,
+                            )
 
                     for mid in valid_ids:
                         m_obj = next(m for m in batch_memories if m.id == mid)
@@ -1042,10 +1069,18 @@ class ReflectionService:
                         # [Fix] 同步删除向量
                         try:
                             from services.memory.trivium_store import trivium_store
+                            from services.memory.trivium_sync_service import (
+                                TriviumSyncService,
+                            )
 
                             await trivium_store.delete_memory(mid, agent_id=agent_id)
                         except Exception as ve:
                             print(f"[Reflection] 向量删除失败: {ve}")
+                            await TriviumSyncService.enqueue_delete(
+                                self.session,
+                                mid,
+                                agent_id=agent_id,
+                            )
 
                     count += 1
                 await self.session.commit()
@@ -1095,10 +1130,18 @@ class ReflectionService:
                         # [Fix] 同步删除向量
                         try:
                             from services.memory.trivium_store import trivium_store
+                            from services.memory.trivium_sync_service import (
+                                TriviumSyncService,
+                            )
 
                             await trivium_store.delete_memory(mem.id, agent_id=agent_id)
                         except Exception as ve:
                             print(f"[Reflection] 向量删除失败: {ve}")
+                            await TriviumSyncService.enqueue_delete(
+                                self.session,
+                                mem.id,
+                                agent_id=agent_id,
+                            )
 
                         total_deleted += 1
 
@@ -1136,10 +1179,18 @@ class ReflectionService:
                     # 同步删除向量
                     try:
                         from services.memory.trivium_store import trivium_store
+                        from services.memory.trivium_sync_service import (
+                            TriviumSyncService,
+                        )
 
                         await trivium_store.delete_memory(mem.id, agent_id=agent_id)
                     except Exception as ve:
                         print(f"[Reflection] 向量删除失败: {ve}")
+                        await TriviumSyncService.enqueue_delete(
+                            self.session,
+                            mem.id,
+                            agent_id=agent_id,
+                        )
 
                     count += 1
 
@@ -1210,6 +1261,7 @@ class ReflectionService:
 
                 # 检查数据库中是否已经存在关联 (由 TriviumDB 处理)
                 from services.memory.trivium_store import trivium_store
+                from services.memory.trivium_sync_service import TriviumSyncService
 
                 if await trivium_store.has_link(
                     target_memory.id, candidate.id
@@ -1221,12 +1273,29 @@ class ReflectionService:
 
                 if relation:
                     # 4. 写入原生的 TriviumDB 高速图谱
-                    await trivium_store.link(
-                        src=target_memory.id,
-                        dst=candidate.id,
-                        label=relation["type"],
-                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5)))),
-                    )
+                    try:
+                        await trivium_store.link(
+                            src=target_memory.id,
+                            dst=candidate.id,
+                            label=relation["type"],
+                            weight=max(
+                                0.1,
+                                min(1.0, float(relation.get("strength", 0.5))),
+                            ),
+                        )
+                    except Exception as ve:
+                        print(f"[Reflection] 梦境关联写入失败: {ve}")
+                        await TriviumSyncService.enqueue_time_link(
+                            self.session,
+                            target_memory.id,
+                            candidate.id,
+                            agent_id=agent_id,
+                            label=relation["type"],
+                            weight=max(
+                                0.1,
+                                min(1.0, float(relation.get("strength", 0.5))),
+                            ),
+                        )
                     # Trivium 写入非阻塞，无长事务困扰
                     print(
                         f"[Reflection] 发现新关联: {relation['description']} (强度: {relation['strength']})"
@@ -1248,12 +1317,13 @@ class ReflectionService:
         寻找那些没有关联 (TriviumDB 图谱边为空) 的孤立记忆，并尝试将它们织入关系网。
         """
         from services.memory.memory_service import MemoryService
+        from services.memory.trivium_store import trivium_store
+        from services.memory.trivium_sync_service import TriviumSyncService
 
         print(f"[Reflection] 正在扫描孤独记忆 (agent_id={agent_id})...", flush=True)
 
         # 1. 查找孤立记忆 (没有相连的边)
         # 优化: 我们先获取最近一批事件，然后在 TriviumDB 中判断邻居是否为空！
-        from services.memory.trivium_store import trivium_store
 
         # 获取最近 100 条 event 记忆
         mem_statement = (
@@ -1309,12 +1379,29 @@ class ReflectionService:
                 relation = await self._analyze_relation(llm, target_memory, candidate)
 
                 if relation:
-                    await trivium_store.link(
-                        src=target_memory.id,
-                        dst=candidate.id,
-                        label=relation["type"],
-                        weight=max(0.1, min(1.0, float(relation.get("strength", 0.5)))),
-                    )
+                    try:
+                        await trivium_store.link(
+                            src=target_memory.id,
+                            dst=candidate.id,
+                            label=relation["type"],
+                            weight=max(
+                                0.1,
+                                min(1.0, float(relation.get("strength", 0.5))),
+                            ),
+                        )
+                    except Exception as ve:
+                        print(f"[Reflection] 孤独记忆补边失败: {ve}")
+                        await TriviumSyncService.enqueue_time_link(
+                            self.session,
+                            target_memory.id,
+                            candidate.id,
+                            agent_id=agent_id,
+                            label=relation["type"],
+                            weight=max(
+                                0.1,
+                                min(1.0, float(relation.get("strength", 0.5))),
+                            ),
+                        )
                     print(
                         f"[Reflection] 孤独记忆已由于 TriviumDB 扩散接入图谱: {relation['description']}"
                     )
@@ -1441,6 +1528,9 @@ class ReflectionService:
                     try:
                         from services.core.embedding_service import embedding_service
                         from services.memory.trivium_store import trivium_store
+                        from services.memory.trivium_sync_service import (
+                            TriviumSyncService,
+                        )
 
                         vec = await embedding_service.encode_one(
                             f"{name} {entity.get('type', '')}"
@@ -1456,8 +1546,15 @@ class ReflectionService:
                                     "agent_id": agent_id,
                                 },
                             )
+                        else:
+                            raise ValueError("embedding 为空，无法同步实体到 TriviumDB")
                     except Exception as e:
                         print(f"[GraphGardener] 实体向量生成失败: {e}")
+                        await TriviumSyncService.enqueue_insert(
+                            self.session,
+                            new_entity,
+                            vec if "vec" in locals() else None,
+                        )
 
             # 4.2 处理关系 (Edges)
             for rel in graph_updates.get("relations", []):
@@ -1476,16 +1573,28 @@ class ReflectionService:
 
                 # 检查重复关系
                 from services.memory.trivium_store import trivium_store
+                from services.memory.trivium_sync_service import TriviumSyncService
 
                 has_rel = await trivium_store.has_link(event_id, entity_id)
 
                 if not has_rel:
-                    await trivium_store.link(
-                        src=event_id,
-                        dst=entity_id,
-                        label=rel_type,
-                        weight=float(weight),
-                    )
+                    try:
+                        await trivium_store.link(
+                            src=event_id,
+                            dst=entity_id,
+                            label=rel_type,
+                            weight=float(weight),
+                        )
+                    except Exception as e:
+                        print(f"[GraphGardener] 图谱关系写入失败: {e}")
+                        await TriviumSyncService.enqueue_time_link(
+                            self.session,
+                            event_id,
+                            entity_id,
+                            agent_id=agent_id,
+                            label=rel_type,
+                            weight=float(weight),
+                        )
                     new_relations_count += 1
 
             # 4.3 维护 Entity 共现统计 (纯统计，不涉及 LLM)
@@ -1625,12 +1734,20 @@ class ReflectionService:
                         # 同步删除向量
                         try:
                             from services.memory.trivium_store import trivium_store
+                            from services.memory.trivium_sync_service import (
+                                TriviumSyncService,
+                            )
 
                             await trivium_store.delete_memory(
                                 mem.id, agent_id=mem.agent_id
                             )
-                        except Exception:
-                            pass
+                        except Exception as ve:
+                            print(f"[Reflection] 撤销创建记忆时删除向量失败: {ve}")
+                            await TriviumSyncService.enqueue_delete(
+                                self.session,
+                                mem.id,
+                                agent_id=mem.agent_id,
+                            )
                     print(f"[Reflection] 已撤销创建的 {len(created_memories)} 条记忆。")
 
             # 2. 恢复被修改的记忆 (Modified Data)
@@ -1661,6 +1778,9 @@ class ReflectionService:
                                 embedding_service,
                             )
                             from services.memory.trivium_store import trivium_store
+                            from services.memory.trivium_sync_service import (
+                                TriviumSyncService,
+                            )
 
                             enriched = (
                                 f"{mem.tags} {mem.tags} {mem.content}"
@@ -1681,8 +1801,15 @@ class ReflectionService:
                                         "agent_id": mem.agent_id,
                                     },
                                 )
-                        except Exception:
-                            pass
+                            else:
+                                raise ValueError("embedding 为空，无法恢复 TriviumDB 记忆")
+                        except Exception as ve:
+                            print(f"[Reflection] 恢复修改记忆向量失败: {ve}")
+                            await TriviumSyncService.enqueue_insert(
+                                self.session,
+                                mem,
+                                vec if "vec" in locals() else None,
+                            )
 
                         count_restored += 1
                 print(f"[Reflection] 已恢复 {count_restored} 条被修改的记忆。")
@@ -1705,6 +1832,9 @@ class ReflectionService:
                                 embedding_service,
                             )
                             from services.memory.trivium_store import trivium_store
+                            from services.memory.trivium_sync_service import (
+                                TriviumSyncService,
+                            )
 
                             enriched = (
                                 f"{new_mem.tags} {new_mem.tags} {new_mem.content}"
@@ -1725,8 +1855,15 @@ class ReflectionService:
                                         "agent_id": new_mem.agent_id,
                                     },
                                 )
-                        except Exception:
-                            pass
+                            else:
+                                raise ValueError("embedding 为空，无法恢复 TriviumDB 记忆")
+                        except Exception as ve:
+                            print(f"[Reflection] 恢复删除记忆向量失败: {ve}")
+                            await TriviumSyncService.enqueue_insert(
+                                self.session,
+                                new_mem,
+                                vec if "vec" in locals() else None,
+                            )
 
                         count_recreated += 1
                 print(f"[Reflection] 已恢复 {count_recreated} 条被删除的记忆。")

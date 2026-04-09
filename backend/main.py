@@ -260,6 +260,7 @@ async def lifespan(app: FastAPI):
         from sqlalchemy.orm import sessionmaker
 
         from services.memory.scorer_service import ScorerService
+        from services.memory.trivium_sync_service import TriviumSyncService
 
         async_session = sessionmaker(
             engine, class_=AsyncSession, expire_on_commit=False
@@ -267,6 +268,24 @@ async def lifespan(app: FastAPI):
         async with async_session() as session:
             scorer = ScorerService(session)
             await scorer.recover_pending_tasks()
+            sync_result = await TriviumSyncService.retry_pending_tasks(session)
+            if sync_result["processed"] > 0:
+                print(
+                    "[Main] TriviumDB 补偿任务恢复完成: "
+                    f"processed={sync_result['processed']}, "
+                    f"succeeded={sync_result['succeeded']}, "
+                    f"failed={sync_result['failed']}, "
+                    f"processed_by_store={sync_result.get('processed_by_store', {})}, "
+                    f"succeeded_by_store={sync_result.get('succeeded_by_store', {})}, "
+                    f"failed_by_store={sync_result.get('failed_by_store', {})}"
+                )
+                summary = await TriviumSyncService.get_task_summary(session)
+                print(
+                    "[Main] TriviumDB 补偿任务剩余摘要: "
+                    f"by_store={summary.get('by_store', {})}, "
+                    f"by_operation={summary.get('by_operation', {})}, "
+                    f"oldest_pending_created_at={summary.get('oldest_pending_created_at')}"
+                )
     except Exception as e:
         print(f"[Main] 记忆任务恢复失败: {e}")
 

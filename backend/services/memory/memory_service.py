@@ -54,6 +54,7 @@ class MemoryService:
         from core.event_bus import EventBus
         from services.core.embedding_service import embedding_service
         from services.memory.trivium_store import trivium_store
+        from services.memory.trivium_sync_service import TriviumSyncService
 
         # [钩子] memory.save.pre
         # 允许 MOD 修改参数或取消保存
@@ -153,6 +154,7 @@ class MemoryService:
 
             except Exception as e:
                 print(f"[MemoryService] 同步到 TriviumDB 失败: {e}")
+                await TriviumSyncService.enqueue_insert(session, memory, embedding_vec)
         else:
             print(
                 f"[MemoryService] 警告: Embedding 为空，未写入 TriviumDB (Memory ID {memory.id})"
@@ -176,6 +178,18 @@ class MemoryService:
                 )
             except Exception as e:
                 print(f"[MemoryService] TriviumDB 时间图谱连接失败: {e}")
+                await TriviumSyncService.enqueue_time_link(
+                    session,
+                    memory.id,
+                    last_memory.id,
+                    agent_id=agent_id,
+                )
+                await TriviumSyncService.enqueue_time_link(
+                    session,
+                    last_memory.id,
+                    memory.id,
+                    agent_id=agent_id,
+                )
 
         # [钩子] memory.save.post
         await EventBus.publish("memory.save.post", memory)
@@ -495,7 +509,7 @@ class MemoryService:
         from services.memory.trivium_store import trivium_store
 
         try:
-            # 1. 直接通过 TriviumDB 的高级检索（图谱扩散已内置于底层 L4-L6）
+            # 1. 通过 TriviumDB 的高层混合检索做图谱联想
             query_vec = await embedding_service.encode_one(text)
             if not query_vec:
                 return []
@@ -506,7 +520,7 @@ class MemoryService:
                 expand_depth=2,  # 开启图谱游走扩散
                 agent_id=agent_id,
                 query_text=text,
-                enable_dpp=True,  # 增加联想多样性
+                enable_dpp=False,  # 闪回优先稳定命中，直接走 search_hybrid
                 enable_text_hybrid=True,
             )
 
@@ -669,8 +683,7 @@ class MemoryService:
         """
         from services.memory.trivium_store import trivium_store
 
-        # 1. 搜索 VectorDB (获取更多候选以允许过滤)
-        # TriviumDB 默认支持 payload_filter，但这里为了兼容后续逻辑，可以先调 search
+        # 简单召回保持纯向量路径，避免误入高级检索分支
         hits = await trivium_store.search(
             query_vector=query_vec,
             top_k=limit * 5,

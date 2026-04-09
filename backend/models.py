@@ -250,6 +250,21 @@ class MaintenanceRecord(SQLModel, table=True):
     modified_data: str = "[]"  # 修改前记忆的数据备份
 
 
+class TriviumSyncTask(SQLModel, table=True):
+    id: Optional[int] = Field(default=None, primary_key=True)
+    operation: str = Field(index=True)
+    memory_id: Optional[int] = Field(default=None, index=True)
+    store_name: str = Field(default="memory", index=True)
+    dedupe_key: Optional[str] = Field(default=None, index=True)
+    payload_json: str = Field(default="{}", sa_column=Column(Text))
+    status: str = Field(default="pending", index=True)
+    retry_count: int = 0
+    last_error: Optional[str] = Field(default=None, sa_column=Column(Text))
+    agent_id: str = Field(default="pero", index=True)
+    created_at: datetime = Field(default_factory=get_local_now)
+    updated_at: datetime = Field(default_factory=get_local_now)
+
+
 class MCPConfig(SQLModel, table=True):
     """
     MCP 服务器配置
