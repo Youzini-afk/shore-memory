@@ -304,8 +304,15 @@ export class WindowManager {
     })
 
     this.petWin.on('closed', () => {
+      logger.info('Main', 'Pet 窗口已关闭')
       this.stopMouseTracking()
       this.petWin = null
+      // 安全兜底：Pet 窗口关闭后，如果没有其他可见窗口，恢复 Launcher
+      const hasVisibleWindow = BrowserWindow.getAllWindows().some(w => !w.isDestroyed() && w.isVisible())
+      if (!hasVisibleWindow && this.launcherWin && !this.launcherWin.isDestroyed()) {
+        logger.info('Main', 'Pet 窗口关闭且无其他可见窗口，正在恢复 Launcher')
+        this.launcherWin.show()
+      }
     })
 
     return this.petWin

@@ -271,6 +271,9 @@ ipcMain.handle('get-model-load-path', async (_, model: AssetInfo) => {
 // 注册 Native 模块处理程序
 ipcMain.handle('native-load-pero-model', async (_, buffer: Buffer, filterPatterns?: string[]) => {
   try {
+    if (!buffer || buffer.byteLength < 16) {
+      throw new Error(`[native-load-pero-model] Buffer (${buffer?.byteLength} bytes) is too small.`)
+    }
     const nativeMod = loadNativeModule()
     if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
     return nativeMod.loadPeroModel(buffer, filterPatterns)
@@ -284,6 +287,9 @@ ipcMain.handle(
   'native-load-standard-model',
   async (_, buffer: Buffer, filterPatterns?: string[]) => {
     try {
+      if (!buffer || buffer.byteLength < 16) {
+        throw new Error(`[native-load-standard-model] Buffer (${buffer?.byteLength} bytes) is too small.`)
+      }
       const nativeMod = loadNativeModule()
       if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
       return nativeMod.loadStandardModel(buffer, filterPatterns)
@@ -297,6 +303,9 @@ ipcMain.handle(
 // 加载 .pero 容器（tar 格式打包的文件夹）
 ipcMain.handle('native-load-pero-container', async (_, buffer: Buffer) => {
   try {
+    if (!buffer || buffer.byteLength < 16) {
+      throw new Error(`传入的 Buffer 小于 16 字节或为空 (${buffer?.byteLength} 字节)，拒绝进行原生加载防止内存崩溃`)
+    }
     const nativeMod = loadNativeModule()
     if (!nativeMod) throw new Error('Native 渲染核心不可用 (加载失败或文件缺失)')
     const hex = Buffer.from(buffer).subarray(0, 16).toString('hex')
@@ -582,6 +591,11 @@ ipcMain.handle('check_es', () => checkEsInstalled())
 ipcMain.handle('get_backend_logs', () => getBackendLogs())
 ipcMain.handle('scan_local_agents', async () => {
   return await scanLocalAgents()
+})
+
+// 接收渲染进程的系统级错误日志
+ipcMain.handle('system_error_log', (_, errMsg) => {
+  logger.error('Renderer', errMsg)
 })
 
 // 根据角色 ID 获取该角色的交互台词

@@ -1,6 +1,6 @@
 [package]
 name = "nit_rust_runtime"
-version = "0.8.64"
+version = "0.8.65"
 edition = "2021"
 
 [lib]
