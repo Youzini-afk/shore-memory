@@ -58,12 +58,13 @@
 <script setup>
 import { ref } from 'vue'
 import PixelIcon from '../ui/PixelIcon.vue'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 
 const props = defineProps({
   item: { type: Object, default: () => ({}) },
   level: { type: Number, default: 0 }
 })
-// ... 其余脚本保持不变，但需要检查导入
 
 const emit = defineEmits(['select', 'contextmenu'])
 
@@ -77,8 +78,9 @@ const toggle = async () => {
     if (!isOpen.value && children.value.length === 0) {
       loading.value = true
       try {
-        const res = await fetch(
-          `http://localhost:9120/api/ide/files?path=${encodeURIComponent(props.item.path)}`
+        const res = await fetchWithTimeout(
+          `${API_BASE}/ide/files?path=${encodeURIComponent(props.item.path)}`,
+          { silent: true }
         )
         if (res.ok) {
           children.value = await res.json()

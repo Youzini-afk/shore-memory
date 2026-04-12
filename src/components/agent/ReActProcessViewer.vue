@@ -73,8 +73,10 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { AGENT_NAME } from '../../config'
+import { API_BASE, fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 
 const props = defineProps({
+
   segments: {
     type: Array,
     default: () => []
@@ -107,7 +109,9 @@ watch(
 const checkTaskStatus = async () => {
   if (!props.isLive) return
   try {
-    const res = await fetch(`http://localhost:9120/api/task/default/status`)
+    const res = await fetchWithTimeout(`${API_BASE}/tasks/default/status`, { silent: true })
+
+
     if (res.ok) {
       const data = await res.json()
       isTaskPaused.value = data.status === 'paused'
@@ -132,7 +136,9 @@ onUnmounted(() => {
 const toggleTaskPause = async () => {
   const action = isTaskPaused.value ? 'resume' : 'pause'
   try {
-    const res = await fetch(`http://localhost:9120/api/task/default/${action}`, { method: 'POST' })
+    const res = await fetchWithTimeout(`${API_BASE}/tasks/default/${action}`, { method: 'POST' })
+
+
     if (res.ok) {
       isTaskPaused.value = !isTaskPaused.value
     }
@@ -146,11 +152,13 @@ const sendInjection = async () => {
 
   isSendingInjection.value = true
   try {
-    const res = await fetch(`http://localhost:9120/api/task/default/inject`, {
+    const res = await fetchWithTimeout(`${API_BASE}/tasks/default/inject`, {
+
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ instruction: injectionInput.value })
     })
+
 
     if (res.ok) {
       injectionInput.value = ''

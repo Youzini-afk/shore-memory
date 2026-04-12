@@ -905,10 +905,11 @@ import { listen, emit } from '@/utils/ipcAdapter'
 import PixelIcon from '../ui/PixelIcon.vue'
 import AsyncMarkdown from '../markdown/AsyncMarkdown.vue'
 import CustomDialog from '../ui/CustomDialog.vue'
-import { AGENT_NAME, AGENT_AVATAR_TEXT } from '../../config'
+import { AGENT_NAME, AGENT_AVATAR_TEXT, API_BASE } from '../../config'
 import { gatewayClient } from '../../api/gateway'
+import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 
-const API_BASE = 'http://localhost:9120'
+// 使用统一的 API_BASE 喵~ ✨
 
 const props = defineProps({
   workMode: Boolean,
@@ -1167,7 +1168,8 @@ const skipCommandWait = async () => {
   if (!activeCommand.value) return
 
   try {
-    await fetch(`${API_BASE}/api/ide/tools/terminal/skip`, {
+    await fetch(`${API_BASE}/ide/tools/terminal/skip`, {
+
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ pid: activeCommand.value.pid })
@@ -1210,7 +1212,8 @@ const playMessage = async (msg) => {
   isLoadingAudio.value = true
 
   try {
-    const response = await fetch(`${API_BASE}/api/tts/preview`, {
+    const response = await fetch(`${API_BASE}/voice/tts/preview`, {
+
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
@@ -1260,7 +1263,8 @@ const agentAvatars = ref({}) // agentId -> avatarUrl
 
 const fetchAgentAvatars = async () => {
   try {
-    const res = await fetch(`${API_BASE}/api/agents`)
+    const res = await fetch(`${API_BASE}/agents`)
+
     if (res.ok) {
       const agents = await res.json()
       agents.forEach((agent) => {
@@ -1282,13 +1286,15 @@ const isVisionEnabled = ref(false)
 
 const checkVisionCapability = async () => {
   try {
-    const configRes = await fetch(`${API_BASE}/api/configs`)
+    const configRes = await fetch(`${API_BASE}/configs`)
+
     if (!configRes.ok) return
     const configs = await configRes.json()
     const modelId = configs.current_model_id
 
     if (modelId) {
-      const modelsRes = await fetch(`${API_BASE}/api/models`)
+      const modelsRes = await fetch(`${API_BASE}/models`)
+
       if (!modelsRes.ok) return
       const models = await modelsRes.json()
       const currentModel = models.find((m) => m.id == modelId)
@@ -1465,11 +1471,13 @@ const saveEdit = async (msg) => {
   if (!editingContent.value.trim() || !msg.id) return
 
   try {
-    const res = await fetch(`${API_BASE}/api/history/${msg.id}`, {
+    const res = await fetchWithTimeout(`${API_BASE}/memories/history/${msg.id}`, {
+
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ content: editingContent.value })
     })
+
 
     if (res.ok) {
       msg.content = editingContent.value
@@ -1495,9 +1503,11 @@ const handleConfirmDelete = async () => {
   if (!pendingDeleteId.value) return
 
   try {
-    const res = await fetch(`${API_BASE}/api/history/${pendingDeleteId.value}`, {
+    const res = await fetchWithTimeout(`${API_BASE}/memories/history/${pendingDeleteId.value}`, {
+
       method: 'DELETE'
     })
+
 
     if (res.ok) {
       const deletedMsg = messages.value.find((m) => m.id === pendingDeleteId.value)
@@ -1676,16 +1686,20 @@ const injectInstruction = async (action) => {
   const sessionId = props.workMode ? 'current_work_session' : props.targetId || 'default'
   try {
     if (action === 'pause') {
-      await fetch(`${API_BASE}/api/task/${sessionId}/pause`, { method: 'POST' })
+      await fetch(`${API_BASE}/tasks/${sessionId}/pause`, { method: 'POST' })
+
     } else if (action === 'resume') {
-      await fetch(`${API_BASE}/api/task/${sessionId}/resume`, { method: 'POST' })
+      await fetch(`${API_BASE}/tasks/${sessionId}/resume`, { method: 'POST' })
+
     } else if (action === 'stop') {
-      await fetch(`${API_BASE}/api/task/${sessionId}/inject`, {
+      await fetch(`${API_BASE}/tasks/${sessionId}/inject`, {
+
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ instruction: '停止任务' })
       })
     }
+
   } catch (e) {
     console.error('任务控制失败', e)
   }
@@ -1727,17 +1741,21 @@ const fetchHistory = async (append = false) => {
         hasMore.value = false
         return
       } // Group chat pagination not supported yet
-      res = await fetch(
-        `${API_BASE}/api/groupchat/rooms/${props.targetId}/history?limit=${HISTORY_LIMIT}`
+      res = await fetchWithTimeout(
+        `${API_BASE}/groupchat/rooms/${props.targetId}/history?limit=${HISTORY_LIMIT}`,
+        { silent: true }
       )
     } else {
-      let url = `${API_BASE}/api/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`
+      let url = `${API_BASE}/memories/history/${source}/${sessionId}?limit=${HISTORY_LIMIT}&offset=${offset.value}&sort=desc`
+
+
       // 直接模式传递 agent_id (targetId 作为 agentId)
       if (props.targetId) {
         url += `&agent_id=${props.targetId}`
       }
-      res = await fetch(url)
+      res = await fetchWithTimeout(url, { silent: true })
     }
+
 
     if (res.ok) {
       const logs = await res.json()
@@ -1754,8 +1772,9 @@ const fetchHistory = async (append = false) => {
               const meta = JSON.parse(log.metadata_json)
               if (meta.images && Array.isArray(meta.images)) {
                 images = meta.images.map(
-                  (path) => `${API_BASE}/api/ide/image?path=${encodeURIComponent(path)}`
+                  (path) => `${API_BASE}/ide/image?path=${encodeURIComponent(path)}`
                 )
+
               }
             }
           } catch (e) {
@@ -2020,7 +2039,8 @@ const sendMessage = async () => {
 
   try {
     if (props.mode === 'group') {
-      const res = await fetch(`${API_BASE}/api/groupchat/rooms/${props.targetId}/messages`, {
+      const res = await fetch(`${API_BASE}/groupchat/rooms/${props.targetId}/messages`, {
+
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -2050,7 +2070,8 @@ const sendMessage = async () => {
       return { role: m.role, content: m.content } // 历史记录总是文本
     })
 
-    const res = await fetch(`${API_BASE}/api/ide/chat`, {
+    const res = await fetch(`${API_BASE}/ide/chat`, {
+
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({

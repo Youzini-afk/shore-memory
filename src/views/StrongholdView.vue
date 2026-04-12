@@ -357,9 +357,10 @@
                       v-if="agent.avatar"
                       :src="
                         agent.avatar.startsWith('/')
-                          ? `http://localhost:9120${agent.avatar}`
+                          ? `${BASE_URL}${agent.avatar}`
                           : agent.avatar
                       "
+
                       class="w-full h-full object-cover"
                       alt="Avatar"
                     />
@@ -418,9 +419,10 @@
                     v-if="agent.avatar"
                     :src="
                       agent.avatar.startsWith('/')
-                        ? `http://localhost:9120${agent.avatar}`
+                        ? `${BASE_URL}${agent.avatar}`
                         : agent.avatar
                     "
+
                     class="w-full h-full object-cover"
                     alt="Avatar"
                   />
@@ -593,6 +595,8 @@
 import { onMounted, onUnmounted, ref, computed } from 'vue'
 import { useStronghold } from '../composables/useStronghold'
 import { isElectron } from '@/utils/ipcAdapter'
+import { BASE_URL } from '@/config'
+
 import ChatInterface from '../components/chat/ChatInterface.vue'
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import PixelIcon from '../components/ui/PixelIcon.vue'

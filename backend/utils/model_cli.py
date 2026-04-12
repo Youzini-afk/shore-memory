@@ -40,6 +40,10 @@ def download_model(model_key: str, force: bool = False):
             for key in model_manager.models:
                 # print(f"Checking/Downloading {key}...", flush=True)
                 model_manager.download_model(key, force)
+        elif model_key == "default":
+            # 基础运行所需的核心模型，避免过大体积下载
+            for key in ["tiny", "embedding"]:
+                model_manager.download_model(key, force)
         else:
             model_manager.download_model(model_key, force)
         print("Download complete.", flush=True)

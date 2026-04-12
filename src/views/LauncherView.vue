@@ -1922,7 +1922,8 @@
 
 <script setup>
 import { ref, onMounted, onUnmounted, watch, computed } from 'vue'
-import { AGENT_NAME } from '../config'
+import { AGENT_NAME, API_BASE, BASE_URL } from '../config'
+
 import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import PTooltip from '../components/ui/PTooltip.vue'
 import { invoke, listen, isElectron } from '@/utils/ipcAdapter'
@@ -2266,12 +2267,13 @@ const checkEnvironment = async () => {
     if (isSocialEnabled.value && !report.napcat_installed) warning = true // Optional based on setting
     if (isSocialEnabled.value && !report.node_exists) warning = true // Node.js required for NapCat
 
-    // 模型检查
+    // 模型检查：模型必须存在，否则阻止启动以防后端死循环/崩溃
     if (report.embedding_model_exists && report.whisper_model_exists) {
       allModelsExist.value = true
     } else {
       allModelsExist.value = false
-      warning = true // 模型缺失视为警告
+      criticalMissing = true // 模型缺失现在是致命错误，必须拦截
+      warning = true 
     }
 
     if (criticalMissing) {
@@ -2472,7 +2474,8 @@ const fetchAgents = async () => {
       avatarUrl: agent.avatar
         ? agent.avatar.startsWith('data:')
           ? agent.avatar
-          : `http://localhost:9120${agent.avatar}`
+          : `${BASE_URL}${agent.avatar}`
+
         : null
     }))
   } catch (e) {

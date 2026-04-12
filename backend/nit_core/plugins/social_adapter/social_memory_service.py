@@ -64,6 +64,11 @@ class SocialMemoryService:
         except Exception as e:
             print(f"[SocialMemory] 警告: 生成 Embedding 失败: {e}")
 
+        dim = embedding_service.get_dimension()
+        if not vec or len(vec) != dim:
+            print(f"[SocialMemory] 警告: Embedding 维度不匹配或为空 ({len(vec)} != {dim})，跳过向量存储。")
+            vec = [] # 确保为同步任务提供空或正确维度的后备
+
         # 2. 保存到数据库 (基础信息)
         async for session in get_social_db_session():
             memory = SocialMemory(
@@ -121,8 +126,8 @@ class SocialMemoryService:
         try:
             query_vec = await embedding_service.encode_one(query)
         except Exception:
-            # 防止空向量报错
-            query_vec = [0.0] * 512
+            # 防止空向量报错，使用当前 Provider 的标准维度
+            query_vec = [0.0] * embedding_service.get_dimension()
 
         try:
             # 利用 TriviumDB 的高层混合检索入口：向量召回 + 文本增强 + 图扩散

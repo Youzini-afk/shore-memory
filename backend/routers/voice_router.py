@@ -7,9 +7,9 @@ import os
 import uuid
 from contextlib import suppress
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import List
 
-from fastapi import APIRouter, Body, Depends, File, HTTPException, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from sqlmodel import select
@@ -17,10 +17,12 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from database import get_session
 from models import VoiceConfig
+from schemas import TTSRequest, VoiceConfigData
 from services.interaction.tts_service import get_tts_service
 from services.perception.asr_service import get_asr_service
 
-router = APIRouter(tags=["voice"])
+router = APIRouter(prefix="/api/voice", tags=["voice"])
+
 
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -32,18 +34,19 @@ class TTSPreviewRequest(BaseModel):
 # --- 语音配置 CRUD ---
 
 
-@router.get("/api/voice-configs", response_model=List[VoiceConfig])
+@router.get("/configs", response_model=List[VoiceConfig])
 async def get_voice_configs(session: AsyncSession = Depends(get_session)):  # noqa: B008
     return (await session.exec(select(VoiceConfig))).all()
 
 
-@router.post("/api/voice-configs", response_model=VoiceConfig)
+@router.post("/configs", response_model=VoiceConfig)
 async def create_voice_config(
-    config_data: Dict[str, Any] = Body(...),  # noqa: B008
+    config_data: VoiceConfigData,
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     try:
-        name = config_data.get("name")
+        name = config_data.name
+
         if not name:
             raise HTTPException(status_code=400, detail="名称不能为空")
 
@@ -53,11 +56,12 @@ async def create_voice_config(
         if existing:
             raise HTTPException(status_code=400, detail="名称已存在")
 
-        config_data.pop("id", None)
-        config_data.pop("created_at", None)
-        config_data.pop("updated_at", None)
+        data = config_data.model_dump()
+        data.pop("id", None)
+        data.pop("created_at", None)
+        data.pop("updated_at", None)
 
-        new_config = VoiceConfig(**config_data)
+        new_config = VoiceConfig(**data)
 
         if new_config.is_active:
             others = (
@@ -81,10 +85,10 @@ async def create_voice_config(
         raise HTTPException(status_code=500, detail=f"创建失败: {str(e)}") from e
 
 
-@router.put("/api/voice-configs/{config_id}", response_model=VoiceConfig)
+@router.put("/configs/{config_id}", response_model=VoiceConfig)
 async def update_voice_config(
     config_id: int,
-    config_data: Dict[str, Any] = Body(...),  # noqa: B008
+    config_data: VoiceConfigData,
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     try:
@@ -92,7 +96,7 @@ async def update_voice_config(
         if not db_config:
             raise HTTPException(status_code=404, detail="Config not found")
 
-        new_name = config_data.get("name")
+        new_name = config_data.name
         if new_name and new_name != db_config.name:
             existing = (
                 await session.exec(
@@ -104,7 +108,7 @@ async def update_voice_config(
             if existing:
                 raise HTTPException(status_code=400, detail="名称已存在")
 
-        is_activating = config_data.get("is_active") and not db_config.is_active
+        is_activating = config_data.is_active and not db_config.is_active
         if is_activating:
             others = (
                 await session.exec(
@@ -117,7 +121,8 @@ async def update_voice_config(
                 other.is_active = False
 
         exclude_fields = {"id", "created_at", "updated_at"}
-        for key, value in config_data.items():
+        new_data = config_data.model_dump()
+        for key, value in new_data.items():
             if key not in exclude_fields and hasattr(db_config, key):
                 setattr(db_config, key, value)
 
@@ -135,7 +140,7 @@ async def update_voice_config(
         raise HTTPException(status_code=500, detail=f"更新失败: {str(e)}") from e
 
 
-@router.delete("/api/voice-configs/{config_id}")
+@router.delete("/configs/{config_id}")
 async def delete_voice_config(
     config_id: int,
     session: AsyncSession = Depends(get_session),  # noqa: B008
@@ -150,7 +155,11 @@ async def delete_voice_config(
 
         await session.delete(db_config)
         await session.commit()
-        return {"status": "success"}
+        return {
+            "status": "success",
+            "message": "语音配置已成功移除喵~",
+            "data": {"id": config_id},
+        }
     except HTTPException:
         raise
     except Exception as e:
@@ -163,7 +172,7 @@ async def delete_voice_config(
 # --- 语音 ASR/TTS API ---
 
 
-@router.post("/api/voice/asr")
+@router.post("/asr")
 async def voice_asr(file: UploadFile = File(...)):  # noqa: B008
     """语音转文字接口"""
     try:
@@ -193,10 +202,10 @@ async def voice_asr(file: UploadFile = File(...)):  # noqa: B008
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/api/voice/tts")
-async def voice_tts(payload: Dict[str, str] = Body(...)):  # noqa: B008
+@router.post("/tts")
+async def voice_tts(payload: TTSRequest):  # noqa: B008
     """文字转语音接口"""
-    text = payload.get("text", "")
+    text = payload.text
     if not text:
         raise HTTPException(status_code=400, detail="Text is required")
 
@@ -209,7 +218,7 @@ async def voice_tts(payload: Dict[str, str] = Body(...)):  # noqa: B008
     return {"audio_url": f"/api/voice/audio/{filename}"}
 
 
-@router.get("/api/voice/audio/{filename}")
+@router.get("/audio/{filename}")
 async def get_audio_file(filename: str):
     """获取语音文件"""
     default_data_dir = os.path.join(current_dir, "data")
@@ -221,7 +230,7 @@ async def get_audio_file(filename: str):
     return FileResponse(file_path, media_type="audio/mpeg")
 
 
-@router.delete("/api/voice/audio/{filename}")
+@router.delete("/audio/{filename}")
 async def delete_audio(filename: str):
     """手动删除音频文件 (由前端播放完毕后触发)"""
     tts = get_tts_service()
@@ -238,10 +247,14 @@ async def delete_audio(filename: str):
             with suppress(Exception):
                 os.remove(filepath)
 
-    return {"status": "success"}
+    return {
+        "status": "success",
+        "message": "音频缓存清理完毕喵！",
+        "data": {"filename": filename},
+    }
 
 
-@router.post("/api/tts/preview")
+@router.post("/tts/preview")
 async def preview_tts(request: TTSPreviewRequest):
     """
     为给定的文本生成 TTS 音频，应用与语音模式相同的过滤和情绪分析。

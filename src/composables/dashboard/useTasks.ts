@@ -3,8 +3,10 @@
  * 待办任务管理：获取/删除
  */
 import { shallowRef, type Ref } from 'vue'
-import { API_BASE, fetchWithTimeout } from './useDashboard'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from './useDashboard'
 import type { Task, Agent, OpenConfirmFn } from './types'
+
 
 interface UseTasksOptions {
   activeAgent: Ref<Agent | null>
@@ -28,7 +30,8 @@ export function useTasks({ activeAgent, openConfirm }: UseTasksOptions) {
     fetchTasksState.lastRequestId = currentRequestId
 
     try {
-      let url = `${API_BASE}/tasks`
+      let url = `${API_BASE}/maintenance/tasks`
+
       if (activeAgent.value) url += `?agent_id=${activeAgent.value.id}`
       const res = await fetchWithTimeout(url, {}, 5000)
       const rawTasks = (await res.json()) as Task[]
@@ -73,7 +76,8 @@ export function useTasks({ activeAgent, openConfirm }: UseTasksOptions) {
     try {
       await openConfirm('提示', '确定删除此任务？', { type: 'warning' })
       deleteTaskState.isLoading = true
-      const res = await fetchWithTimeout(`${API_BASE}/tasks/${taskId}`, { method: 'DELETE' }, 5000)
+      const res = await fetchWithTimeout(`${API_BASE}/maintenance/tasks/${taskId}`, { method: 'DELETE' }, 5000)
+
       if (res.ok) {
         await fetchTasks()
         window.$notify('已删除', 'success')

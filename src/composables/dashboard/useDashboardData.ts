@@ -3,7 +3,9 @@
  * 全局数据获取：stats、petState、nitStatus、背景氛围灯
  */
 import { ref, computed, type Ref } from 'vue'
-import { API_BASE, fetchWithTimeout } from './useDashboard'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from './useDashboard'
+
 import type { Stats, PetState, NitStatus, Agent } from './types'
 
 interface UseDashboardDataOptions {
@@ -44,7 +46,8 @@ export function useDashboardData({ activeAgent, isBackendOnline }: UseDashboardD
 
   const fetchStats = async (): Promise<void> => {
     try {
-      let url = `${API_BASE}/stats/overview`
+      let url = `${API_BASE}/system/stats/overview`
+
       if (activeAgent.value) url += `?agent_id=${activeAgent.value.id}`
       const res = await fetchWithTimeout(url, {}, 2000)
       stats.value = (await res.json()) as Stats
@@ -73,7 +76,8 @@ export function useDashboardData({ activeAgent, isBackendOnline }: UseDashboardD
     if (fetchNitStatusState.isLoading) return
     fetchNitStatusState.isLoading = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/nit/status`, {}, 2000)
+      const res = await fetchWithTimeout(`${API_BASE}/maintenance/nit/status`, {}, 2000)
+
       nitStatus.value = (await res.json()) as NitStatus
     } catch {
       console.error('NIT 状态获取错误')

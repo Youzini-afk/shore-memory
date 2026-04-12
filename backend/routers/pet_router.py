@@ -6,7 +6,7 @@
 import time
 from datetime import datetime
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
@@ -14,12 +14,13 @@ from core.config_manager import get_config_manager
 from database import get_session
 from models import AIModelConfig, Config, PetState
 from nit_core.plugins.social_adapter.social_service import get_social_service
+from schemas import PetStateResponse, ToggleRequest
 from services.agent.companion_service import companion_service
 
-router = APIRouter(tags=["pet"])
+router = APIRouter(prefix="/api/pet", tags=["pet"])
 
 
-@router.get("/api/pet/state")
+@router.get("/state", response_model=PetStateResponse)
 async def get_pet_state(session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         from services.agent.agent_manager import get_agent_manager
@@ -76,18 +77,20 @@ async def get_pet_state(session: AsyncSession = Depends(get_session)):  # noqa: 
 _pet_state_cache: dict = {}
 
 
-@router.get("/api/companion/status")
+@router.get("/companion/status")
 async def get_companion_status():
     config_mgr = get_config_manager()
     enabled = config_mgr.get("companion_mode_enabled", False)
     return {"enabled": enabled}
 
 
-@router.post("/api/companion/toggle")
+@router.post("/companion/toggle", response_model=StandardResponse)
 async def toggle_companion(
-    enabled: bool = Body(..., embed=True),
+    request: ToggleRequest,
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
+    enabled = request.enabled
+
     config_mgr = get_config_manager()
     if enabled and not config_mgr.get("lightweight_mode", False):
         raise HTTPException(
@@ -130,18 +133,20 @@ async def toggle_companion(
 # --- 社交模式 ---
 
 
-@router.get("/api/social/status")
+@router.get("/social/status")
 async def get_social_status():
     config_mgr = get_config_manager()
     enabled = config_mgr.get("enable_social_mode", False)
     return {"enabled": enabled}
 
 
-@router.post("/api/social/toggle")
+@router.post("/social/toggle", response_model=StandardResponse)
 async def toggle_social(
-    enabled: bool = Body(..., embed=True),
+    request: ToggleRequest,
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
+    enabled = request.enabled
+
     await get_config_manager().set("enable_social_mode", enabled)
 
     social_service = get_social_service()

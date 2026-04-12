@@ -98,13 +98,10 @@ class LocalEmbeddingProvider(EmbeddingProvider):
                     if local_path:
                         self._model = SentenceTransformer(local_path, device="cpu")
                     else:
-                        # 3. 如果都不存在，尝试下载
-                        print(
-                            f"[Embedding] 模型 {repo_id} 未找到，尝试下载...",
-                            flush=True,
+                        # 3. 如果都不存在，直接报错，让前端接管下载
+                        raise RuntimeError(
+                            f"模型文件 {repo_id} 不存在。请通过启动器完成模型下载。"
                         )
-                        local_path = self.model_manager.download_model(model_key)
-                        self._model = SentenceTransformer(local_path, device="cpu")
             except Exception as e:
                 print(f"[Embedding] 加载本地模型失败: {e}", flush=True)
                 self._model = SentenceTransformer(repo_id, device="cpu")

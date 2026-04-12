@@ -1,20 +1,34 @@
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import List, Optional
 
 import dateparser
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends
+from pydantic import BaseModel
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
 from database import get_session
 from models import ScheduledTask
+from schemas import StandardResponse
 from services.agent.scheduler_service import scheduler_service
 
-router = APIRouter()
+
+class ReminderItem(BaseModel):
+    content: str
+    time: str
+    repeat: Optional[str] = None
 
 
-@router.post("/sync")
-async def sync_reminders(payload: Dict[str, Any] = Body(...)):  # noqa: B008
+class SyncRemindersRequest(BaseModel):
+    source: str = "unknown"
+    reminders: List[ReminderItem]
+
+
+router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
+
+
+@router.post("/sync", response_model=StandardResponse)
+async def sync_reminders(request: SyncRemindersRequest):
     """
     接收同步结果注册至调度器。
     Payload示例:
@@ -23,18 +37,13 @@ async def sync_reminders(payload: Dict[str, Any] = Body(...)):  # noqa: B008
         "reminders": [{"content": "提醒我喝水", "time": "2024-01-01 12:00:00"}]
     }
     """
-    reminders = payload.get("reminders", [])
-    payload.get("source", "unknown")
-
+    reminders = request.reminders
     results = []
 
     for item in reminders:
-        content = item.get("content")
-        time_str = item.get("time")
-        repeat = item.get("repeat")  # 可选重复规则
-
-        if not content or not time_str:
-            continue
+        content = item.content
+        time_str = item.time
+        repeat = item.repeat
 
         try:
             # 解析时间
@@ -58,31 +67,7 @@ async def sync_reminders(payload: Dict[str, Any] = Body(...)):  # noqa: B008
         except Exception as e:
             results.append({"status": "error", "message": str(e)})
 
-    return {"status": "completed", "results": results}
-
-
-@router.get("/tasks", response_model=List[ScheduledTask])
-async def get_tasks(
-    agent_id: Optional[str] = None,
-    session: AsyncSession = Depends(get_session),  # noqa: B008
-):
-    statement = select(ScheduledTask).where(not ScheduledTask.is_triggered)
-    if agent_id:
-        statement = statement.where(ScheduledTask.agent_id == agent_id)
-    return (await session.exec(statement)).all()
-
-
-@router.delete("/tasks/{task_id}")
-async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
-    try:
-        task = await session.get(ScheduledTask, task_id)
-        if not task:
-            raise HTTPException(status_code=404, detail="未找到任务")
-        await session.delete(task)
-        await session.commit()
-        return {"status": "success"}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from None
+    return StandardResponse(status="completed", data={"results": results})
 
 
 @router.post("/check")

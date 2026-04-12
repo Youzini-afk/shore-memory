@@ -76,12 +76,15 @@ with suppress(ImportError):
 import uvicorn
 from fastapi import (
     FastAPI,
-    WebSocket,
+    Request,
 )
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from core.config_manager import get_config_manager
 from database import engine, get_session, init_db
@@ -98,7 +101,6 @@ from routers.config_router import router as config_router
 from routers.group_chat_router import router as group_chat_router
 from routers.ide_router import router as ide_router
 from routers.ipc_router import router as ipc_router
-from routers.memory_router import history_router, legacy_memories_router
 from routers.memory_router import router as memory_router
 from routers.nit_router import router as nit_router
 from routers.scheduler_router import router as scheduler_router
@@ -111,7 +113,6 @@ from services.core.embedding_service import embedding_service
 from services.core.gateway_client import gateway_client
 from services.core.realtime_session_manager import realtime_session_manager
 from services.core.sync_service import sync_service
-from services.interaction.browser_bridge_service import browser_bridge_service
 from services.interaction.tts_service import get_tts_service
 
 # from services.memory_secretary_service import MemorySecretaryService
@@ -182,7 +183,9 @@ async def lifespan(app: FastAPI):
 
         print(f"📊 记忆节点总数: {trivium_store.count()}")
     except Exception as e:
-        print(f"📊 记忆存储: [降级] TriviumStore 初始化失败，后端将以无记忆引擎模式运行 ({e})")
+        print(
+            f"📊 记忆存储: [降级] TriviumStore 初始化失败，后端将以无记忆引擎模式运行 ({e})"
+        )
         trivium_store = None  # type: ignore[assignment]
     print("=" * 50)
 
@@ -836,7 +839,14 @@ async def lifespan(app: FastAPI):
 
     yield
 
-    # 关闭服务
+    # 关闭服务前强制刷盘
+    try:
+        from services.memory.trivium_store import trivium_store
+        await trivium_store.flush_all()
+        print("[Main] 所有 TriviumDB 实例磁盘同步完成。")
+    except Exception as e:
+        print(f"[Main] TriviumDB 强制刷盘失败: {e}")
+
     await sync_service.stop()
     await gateway_client.stop()
     cleanup_task.cancel()
@@ -867,12 +877,80 @@ app = FastAPI(
     description="AI Agent powered backend for Pero",
     lifespan=lifespan,
 )
+
+# --- 统一异常处理 (P0-3) ---
+
+
+@app.exception_handler(StarletteHTTPException)
+async def http_exception_handler(request: Request, exc: StarletteHTTPException):
+    """统一处理 HTTPException"""
+    # 允许 detail 是字典，支持透传自定义结构
+    detail = exc.detail
+    message = "请求失败"
+
+    # 根据状态码映射一些基础描述
+    status_msg_map = {
+        400: "请求参数错误",
+        401: "未授权或登录过期",
+        403: "权限不足",
+        404: "资源未找到",
+        405: "方法不允许",
+        429: "请求过于频繁",
+        500: "服务器内部错误",
+    }
+
+    if isinstance(detail, dict):
+        message = detail.get("message", status_msg_map.get(exc.status_code, message))
+        detail = detail.get("detail", str(detail))
+    else:
+        message = status_msg_map.get(exc.status_code, message)
+
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": {"status": "error", "message": message, "detail": detail}},
+    )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """统一处理参数校验错误"""
+    return JSONResponse(
+        status_code=400,
+        content={
+            "error": {
+                "status": "error",
+                "message": "请求参数验证失败喵",
+                "detail": exc.errors(),
+            }
+        },
+    )
+
+
+@app.exception_handler(Exception)
+async def all_exception_handler(request: Request, exc: Exception):
+    """全局兜底异常处理"""
+    logger.error(
+        f"[全局异常] {request.method} {request.url} | {str(exc)}", exc_info=True
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "status": "error",
+                "message": "系统内部发生了一件意外的事喵...",
+                "detail": str(exc),
+            }
+        },
+    )
+
+
+# --------------------------
+
 from routers.connection_router import router as connection_router
 
 app.include_router(ide_router)
 app.include_router(memory_router)
-app.include_router(history_router)
-app.include_router(legacy_memories_router)
+
 app.include_router(config_router)
 app.include_router(nit_router)
 app.include_router(ipc_router)
@@ -888,7 +966,8 @@ from nit_core.plugins.social_adapter.social_router import router as social_route
 
 app.include_router(social_router)
 
-app.include_router(scheduler_router, prefix="/api/scheduler", tags=["Scheduler"])
+app.include_router(scheduler_router)
+
 
 from routers.sync_router import router as sync_router
 
@@ -909,7 +988,11 @@ app.include_router(voice_router)
 app.include_router(system_router)
 app.include_router(pet_router)
 app.include_router(maintenance_router)
+from routers.ws_router import router as ws_router
+
+app.include_router(ws_router)
 app.include_router(chat_router)
+
 
 # [插件] 外部插件管理路由
 from mods._external_plugins.router import router as external_plugin_router
@@ -1029,18 +1112,6 @@ async def seed_voice_configs():
 
         await session.commit()
         break
-
-
-@app.websocket("/ws/browser")
-async def websocket_browser_endpoint(websocket: WebSocket):
-    await browser_bridge_service.connect(websocket)
-
-
-@app.websocket("/ws/gateway")
-async def websocket_gateway_endpoint(websocket: WebSocket):
-    from services.core.gateway_hub import gateway_hub
-
-    await gateway_hub.handle_connection(websocket)
 
 
 if __name__ == "__main__":

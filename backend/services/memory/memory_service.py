@@ -178,13 +178,13 @@ class MemoryService:
                 )
             except Exception as e:
                 print(f"[MemoryService] TriviumDB 时间图谱连接失败: {e}")
-                await TriviumSyncService.enqueue_time_link(
+                await TriviumSyncService.enqueue_link(
                     session,
                     memory.id,
                     last_memory.id,
                     agent_id=agent_id,
                 )
-                await TriviumSyncService.enqueue_time_link(
+                await TriviumSyncService.enqueue_link(
                     session,
                     last_memory.id,
                     memory.id,
@@ -878,32 +878,16 @@ class MemoryService:
             if not neighbors:
                 continue
 
-            for nbr in neighbors:
-                # 兼容可能的返回格式 (hit) 或者 tuple(id, weight, label)
-                tgt_id = None
-                weight = 0.5
-                label = "related"
-
-                if hasattr(nbr, "id"):
-                    tgt_id = nbr.id
-                    weight = getattr(nbr, "score", 0.5)
-                elif isinstance(nbr, tuple):
-                    tgt_id = nbr[0]
-                    weight = nbr[1] if len(nbr) > 1 else 0.5
-                elif isinstance(nbr, dict):
-                    tgt_id = nbr.get("id")
-                    weight = nbr.get("weight", 0.5)
-                elif isinstance(nbr, int):
-                    tgt_id = nbr
-
-                # 双向边可能导致 Echarts 重复, 但这里如果 target 也在 limit 节点内我们就展示
-                if tgt_id and tgt_id in memory_ids:
+            for nbr_id in neighbors:
+                # [Clean] TriviumDB 0.5.0 以后 get_neighbors 已经收敛为返回 int 列表
+                # 只有当 target 也在当前 limit 节点范围内时我们才展示连边
+                if nbr_id in memory_ids:
                     edges.append(
                         {
                             "source": str(mem_id),
-                            "target": str(tgt_id),
-                            "value": float(weight),
-                            "label": label,
+                            "target": str(nbr_id),
+                            "value": 0.5,
+                            "label": "related",
                         }
                     )
 

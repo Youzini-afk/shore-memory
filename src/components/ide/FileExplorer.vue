@@ -110,6 +110,9 @@ import PixelIcon from '../ui/PixelIcon.vue'
 import FileTreeItem from './FileTreeItem.vue'
 import ContextMenu from '../ui/ContextMenu.vue'
 import CustomDialog from '../ui/CustomDialog.vue'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
+
 
 const emit = defineEmits(['file-selected'])
 const files = ref([])
@@ -197,14 +200,14 @@ const handleDialogCancel = () => {
   dialog.visible = false
 }
 
-// 动态获取后端基础 URL 喵~ 🌸
-const BACKEND_HOST = window.location.hostname || 'localhost'
-const API_BASE = window.location.protocol + '//' + BACKEND_HOST + ':9120/api/ide'
+// 使用统一的 API_BASE 喵~ ✨
+
 
 const fetchFiles = async (path = null) => {
   try {
-    const url = path ? `${API_BASE}/files?path=${encodeURIComponent(path)}` : `${API_BASE}/files`
-    const res = await fetch(url)
+    const url = path ? `${API_BASE}/ide/files?path=${encodeURIComponent(path)}` : `${API_BASE}/ide/files`
+    const res = await fetchWithTimeout(url, { silent: true })
+
 
     if (!res.ok) {
       const errData = await res.json().catch(() => ({}))
@@ -303,12 +306,13 @@ const createFile = async (parentItem) => {
   const path = parentPath ? `${parentPath}/${name}` : name
 
   try {
-    await fetch(`${API_BASE}/file/create`, {
+    await fetchWithTimeout(`${API_BASE}/ide/file/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, is_directory: false })
     })
     refresh()
+
   } catch (e) {
     showDialog({ type: 'alert', title: '错误', message: '创建文件失败: ' + e.message })
   }
@@ -328,12 +332,13 @@ const createFolder = async (parentItem) => {
   const path = parentPath ? `${parentPath}/${name}` : name
 
   try {
-    await fetch(`${API_BASE}/file/create`, {
+    await fetchWithTimeout(`${API_BASE}/ide/file/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path, is_directory: true })
     })
     refresh()
+
   } catch (e) {
     showDialog({ type: 'alert', title: '错误', message: '创建文件夹失败: ' + e.message })
   }
@@ -350,12 +355,13 @@ const renameItem = async (item) => {
   if (!newName || newName === item.name) return
 
   try {
-    await fetch(`${API_BASE}/file/rename`, {
+    await fetchWithTimeout(`${API_BASE}/ide/file/rename`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: item.path, new_name: newName })
     })
     refresh()
+
   } catch (e) {
     showDialog({ type: 'alert', title: '错误', message: '重命名失败: ' + e.message })
   }
@@ -371,12 +377,13 @@ const deleteItem = async (item) => {
   if (!confirmed) return
 
   try {
-    await fetch(`${API_BASE}/file/delete`, {
+    await fetchWithTimeout(`${API_BASE}/ide/file/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ path: item.path })
     })
     refresh()
+
   } catch (e) {
     showDialog({ type: 'alert', title: '错误', message: '删除失败: ' + e.message })
   }

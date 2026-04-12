@@ -4,6 +4,7 @@
  */
 import { ref } from 'vue'
 import { invoke } from '@/utils/ipcAdapter'
+import { API_BASE } from '@/config'
 import type {
   ConfirmOptions,
   ConfirmResult,
@@ -14,8 +15,6 @@ import type {
   UpdateStatus
 } from './types'
 
-// ─── API 基础地址 ──────────────────────────────────────────────────────────────
-export const API_BASE: string = (window as any).electron ? 'http://localhost:9120/api' : '/api'
 
 // ─── 带超时的 fetch 包装 ─────────────────────────────────────────────────────
 export const fetchWithTimeout = async (
@@ -26,9 +25,28 @@ export const fetchWithTimeout = async (
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
   const { silent, ...fetchOptions } = options
+  
   try {
     const response = await fetch(url, { ...fetchOptions, signal: controller.signal })
     clearTimeout(id)
+    
+    // 如果响应不 OK，尝试解析统一的报错结构 (P0-3)
+    if (!response.ok && !silent) {
+      try {
+        const errorData = await response.clone().json()
+        const errorObj = errorData.error || errorData
+        
+        // 按照优先级提取信息：error.message -> message -> detail
+        const errorMsg = errorObj.message || errorObj.detail || `请求失败 (${response.status})`
+        const errorDetail = errorObj.detail && errorObj.detail !== errorMsg ? `\n详情: ${errorObj.detail}` : ''
+        
+        window.$notify(errorMsg + errorDetail, 'error')
+      } catch (e) {
+        window.$notify(`服务器返回异常: ${response.status}`, 'error')
+      }
+    }
+
+    
     return response
   } catch (error: unknown) {
     clearTimeout(id)
@@ -43,9 +61,6 @@ export const fetchWithTimeout = async (
     }
     if (!silent) {
       window.$notify(errorMsg, 'error')
-      if (err.name !== 'AbortError') {
-        console.warn(`[Fetch] 请求失败 ${url}:`, err.message)
-      }
     }
     throw error
   }

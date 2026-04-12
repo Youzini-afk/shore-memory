@@ -708,7 +708,7 @@ ipcMain.handle('download_models', async (event) => {
     env['PYTHONUTF8'] = '1'
 
     return new Promise((resolve, reject) => {
-      const child = spawn(pythonPath, [cliScript, 'download', '--model', 'all'], {
+      const child = spawn(pythonPath, [cliScript, 'download', '--model', 'default'], {
         env: env
       })
 

@@ -290,6 +290,13 @@ class ReflectionService:
                 f"[Reflection] 已将 {len(group)} 条记忆整合为 ID {summary_mem.id}: {summary_text[:50]}..."
             )
 
+        # [P1] 批量任务结束，执行显式落盘同步
+        try:
+            from services.memory.trivium_store import trivium_store
+            await trivium_store.flush()
+        except Exception as fe:
+            print(f"[Reflection] 记忆整合落盘失败: {fe}")
+
         print("[Reflection] 记忆整合完成。")
 
     async def generate_desktop_diary(
@@ -559,6 +566,13 @@ class ReflectionService:
             self.session.add(record)
             await self.session.commit()
             await self.session.refresh(record)
+
+            # [P1] 批量维护任务结束，执行显式落盘同步
+            try:
+                from services.memory.trivium_store import trivium_store
+                await trivium_store.flush()
+            except Exception as fe:
+                print(f"[Reflection] 维护任务落盘失败: {fe}")
 
             report["record_id"] = record.id
             print(f"[Reflection] 维护完成。记录 ID: {record.id}, 报告: {report}")
@@ -1042,24 +1056,42 @@ class ReflectionService:
                                 pair = (new_mem.id, nbr_id)
                                 if pair not in processed_pairs:
                                     processed_pairs.add(pair)
-                                    await trivium_store.link(
-                                        src=new_mem.id,
-                                        dst=nbr_id,
-                                        label="inherited",
-                                        weight=0.6,
-                                    )
+                                    try:
+                                        # [Fix] 继承边应该是双向的，以维持 associative 的双向联想特性
+                                        await trivium_store.link(
+                                            src=new_mem.id,
+                                            dst=nbr_id,
+                                            label="inherited",
+                                            weight=0.6,
+                                        )
+                                        await trivium_store.link(
+                                            src=nbr_id,
+                                            dst=new_mem.id,
+                                            label="inherited",
+                                            weight=0.6,
+                                        )
+                                    except Exception as e:
+                                        print(f"[Reflection] 图谱边继承补偿入队: {e}")
+                                        # 双向补偿入队
+                                        await TriviumSyncService.enqueue_link(
+                                            self.session,
+                                            new_mem.id,
+                                            nbr_id,
+                                            agent_id=agent_id,
+                                            label="inherited",
+                                            weight=0.6,
+                                        )
+                                        await TriviumSyncService.enqueue_link(
+                                            self.session,
+                                            nbr_id,
+                                            new_mem.id,
+                                            agent_id=agent_id,
+                                            label="inherited",
+                                            weight=0.6,
+                                        )
 
                     except Exception as e:
-                        print(f"[Reflection] 图谱边继承失败 (非致命): {e}")
-                        for _, nbr_id in processed_pairs:
-                            await TriviumSyncService.enqueue_time_link(
-                                self.session,
-                                new_mem.id,
-                                nbr_id,
-                                agent_id=agent_id,
-                                label="inherited",
-                                weight=0.6,
-                            )
+                        print(f"[Reflection] 图谱边继承扫描失败 (非致命): {e}")
 
                     for mid in valid_ids:
                         m_obj = next(m for m in batch_memories if m.id == mid)
@@ -1084,6 +1116,9 @@ class ReflectionService:
 
                     count += 1
                 await self.session.commit()
+                # [Hardening] 批量操作结束后显式落盘
+                from services.memory.trivium_store import trivium_store
+                await trivium_store.flush()
                 return count
         except Exception as e:
             print(f"整合记忆时出错: {e}")
@@ -1196,6 +1231,9 @@ class ReflectionService:
 
             if count > 0:
                 await self.session.commit()
+                # [Hardening] 批量删除结束后显式落盘
+                from services.memory.trivium_store import trivium_store
+                await trivium_store.flush()
                 print(f"[Reflection] 边界维护清理了 {count} 条陈旧记忆。")
             return count
 
@@ -1284,8 +1322,8 @@ class ReflectionService:
                             ),
                         )
                     except Exception as ve:
-                        print(f"[Reflection] 梦境关联写入失败: {ve}")
-                        await TriviumSyncService.enqueue_time_link(
+                        print(f"[Reflection] 梦境关联写入补偿入队: {ve}")
+                        await TriviumSyncService.enqueue_link(
                             self.session,
                             target_memory.id,
                             candidate.id,
@@ -1301,6 +1339,10 @@ class ReflectionService:
                         f"[Reflection] 发现新关联: {relation['description']} (强度: {relation['strength']})"
                     )
                     new_relations_count += 1
+
+        # [Hardening] 梦境循环结束后显式落盘
+        from services.memory.trivium_store import trivium_store
+        await trivium_store.flush()
 
         print("[Reflection] 梦境循环完成。")
         return {
@@ -1390,8 +1432,8 @@ class ReflectionService:
                             ),
                         )
                     except Exception as ve:
-                        print(f"[Reflection] 孤独记忆补边失败: {ve}")
-                        await TriviumSyncService.enqueue_time_link(
+                        print(f"[Reflection] 孤独记忆补边补偿入队: {ve}")
+                        await TriviumSyncService.enqueue_link(
                             self.session,
                             target_memory.id,
                             candidate.id,
@@ -1407,6 +1449,10 @@ class ReflectionService:
                     )
                     new_relations_count += 1
                     break  # 找到一个连接就够了，脱离孤独状态
+
+        # [Hardening] 孤独记忆扫描结束后显式落盘
+        from services.memory.trivium_store import trivium_store
+        await trivium_store.flush()
 
         return {"status": "success", "new_relations": new_relations_count}
 
@@ -1586,8 +1632,8 @@ class ReflectionService:
                             weight=float(weight),
                         )
                     except Exception as e:
-                        print(f"[GraphGardener] 图谱关系写入失败: {e}")
-                        await TriviumSyncService.enqueue_time_link(
+                        print(f"[GraphGardener] 图谱关系写入补偿入队: {e}")
+                        await TriviumSyncService.enqueue_link(
                             self.session,
                             event_id,
                             entity_id,
@@ -1802,7 +1848,9 @@ class ReflectionService:
                                     },
                                 )
                             else:
-                                raise ValueError("embedding 为空，无法恢复 TriviumDB 记忆")
+                                raise ValueError(
+                                    "embedding 为空，无法恢复 TriviumDB 记忆"
+                                )
                         except Exception as ve:
                             print(f"[Reflection] 恢复修改记忆向量失败: {ve}")
                             await TriviumSyncService.enqueue_insert(
@@ -1856,7 +1904,9 @@ class ReflectionService:
                                     },
                                 )
                             else:
-                                raise ValueError("embedding 为空，无法恢复 TriviumDB 记忆")
+                                raise ValueError(
+                                    "embedding 为空，无法恢复 TriviumDB 记忆"
+                                )
                         except Exception as ve:
                             print(f"[Reflection] 恢复删除记忆向量失败: {ve}")
                             await TriviumSyncService.enqueue_insert(

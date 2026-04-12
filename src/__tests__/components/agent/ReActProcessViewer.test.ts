@@ -84,7 +84,8 @@ describe('ReActProcessViewer.vue', () => {
       props: { segments: [], isLive: true }
     })
 
-    expect(global.fetch).toHaveBeenCalledWith('http://localhost:9120/api/task/default/status')
+    expect(global.fetch).toHaveBeenCalledWith('http://localhost:9120/api/tasks/default/status')
+
 
     // 快进时间检查轮询
     await vi.advanceTimersByTimeAsync(2100)
@@ -126,7 +127,8 @@ describe('ReActProcessViewer.vue', () => {
     await flushPromises()
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:9120/api/task/default/pause',
+      'http://localhost:9120/api/tasks/default/pause',
+
       expect.objectContaining({ method: 'POST' })
     )
 
@@ -139,7 +141,8 @@ describe('ReActProcessViewer.vue', () => {
     await flushPromises()
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:9120/api/task/default/resume',
+      'http://localhost:9120/api/tasks/default/resume',
+
       expect.objectContaining({ method: 'POST' })
     )
 
@@ -167,7 +170,8 @@ describe('ReActProcessViewer.vue', () => {
     await flushPromises()
 
     expect(global.fetch).toHaveBeenCalledWith(
-      'http://localhost:9120/api/task/default/inject',
+      'http://localhost:9120/api/tasks/default/inject',
+
       expect.objectContaining({
         method: 'POST',
         body: JSON.stringify({ instruction: '停止思考' })

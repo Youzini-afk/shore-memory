@@ -25,7 +25,7 @@ from models import Config
 from services.agent.agent_service import AgentService
 from services.interaction.tts_service import get_tts_service
 
-router = APIRouter(tags=["chat"])
+router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
@@ -72,7 +72,7 @@ async def verify_token(
     return token
 
 
-@router.post("/api/chat")
+@router.post("")
 async def chat(
     request: ChatRequest,
     token: str = Depends(verify_token),  # noqa: B008

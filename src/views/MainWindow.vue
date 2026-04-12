@@ -51,15 +51,16 @@ import CustomTitleBar from '../components/layout/CustomTitleBar.vue'
 import CustomDialog from '../components/ui/CustomDialog.vue'
 import ChatModeView from './ChatModeView.vue'
 import WorkModeView from './WorkModeView.vue'
+import { API_BASE, fetchWithTimeout } from '@/composables/dashboard/useDashboard'
+
 
 const isWorkMode = ref(false)
 const showErrorDialog = ref(false)
 const isSessionReady = ref(false)
 const errorMessage = ref('')
 
-// 动态获取后端基础 URL 喵~ 🌸
-const BACKEND_HOST = window.location.hostname || 'localhost'
-const API_BASE = window.location.protocol + '//' + BACKEND_HOST + ':9120'
+// 使用统一导入的 API_BASE 喵~ 🌸
+
 
 // 在 Electron 中，窗口管理通过 IPC 由主进程处理
 // 主进程 (windows/manager.ts) 应该处理 'close' 事件以隐藏窗口
@@ -74,7 +75,8 @@ const toggleMode = async () => {
   // 检查我们是否试图进入工作模式
   if (!isWorkMode.value) {
     try {
-      const configRes = await fetch(`${API_BASE}/api/config/lightweight_mode`)
+      const configRes = await fetchWithTimeout(`${API_BASE}/configs/lightweight_mode`)
+
       if (configRes.ok) {
         const config = await configRes.json()
         if (config.enabled) {
@@ -99,11 +101,12 @@ watch(isWorkMode, async (newVal) => {
     // 进入工作模式
     isSessionReady.value = false
     try {
-      const res = await fetch(`${API_BASE}/api/ide/work_mode/enter`, {
+      const res = await fetchWithTimeout(`${API_BASE}/ide/work_mode/enter`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ task_name: 'Coding Session' })
       })
+
       if (!res.ok) throw new Error('进入工作会话失败')
       const data = await res.json()
 
@@ -139,10 +142,10 @@ const handleWorkExit = async (save) => {
   try {
     if (save) {
       console.log('工作会话正在完成...')
-      await fetch(`${API_BASE}/api/ide/work_mode/exit`, { method: 'POST' })
+      await fetchWithTimeout(`${API_BASE}/ide/work_mode/exit`, { method: 'POST' })
     } else {
       console.log('工作会话正在中止...')
-      await fetch(`${API_BASE}/api/ide/work_mode/abort`, { method: 'POST' })
+      await fetchWithTimeout(`${API_BASE}/ide/work_mode/abort`, { method: 'POST' })
     }
   } catch (e) {
     console.error('同步工作会话退出失败:', e)

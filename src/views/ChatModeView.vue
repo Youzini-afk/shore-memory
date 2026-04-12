@@ -203,8 +203,12 @@ import { invoke } from '@/utils/ipcAdapter'
 import ChatInterface from '../components/chat/ChatInterface.vue'
 import PixelIcon from '../components/ui/PixelIcon.vue'
 import PTooltip from '../components/ui/PTooltip.vue'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 
-const API_BASE = 'http://localhost:9120'
+
+// 使用统一的 API_BASE 喵~ ✨
+
 
 // 状态
 const agents = ref([])
@@ -246,7 +250,8 @@ const loadAgents = async () => {
   isLoading.value = true
   errorMsg.value = ''
   try {
-    const resAll = await fetch(`${API_BASE}/api/agents`)
+    const resAll = await fetchWithTimeout(`${API_BASE}/agents`, { silent: true })
+
     if (!resAll.ok) throw new Error(`HTTP ${resAll.status}`)
 
     const allAgents = await resAll.json()
@@ -273,11 +278,12 @@ const switchAgent = async (agent) => {
   activeAgentName.value = agent.name
 
   try {
-    await fetch(`${API_BASE}/api/agents/active`, {
+    await fetchWithTimeout(`${API_BASE}/agents/active`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ agent_id: agent.id })
     })
+
   } catch (e) {
     console.error('切换助手失败', e)
   }

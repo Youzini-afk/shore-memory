@@ -55,7 +55,9 @@ class ReindexService:
 
     @staticmethod
     async def reindex_all_memories(agent_id: str = "pero"):
-        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async_session = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
         async with async_session() as session:
             await ReindexService.reindex_memories_with_session(session, agent_id)
 
@@ -78,7 +80,9 @@ class ReindexService:
         batch_size = 20
         for i in range(0, len(memories), batch_size):
             batch = memories[i : i + batch_size]
-            texts_to_encode = [ReindexService._build_embedding_text(mem) for mem in batch]
+            texts_to_encode = [
+                ReindexService._build_embedding_text(mem) for mem in batch
+            ]
 
             try:
                 embeddings = await embedding_service.encode(texts_to_encode)
@@ -115,9 +119,13 @@ class ReindexService:
 
     @staticmethod
     async def rebuild_trivium_store(agent_id: str = "pero"):
-        async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+        async_session = sessionmaker(
+            engine, class_=AsyncSession, expire_on_commit=False
+        )
         async with async_session() as session:
-            return await ReindexService.rebuild_trivium_store_with_session(session, agent_id)
+            return await ReindexService.rebuild_trivium_store_with_session(
+                session, agent_id
+            )
 
     @staticmethod
     async def rebuild_trivium_store_with_session(session: Any, agent_id: str = "pero"):
@@ -136,7 +144,10 @@ class ReindexService:
         await trivium_store.reset_storage()
 
         if not memories:
-            print(f"[Rebuild] 未发现 Agent {agent_id} 的任何记忆，已完成空库重建。", flush=True)
+            print(
+                f"[Rebuild] 未发现 Agent {agent_id} 的任何记忆，已完成空库重建。",
+                flush=True,
+            )
             return {
                 "status": "success",
                 "agent_id": agent_id,

@@ -4,14 +4,20 @@
 """
 
 from datetime import datetime
-from typing import Any, Dict, List
+from typing import List
 
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from database import get_session
 from models import AIModelConfig
+from schemas import (
+    CreateModelRequest,
+    FetchRemoteModelsRequest,
+    RemoteModelsResponse,
+    StandardResponse,
+    UpdateModelRequest,
+)
 
 router = APIRouter(prefix="/api/models", tags=["models"])
 
@@ -23,11 +29,10 @@ async def get_models(session: AsyncSession = Depends(get_session)):  # noqa: B00
 
 @router.post("", response_model=AIModelConfig)
 async def create_model(
-    model_data: Dict[str, Any] = Body(...),
+    payload: CreateModelRequest,
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
-    model_data.pop("id", None)
-    model = AIModelConfig(**model_data)
+    model = AIModelConfig(**payload.model_dump())
     session.add(model)
     await session.commit()
     await session.refresh(model)
@@ -37,15 +42,17 @@ async def create_model(
 @router.put("/{model_id}", response_model=AIModelConfig)
 async def update_model(
     model_id: int,
-    model_data: Dict[str, Any] = Body(...),  # noqa: B008
+    payload: UpdateModelRequest,
     session: AsyncSession = Depends(get_session),  # noqa: B008
 ):
     db_model = await session.get(AIModelConfig, model_id)
     if not db_model:
         raise HTTPException(status_code=404, detail="Model not found")
-    for key, value in model_data.items():
-        if hasattr(db_model, key) and key not in ["id", "created_at"]:
-            setattr(db_model, key, value)
+
+    update_data = payload.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(db_model, key, value)
+
     db_model.updated_at = datetime.utcnow()
     session.add(db_model)
     await session.commit()
@@ -53,26 +60,21 @@ async def update_model(
     return db_model
 
 
-@router.delete("/{model_id}")
+@router.delete("/{model_id}", response_model=StandardResponse)
 async def delete_model(model_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     db_model = await session.get(AIModelConfig, model_id)
     if not db_model:
         raise HTTPException(status_code=404, detail="Model not found")
     await session.delete(db_model)
     await session.commit()
-    return {"status": "success"}
+    return StandardResponse(message="模型已成功删除")
 
 
-@router.post("/remote")
-async def fetch_remote_models(payload: Dict[str, Any] = Body(...)):  # noqa: B008
+@router.post("/remote", response_model=RemoteModelsResponse)
+async def fetch_remote_models(payload: FetchRemoteModelsRequest):
     """获取远程服务商提供的模型列表"""
-    api_key = payload.get("api_key", "")
-    api_base = payload.get("api_base", "https://api.openai.com")
-    provider = payload.get("provider", "openai")
-
     from services.core.llm_service import LLMService
 
-    llm = LLMService(api_key, api_base, "", provider=provider)
+    llm = LLMService(payload.api_key, payload.api_base, "", provider=payload.provider)
     models = await llm.list_models()
-    print(f"后端返回模型列表: {models} (服务商: {provider})")
-    return {"models": models}
+    return RemoteModelsResponse(models=models)

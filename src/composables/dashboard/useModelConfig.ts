@@ -3,7 +3,9 @@
  * 模型配置、全局配置、MCP、向量/重排模型配置
  */
 import { ref, type Ref, type ShallowRef } from 'vue'
-import { API_BASE, fetchWithTimeout, formatLLMError } from './useDashboard'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout, formatLLMError } from './useDashboard'
+
 import type {
   Model,
   Mcp,
@@ -491,7 +493,8 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     if (isReindexing.value) return
     try {
       isReindexing.value = true
-      const res = await fetch(`${API_BASE}/memory/reindex`, { method: 'POST' })
+      const res = await fetch(`${API_BASE}/maintenance/memory/reindex`, { method: 'POST' })
+
       if (res.ok) window.$notify('重索引任务已在后台启动喵~ ✨', 'success')
       else throw new Error('启动失败')
     } catch (e) {

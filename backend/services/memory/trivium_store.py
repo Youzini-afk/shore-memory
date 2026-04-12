@@ -7,12 +7,15 @@ from typing import Any, Dict, List, Optional
 
 try:
     import triviumdb
+
     _TRIVIUM_AVAILABLE = True
 except (ImportError, OSError) as _trivium_err:
     triviumdb = None
     _TRIVIUM_AVAILABLE = False
     # 此处 log 极其关键，能直接告诉便携版用户是否缺少 VC++ 运行库 DLL
-    print(f"[TriviumStore] ⚠️ triviumdb 原生扩展加载失败（可能缺少 VC++ 运行库 DLL）: {_trivium_err}")
+    print(
+        f"[TriviumStore] ⚠️ triviumdb 原生扩展加载失败（可能缺少 VC++ 运行库 DLL）: {_trivium_err}"
+    )
 
 # 创建全局线程池用于 TriviumDB 的同步调用，避免阻塞 FastAPI 事件循环
 # TriviumDB 内部并发安全，但 Python 侧包装尽量限制线程数以防暴涨
@@ -56,7 +59,9 @@ class TriviumMemoryStore:
         self._initialized = True
 
     def _open_db(self, dim: int = 1536):
-        return triviumdb.TriviumDB(self.db_path, dim=dim, dtype="f32", sync_mode="normal")
+        return triviumdb.TriviumDB(
+            self.db_path, dim=dim, dtype="f32", sync_mode="normal"
+        )
 
     def _enable_auto_compaction(self):
         if self._db:
@@ -72,7 +77,17 @@ class TriviumMemoryStore:
             # 捕获可能的损坏异常
             try:
                 self._db = self._open_db(dim)
+            except (ImportError, PermissionError) as fatal_e:
+                # 模块缺失或权限问题属于环境错误，直接抛出，不应触发删库重建
+                print(f"[TriviumStore] ❌ 环境异常，无法加载引擎: {fatal_e}")
+                raise fatal_e
             except Exception as e:
+                # 检查是否为典型的系统错误（如文件占用）
+                err_msg = str(e).lower()
+                if "permission denied" in err_msg or "process cannot access the file" in err_msg:
+                    print(f"[TriviumStore] ❌ 文件被占用或权限不足: {e}")
+                    raise e
+
                 print(f"[TriviumStore] ⚠️ 加载失败，检测到文件可能损坏: {e}")
                 print("[TriviumStore] 正在备份受损数据并自动恢复底层引擎...")
                 import time
@@ -292,7 +307,7 @@ class TriviumMemoryStore:
             self._ensure_loaded()
         await self._run(self._db.link, src, dst, label, weight)
 
-    async def get_neighbors(self, node_id: int) -> List[Any]:
+    async def get_neighbors(self, node_id: int) -> List[int]:
         """获取目标节点的相连邻居"""
         if self._db is None:
             self._ensure_loaded()
@@ -322,6 +337,17 @@ class TriviumMemoryStore:
         if self._db is None:
             return
         await self._run(self._db.flush)
+
+    @staticmethod
+    async def flush_all():
+        """对所有已实例化的 Store 进行强制刷盘"""
+        for name, instance in TriviumMemoryStore._instances.items():
+            if instance._db:
+                try:
+                    await instance.flush()
+                    print(f"[TriviumStore] Store '{name}' 数据已同步落盘。")
+                except Exception as e:
+                    print(f"[TriviumStore] Store '{name}' 刷盘失败: {e}")
 
     async def reset_storage(self, dim: int = 1536):
         """重置底层存储，用于从 SQLite 全量回放重建 TriviumDB。"""

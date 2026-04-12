@@ -4,7 +4,9 @@
  */
 import { ref } from 'vue'
 import { invoke } from '@/utils/ipcAdapter'
-import { API_BASE, fetchWithTimeout } from './useDashboard'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from './useDashboard'
+
 import type { Agent, NapCatStatus, MemoryConfig } from './types'
 
 export function useAgentConfig() {
@@ -47,10 +49,7 @@ export function useAgentConfig() {
         },
         5000
       )
-      if (!res.ok) {
-        const err = (await res.json()) as { detail?: string }
-        throw new Error(err.detail ?? 'Failed to switch agent')
-      }
+      if (!res.ok) throw new Error('Failed to switch agent')
       await fetchAgents()
       window.$notify(`已切换到角色: ${activeAgent.value?.name}`, 'success')
       const enabled = availableAgents.value.filter((a) => a.is_enabled).map((a) => a.id)
@@ -110,9 +109,7 @@ export function useAgentConfig() {
         isCompanionEnabled.value = data.enabled
         window.$notify(data.enabled ? '已开启陪伴模式' : '已关闭陪伴模式', 'success')
       } else {
-        const errorData = (await res.json()) as { detail?: string }
         isCompanionEnabled.value = !val
-        window.$notify(errorData.detail ?? '切换失败', 'warning')
       }
     } catch {
       isCompanionEnabled.value = !val
@@ -136,7 +133,7 @@ export function useAgentConfig() {
 
   const fetchLightweightStatus = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/config/lightweight_mode`, {}, 2000)
+      const res = await fetchWithTimeout(`${API_BASE}/configs/lightweight_mode`, {}, 2000)
       if (res.ok) {
         const data = (await res.json()) as { enabled: boolean }
         isLightweightEnabled.value = data.enabled
@@ -150,7 +147,7 @@ export function useAgentConfig() {
     try {
       isTogglingLightweight.value = true
       const res = await fetchWithTimeout(
-        `${API_BASE}/config/lightweight_mode`,
+        `${API_BASE}/configs/lightweight_mode`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -164,7 +161,6 @@ export function useAgentConfig() {
         window.$notify(data.enabled ? '已开启轻量聊天模式' : '已关闭轻量聊天模式', 'success')
       } else {
         isLightweightEnabled.value = !val
-        window.$notify('切换失败', 'error')
       }
     } catch {
       isLightweightEnabled.value = !val
@@ -176,7 +172,7 @@ export function useAgentConfig() {
 
   const fetchAuraVisionStatus = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/config/aura_vision`, {}, 3000)
+      const res = await fetchWithTimeout(`${API_BASE}/configs/aura_vision`, {}, 3000)
       if (res.ok) {
         const data = (await res.json()) as { enabled: boolean }
         isAuraVisionEnabled.value = data.enabled
@@ -190,7 +186,7 @@ export function useAgentConfig() {
     try {
       isTogglingAuraVision.value = true
       const res = await fetchWithTimeout(
-        `${API_BASE}/config/aura_vision`,
+        `${API_BASE}/configs/aura_vision`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -207,7 +203,6 @@ export function useAgentConfig() {
         )
       } else {
         isAuraVisionEnabled.value = !val
-        window.$notify('切换失败', 'error')
       }
     } catch {
       isAuraVisionEnabled.value = !val
@@ -234,7 +229,7 @@ export function useAgentConfig() {
 
   const fetchMemoryConfig = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/config/memory`, {}, 3000)
+      const res = await fetchWithTimeout(`${API_BASE}/configs/memory`, {}, 3000)
       if (res.ok) {
         const data = (await res.json()) as MemoryConfig
         if (data?.modes) memoryConfig.value = data
@@ -248,11 +243,11 @@ export function useAgentConfig() {
     isSavingMemoryConfig.value = true
     try {
       const res = await fetchWithTimeout(
-        `${API_BASE}/config/memory`,
+        `${API_BASE}/configs/memory`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(memoryConfig.value)
+          body: JSON.stringify({ config: memoryConfig.value })
         },
         5000
       )

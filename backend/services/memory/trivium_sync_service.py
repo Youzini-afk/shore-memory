@@ -207,7 +207,7 @@ class TriviumSyncService:
         )
 
     @staticmethod
-    async def enqueue_time_link(
+    async def enqueue_link(
         session: AsyncSession,
         src_memory_id: int,
         dst_memory_id: int,
@@ -225,6 +225,13 @@ class TriviumSyncService:
             weight=weight,
             store_name=store_name,
         )
+
+    @staticmethod
+    async def enqueue_time_link(
+        *args, **kwargs
+    ) -> TriviumSyncTask:
+        """[已过时] 请使用 enqueue_link"""
+        return await TriviumSyncService.enqueue_link(*args, **kwargs)
 
     @staticmethod
     async def enqueue_link_payload(
@@ -262,9 +269,16 @@ class TriviumSyncService:
         store_name: Optional[str] = None,
         limit: int = 100,
     ) -> Dict[str, Any]:
+        # [Harden] 允许重试因异常中断而卡在 processing 状态的“僵尸任务”
+        from datetime import timedelta
+        timeout_threshold = datetime.now() - timedelta(minutes=10)
+
         statement = (
             select(TriviumSyncTask)
-            .where(TriviumSyncTask.status.in_(["pending", "failed"]))
+            .where(
+                (TriviumSyncTask.status.in_(["pending", "failed"])) |
+                ((TriviumSyncTask.status == "processing") & (TriviumSyncTask.updated_at < timeout_threshold))
+            )
             .order_by(TriviumSyncTask.created_at)
             .limit(limit)
         )
@@ -448,8 +462,12 @@ class TriviumSyncService:
         oldest_pending = None
         latest_error_task = None
         for task in tasks:
-            summary["by_status"][task.status] = summary["by_status"].get(task.status, 0) + 1
-            summary["by_operation"][task.operation] = summary["by_operation"].get(task.operation, 0) + 1
+            summary["by_status"][task.status] = (
+                summary["by_status"].get(task.status, 0) + 1
+            )
+            summary["by_operation"][task.operation] = (
+                summary["by_operation"].get(task.operation, 0) + 1
+            )
             task_store_name = task.store_name or "memory"
             store_bucket = summary["by_store"].setdefault(
                 task_store_name,
@@ -481,14 +499,17 @@ class TriviumSyncService:
                 oldest_pending = task.created_at
 
             if task.last_error and (
-                latest_error_task is None or task.updated_at > latest_error_task.updated_at
+                latest_error_task is None
+                or task.updated_at > latest_error_task.updated_at
             ):
                 latest_error_task = task
 
         summary["pending_total"] = summary["by_status"].get("pending", 0)
         summary["failed_total"] = summary["by_status"].get("failed", 0)
         summary["processing_total"] = summary["by_status"].get("processing", 0)
-        summary["healthy"] = summary["pending_total"] == 0 and summary["failed_total"] == 0
+        summary["healthy"] = (
+            summary["pending_total"] == 0 and summary["failed_total"] == 0
+        )
         summary["attention_required"] = not summary["healthy"]
         summary["top_failed_stores"] = [
             {"store_name": name, "failed": count}

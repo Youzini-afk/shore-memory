@@ -4,7 +4,7 @@ from fastapi import APIRouter, HTTPException
 
 from core.asset_registry import get_asset_registry
 
-router = APIRouter(prefix="/assets", tags=["assets"])
+router = APIRouter(prefix="/api/assets", tags=["assets"])
 
 
 @router.get("/", response_model=List[dict])

@@ -622,6 +622,9 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
+
 import PixelIcon from '../ui/PixelIcon.vue'
 import PModal from '../ui/PModal.vue'
 import PCard from '../ui/PCard.vue'
@@ -632,7 +635,8 @@ import PSelect from '../ui/PSelect.vue'
 import PTextarea from '../ui/PTextarea.vue'
 import PTooltip from '../ui/PTooltip.vue'
 
-const API_BASE = 'http://localhost:9120/api'
+// 使用统一的 API_BASE 喵~ ✨
+
 const activeTab = ref('stt')
 const configs = ref([])
 const showEditor = ref(false)
@@ -655,7 +659,7 @@ const ttsConfigs = computed(() => configs.value.filter((c) => c.type === 'tts'))
 
 const fetchTTSMode = async () => {
   try {
-    const res = await fetch(`${API_BASE}/config/tts`)
+    const res = await fetchWithTimeout(`${API_BASE}/configs/tts`, { silent: true })
     if (res.ok) {
       const data = await res.json()
       ttsEnabled.value = data.enabled
@@ -667,21 +671,20 @@ const fetchTTSMode = async () => {
 
 const toggleTTSMode = async (val) => {
   try {
-    await fetch(`${API_BASE}/config/tts`, {
+    await fetchWithTimeout(`${API_BASE}/configs/tts`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ enabled: val })
     })
-    // 成功不弹窗，失败弹窗
   } catch {
-    showAlert('设置失败', '无法更新 TTS 模式设置')
     ttsEnabled.value = !val // 恢复原状
   }
 }
 
 const fetchConfigs = async () => {
   try {
-    const res = await fetch(`${API_BASE}/voice-configs`)
+    const res = await fetchWithTimeout(`${API_BASE}/voice/configs`, { silent: true })
+
     if (res.ok) {
       configs.value = await res.json()
     }
@@ -697,7 +700,7 @@ const fetchRemoteModels = async () => {
       return
     }
     isFetchingRemote.value = true
-    const res = await fetch(`${API_BASE}/models/remote`, {
+    const res = await fetchWithTimeout(`${API_BASE}/models/remote`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -705,15 +708,14 @@ const fetchRemoteModels = async () => {
         api_base: editingConfig.value.api_base
       })
     })
-    const data = await res.json()
-    if (data.models && data.models.length > 0) {
-      remoteModels.value = data.models
-      // ElMessage.success(`成功获取 ${data.models.length} 个模型`)
-    } else {
-      showAlert('提示', '未能获取到模型列表，请检查配置')
+    if (res.ok) {
+        const data = await res.json()
+        if (data.models && data.models.length > 0) {
+            remoteModels.value = data.models
+        }
     }
   } catch (e) {
-    showAlert('错误', '获取模型失败: ' + e.message)
+    // 自动通知已处理
   } finally {
     isFetchingRemote.value = false
   }
@@ -748,19 +750,18 @@ const saveConfig = async () => {
 
     const method = editingConfig.value.id ? 'PUT' : 'POST'
     const url = editingConfig.value.id
-      ? `${API_BASE}/voice-configs/${editingConfig.value.id}`
-      : `${API_BASE}/voice-configs`
+      ? `${API_BASE}/voice/configs/${editingConfig.value.id}`
+      : `${API_BASE}/voice/configs`
 
-    const res = await fetch(url, {
+
+    const res = await fetchWithTimeout(url, {
       method,
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(editingConfig.value)
     })
 
-    if (!res.ok) {
-      const err = await res.json()
-      throw new Error(err.detail || '保存失败')
-    }
+    if (!res.ok) return
+
 
     await fetchConfigs()
     showEditor.value = false
@@ -774,12 +775,16 @@ const saveConfig = async () => {
 const activateConfig = async (config) => {
   try {
     config.is_active = true
-    const res = await fetch(`${API_BASE}/voice-configs/${config.id}`, {
+    const res = await fetchWithTimeout(`${API_BASE}/voice/configs/${config.id}`, {
+
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(config)
     })
-    if (!res.ok) throw new Error('切换失败')
+    if (!res.ok) {
+        config.is_active = false
+        return
+    }
     await fetchConfigs()
   } catch (e) {
     showAlert('错误', e.message)
@@ -795,8 +800,10 @@ const confirmDelete = async () => {
   if (!config) return
 
   try {
-    const res = await fetch(`${API_BASE}/voice-configs/${config.id}`, { method: 'DELETE' })
-    if (!res.ok) throw new Error('删除失败')
+    const res = await fetchWithTimeout(`${API_BASE}/voice/configs/${config.id}`, { method: 'DELETE' })
+
+    if (!res.ok) return
+
     await fetchConfigs()
   } catch (e) {
     showAlert('错误', e.message)

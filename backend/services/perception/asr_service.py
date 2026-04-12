@@ -105,12 +105,10 @@ class ASRService:
                             flush=True,
                         )
                     else:
-                        # 如果预定义模型不存在，尝试下载
-                        print(
-                            f"[ASR] 预定义模型 {model_path} 未找到，尝试下载...",
-                            flush=True,
+                        # 如果预定义模型不存在，直接报错
+                        raise RuntimeError(
+                            f"ASR 模型 {model_path} 不存在。请通过启动器完成模型下载。"
                         )
-                        real_model_path = model_manager.download_model(model_path)
                 except ValueError:
                     # model_path 不是预定义的 key，假设是路径或 HuggingFace 仓库 ID
                     real_model_path = model_path

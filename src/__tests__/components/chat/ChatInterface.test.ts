@@ -184,7 +184,8 @@ describe('ChatInterface.vue', () => {
     await wrapper.vm.handleConfirmDelete()
 
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/history/msg-delete-1'),
+      expect.stringContaining('/api/memories/history/msg-delete-1'),
+
       expect.objectContaining({ method: 'DELETE' })
     )
 
@@ -220,7 +221,8 @@ describe('ChatInterface.vue', () => {
 
     // 验证 API 调用
     expect(fetchMock).toHaveBeenCalledWith(
-      expect.stringContaining('/api/history/msg-edit-1'),
+      expect.stringContaining('/api/memories/history/msg-edit-1'),
+
       expect.objectContaining({
         method: 'PATCH',
         body: JSON.stringify({ content: 'New Content' })

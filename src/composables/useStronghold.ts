@@ -1,5 +1,7 @@
 import { ref, type Ref } from 'vue'
 import { API_BASE } from '../config'
+import { fetchWithTimeout } from './dashboard/useDashboard'
+
 
 interface Facility {
   id: string
@@ -28,7 +30,8 @@ export function useStronghold() {
   const fetchFacilities = async () => {
     loading.value = true
     try {
-      const res = await fetch(`${API_BASE}/stronghold/facilities`)
+      const res = await fetchWithTimeout(`${API_BASE}/stronghold/facilities`)
+
       if (!res.ok) throw new Error('获取设施失败')
       facilities.value = await res.json()
 
@@ -55,7 +58,7 @@ export function useStronghold() {
         ? `${API_BASE}/stronghold/rooms?facility_id=${facilityId}`
         : `${API_BASE}/stronghold/rooms`
 
-      const res = await fetch(url)
+      const res = await fetchWithTimeout(url)
       if (!res.ok) throw new Error('获取房间失败')
       rooms.value = await res.json()
 
@@ -90,12 +93,13 @@ export function useStronghold() {
   // 创建设施
   const createFacility = async (name: string, description: string, icon?: string) => {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `${API_BASE}/stronghold/facilities?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}&icon=${encodeURIComponent(icon || '')}`,
         {
           method: 'POST'
         }
       )
+
       if (!res.ok) throw new Error('创建设施失败')
       await fetchFacilities()
     } catch (err: any) {
@@ -107,12 +111,13 @@ export function useStronghold() {
   // 创建房间
   const createRoom = async (facilityId: string, name: string, description: string) => {
     try {
-      const res = await fetch(
+      const res = await fetchWithTimeout(
         `${API_BASE}/stronghold/rooms?facility_id=${facilityId}&name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`,
         {
           method: 'POST'
         }
       )
+
       if (!res.ok) throw new Error('创建房间失败')
       await fetchRooms(facilityId)
     } catch (err: any) {
@@ -124,7 +129,8 @@ export function useStronghold() {
   // 获取管家配置
   const fetchButler = async () => {
     try {
-      const res = await fetch(`${API_BASE}/stronghold/butler`)
+      const res = await fetchWithTimeout(`${API_BASE}/stronghold/butler`)
+
       if (!res.ok) throw new Error('获取管家配置失败')
       butlerConfig.value = await res.json()
     } catch (err: any) {
@@ -137,7 +143,8 @@ export function useStronghold() {
   const agentsStatus = ref<any[]>([])
   const fetchAgentsStatus = async () => {
     try {
-      const res = await fetch(`${API_BASE}/stronghold/agents/status`)
+      const res = await fetchWithTimeout(`${API_BASE}/stronghold/agents/status`)
+
       if (!res.ok) throw new Error('获取智能体状态失败')
       agentsStatus.value = await res.json()
     } catch (err: any) {
@@ -148,7 +155,7 @@ export function useStronghold() {
   // 呼叫管家
   const callButler = async (query: string) => {
     try {
-      const res = await fetch(`${API_BASE}/stronghold/butler/call`, {
+      const res = await fetchWithTimeout(`${API_BASE}/stronghold/butler/call`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json'
@@ -158,6 +165,7 @@ export function useStronghold() {
           query: query
         })
       })
+
       if (!res.ok) throw new Error('呼叫管家失败')
       // 呼叫后可能需要刷新房间状态或历史记录
       if (currentRoom.value) {

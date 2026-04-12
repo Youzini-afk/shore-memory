@@ -3,7 +3,9 @@
  * 对话日志的数据获取、编辑、删除、重试分析
  */
 import { ref, shallowRef, type Ref } from 'vue'
-import { API_BASE, fetchWithTimeout, formatLLMError } from './useDashboard'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout, formatLLMError } from './useDashboard'
+
 import type { LogEntry, Agent, DebugSegment, PromptMessage, OpenConfirmFn } from './types'
 
 interface UseLogsOptions {
@@ -104,7 +106,8 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
     fetchLogsState.lastRequestId = currentRequestId
 
     try {
-      let url = `${API_BASE}/history/${selectedSource.value}/${selectedSessionId.value}?limit=200&sort=${selectedSort.value}`
+      let url = `${API_BASE}/memories/history/${selectedSource.value}/${selectedSessionId.value}?limit=200&sort=${selectedSort.value}`
+
       if (selectedDate.value) url += `&date=${selectedDate.value}`
       if (activeAgent.value) url += `&agent_id=${activeAgent.value.id}`
 
@@ -116,13 +119,15 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
       const processedLogs = (Array.isArray(rawLogs) ? rawLogs : [])
         .filter((log): log is Record<string, unknown> => !!log && typeof log === 'object')
         .map((log) => {
-          const metadata = getLogMetadata(log as LogEntry)
+          const metadata = getLogMetadata(log as unknown as LogEntry)
+
           const images =
             (metadata?.images as string[] | undefined)?.map(
               (path) => `${API_BASE}/ide/image?path=${encodeURIComponent(path)}`
             ) ?? []
           return Object.freeze<LogEntry>({
-            ...(log as LogEntry),
+            ...(log as unknown as LogEntry),
+
             displayTime: new Date(log.timestamp as string).toLocaleString(),
             metadata: metadata,
             sentiment: (log.sentiment as string | null) ?? (metadata?.sentiment as string) ?? null,
@@ -165,7 +170,8 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
     if (!editingContent.value.trim()) return
     try {
       const res = await fetchWithTimeout(
-        `${API_BASE}/history/${logId}`,
+        `${API_BASE}/memories/history/${logId}`,
+
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
@@ -194,7 +200,8 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
     }
     try {
       await openConfirm('提示', '确定删除这条记录？', { type: 'warning' })
-      const res = await fetchWithTimeout(`${API_BASE}/history/${logId}`, { method: 'DELETE' }, 5000)
+      const res = await fetchWithTimeout(`${API_BASE}/memories/history/${logId}`, { method: 'DELETE' }, 5000)
+
       if (res.ok) {
         window.$notify('已删除', 'success')
         await fetchLogs()
@@ -229,7 +236,8 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
       if (log.analysis_status === 'processing') return
       updateLogStatus(log.id, 'processing')
       const res = await fetchWithTimeout(
-        `${API_BASE}/history/${log.id}/retry_analysis`,
+        `${API_BASE}/maintenance/memory/history/${log.id}/retry`,
+
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

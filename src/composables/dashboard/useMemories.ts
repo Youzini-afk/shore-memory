@@ -4,7 +4,9 @@
  */
 import { ref, shallowRef, computed, nextTick, type Ref } from 'vue'
 import * as echarts from 'echarts'
-import { API_BASE, fetchWithTimeout } from './useDashboard'
+import { API_BASE } from '@/config'
+import { fetchWithTimeout } from './useDashboard'
+
 import type { Memory, Agent, MemoryGraphData, TagCloudItem, OpenConfirmFn } from './types'
 
 interface UseMemoriesOptions {
@@ -319,10 +321,11 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       )
       isClearingEdges.value = true
       const res = await fetchWithTimeout(
-        `${API_BASE}/memories/orphaned_edges`,
+        `${API_BASE}/maintenance/memory/orphaned_edges`,
         { method: 'DELETE' },
         10000
       )
+
       const data = (await res.json()) as { deleted_count: number }
       window.$notify(`清理完成，共移除 ${data.deleted_count} 条无效连线`, 'success')
       if (memoryViewMode.value === 'graph') fetchMemoryGraph()
@@ -340,9 +343,10 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
     if (isScanningLonely.value) return
     isScanningLonely.value = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/memories/scan_lonely?limit=5`, {
+      const res = await fetchWithTimeout(`${API_BASE}/maintenance/memory/scan_lonely?limit=5`, {
         method: 'POST'
       })
+
       const data = (await res.json()) as {
         status: string
         processed_count?: number
@@ -378,10 +382,11 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       )
       isRunningMaintenance.value = true
       const res = await fetchWithTimeout(
-        `${API_BASE}/memories/maintenance`,
+        `${API_BASE}/maintenance/memory/legacy_maintenance`,
         { method: 'POST' },
         120000
       )
+
       const data = (await res.json()) as {
         status: string
         important_tagged?: number
@@ -416,10 +421,11 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       })
       isDreaming.value = true
       const res = await fetchWithTimeout(
-        `${API_BASE}/memories/dream?limit=10`,
+        `${API_BASE}/maintenance/memory/dream?limit=10`,
         { method: 'POST' },
         60000
       )
+
       const data = (await res.json()) as {
         status: string
         anchors_processed?: number
@@ -455,7 +461,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
     }
     isImportingStory.value = true
     try {
-      const response = await fetch(`${API_BASE}/memory/import_story`, {
+      const response = await fetch(`${API_BASE}/maintenance/memory/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -463,6 +469,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
           agent_id: activeAgent.value?.id ?? 'pero'
         })
       })
+
       if (!response.ok) {
         const errData = (await response.json()) as { detail?: string }
         throw new Error(errData.detail ?? 'Import failed')

@@ -257,6 +257,8 @@ import LyricOverlay from '../components/chat/LyricOverlay.vue'
 import { invoke, listen } from '@/utils/ipcAdapter'
 import { API_BASE } from '../config'
 import { gatewayClient } from '../api/gateway'
+import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
+
 
 const isElectron = window.electron !== undefined
 
@@ -729,8 +731,9 @@ const stopCurrentTask = async () => {
   if (!isThinking.value) return
 
   try {
-    const API_BASE = 'http://localhost:9120/api'
-    const res = await fetch(`${API_BASE}/task/voice_session/stop`, { method: 'POST' })
+    const res = await fetchWithTimeout(`${API_BASE}/tasks/voice_session/stop`, { method: 'POST' })
+
+
     if (res.ok) {
       console.log('[Pet3DView] 任务中断请求已发送')
       notificationManager.value?.add('已请求强行中断本次对话', 'warning', '任务控制')
@@ -980,7 +983,8 @@ const handleGlobalKeyUp = (e) => {
 // --- Agent 逻辑 ---
 const fetchActiveAgent = async () => {
   try {
-    const res = await fetch(`${API_BASE}/agents`)
+    const res = await fetchWithTimeout(`${API_BASE}/agents`, { silent: true })
+
     if (res.ok) {
       const agents = await res.json()
       const active = agents.find((a) => a.is_active)
@@ -1087,11 +1091,10 @@ onMounted(async () => {
     }
   }
 
-  // 初始获取 Pet 状态 (与后端同步)
   const fetchPetState = async () => {
     try {
-      const API_BASE = 'http://localhost:9120/api'
-      const res = await fetch(`${API_BASE}/pet/state`)
+      const res = await fetchWithTimeout(`${API_BASE}/pet/state`, { silent: true })
+
       if (res.ok) {
         const state = await res.json()
         if (state.mood) {

@@ -12,7 +12,8 @@ from datetime import datetime
 from typing import Dict, Optional
 
 import psutil
-from fastapi import APIRouter, Body, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy import func
 from sqlmodel import delete, select
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -26,13 +27,14 @@ from models import (
     ScheduledTask,
 )
 
-router = APIRouter(tags=["system"])
+router = APIRouter(prefix="/api/system", tags=["system"])
+
 
 current_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 logger = logging.getLogger(__name__)
 
 
-@router.get("/api/ping")
+@router.get("/ping")
 async def ping():
     return {"status": "ok", "timestamp": datetime.now().isoformat()}
 
@@ -42,7 +44,7 @@ async def health_check():
     return {"status": "healthy"}
 
 
-@router.get("/api/system/status")
+@router.get("/system/status")
 async def get_system_status():
     try:
         cpu_percent = psutil.cpu_percent(interval=None)
@@ -62,13 +64,17 @@ async def get_system_status():
         }
     except Exception as e:
         print(f"获取系统状态错误: {e}")
-        return {"error": str(e)}
+        raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.post("/api/open-path")
-async def open_path(payload: Dict[str, str] = Body(...)):  # noqa: B008
+class OpenPathRequest(BaseModel):
+    path: str
+
+
+@router.post("/open-path")
+async def open_path(payload: OpenPathRequest):
     """打开本地文件或文件夹"""
-    path = payload.get("path")
+    path = payload.path
     if not path:
         raise HTTPException(status_code=400, detail="Path is required")
 
@@ -97,10 +103,10 @@ async def open_path(payload: Dict[str, str] = Body(...)):  # noqa: B008
     else:
         subprocess.Popen(["xdg-open", path])
 
-    return {"status": "success", "message": f"Opened {path}"}
+    return {"status": "success", "message": f"Opened {path}", "data": {"path": path}}
 
 
-@router.get("/api/gateway/token")
+@router.get("/gateway/token")
 async def get_gateway_token_api():
     """获取 Gateway Token (用于前端连接 Gateway)"""
     try:
@@ -114,7 +120,10 @@ async def get_gateway_token_api():
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.get("/api/stats/overview")
+from schemas import OpenPathRequest, StatsOverviewResponse
+
+
+@router.get("/stats/overview", response_model=StatsOverviewResponse)
 async def get_overview_stats(
     agent_id: Optional[str] = None,
     session: AsyncSession = Depends(get_session),  # noqa: B008
@@ -144,20 +153,19 @@ async def get_overview_stats(
             "total_tasks": task_count,
         }
     except Exception as e:
-        logger.error(f"Failed to get overview stats: {e}")
-        return {"total_memories": 0, "total_logs": 0, "total_tasks": 0}
+        raise HTTPException(status_code=500, detail=f"获取统计概览失败: {str(e)}")
 
 
 # --- 配置 ---
 
 
-@router.get("/api/configs")
+@router.get("/config", deprecated=True, summary="历史兼容接口，请使用 /api/configs")
 async def get_configs(session: AsyncSession = Depends(get_session)):  # noqa: B008
     configs = (await session.exec(select(Config))).all()
     return {c.key: c.value for c in configs}
 
 
-@router.post("/api/configs")
+@router.post("/config", deprecated=True, summary="历史兼容接口，请使用 /api/configs")
 async def update_config(
     configs: Dict[str, str],
     session: AsyncSession = Depends(get_session),  # noqa: B008
@@ -215,39 +223,10 @@ async def update_config(
     return {"status": "success"}
 
 
-@router.get("/api/configs/waifu-texts")
-async def get_waifu_texts(session: AsyncSession = Depends(get_session)):  # noqa: B008
-    """获取动态生成的 Live2D 台词配置 (Agent 专属)"""
-    try:
-        from services.agent.agent_manager import get_agent_manager
-
-        agent_manager = get_agent_manager()
-        active_agent = agent_manager.get_active_agent()
-        agent_id = active_agent.id if active_agent else "pero"
-
-        agent_dir = os.path.join(current_dir, "services", "mdp", "agents", agent_id)
-        texts_path = os.path.join(agent_dir, "waifu_texts.json")
-
-        if os.path.exists(texts_path):
-            try:
-                with open(texts_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception as e:
-                print(f"[Main] 加载代理 {agent_id} 的 waifu_texts 失败: {e}")
-
-        config = await session.get(Config, "waifu_dynamic_texts")
-        if config:
-            return json.loads(config.value)
-
-        return {}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e)) from e
-
-
 # --- 系统重置 ---
 
 
-@router.post("/api/system/reset")
+@router.post("/system/reset")
 async def reset_system(session: AsyncSession = Depends(get_session)):  # noqa: B008
     """一键恢复出厂设置：清理所有记忆、对话记录、状态和任务，但保留模型配置"""
     try:
@@ -270,7 +249,11 @@ async def reset_system(session: AsyncSession = Depends(get_session)):  # noqa: B
         session.add(default_state)
 
         await session.commit()
-        return {"status": "success", "message": "系统已成功恢复出厂设置"}
+        return {
+            "status": "success",
+            "message": "系统已成功恢复出厂设置喵！",
+            "data": {},
+        }
     except Exception as e:
         await session.rollback()
         import traceback
