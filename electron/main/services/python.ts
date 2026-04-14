@@ -72,8 +72,12 @@ export async function startBackend(window: WindowLike, enableSocialMode: boolean
     pythonPath.includes(path.join('resources\\python'))
 
   if (isDev) {
-    // 开发模式：使用 venv，需要设置 PYTHONHOME
-    env['PYTHONHOME'] = pythonDir
+    // 开发模式：虚拟环境 (venv/.venv) 不应设置 PYTHONHOME，它们通过 pyvenv.cfg 自我配置
+    if (!pythonPath.toLowerCase().includes('.venv') && !pythonPath.toLowerCase().includes('venv')) {
+      env['PYTHONHOME'] = pythonDir
+    } else {
+      delete env['PYTHONHOME']
+    }
     env['PYTHONPATH'] = workspaceRoot
   } else if (isEmbeddedPython) {
     // 嵌入式 Python：不设置 PYTHONHOME！

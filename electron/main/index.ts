@@ -697,11 +697,23 @@ ipcMain.handle('download_models', async (event) => {
     env['PYTHONUNBUFFERED'] = '1' // 强制 Python 输出不缓冲，防止下载大文件时日志卡住
 
     const pythonDir = path.dirname(pythonPath)
-    env['PYTHONHOME'] = pythonDir
+    const isEmbeddedPython =
+      pythonPath.includes(path.join('resources', 'python')) ||
+      pythonPath.includes(path.join('resources\\python'))
+
     if (isDev) {
+      if (!pythonPath.toLowerCase().includes('.venv') && !pythonPath.toLowerCase().includes('venv')) {
+        env['PYTHONHOME'] = pythonDir
+      } else {
+        delete env['PYTHONHOME']
+      }
       env['PYTHONPATH'] = workspaceRoot
+    } else if (isEmbeddedPython) {
+      delete env['PYTHONHOME']
+      // 同时包含 resources 和 resources/backend，以支持两种导入风格
+      env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
     } else {
-      // 同时包含 resources 和 resources/backend，以支持两种导入风格 (from backend.xxx 和 from xxx)
+      env['PYTHONHOME'] = pythonDir
       env['PYTHONPATH'] = `${resourceDir}${path.delimiter}${path.join(resourceDir, 'backend')}`
     }
     env['PYTHONNOUSERSITE'] = '1'

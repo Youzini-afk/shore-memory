@@ -322,7 +322,11 @@ export async function getDiagnostics(): Promise<DiagnosticReport> {
           pythonPath.includes(path.join('resources\\python'))
 
         if (isDev) {
-          env['PYTHONHOME'] = pythonDir
+          if (!pythonPath.toLowerCase().includes('.venv') && !pythonPath.toLowerCase().includes('venv')) {
+            env['PYTHONHOME'] = pythonDir
+          } else {
+            delete env['PYTHONHOME']
+          }
           env['PYTHONPATH'] = workspaceRoot
         } else if (isEmbeddedPython) {
           // 嵌入式 Python 不设 PYTHONHOME，避免干扰其通过 .pth 的自我发现

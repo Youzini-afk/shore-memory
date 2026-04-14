@@ -5,6 +5,8 @@
 import { ref } from 'vue'
 import { invoke } from '@/utils/ipcAdapter'
 import { API_BASE } from '@/config'
+// 重新导出 API_BASE，方便已有的下游组件直接从本模块导入
+export { API_BASE }
 import type {
   ConfirmOptions,
   ConfirmResult,
