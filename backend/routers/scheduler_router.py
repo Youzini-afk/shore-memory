@@ -9,7 +9,7 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 
 from database import get_session
 from models import ScheduledTask
-from schemas import StandardResponse
+
 from services.agent.scheduler_service import scheduler_service
 
 
@@ -27,7 +27,7 @@ class SyncRemindersRequest(BaseModel):
 router = APIRouter(prefix="/api/scheduler", tags=["scheduler"])
 
 
-@router.post("/sync", response_model=StandardResponse)
+@router.post("/sync")
 async def sync_reminders(request: SyncRemindersRequest):
     """
     接收同步结果注册至调度器。
@@ -67,7 +67,7 @@ async def sync_reminders(request: SyncRemindersRequest):
         except Exception as e:
             results.append({"status": "error", "message": str(e)})
 
-    return StandardResponse(status="completed", data={"results": results})
+    return {"status": "completed", "results": results}
 
 
 @router.post("/check")

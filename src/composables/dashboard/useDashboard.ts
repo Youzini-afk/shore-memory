@@ -18,33 +18,56 @@ import type {
 } from './types'
 
 
+// ─── API 错误类（可用于 catch 中精确判断） ───────────────────────────────────
+export class ApiError extends Error {
+  status: number
+  detail: string
+
+  constructor(status: number, message: string, detail = '') {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.detail = detail
+  }
+}
+
 // ─── 带超时的 fetch 包装 ─────────────────────────────────────────────────────
 export const fetchWithTimeout = async (
   url: string,
-  options: RequestInit & { silent?: boolean } = {},
+  options: RequestInit & { silent?: boolean; throwOnError?: boolean } = {},
   timeout = 5000
 ): Promise<Response> => {
   const controller = new AbortController()
   const id = setTimeout(() => controller.abort(), timeout)
-  const { silent, ...fetchOptions } = options
+  const { silent, throwOnError, ...fetchOptions } = options
   
   try {
     const response = await fetch(url, { ...fetchOptions, signal: controller.signal })
     clearTimeout(id)
     
     // 如果响应不 OK，尝试解析统一的报错结构 (P0-3)
-    if (!response.ok && !silent) {
+    if (!response.ok) {
+      let errorMsg = `请求失败 (${response.status})`
+      let errorDetail = ''
+
       try {
         const errorData = await response.clone().json()
         const errorObj = errorData.error || errorData
         
         // 按照优先级提取信息：error.message -> message -> detail
-        const errorMsg = errorObj.message || errorObj.detail || `请求失败 (${response.status})`
-        const errorDetail = errorObj.detail && errorObj.detail !== errorMsg ? `\n详情: ${errorObj.detail}` : ''
-        
+        errorMsg = errorObj.message || errorObj.detail || errorMsg
+        errorDetail = errorObj.detail && errorObj.detail !== errorMsg ? `\n详情: ${errorObj.detail}` : ''
+      } catch {
+        // JSON 解析失败时使用默认错误消息
+      }
+
+      if (!silent) {
         window.$notify(errorMsg + errorDetail, 'error')
-      } catch (e) {
-        window.$notify(`服务器返回异常: ${response.status}`, 'error')
+      }
+
+      // 当 throwOnError 为 true 时，抛出 ApiError 防止调用方误 .json()
+      if (throwOnError) {
+        throw new ApiError(response.status, errorMsg, errorDetail)
       }
     }
 
@@ -52,6 +75,12 @@ export const fetchWithTimeout = async (
     return response
   } catch (error: unknown) {
     clearTimeout(id)
+
+    // 如果是已经构造好的 ApiError，直接 re-throw
+    if (error instanceof ApiError) {
+      throw error
+    }
+
     const err = error as Error
     let errorMsg = err.message
     if (err.name === 'AbortError') {
@@ -66,6 +95,30 @@ export const fetchWithTimeout = async (
     }
     throw error
   }
+}
+
+// ─── 安全的 JSON fetch 包装（推荐新代码使用） ─────────────────────────────────
+/**
+ * 一步完成 fetch + OK 校验 + JSON 解析，失败时自动 throw ApiError。
+ *
+ * 与 fetchWithTimeout 的区别：
+ *   - 非 OK 响应 **一定** 会 throw（不需要手动 if (!res.ok)）
+ *   - 自动调用 .json() 并返回 T 类型数据
+ *   - 适用于所有「成功时返回 JSON」的接口
+ *
+ * @example
+ * ```ts
+ * const data = await fetchJson<Memory[]>(`${API_BASE}/memories`, {}, 5000)
+ * // data 已经是 Memory[]，无需 res.ok 检查
+ * ```
+ */
+export const fetchJson = async <T = unknown>(
+  url: string,
+  options: RequestInit & { silent?: boolean } = {},
+  timeout = 5000
+): Promise<T> => {
+  const response = await fetchWithTimeout(url, { ...options, throwOnError: true }, timeout)
+  return (await response.json()) as T
 }
 
 // ─── LLM 错误信息格式化 ────────────────────────────────────────────────────────

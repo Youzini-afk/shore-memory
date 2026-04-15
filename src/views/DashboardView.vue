@@ -212,7 +212,13 @@
               : 'min-height: 100%;'
           "
         >
-          <div>
+          <div
+            :class="
+              ['logs', 'terminal', 'napcat'].includes(currentTab)
+                ? 'h-full overflow-hidden'
+                : ''
+            "
+          >
             <!-- 选项卡组件 (通过 provide/inject 传递状态) -->
             <OverviewTab v-if="currentTab === 'overview'" key="overview" />
             <LogsTab v-else-if="currentTab === 'logs'" key="logs" />

@@ -1,6 +1,6 @@
 import { ref, type Ref } from 'vue'
 import { API_BASE } from '../config'
-import { fetchWithTimeout } from './dashboard/useDashboard'
+import { fetchJson, fetchWithTimeout } from './dashboard/useDashboard'
 
 
 interface Facility {
@@ -30,10 +30,7 @@ export function useStronghold() {
   const fetchFacilities = async () => {
     loading.value = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/stronghold/facilities`)
-
-      if (!res.ok) throw new Error('获取设施失败')
-      facilities.value = await res.json()
+      facilities.value = await fetchJson<Facility[]>(`${API_BASE}/stronghold/facilities`)
 
       // 如果未选择，则选择第一个设施
       if (!currentFacility.value && facilities.value.length > 0) {
@@ -52,15 +49,11 @@ export function useStronghold() {
   const fetchRooms = async (facilityId?: string) => {
     loading.value = true
     try {
-      // 若未提供 facilityId，则获取所有设施的房间（需确认后端 API 行为）
-      // API 支持通过 facility_id 参数筛选
       const url = facilityId
         ? `${API_BASE}/stronghold/rooms?facility_id=${facilityId}`
         : `${API_BASE}/stronghold/rooms`
 
-      const res = await fetchWithTimeout(url)
-      if (!res.ok) throw new Error('获取房间失败')
-      rooms.value = await res.json()
+      rooms.value = await fetchJson<Room[]>(url)
 
       // 切换设施后，默认选中第一个房间
       if (
@@ -93,14 +86,10 @@ export function useStronghold() {
   // 创建设施
   const createFacility = async (name: string, description: string, icon?: string) => {
     try {
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/stronghold/facilities?name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}&icon=${encodeURIComponent(icon || '')}`,
-        {
-          method: 'POST'
-        }
+        { method: 'POST', throwOnError: true }
       )
-
-      if (!res.ok) throw new Error('创建设施失败')
       await fetchFacilities()
     } catch (err: any) {
       error.value = err.message
@@ -111,14 +100,10 @@ export function useStronghold() {
   // 创建房间
   const createRoom = async (facilityId: string, name: string, description: string) => {
     try {
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/stronghold/rooms?facility_id=${facilityId}&name=${encodeURIComponent(name)}&description=${encodeURIComponent(description)}`,
-        {
-          method: 'POST'
-        }
+        { method: 'POST', throwOnError: true }
       )
-
-      if (!res.ok) throw new Error('创建房间失败')
       await fetchRooms(facilityId)
     } catch (err: any) {
       error.value = err.message
@@ -129,10 +114,7 @@ export function useStronghold() {
   // 获取管家配置
   const fetchButler = async () => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/stronghold/butler`)
-
-      if (!res.ok) throw new Error('获取管家配置失败')
-      butlerConfig.value = await res.json()
+      butlerConfig.value = await fetchJson(`${API_BASE}/stronghold/butler`)
     } catch (err: any) {
       console.error('获取管家配置失败:', err)
       // 非关键错误，不设置全局错误状态
@@ -143,10 +125,7 @@ export function useStronghold() {
   const agentsStatus = ref<any[]>([])
   const fetchAgentsStatus = async () => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/stronghold/agents/status`)
-
-      if (!res.ok) throw new Error('获取智能体状态失败')
-      agentsStatus.value = await res.json()
+      agentsStatus.value = await fetchJson(`${API_BASE}/stronghold/agents/status`)
     } catch (err: any) {
       console.error('获取智能体状态失败:', err)
     }
@@ -155,18 +134,12 @@ export function useStronghold() {
   // 呼叫管家
   const callButler = async (query: string) => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/stronghold/butler/call`, {
+      await fetchWithTimeout(`${API_BASE}/stronghold/butler/call`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          agent_id: 'user',
-          query: query
-        })
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agent_id: 'user', query }),
+        throwOnError: true
       })
-
-      if (!res.ok) throw new Error('呼叫管家失败')
       // 呼叫后可能需要刷新房间状态或历史记录
       if (currentRoom.value) {
         await fetchRooms(currentRoom.value.facility_id)

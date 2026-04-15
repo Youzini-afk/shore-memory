@@ -116,10 +116,34 @@ class ModManager:
         cls._loaded_mods[mod_info.id] = mod_info
 
         try:
-            spec = importlib.util.spec_from_file_location(f"mods.{mod_name}", main_py)
+            # 确保 'mods' 父包已注册到 sys.modules，否则相对导入会失败
+            if "mods" not in sys.modules:
+                import types
+
+                mods_pkg = types.ModuleType("mods")
+                mods_pkg.__path__ = [cls.MODS_DIR]
+                mods_pkg.__package__ = "mods"
+                sys.modules["mods"] = mods_pkg
+
+            spec = importlib.util.spec_from_file_location(
+                f"mods.{mod_name}.main",
+                main_py,
+                submodule_search_locations=[mod_path],
+            )
             if spec and spec.loader:
                 module = importlib.util.module_from_spec(spec)
-                sys.modules[f"mods.{mod_name}"] = module
+                module.__package__ = f"mods.{mod_name}"
+
+                # 注册子包本身 (mods.memory_tagger)
+                if f"mods.{mod_name}" not in sys.modules:
+                    import types as _types
+
+                    sub_pkg = _types.ModuleType(f"mods.{mod_name}")
+                    sub_pkg.__path__ = [mod_path]
+                    sub_pkg.__package__ = f"mods.{mod_name}"
+                    sys.modules[f"mods.{mod_name}"] = sub_pkg
+
+                sys.modules[f"mods.{mod_name}.main"] = module
                 spec.loader.exec_module(module)
 
                 if hasattr(module, "init"):

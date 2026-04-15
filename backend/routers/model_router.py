@@ -10,12 +10,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel import select
 from sqlmodel.ext.asyncio.session import AsyncSession
 
+from database import get_session
+
 from models import AIModelConfig
 from schemas import (
     CreateModelRequest,
     FetchRemoteModelsRequest,
     RemoteModelsResponse,
-    StandardResponse,
     UpdateModelRequest,
 )
 
@@ -60,14 +61,14 @@ async def update_model(
     return db_model
 
 
-@router.delete("/{model_id}", response_model=StandardResponse)
+@router.delete("/{model_id}")
 async def delete_model(model_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     db_model = await session.get(AIModelConfig, model_id)
     if not db_model:
         raise HTTPException(status_code=404, detail="Model not found")
     await session.delete(db_model)
     await session.commit()
-    return StandardResponse(message="模型已成功删除")
+    return {"status": "success", "message": "模型已成功删除"}
 
 
 @router.post("/remote", response_model=RemoteModelsResponse)

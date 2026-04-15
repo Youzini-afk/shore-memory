@@ -5,7 +5,7 @@
 import { ref } from 'vue'
 import { invoke } from '@/utils/ipcAdapter'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout } from './useDashboard'
+import { fetchJson, fetchWithTimeout } from './useDashboard'
 
 import type { Agent, NapCatStatus, MemoryConfig } from './types'
 
@@ -17,20 +17,17 @@ export function useAgentConfig() {
 
   const fetchAgents = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/agents`, {}, 2000)
-      if (res.ok) {
-        const agents = (await res.json()) as Agent[]
-        availableAgents.value = agents.map((a) => ({
-          ...a,
-          avatarUrl: a.avatar
-            ? a.avatar.startsWith('http')
-              ? a.avatar
-              : `${API_BASE.replace('/api', '')}${a.avatar}`
-            : null
-        }))
-        const active = availableAgents.value.find((a) => a.is_active)
-        if (active) activeAgent.value = active
-      }
+      const agents = await fetchJson<Agent[]>(`${API_BASE}/agents`, {}, 2000)
+      availableAgents.value = agents.map((a) => ({
+        ...a,
+        avatarUrl: a.avatar
+          ? a.avatar.startsWith('http')
+            ? a.avatar
+            : `${API_BASE.replace('/api', '')}${a.avatar}`
+          : null
+      }))
+      const active = availableAgents.value.find((a) => a.is_active)
+      if (active) activeAgent.value = active
     } catch (e) {
       console.error('获取助手列表失败:', e)
     }
@@ -82,11 +79,8 @@ export function useAgentConfig() {
 
   const fetchCompanionStatus = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/companion/status`, {}, 2000)
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isCompanionEnabled.value = data.enabled
-      }
+      const data = await fetchJson<{ enabled: boolean }>(`${API_BASE}/companion/status`, {}, 2000)
+      isCompanionEnabled.value = data.enabled
     } catch (e) {
       console.error('Failed to fetch companion status', e)
     }
@@ -95,7 +89,7 @@ export function useAgentConfig() {
   const toggleCompanion = async (val: boolean): Promise<void> => {
     try {
       isTogglingCompanion.value = true
-      const res = await fetchWithTimeout(
+      const data = await fetchJson<{ enabled: boolean }>(
         `${API_BASE}/companion/toggle`,
         {
           method: 'POST',
@@ -104,16 +98,10 @@ export function useAgentConfig() {
         },
         5000
       )
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isCompanionEnabled.value = data.enabled
-        window.$notify(data.enabled ? '已开启陪伴模式' : '已关闭陪伴模式', 'success')
-      } else {
-        isCompanionEnabled.value = !val
-      }
+      isCompanionEnabled.value = data.enabled
+      window.$notify(data.enabled ? '已开启陪伴模式' : '已关闭陪伴模式', 'success')
     } catch {
       isCompanionEnabled.value = !val
-      window.$notify('网络错误', 'error')
     } finally {
       isTogglingCompanion.value = false
     }
@@ -121,11 +109,8 @@ export function useAgentConfig() {
 
   const fetchSocialStatus = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/social/status`, {}, 2000)
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isSocialEnabled.value = data.enabled
-      }
+      const data = await fetchJson<{ enabled: boolean }>(`${API_BASE}/social/status`, {}, 2000)
+      isSocialEnabled.value = data.enabled
     } catch {
       console.error('Failed to fetch social status')
     }
@@ -133,11 +118,8 @@ export function useAgentConfig() {
 
   const fetchLightweightStatus = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/configs/lightweight_mode`, {}, 2000)
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isLightweightEnabled.value = data.enabled
-      }
+      const data = await fetchJson<{ enabled: boolean }>(`${API_BASE}/configs/lightweight_mode`, {}, 2000)
+      isLightweightEnabled.value = data.enabled
     } catch {
       console.error('Failed to fetch lightweight status')
     }
@@ -146,7 +128,7 @@ export function useAgentConfig() {
   const toggleLightweight = async (val: boolean): Promise<void> => {
     try {
       isTogglingLightweight.value = true
-      const res = await fetchWithTimeout(
+      const data = await fetchJson<{ enabled: boolean }>(
         `${API_BASE}/configs/lightweight_mode`,
         {
           method: 'POST',
@@ -155,16 +137,10 @@ export function useAgentConfig() {
         },
         5000
       )
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isLightweightEnabled.value = data.enabled
-        window.$notify(data.enabled ? '已开启轻量聊天模式' : '已关闭轻量聊天模式', 'success')
-      } else {
-        isLightweightEnabled.value = !val
-      }
+      isLightweightEnabled.value = data.enabled
+      window.$notify(data.enabled ? '已开启轻量聊天模式' : '已关闭轻量聊天模式', 'success')
     } catch {
       isLightweightEnabled.value = !val
-      window.$notify('网络错误', 'error')
     } finally {
       isTogglingLightweight.value = false
     }
@@ -172,11 +148,8 @@ export function useAgentConfig() {
 
   const fetchAuraVisionStatus = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/configs/aura_vision`, {}, 3000)
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isAuraVisionEnabled.value = data.enabled
-      }
+      const data = await fetchJson<{ enabled: boolean }>(`${API_BASE}/configs/aura_vision`, {}, 3000)
+      isAuraVisionEnabled.value = data.enabled
     } catch (e) {
       console.error('Failed to fetch AuraVision status', e)
     }
@@ -185,7 +158,7 @@ export function useAgentConfig() {
   const toggleAuraVision = async (val: boolean): Promise<void> => {
     try {
       isTogglingAuraVision.value = true
-      const res = await fetchWithTimeout(
+      const data = await fetchJson<{ enabled: boolean }>(
         `${API_BASE}/configs/aura_vision`,
         {
           method: 'POST',
@@ -194,19 +167,13 @@ export function useAgentConfig() {
         },
         5000
       )
-      if (res.ok) {
-        const data = (await res.json()) as { enabled: boolean }
-        isAuraVisionEnabled.value = data.enabled
-        window.$notify(
-          data.enabled ? '已开启主动视觉感应 (AuraVision)' : '已关闭主动视觉感应 (AuraVision)',
-          'success'
-        )
-      } else {
-        isAuraVisionEnabled.value = !val
-      }
+      isAuraVisionEnabled.value = data.enabled
+      window.$notify(
+        data.enabled ? '已开启主动视觉感应 (AuraVision)' : '已关闭主动视觉感应 (AuraVision)',
+        'success'
+      )
     } catch {
       isAuraVisionEnabled.value = !val
-      window.$notify('网络错误', 'error')
     } finally {
       isTogglingAuraVision.value = false
     }
@@ -229,11 +196,8 @@ export function useAgentConfig() {
 
   const fetchMemoryConfig = async (): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/configs/memory`, {}, 3000)
-      if (res.ok) {
-        const data = (await res.json()) as MemoryConfig
-        if (data?.modes) memoryConfig.value = data
-      }
+      const data = await fetchJson<MemoryConfig>(`${API_BASE}/configs/memory`, {}, 3000)
+      if (data?.modes) memoryConfig.value = data
     } catch (e) {
       console.error('Failed to fetch memory config:', e)
     }
@@ -242,20 +206,17 @@ export function useAgentConfig() {
   const saveMemoryConfig = async (): Promise<void> => {
     isSavingMemoryConfig.value = true
     try {
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/configs/memory`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ config: memoryConfig.value })
+          body: JSON.stringify({ config: memoryConfig.value }),
+          throwOnError: true
         },
         5000
       )
-      if (res.ok) {
-        window.$notify('记忆配置已保存', 'success')
-      } else {
-        throw new Error('保存失败')
-      }
+      window.$notify('记忆配置已保存', 'success')
     } catch (e) {
       window.$notify('保存失败: ' + (e as Error).message, 'error')
     } finally {

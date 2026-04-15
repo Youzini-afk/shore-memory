@@ -4,7 +4,7 @@
  */
 import { shallowRef, type Ref } from 'vue'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout } from './useDashboard'
+import { fetchJson, fetchWithTimeout } from './useDashboard'
 import type { Task, Agent, OpenConfirmFn } from './types'
 
 
@@ -33,8 +33,7 @@ export function useTasks({ activeAgent, openConfirm }: UseTasksOptions) {
       let url = `${API_BASE}/maintenance/tasks`
 
       if (activeAgent.value) url += `?agent_id=${activeAgent.value.id}`
-      const res = await fetchWithTimeout(url, {}, 5000)
-      const rawTasks = (await res.json()) as Task[]
+      const rawTasks = await fetchJson<Task[]>(url, {}, 5000)
 
       if (rawTasks.length < 100) {
         tasks.value = rawTasks.map((t) => Object.freeze(t))
@@ -76,15 +75,9 @@ export function useTasks({ activeAgent, openConfirm }: UseTasksOptions) {
     try {
       await openConfirm('提示', '确定删除此任务？', { type: 'warning' })
       deleteTaskState.isLoading = true
-      const res = await fetchWithTimeout(`${API_BASE}/maintenance/tasks/${taskId}`, { method: 'DELETE' }, 5000)
-
-      if (res.ok) {
-        await fetchTasks()
-        window.$notify('已删除', 'success')
-      } else {
-        const err = (await res.json()) as { message?: string }
-        window.$notify(err.message ?? '操作失败', 'error')
-      }
+      await fetchWithTimeout(`${API_BASE}/maintenance/tasks/${taskId}`, { method: 'DELETE', throwOnError: true }, 5000)
+      await fetchTasks()
+      window.$notify('已删除', 'success')
     } catch (e) {
       if ((e as Error).message !== 'User cancelled') {
         console.error(e)

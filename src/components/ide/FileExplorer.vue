@@ -111,7 +111,7 @@ import FileTreeItem from './FileTreeItem.vue'
 import ContextMenu from '../ui/ContextMenu.vue'
 import CustomDialog from '../ui/CustomDialog.vue'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout } from '@/composables/dashboard/useDashboard'
+import { fetchJson, fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 
 
 const emit = defineEmits(['file-selected'])
@@ -206,15 +206,7 @@ const handleDialogCancel = () => {
 const fetchFiles = async (path = null) => {
   try {
     const url = path ? `${API_BASE}/ide/files?path=${encodeURIComponent(path)}` : `${API_BASE}/ide/files`
-    const res = await fetchWithTimeout(url, { silent: true })
-
-
-    if (!res.ok) {
-      const errData = await res.json().catch(() => ({}))
-      throw new Error(errData.detail || '无法获取文件列表')
-    }
-
-    return await res.json()
+    return await fetchJson(url, { silent: true })
   } catch (e) {
     console.error('[FileExplorer] 获取文件列表失败:', e)
     throw e
@@ -309,7 +301,8 @@ const createFile = async (parentItem) => {
     await fetchWithTimeout(`${API_BASE}/ide/file/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, is_directory: false })
+      body: JSON.stringify({ path, is_directory: false }),
+      throwOnError: true
     })
     refresh()
 
@@ -335,7 +328,8 @@ const createFolder = async (parentItem) => {
     await fetchWithTimeout(`${API_BASE}/ide/file/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path, is_directory: true })
+      body: JSON.stringify({ path, is_directory: true }),
+      throwOnError: true
     })
     refresh()
 
@@ -358,7 +352,8 @@ const renameItem = async (item) => {
     await fetchWithTimeout(`${API_BASE}/ide/file/rename`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: item.path, new_name: newName })
+      body: JSON.stringify({ path: item.path, new_name: newName }),
+      throwOnError: true
     })
     refresh()
 
@@ -380,7 +375,8 @@ const deleteItem = async (item) => {
     await fetchWithTimeout(`${API_BASE}/ide/file/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: item.path })
+      body: JSON.stringify({ path: item.path }),
+      throwOnError: true
     })
     refresh()
 

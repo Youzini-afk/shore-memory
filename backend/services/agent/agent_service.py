@@ -286,18 +286,19 @@ class AgentService:
         except Exception as e:
             import traceback
 
-            error_msg = f"Error: {str(e)}"
+            error_str = str(e)
             print(f"[Agent] 聊天错误: {traceback.format_exc()}")
 
-            # 空内容错误特殊处理
-            err_lower = str(e).lower()
+            # 统一走 Gateway 广播错误通知，不写入会话记录和数据库
+            from services.core.gateway_client import gateway_client
+
+            err_lower = error_str.lower()
             if (
                 "no valid content" in err_lower
                 or "invalid api response" in err_lower
                 or "choices array is missing" in err_lower
             ):
-                from services.core.gateway_client import gateway_client
-
+                # 空内容 / 无效 API 响应
                 asyncio.create_task(
                     gateway_client.broadcast_error(
                         message="API 未返回有效内容，可能是模型正在思考或被截断，请重试。",
@@ -305,21 +306,25 @@ class AgentService:
                         error_type="error",
                     )
                 )
-                return
+            else:
+                # 所有其他异常（超时、网络、配置等）
+                asyncio.create_task(
+                    gateway_client.broadcast_error(
+                        message=f"对话出错: {error_str}",
+                        title="LLM 错误",
+                        error_type="error",
+                    )
+                )
 
-            # 错误路径：尝试保存日志
-            await self.post_handler.handle_error(
-                full_response_text=full_response_text,
-                error_msg=error_msg,
-                user_message=user_message,
-                user_text_override=user_text_override,
-                source=source,
-                session_id=session_id,
-                pair_id=pair_id,
-                current_agent_id=current_agent_id,
-            )
-            yield error_msg
+            # 出错时强制重置思维链状态
+            if on_status:
+                try:
+                    await on_status("idle", "")
+                except Exception:
+                    pass
+
             return
+
 
         finally:
             # 清理 MCP 客户端资源

@@ -73,7 +73,7 @@
 <script setup>
 import { ref, watch, nextTick, onMounted, onUnmounted } from 'vue'
 import { AGENT_NAME } from '../../config'
-import { API_BASE, fetchWithTimeout } from '@/composables/dashboard/useDashboard'
+import { API_BASE, fetchJson, fetchWithTimeout } from '@/composables/dashboard/useDashboard'
 
 const props = defineProps({
 
@@ -109,13 +109,8 @@ watch(
 const checkTaskStatus = async () => {
   if (!props.isLive) return
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/tasks/default/status`, { silent: true })
-
-
-    if (res.ok) {
-      const data = await res.json()
-      isTaskPaused.value = data.status === 'paused'
-    }
+    const data = await fetchJson(`${API_BASE}/tasks/default/status`, { silent: true })
+    isTaskPaused.value = data.status === 'paused'
   } catch {
     // 静默失败
   }
@@ -136,12 +131,8 @@ onUnmounted(() => {
 const toggleTaskPause = async () => {
   const action = isTaskPaused.value ? 'resume' : 'pause'
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/tasks/default/${action}`, { method: 'POST' })
-
-
-    if (res.ok) {
-      isTaskPaused.value = !isTaskPaused.value
-    }
+    await fetchWithTimeout(`${API_BASE}/tasks/default/${action}`, { method: 'POST', throwOnError: true })
+    isTaskPaused.value = !isTaskPaused.value
   } catch (e) {
     console.error('Task control failed', e)
   }
@@ -152,17 +143,13 @@ const sendInjection = async () => {
 
   isSendingInjection.value = true
   try {
-    const res = await fetchWithTimeout(`${API_BASE}/tasks/default/inject`, {
-
+    await fetchWithTimeout(`${API_BASE}/tasks/default/inject`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ instruction: injectionInput.value })
+      body: JSON.stringify({ instruction: injectionInput.value }),
+      throwOnError: true
     })
-
-
-    if (res.ok) {
-      injectionInput.value = ''
-    }
+    injectionInput.value = ''
   } catch (e) {
     console.error('指令注入失败', e)
   } finally {

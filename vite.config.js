@@ -31,8 +31,18 @@ export default defineConfig(({ command }) => ({
     }
   },
   optimizeDeps: {
-    // 排除会被扫描到的非源码目录中的内容
-    entries: ['index.html', 'src/**/*.{vue,ts,js,tsx,jsx}'],
+    // 排除会被扫描到的非源码目录中的内容，并且不扫描 native 文件夹
+    entries: [
+      'index.html', 
+      'src/**/*.{vue,ts,js,tsx,jsx}',
+      '!src/components/avatar/native/**/*'
+    ],
+    // 这里也可以显式 exclude 那些未安装的可选平台包，防止误报
+    exclude: [
+      'pero-render-core-win32-x64-msvc',
+      'pero-render-core-darwin-arm64',
+      'pero-render-core-linux-x64-gnu'
+    ],
     force: true,
     include: [
       'vue',

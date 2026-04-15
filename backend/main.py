@@ -78,7 +78,7 @@ from fastapi import (
     FastAPI,
     Request,
 )
-from fastapi.exceptions import RequestValidationError
+from fastapi.exceptions import RequestValidationError, ResponseValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -921,6 +921,25 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
                 "status": "error",
                 "message": "请求参数验证失败喵",
                 "detail": exc.errors(),
+            }
+        },
+    )
+
+
+@app.exception_handler(ResponseValidationError)
+async def response_validation_handler(request: Request, exc: ResponseValidationError):
+    """捕获 response_model 校验失败（P2.5）—— 防止 ASGI 层裸崩"""
+    logger.error(
+        f"[响应校验失败] {request.method} {request.url} | {exc.errors()}",
+        exc_info=True,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": {
+                "status": "error",
+                "message": "服务器响应数据异常喵，请联系开发者检查日志",
+                "detail": str(exc.errors()),
             }
         },
     )

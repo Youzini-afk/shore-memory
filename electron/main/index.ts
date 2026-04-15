@@ -600,7 +600,7 @@ ipcMain.handle('system_error_log', (_, errMsg) => {
 
 // 根据角色 ID 获取该角色的交互台词
 ipcMain.handle('get_agent_waifu_texts', async (_, agentId: string) => {
-  const root = isDev ? path.resolve(__dirname, '../../..') : paths.resources
+  const root = isDev ? path.resolve(__dirname, '../..') : paths.resources
   const waifuPath = path.join(root, 'backend/services/mdp/agents', agentId, 'waifu_texts.json')
   if (await fs.pathExists(waifuPath)) {
     return await fs.readJson(waifuPath)
@@ -654,7 +654,7 @@ ipcMain.handle('download_models', async (event) => {
       throw new Error('Python environment not found')
     }
 
-    const workspaceRoot = isDev ? path.resolve(__dirname, '../../..') : paths.resources
+    const workspaceRoot = isDev ? path.resolve(__dirname, '../..') : paths.resources
 
     let cliScript = path.join(workspaceRoot, 'backend/utils/model_cli.py')
     // 生产环境资源目录逻辑

@@ -4,7 +4,7 @@
  */
 import { ref, shallowRef, type Ref } from 'vue'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout, formatLLMError } from './useDashboard'
+import { fetchJson, fetchWithTimeout, formatLLMError } from './useDashboard'
 
 import type { LogEntry, Agent, DebugSegment, PromptMessage, OpenConfirmFn } from './types'
 
@@ -111,8 +111,7 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
       if (selectedDate.value) url += `&date=${selectedDate.value}`
       if (activeAgent.value) url += `&agent_id=${activeAgent.value.id}`
 
-      const res = await fetchWithTimeout(url, {}, 5000)
-      const rawLogs = (await res.json()) as unknown[]
+      const rawLogs = await fetchJson<unknown[]>(url, {}, 5000)
 
       if (fetchLogsState.lastRequestId !== currentRequestId) return
 
@@ -169,25 +168,21 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
   const saveLogEdit = async (logId: string | number): Promise<void> => {
     if (!editingContent.value.trim()) return
     try {
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/memories/history/${logId}`,
 
         {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ content: editingContent.value })
+          body: JSON.stringify({ content: editingContent.value }),
+          throwOnError: true
         },
         5000
       )
-      if (res.ok) {
-        editingLogId.value = null
-        await fetchLogs()
-        window.$notify('已修改', 'success')
-      } else {
-        window.$notify('修改失败', 'error')
-      }
+      editingLogId.value = null
+      await fetchLogs()
+      window.$notify('已修改', 'success')
     } catch (e) {
-      window.$notify('网络错误', 'error')
       console.error(e)
     }
   }
@@ -200,19 +195,12 @@ export function useLogs({ activeAgent, currentTab, openConfirm }: UseLogsOptions
     }
     try {
       await openConfirm('提示', '确定删除这条记录？', { type: 'warning' })
-      const res = await fetchWithTimeout(`${API_BASE}/memories/history/${logId}`, { method: 'DELETE' }, 5000)
-
-      if (res.ok) {
-        window.$notify('已删除', 'success')
-        await fetchLogs()
-      } else {
-        const err = (await res.json()) as { message?: string }
-        window.$notify(err.message ?? '删除失败', 'error')
-      }
+      await fetchWithTimeout(`${API_BASE}/memories/history/${logId}`, { method: 'DELETE', throwOnError: true }, 5000)
+      window.$notify('已删除', 'success')
+      await fetchLogs()
     } catch (e) {
       if ((e as Error).message !== 'User cancelled') {
         console.error('Error in deleteLog:', e)
-        window.$notify('系统错误: ' + ((e as Error).message ?? '未知错误'), 'error')
       }
     }
   }

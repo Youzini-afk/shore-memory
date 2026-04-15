@@ -1,6 +1,6 @@
 [project]
 name = "pero-backend"
-version = "0.8.67"
+version = "0.8.68"
 description = "萌动链接：PeroperoChat！ 后端服务"
 requires-python = ">=3.10,<3.11"
 dependencies = [
@@ -139,3 +139,14 @@ exclude = '''
 
 [tool.basedpyright]
 typeCheckingMode = "off"
+
+[tool.pyrefly]
+# 告诉 Pyrefly 当前目录 (backend/) 是 import root
+# 解决因 sys.path 动态操作导致的 "Cannot find module" 误报
+search-path = ["."]
+project-includes = ["."]
+python-version = "3.10"
+python-interpreter-path = ".venv/Scripts/python.exe"
+# 关闭 IDE 中的类型错误显示（保留模块解析、自动补全、跳转定义等功能）
+# 这样既不会报 "Cannot find module"，也不会出现一堆严格类型检查的误报
+disable-type-errors-in-ide = true

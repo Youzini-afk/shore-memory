@@ -18,8 +18,15 @@ from sqlmodel.ext.asyncio.session import AsyncSession
 from schemas import (
     ImportStoryRequest,
     ScheduledTaskResponse,
-    StandardResponse,
 )
+
+from database import engine, get_session
+from models import ConversationLog, MaintenanceRecord, ScheduledTask
+from models import TriviumSyncTask
+from peroproto import perolink_pb2
+from services.core.gateway_client import gateway_client
+from services.memory.memory_service import MemoryService
+from services.memory.memory_importer import MemoryImporter
 
 router = APIRouter(prefix="/api/maintenance", tags=["maintenance"])
 
@@ -51,7 +58,7 @@ async def _run_retry_background(log_id: int):
 # --- 记忆运维细分路由 (从 memory_router 迁移) ---
 
 
-@router.post("/memory/import", response_model=StandardResponse)
+@router.post("/memory/import")
 async def import_story_maintenance(
     request: ImportStoryRequest,
     session: AsyncSession = Depends(get_session),
@@ -64,7 +71,7 @@ async def import_story_maintenance(
     return result
 
 
-@router.post("/memory/run_secretary", response_model=StandardResponse)
+@router.post("/memory/run_secretary")
 async def run_memory_secretary_maintenance(
     session: AsyncSession = Depends(get_session),
 ):
@@ -78,7 +85,7 @@ async def run_memory_secretary_maintenance(
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.post("/memory/history/{log_id}/retry", response_model=StandardResponse)
+@router.post("/memory/history/{log_id}/retry")
 async def retry_log_analysis_maintenance(
     log_id: int,
     background_tasks: BackgroundTasks,
@@ -89,7 +96,7 @@ async def retry_log_analysis_maintenance(
     if not log:
         raise HTTPException(status_code=404, detail="未找到日志")
     background_tasks.add_task(_run_retry_background, log_id)
-    return StandardResponse(status="queued", message="分析重试已在后台启动喵")
+    return {"status": "queued", "message": "分析重试已在后台启动喵"}
 
 
 @router.get("/nit/status")
@@ -123,7 +130,7 @@ async def get_tasks(
     return (await session.exec(statement)).all()
 
 
-@router.delete("/tasks/{task_id}", response_model=StandardResponse)
+@router.delete("/tasks/{task_id}")
 async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         task = await session.get(ScheduledTask, task_id)
@@ -131,7 +138,7 @@ async def delete_task(task_id: int, session: AsyncSession = Depends(get_session)
             raise HTTPException(status_code=404, detail="Task not found")
         await session.delete(task)
         await session.commit()
-        return StandardResponse(message="任务已被移除喵")
+        return {"status": "success", "message": "任务已被移除喵"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e)) from e
 
@@ -198,16 +205,14 @@ async def check_tasks(session: AsyncSession = Depends(get_session)):  # noqa: B0
 # --- 记忆运维资产保留分界线 ---
 
 
-@router.delete("/memory/orphaned_edges", response_model=StandardResponse)
+@router.delete("/memory/orphaned_edges")
 async def delete_orphaned_edges(session: AsyncSession = Depends(get_session)):
     service = MemoryService()
     count = await service.delete_orphaned_edges(session)
-    return StandardResponse(
-        message=f"清理完成，共移除 {count} 条孤立边喵~", data={"deleted_count": count}
-    )
+    return {"status": "success", "message": f"清理完成，共移除 {count} 条孤立边喵~", "deleted_count": count}
 
 
-@router.post("/memory/scan_lonely", response_model=StandardResponse)
+@router.post("/memory/scan_lonely")
 async def scan_lonely_memories(
     limit: int = 5,
     session: AsyncSession = Depends(get_session),  # noqa: B008
@@ -215,26 +220,23 @@ async def scan_lonely_memories(
     from services.memory.reflection_service import ReflectionService
 
     service = ReflectionService(session)
-    result = await service.scan_lonely_memories(limit=limit)
-    return StandardResponse(message="扫描已完成", data=result)
+    return await service.scan_lonely_memories(limit=limit)
 
 
-@router.post("/memory/legacy_maintenance", response_model=StandardResponse)
+@router.post("/memory/legacy_maintenance")
 async def run_legacy_maintenance(session: AsyncSession = Depends(get_session)):
     from services.memory.reflection_service import ReflectionService
 
     service = ReflectionService(session)
-    result = await service.run_maintenance()
-    return StandardResponse(message="旧版维护任务已执行", data=result)
+    return await service.run_maintenance()
 
 
-@router.post("/memory/dream", response_model=StandardResponse)
+@router.post("/memory/dream")
 async def trigger_dream(limit: int = 10, session: AsyncSession = Depends(get_session)):
     from services.memory.reflection_service import ReflectionService
 
     service = ReflectionService(session)
-    result = await service.dream_and_associate(limit=limit)
-    return StandardResponse(message="梦境联想任务已启动", data=result)
+    return await service.dream_and_associate(limit=limit)
 
 
 # --- 维护 ---
@@ -248,7 +250,7 @@ async def run_maintenance_api(session: AsyncSession = Depends(get_session)):  # 
     return await service.run_maintenance()
 
 
-@router.post("/maintenance/undo/{record_id}", response_model=StandardResponse)
+@router.post("/maintenance/undo/{record_id}")
 async def undo_maintenance_api(
     record_id: int,
     session: AsyncSession = Depends(get_session),  # noqa: B008
@@ -259,7 +261,7 @@ async def undo_maintenance_api(
     success = await service.undo_maintenance(record_id)
     if not success:
         raise HTTPException(status_code=400, detail="Undo failed or record not found")
-    return StandardResponse(message="维护记录已撤销喵！", data={"record_id": record_id})
+    return {"status": "success", "message": "维护记录已撤销喵！", "record_id": record_id}
 
 
 @router.get("/maintenance/records")
@@ -274,7 +276,7 @@ async def get_maintenance_records(session: AsyncSession = Depends(get_session)):
 # --- 记忆重建索引 ---
 
 
-@router.post("/memory/reindex", response_model=StandardResponse)
+@router.post("/memory/reindex")
 async def trigger_reindex(
     agent_id: str = "pero", session: AsyncSession = Depends(get_session)
 ):  # noqa: B008
@@ -288,7 +290,7 @@ async def trigger_reindex(
         asyncio.create_task(
             ReindexService.reindex_memories_with_session(session, agent_id)
         )
-        return StandardResponse(message="重索引任务已在后台启动喵~ ✨")
+        return {"status": "success", "message": "重索引任务已在后台启动喵~ ✨"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"启动重索引失败: {str(e)}") from e
 

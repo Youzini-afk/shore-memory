@@ -4,7 +4,7 @@
  */
 import { ref, type Ref, type ShallowRef } from 'vue'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout, formatLLMError } from './useDashboard'
+import { fetchJson, fetchWithTimeout, formatLLMError } from './useDashboard'
 
 import type {
   Model,
@@ -148,13 +148,11 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     lastSyncedSessionId?: Ref<string | null>
   }): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(
+      const data = await fetchJson<ApiConfig>(
         `${API_BASE}/configs`,
-        { silent: true } as RequestInit,
+        { silent: true },
         5000
       )
-      if (!res.ok) throw new Error(`Status ${res.status}: ${res.statusText}`)
-      const data = (await res.json()) as ApiConfig
 
       globalConfig.value.global_llm_api_key = data.global_llm_api_key ?? ''
       globalConfig.value.global_llm_api_base = data.global_llm_api_base ?? 'https://api.openai.com'
@@ -213,10 +211,9 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     try {
       const res = await fetchWithTimeout(
         `${API_BASE}/models`,
-        { silent: true } as RequestInit,
+        { silent: true, throwOnError: true },
         5000
       )
-      if (!res.ok) throw new Error(`Status ${res.status}: ${res.statusText}`)
       models.value = (await res.json()) as Model[]
     } catch (e) {
       console.error(e)
@@ -243,11 +240,12 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ [key]: targetId }),
-          silent: true
-        } as RequestInit,
+          silent: true,
+          throwOnError: true
+        },
         5000
       )
-      if (!res.ok) throw new Error(isCurrentlyActive ? `取消${failMsg}失败` : `设置${failMsg}失败`)
+      void res
       idRef.value = isCurrentlyActive ? null : id
       window.$notify(isCurrentlyActive ? `${successMsg}已取消` : `${successMsg}已更新`, 'success')
     } catch (e) {
@@ -272,17 +270,17 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     if (isSaving.value) return
     try {
       isSaving.value = true
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/configs`,
         {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(globalConfig.value),
-          silent: true
-        } as RequestInit,
+          silent: true,
+          throwOnError: true
+        },
         5000
       )
-      if (!res.ok) throw new Error('保存配置失败')
       showGlobalSettings.value = false
       window.$notify('全局配置已保存', 'success')
       await fetchConfig()
@@ -368,17 +366,11 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
             api_base: apiBase,
             provider: currentEditingModel.value.provider ?? 'openai'
           }),
-          silent: true
-        } as RequestInit,
+          silent: true,
+          throwOnError: true
+        },
         10000
       )
-      if (!res.ok) {
-        const errData = (await res.json().catch(() => ({}))) as {
-          detail?: string
-          message?: string
-        }
-        throw new Error(errData.detail ?? errData.message ?? `Status ${res.status}`)
-      }
       const data = (await res.json()) as { models?: string[] }
       if (data.models?.length) {
         remoteModels.value = data.models
@@ -400,17 +392,17 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
       const model = currentEditingModel.value
       const url = model.id ? `${API_BASE}/models/${model.id}` : `${API_BASE}/models`
       const method = model.id ? 'PUT' : 'POST'
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         url,
         {
           method,
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(model),
-          silent: true
-        } as RequestInit,
+          silent: true,
+          throwOnError: true
+        },
         5000
       )
-      if (!res.ok) throw new Error('保存失败')
       showModelEditor.value = false
       await fetchModels()
       window.$notify('模型已保存', 'success')
@@ -429,11 +421,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     try {
       await openConfirm('警告', '确定删除此模型配置吗？', { type: 'warning' })
       deleteModelState.isLoading = true
-      const res = await fetchWithTimeout(`${API_BASE}/models/${id}`, { method: 'DELETE' }, 5000)
-      if (!res.ok) {
-        const err = (await res.json()) as { message?: string }
-        throw new Error(err.message ?? '删除失败')
-      }
+      await fetchWithTimeout(`${API_BASE}/models/${id}`, { method: 'DELETE', throwOnError: true }, 5000)
       await fetchModels()
       window.$notify('已删除', 'success')
     } catch (e) {
@@ -468,19 +456,16 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     if (isEmb) isFetchingEmbeddingModels.value = true
     else isFetchingRerankerModels.value = true
     try {
-      const res = await fetch(`${API_BASE}/models/remote`, {
+      const data = await fetchJson<{ models?: string[] }>(`${API_BASE}/models/remote`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ api_key: apiKey, api_base: apiBase, provider: 'openai' })
       })
-      if (res.ok) {
-        const data = (await res.json()) as { models?: string[] }
-        const modelList = data.models ?? []
-        if (isEmb) availableEmbeddingModels.value = modelList
-        else availableRerankerModels.value = modelList
-        if (!modelList.length) window.$notify('未获取到模型列表，请检查配置喵~ 😿', 'warning')
-        else window.$notify(`已获取 ${modelList.length} 个可用模型喵！✨`, 'success')
-      } else throw new Error('获取失败')
+      const modelList = data.models ?? []
+      if (isEmb) availableEmbeddingModels.value = modelList
+      else availableRerankerModels.value = modelList
+      if (!modelList.length) window.$notify('未获取到模型列表，请检查配置喵~ 😿', 'warning')
+      else window.$notify(`已获取 ${modelList.length} 个可用模型喵！✨`, 'success')
     } catch (e) {
       window.$notify('获取远程模型失败: ' + (e as Error).message, 'error')
     } finally {
@@ -493,10 +478,8 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     if (isReindexing.value) return
     try {
       isReindexing.value = true
-      const res = await fetch(`${API_BASE}/maintenance/memory/reindex`, { method: 'POST' })
-
-      if (res.ok) window.$notify('重索引任务已在后台启动喵~ ✨', 'success')
-      else throw new Error('启动失败')
+      await fetchWithTimeout(`${API_BASE}/maintenance/memory/reindex`, { method: 'POST', throwOnError: true })
+      window.$notify('重索引任务已在后台启动喵~ ✨', 'success')
     } catch (e) {
       window.$notify('重索引失败: ' + (e as Error).message, 'error')
     } finally {
@@ -554,8 +537,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     if (fetchMcpsState.isLoading) return
     fetchMcpsState.isLoading = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/mcp`, {}, 5000)
-      mcps.value = (await res.json()) as Mcp[]
+      mcps.value = await fetchJson<Mcp[]>(`${API_BASE}/mcp`, {}, 5000)
     } catch {
       console.error('Failed to fetch MCPs')
     } finally {
@@ -580,16 +562,16 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
         JSON.parse(mcp.args ?? '[]')
         JSON.parse(mcp.env ?? '{}')
       }
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         url,
         {
           method: mcp.id ? 'PUT' : 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(mcp)
+          body: JSON.stringify(mcp),
+          throwOnError: true
         },
         5000
       )
-      if (!res.ok) throw new Error('保存失败')
       showMcpEditor.value = false
       await fetchMcps()
       window.$notify('MCP 配置已保存', 'success')
@@ -608,11 +590,7 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
     try {
       await openConfirm('警告', '确定删除此 MCP 配置吗？', { type: 'warning' })
       deleteMcpState.isLoading = true
-      const res = await fetchWithTimeout(`${API_BASE}/mcp/${id}`, { method: 'DELETE' }, 5000)
-      if (!res.ok) {
-        const err = (await res.json()) as { message?: string }
-        throw new Error(err.message ?? '删除失败')
-      }
+      await fetchWithTimeout(`${API_BASE}/mcp/${id}`, { method: 'DELETE', throwOnError: true }, 5000)
       await fetchMcps()
       window.$notify('已删除', 'success')
     } catch (e) {
@@ -627,16 +605,16 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
 
   const toggleMcpEnabled = async (mcp: Mcp): Promise<void> => {
     try {
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/mcp/${mcp.id}`,
         {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...mcp, enabled: mcp.enabled })
+          body: JSON.stringify({ ...mcp, enabled: mcp.enabled }),
+          throwOnError: true
         },
         5000
       )
-      if (!res.ok) throw new Error('更新失败')
       await fetchMcps()
     } catch (e) {
       window.$notify((e as Error).message, 'error')
@@ -696,15 +674,10 @@ export function useModelConfig({ memories, isSaving, openConfirm }: UseModelConf
           return
         }
         isSaving.value = true
-        const res = await fetchWithTimeout(`${API_BASE}/system/reset`, { method: 'POST' }, 10000)
-        if (res.ok) {
-          window.$notify('系统已恢复出厂设置', 'success')
-          await fetchAllData?.(true)
-          currentTab.value = 'overview'
-        } else {
-          const err = (await res.json()) as { detail?: string }
-          throw new Error(err.detail ?? '重置失败')
-        }
+        await fetchWithTimeout(`${API_BASE}/system/reset`, { method: 'POST', throwOnError: true }, 10000)
+        window.$notify('系统已恢复出厂设置', 'success')
+        await fetchAllData?.(true)
+        currentTab.value = 'overview'
       }
     } catch (e) {
       if ((e as Error).message !== 'User cancelled') {

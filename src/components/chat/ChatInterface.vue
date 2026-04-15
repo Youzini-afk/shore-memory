@@ -2053,9 +2053,14 @@ const sendMessage = async () => {
         assistantMsg.content = '' // 清除占位符
         messages.value.pop() // 移除占位符助手消息
       } else {
-        assistantMsg.content = '发送消息失败。'
+        // 移除占位消息，不污染会话
+        messages.value.pop()
+        if (window.$notify) {
+          window.$notify('发送消息失败', 'error', '群聊错误')
+        }
       }
       return
+
     }
 
     // 构造 API 消息列表
@@ -2094,8 +2099,23 @@ const sendMessage = async () => {
       assistantMsg.content += chunk
       scrollToBottom()
     }
+
+    // 如果流结束后助手消息为空（后端出错后不会 yield 内容），移除占位消息
+    if (!assistantMsg.content) {
+      const idx = messages.value.indexOf(assistantMsg)
+      if (idx !== -1) messages.value.splice(idx, 1)
+    }
   } catch (e) {
-    assistantMsg.content = `错误: ${e.message}`
+    // 移除占位的空助手消息，不让错误信息污染会话记录
+    const idx = messages.value.indexOf(assistantMsg)
+    if (idx !== -1) messages.value.splice(idx, 1)
+
+    // 网络层错误通过本地通知提示（LLM 错误由后端 broadcast_error 处理）
+    if (window.$notify) {
+      window.$notify(`请求失败: ${e.message}`, 'error', '网络错误')
+    }
+    console.error('[ChatInterface] 发送消息失败:', e)
+
     // 出错时强制重置思维链
     if (activeThoughtChain.value) {
       activeThoughtChain.value.isThinking = false

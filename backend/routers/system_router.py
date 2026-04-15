@@ -120,7 +120,7 @@ async def get_gateway_token_api():
         raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-from schemas import OpenPathRequest, StatsOverviewResponse
+from schemas import StatsOverviewResponse
 
 
 @router.get("/stats/overview", response_model=StatsOverviewResponse)

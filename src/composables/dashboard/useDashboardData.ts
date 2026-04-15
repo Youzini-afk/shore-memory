@@ -4,7 +4,7 @@
  */
 import { ref, computed, type Ref } from 'vue'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout } from './useDashboard'
+import { fetchJson } from './useDashboard'
 
 import type { Stats, PetState, NitStatus, Agent } from './types'
 
@@ -47,10 +47,8 @@ export function useDashboardData({ activeAgent, isBackendOnline }: UseDashboardD
   const fetchStats = async (): Promise<void> => {
     try {
       let url = `${API_BASE}/system/stats/overview`
-
       if (activeAgent.value) url += `?agent_id=${activeAgent.value.id}`
-      const res = await fetchWithTimeout(url, {}, 2000)
-      stats.value = (await res.json()) as Stats
+      stats.value = await fetchJson<Stats>(url, {}, 2000)
     } catch {
       console.error('获取统计信息失败')
     }
@@ -63,8 +61,7 @@ export function useDashboardData({ activeAgent, isBackendOnline }: UseDashboardD
       fetchPetStateState.isPolling = true
       let url = `${API_BASE}/pet/state`
       if (activeAgent.value) url += `?agent_id=${activeAgent.value.id}`
-      const res = await fetchWithTimeout(url, {}, 2000)
-      if (res.ok) petState.value = (await res.json()) as PetState
+      petState.value = await fetchJson<PetState>(url, { silent: true }, 2000)
     } catch {
       // 静默失败
     } finally {
@@ -76,9 +73,7 @@ export function useDashboardData({ activeAgent, isBackendOnline }: UseDashboardD
     if (fetchNitStatusState.isLoading) return
     fetchNitStatusState.isLoading = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/maintenance/nit/status`, {}, 2000)
-
-      nitStatus.value = (await res.json()) as NitStatus
+      nitStatus.value = await fetchJson<NitStatus>(`${API_BASE}/maintenance/nit/status`, {}, 2000)
     } catch {
       console.error('NIT 状态获取错误')
     } finally {

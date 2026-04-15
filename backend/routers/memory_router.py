@@ -1,6 +1,6 @@
 import time
 import uuid
-from typing import Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
@@ -18,10 +18,10 @@ history_router = APIRouter(prefix="/history", tags=["history"])
 
 from typing import List
 
-from sqlmodel import desc
+from sqlmodel import desc, select
 
 from models import Memory
-from schemas import AddMemoryRequest, MemoryGraphResponse, StandardResponse
+from schemas import AddMemoryRequest, MemoryGraphResponse, ChatLogResponse
 
 # --- 记忆资源接口 (从 maintenance_router 迁移) ---
 
@@ -64,7 +64,7 @@ async def get_memory_graph(
     return await service.get_memory_graph(session, limit, agent_id=target_agent)
 
 
-@router.get("/tags", response_model=Dict[str, int])
+@router.get("/tags", response_model=List[Dict[str, Any]])
 async def get_tag_cloud(
     agent_id: Optional[str] = None,
     session: AsyncSession = Depends(get_session),
@@ -120,7 +120,7 @@ async def delete_memory(memory_id: int, session: AsyncSession = Depends(get_sess
         raise HTTPException(status_code=404, detail="Memory not found")
     await session.delete(memory)
     await session.commit()
-    return StandardResponse(message="记忆已抹除喵...", data={"id": memory_id})
+    return {"status": "success", "message": "记忆已抹除喵...", "id": memory_id}
 
 
 # --- 历史记录接口 (History Logs) ---
@@ -166,6 +166,8 @@ async def get_chat_history(
     return [
         {
             "id": log.id,
+            "session_id": getattr(log, "session_id", ""),
+            "source": getattr(log, "source", ""),
             "role": log.role,
             "content": log.content,
             "raw_content": getattr(log, "raw_content", None),  # 返回原始内容
@@ -185,7 +187,7 @@ async def get_chat_history(
 # retry_analysis 逻辑已移至 maintenance_router.py
 
 
-@history_router.delete("/{log_id}", response_model=StandardResponse)
+@history_router.delete("/{log_id}")
 async def delete_chat_log(log_id: int, session: AsyncSession = Depends(get_session)):  # noqa: B008
     try:
         service = MemoryService()

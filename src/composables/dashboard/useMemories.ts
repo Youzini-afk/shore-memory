@@ -5,7 +5,7 @@
 import { ref, shallowRef, computed, nextTick, type Ref } from 'vue'
 import * as echarts from 'echarts'
 import { API_BASE } from '@/config'
-import { fetchWithTimeout } from './useDashboard'
+import { fetchJson, fetchWithTimeout } from './useDashboard'
 
 import type { Memory, Agent, MemoryGraphData, TagCloudItem, OpenConfirmFn } from './types'
 
@@ -102,8 +102,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       if (memoryFilterTags.value.length > 0) url += `&tags=${memoryFilterTags.value.join(',')}`
       if (activeAgent.value) url += `&agent_id=${activeAgent.value.id}`
 
-      const res = await fetchWithTimeout(url, {}, 5000)
-      const rawMemories = (await res.json()) as Record<string, unknown>[]
+      const rawMemories = await fetchJson<Record<string, unknown>[]>(url, {}, 5000)
       const processedMemories: Memory[] = []
       const batchSize = 50
 
@@ -141,8 +140,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
     if (fetchTagCloudState.isLoading) return
     fetchTagCloudState.isLoading = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/memories/tags`, {}, 3000)
-      tagCloud.value = (await res.json()) as Record<string, number>
+      tagCloud.value = await fetchJson<Record<string, number>>(`${API_BASE}/memories/tags`, {}, 3000)
     } catch {
       console.error('标签云获取错误')
     } finally {
@@ -160,18 +158,13 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
     try {
       await openConfirm('提示', '确定要遗忘这段记忆吗？', { type: 'warning' })
       deleteMemoryState.isLoading = true
-      const res = await fetchWithTimeout(
+      await fetchWithTimeout(
         `${API_BASE}/memories/${memoryId}`,
-        { method: 'DELETE' },
+        { method: 'DELETE', throwOnError: true },
         5000
       )
-      if (res.ok) {
-        await fetchMemories()
-        window.$notify('已遗忘', 'success')
-      } else {
-        const err = (await res.json()) as { message?: string }
-        window.$notify(err.message ?? '操作失败', 'error')
-      }
+      await fetchMemories()
+      window.$notify('已遗忘', 'success')
     } catch (e) {
       if ((e as Error).message !== 'User cancelled') {
         console.error('Error in deleteMemory:', e)
@@ -189,10 +182,9 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       isLoadingGraph.value = true
       let url = `${API_BASE}/memories/graph?limit=100`
       if (activeAgent.value) url += `&agent_id=${activeAgent.value.id}`
-      const res = await fetchWithTimeout(url, {}, 8000)
-      const data = (await res.json()) as MemoryGraphData
+      const res = await fetchJson<MemoryGraphData>(url, {}, 8000)
       if (currentTab.value === 'memories') {
-        memoryGraphData.value = Object.freeze(data) as MemoryGraphData
+        memoryGraphData.value = Object.freeze(res) as MemoryGraphData
         nextTick(() => requestAnimationFrame(() => initGraph()))
       }
     } catch {
@@ -320,13 +312,11 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
         }
       )
       isClearingEdges.value = true
-      const res = await fetchWithTimeout(
+      const data = await fetchJson<{ deleted_count: number }>(
         `${API_BASE}/maintenance/memory/orphaned_edges`,
         { method: 'DELETE' },
         10000
       )
-
-      const data = (await res.json()) as { deleted_count: number }
       window.$notify(`清理完成，共移除 ${data.deleted_count} 条无效连线`, 'success')
       if (memoryViewMode.value === 'graph') fetchMemoryGraph()
     } catch (e) {
@@ -343,19 +333,16 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
     if (isScanningLonely.value) return
     isScanningLonely.value = true
     try {
-      const res = await fetchWithTimeout(`${API_BASE}/maintenance/memory/scan_lonely?limit=5`, {
+      const data = await fetchJson<{
+        status: string
+        new_relations?: number
+        reason?: string
+      }>(`${API_BASE}/maintenance/memory/scan_lonely?limit=5`, {
         method: 'POST'
       })
-
-      const data = (await res.json()) as {
-        status: string
-        processed_count?: number
-        connections_found?: number
-        reason?: string
-      }
       if (data.status === 'success') {
         window.$notify(
-          `扫描完成: 处理了 ${data.processed_count} 条记忆，发现了 ${data.connections_found} 个新关联`,
+          `扫描完成: 发现了 ${data.new_relations ?? 0} 个新关联`,
           'success'
         )
         fetchMemories()
@@ -364,6 +351,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
       } else {
         window.$notify('扫描失败', 'error')
       }
+
     } catch (e) {
       console.error(e)
       window.$notify('请求出错: ' + (e as Error).message, 'error')
@@ -381,19 +369,17 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
         { type: 'info' }
       )
       isRunningMaintenance.value = true
-      const res = await fetchWithTimeout(
-        `${API_BASE}/maintenance/memory/legacy_maintenance`,
-        { method: 'POST' },
-        120000
-      )
-
-      const data = (await res.json()) as {
+      const data = await fetchJson<{
         status: string
         important_tagged?: number
         consolidated?: number
         cleaned_count?: number
         error?: string
-      }
+      }>(
+        `${API_BASE}/maintenance/memory/legacy_maintenance`,
+        { method: 'POST' },
+        120000
+      )
       if (data.status === 'success') {
         window.$notify(
           `维护完成: 标记重要性 ${data.important_tagged}, 记忆合并 ${data.consolidated}, 清理 ${data.cleaned_count}`,
@@ -420,18 +406,16 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
         type: 'info'
       })
       isDreaming.value = true
-      const res = await fetchWithTimeout(
-        `${API_BASE}/maintenance/memory/dream?limit=10`,
-        { method: 'POST' },
-        60000
-      )
-
-      const data = (await res.json()) as {
+      const data = await fetchJson<{
         status: string
         anchors_processed?: number
         new_relations?: number
         reason?: string
-      }
+      }>(
+        `${API_BASE}/maintenance/memory/dream?limit=10`,
+        { method: 'POST' },
+        60000
+      )
       if (data.status === 'success') {
         window.$notify(
           `梦境完成: 扫描 ${data.anchors_processed} 个锚点，发现 ${data.new_relations} 个新关联`,
@@ -461,7 +445,7 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
     }
     isImportingStory.value = true
     try {
-      const response = await fetch(`${API_BASE}/maintenance/memory/import`, {
+      const result = await fetchJson<{ count: number }>(`${API_BASE}/maintenance/memory/import`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -469,12 +453,6 @@ export function useMemories({ activeAgent, currentTab, openConfirm }: UseMemorie
           agent_id: activeAgent.value?.id ?? 'pero'
         })
       })
-
-      if (!response.ok) {
-        const errData = (await response.json()) as { detail?: string }
-        throw new Error(errData.detail ?? 'Import failed')
-      }
-      const result = (await response.json()) as { count: number }
       window.$notify(`导入成功！共生成 ${result.count} 条记忆。`, 'success')
       showImportStoryDialog.value = false
       importStoryText.value = ''

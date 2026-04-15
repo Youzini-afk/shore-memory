@@ -84,7 +84,7 @@ async def get_companion_status():
     return {"enabled": enabled}
 
 
-@router.post("/companion/toggle", response_model=StandardResponse)
+@router.post("/companion/toggle")
 async def toggle_companion(
     request: ToggleRequest,
     session: AsyncSession = Depends(get_session),  # noqa: B008
@@ -140,7 +140,7 @@ async def get_social_status():
     return {"enabled": enabled}
 
 
-@router.post("/social/toggle", response_model=StandardResponse)
+@router.post("/social/toggle")
 async def toggle_social(
     request: ToggleRequest,
     session: AsyncSession = Depends(get_session),  # noqa: B008
