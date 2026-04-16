@@ -1,6 +1,6 @@
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, RwLock};
 
 use anyhow::{Context, Result, anyhow};
 use serde_json::{Value, json};
@@ -15,16 +15,15 @@ use crate::types::{EntityRecord, MemoryRecord, MemoryScope};
 #[derive(Clone)]
 pub struct TriviumStore {
     db_path: PathBuf,
-    db: Arc<Mutex<Option<Database<f32>>>>,
+    db: Arc<RwLock<Option<Database<f32>>>>,
     config: TriviumConfig,
 }
 
 impl TriviumStore {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         if let Some(parent) = db_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create trivium dir: {}", parent.display())
-            })?;
+            fs::create_dir_all(parent)
+                .with_context(|| format!("failed to create trivium dir: {}", parent.display()))?;
         }
         let config = TriviumConfig {
             dim: 1536,
@@ -35,7 +34,7 @@ impl TriviumStore {
 
         Ok(Self {
             db_path,
-            db: Arc::new(Mutex::new(Some(db))),
+            db: Arc::new(RwLock::new(Some(db))),
             config,
         })
     }
@@ -50,12 +49,20 @@ impl TriviumStore {
         limit: usize,
         expand_depth: usize,
         min_score: f32,
+        include_invalid: bool,
     ) -> Result<Vec<SearchHit>> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let guard = db.lock().map_err(|_| anyhow!("trivium db lock poisoned"))?;
-            let db = guard.as_ref().ok_or_else(|| anyhow!("trivium db not initialized"))?;
-            let filter = build_visibility_filter(&agent_id, user_uid.as_deref(), channel_uid.as_deref());
+            let guard = db.read().map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let db = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("trivium db not initialized"))?;
+            let filter = build_visibility_filter(
+                &agent_id,
+                user_uid.as_deref(),
+                channel_uid.as_deref(),
+                include_invalid,
+            );
             let config = SearchConfig {
                 top_k: limit.max(5),
                 expand_depth,
@@ -69,12 +76,8 @@ impl TriviumStore {
                 payload_filter: Some(filter),
                 ..Default::default()
             };
-            db.search_hybrid(
-                Some(query_text.as_str()),
-                query_vector.as_deref(),
-                &config,
-            )
-            .map_err(|err| anyhow!(err.to_string()))
+            db.search_hybrid(Some(query_text.as_str()), query_vector.as_deref(), &config)
+                .map_err(|err| anyhow!(err.to_string()))
         })
         .await
         .map_err(|err| anyhow!("trivium search join error: {err}"))?
@@ -91,12 +94,20 @@ impl TriviumStore {
         limit: usize,
         expand_depth: usize,
         min_score: f32,
+        include_invalid: bool,
     ) -> Result<Vec<SearchHit>> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let guard = db.lock().map_err(|_| anyhow!("trivium db lock poisoned"))?;
-            let db = guard.as_ref().ok_or_else(|| anyhow!("trivium db not initialized"))?;
-            let filter = build_visibility_filter(&agent_id, user_uid.as_deref(), channel_uid.as_deref());
+            let guard = db.read().map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let db = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("trivium db not initialized"))?;
+            let filter = build_visibility_filter(
+                &agent_id,
+                user_uid.as_deref(),
+                channel_uid.as_deref(),
+                include_invalid,
+            );
             let config = SearchConfig {
                 top_k: limit.max(5),
                 expand_depth,
@@ -128,12 +139,20 @@ impl TriviumStore {
         query_text: String,
         limit: usize,
         min_score: f32,
+        include_invalid: bool,
     ) -> Result<Vec<SearchHit>> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let guard = db.lock().map_err(|_| anyhow!("trivium db lock poisoned"))?;
-            let db = guard.as_ref().ok_or_else(|| anyhow!("trivium db not initialized"))?;
-            let filter = build_visibility_filter(&agent_id, user_uid.as_deref(), channel_uid.as_deref());
+            let guard = db.read().map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let db = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("trivium db not initialized"))?;
+            let filter = build_visibility_filter(
+                &agent_id,
+                user_uid.as_deref(),
+                channel_uid.as_deref(),
+                include_invalid,
+            );
             let config = SearchConfig {
                 top_k: limit.max(5),
                 expand_depth: 0,
@@ -161,8 +180,12 @@ impl TriviumStore {
     ) -> Result<()> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let mut guard = db.lock().map_err(|_| anyhow!("trivium db lock poisoned"))?;
-            let db = guard.as_mut().ok_or_else(|| anyhow!("trivium db not initialized"))?;
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let db = guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("trivium db not initialized"))?;
             db.insert_with_id(memory.id as u64, &embedding, build_payload(&memory))
                 .map_err(|err| anyhow!(err.to_string()))?;
             db.index_text(memory.id as u64, &memory.content)
@@ -181,11 +204,31 @@ impl TriviumStore {
         .map_err(|err| anyhow!("trivium insert join error: {err}"))?
     }
 
+    pub async fn update_memory_payload(&self, memory: MemoryRecord) -> Result<()> {
+        let db = Arc::clone(&self.db);
+        spawn_blocking(move || {
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let db = guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("trivium db not initialized"))?;
+            db.update_payload(memory.id as u64, build_payload(&memory))
+                .map_err(|err| anyhow!(err.to_string()))
+        })
+        .await
+        .map_err(|err| anyhow!("trivium update payload join error: {err}"))?
+    }
+
     pub async fn flush(&self) -> Result<()> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let mut guard = db.lock().map_err(|_| anyhow!("trivium db lock poisoned"))?;
-            let db = guard.as_mut().ok_or_else(|| anyhow!("trivium db not initialized"))?;
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let db = guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("trivium db not initialized"))?;
             db.flush().map_err(|err| anyhow!(err.to_string()))
         })
         .await
@@ -197,7 +240,9 @@ impl TriviumStore {
         let db_path = self.db_path.clone();
         let config = self.config;
         spawn_blocking(move || {
-            let mut guard = db.lock().map_err(|_| anyhow!("trivium db lock poisoned"))?;
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("trivium db lock poisoned"))?;
             *guard = None;
             remove_store_files(&db_path)?;
 
@@ -248,6 +293,7 @@ fn build_payload(memory: &MemoryRecord) -> Value {
         "sentiment": memory.sentiment,
         "source": memory.source,
         "created_at": memory.created_at,
+        "state": memory.state,
         "archived": memory.archived_at.is_some(),
     })
 }
@@ -262,7 +308,7 @@ fn build_payload(memory: &MemoryRecord) -> Value {
 #[derive(Clone)]
 pub struct EntityTriviumStore {
     db_path: PathBuf,
-    db: Arc<Mutex<Option<Database<f32>>>>,
+    db: Arc<RwLock<Option<Database<f32>>>>,
     config: TriviumConfig,
 }
 
@@ -282,20 +328,20 @@ impl EntityTriviumStore {
 
         Ok(Self {
             db_path,
-            db: Arc::new(Mutex::new(Some(db))),
+            db: Arc::new(RwLock::new(Some(db))),
             config,
         })
     }
 
-    pub async fn insert_entity(
-        &self,
-        entity: EntityRecord,
-        embedding: Vec<f32>,
-    ) -> Result<()> {
+    pub async fn insert_entity(&self, entity: EntityRecord, embedding: Vec<f32>) -> Result<()> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let mut guard = db.lock().map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
-            let db = guard.as_mut().ok_or_else(|| anyhow!("entity trivium db not initialized"))?;
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
+            let db = guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("entity trivium db not initialized"))?;
             db.insert_with_id(entity.id as u64, &embedding, build_entity_payload(&entity))
                 .map_err(|err| anyhow!(err.to_string()))?;
             db.index_text(entity.id as u64, &entity.name_raw)
@@ -320,8 +366,12 @@ impl EntityTriviumStore {
     ) -> Result<Vec<SearchHit>> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let guard = db.lock().map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
-            let db = guard.as_ref().ok_or_else(|| anyhow!("entity trivium db not initialized"))?;
+            let guard = db
+                .read()
+                .map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
+            let db = guard
+                .as_ref()
+                .ok_or_else(|| anyhow!("entity trivium db not initialized"))?;
             let filter = build_entity_visibility_filter(&agent_id, user_uid.as_deref());
             let config = SearchConfig {
                 top_k: limit.max(5),
@@ -344,23 +394,26 @@ impl EntityTriviumStore {
     pub async fn flush(&self) -> Result<()> {
         let db = Arc::clone(&self.db);
         spawn_blocking(move || {
-            let mut guard = db.lock().map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
-            let db = guard.as_mut().ok_or_else(|| anyhow!("entity trivium db not initialized"))?;
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
+            let db = guard
+                .as_mut()
+                .ok_or_else(|| anyhow!("entity trivium db not initialized"))?;
             db.flush().map_err(|err| anyhow!(err.to_string()))
         })
         .await
         .map_err(|err| anyhow!("entity trivium flush join error: {err}"))?
     }
 
-    pub async fn rebuild(
-        &self,
-        items: Vec<(EntityRecord, Vec<f32>)>,
-    ) -> Result<usize> {
+    pub async fn rebuild(&self, items: Vec<(EntityRecord, Vec<f32>)>) -> Result<usize> {
         let db = Arc::clone(&self.db);
         let db_path = self.db_path.clone();
         let config = self.config;
         spawn_blocking(move || {
-            let mut guard = db.lock().map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
+            let mut guard = db
+                .write()
+                .map_err(|_| anyhow!("entity trivium db lock poisoned"))?;
             *guard = None;
             remove_store_files(&db_path)?;
 
@@ -416,30 +469,47 @@ fn build_visibility_filter(
     agent_id: &str,
     user_uid: Option<&str>,
     channel_uid: Option<&str>,
+    include_invalid: bool,
 ) -> Filter {
-    let mut visible = vec![
-        Filter::eq("scope", Value::String(MemoryScope::System.as_str().to_string())),
-        Filter::eq("scope", Value::String(MemoryScope::Shared.as_str().to_string())),
+    let mut visible: Vec<Filter> = vec![
+        Filter::eq(
+            "scope",
+            Value::String(MemoryScope::System.as_str().to_string()),
+        ),
+        Filter::eq(
+            "scope",
+            Value::String(MemoryScope::Shared.as_str().to_string()),
+        ),
     ];
 
     if let Some(user_uid) = user_uid {
         visible.push(Filter::and(vec![
-            Filter::eq("scope", Value::String(MemoryScope::Private.as_str().to_string())),
+            Filter::eq(
+                "scope",
+                Value::String(MemoryScope::Private.as_str().to_string()),
+            ),
             Filter::eq("user_uid", Value::String(user_uid.to_string())),
         ]));
     }
 
     if let Some(channel_uid) = channel_uid {
         visible.push(Filter::and(vec![
-            Filter::eq("scope", Value::String(MemoryScope::Group.as_str().to_string())),
+            Filter::eq(
+                "scope",
+                Value::String(MemoryScope::Group.as_str().to_string()),
+            ),
             Filter::eq("channel_uid", Value::String(channel_uid.to_string())),
         ]));
     }
 
-    Filter::and(vec![
+    let mut predicates = vec![
         Filter::eq("agent_id", Value::String(agent_id.to_string())),
         Filter::or(visible),
-    ])
+    ];
+    if !include_invalid {
+        predicates.push(Filter::eq("state", Value::String("active".to_string())));
+    }
+    Filter::and(predicates)
 }
 
 fn remove_store_files(db_path: &Path) -> Result<()> {
@@ -451,9 +521,14 @@ fn remove_store_files(db_path: &Path) -> Result<()> {
 
     for candidate in [db_file, vec_file, wal_file, lock_file, flush_ok_file] {
         if candidate.exists()
-            && let Err(err) = fs::remove_file(&candidate) {
-                warn!("failed to remove stale trivium file {}: {}", candidate.display(), err);
-            }
+            && let Err(err) = fs::remove_file(&candidate)
+        {
+            warn!(
+                "failed to remove stale trivium file {}: {}",
+                candidate.display(),
+                err
+            );
+        }
     }
     Ok(())
 }

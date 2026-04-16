@@ -2,6 +2,8 @@ use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::time::Duration;
+use tokio::time::timeout;
 
 use crate::config::ServiceConfig;
 use crate::types::{
@@ -36,54 +38,93 @@ struct WorkerExtractEntitiesResponse {
 pub struct WorkerClient {
     client: Client,
     base_url: String,
+    timeout_default: Duration,
+    timeout_embed: Duration,
+    timeout_embed_batch: Duration,
+    timeout_extract_entities: Duration,
+    timeout_score_turn: Duration,
+    timeout_reflect: Duration,
 }
 
 impl WorkerClient {
     pub fn new(config: &ServiceConfig) -> Result<Self> {
+        let max_timeout = [
+            config.worker_timeout,
+            config.worker_timeout_embed,
+            config.worker_timeout_embed_batch,
+            config.worker_timeout_extract_entities,
+            config.worker_timeout_score_turn,
+            config.worker_timeout_reflect,
+        ]
+        .into_iter()
+        .max()
+        .unwrap_or(config.worker_timeout);
+
         let client = Client::builder()
-            .timeout(config.worker_timeout)
+            .timeout(max_timeout)
             .build()
             .context("failed to build reqwest client")?;
         Ok(Self {
             client,
             base_url: config.worker_base_url.trim_end_matches('/').to_string(),
+            timeout_default: config.worker_timeout,
+            timeout_embed: config.worker_timeout_embed,
+            timeout_embed_batch: config.worker_timeout_embed_batch,
+            timeout_extract_entities: config.worker_timeout_extract_entities,
+            timeout_score_turn: config.worker_timeout_score_turn,
+            timeout_reflect: config.worker_timeout_reflect,
         })
+    }
+
+    async fn run_with_timeout<T, F>(op: &str, duration: Duration, fut: F) -> Result<T>
+    where
+        F: std::future::Future<Output = Result<T>>,
+    {
+        timeout(duration, fut)
+            .await
+            .with_context(|| format!("worker {} timeout after {} ms", op, duration.as_millis()))?
     }
 
     pub async fn health(&self) -> Result<()> {
         let url = format!("{}/health", self.base_url);
-        self.client
-            .get(url)
-            .send()
-            .await
-            .context("worker health request failed")?
-            .error_for_status()
-            .context("worker health returned error")?;
-        Ok(())
+        Self::run_with_timeout("health", self.timeout_default, async {
+            self.client
+                .get(url)
+                .send()
+                .await
+                .context("worker health request failed")?
+                .error_for_status()
+                .context("worker health returned error")?;
+            Ok(())
+        })
+        .await
     }
 
     pub async fn embed(&self, text: &str) -> Result<Vec<f32>> {
         let url = format!("{}/v1/embed", self.base_url);
-        let response = self
-            .client
-            .post(url)
-            .json(&WorkerEmbedRequest {
-                text: text.to_string(),
-            })
-            .send()
-            .await
-            .context("worker embed request failed")?
-            .error_for_status()
-            .context("worker embed returned error")?
-            .json::<WorkerEmbedResponse>()
-            .await
-            .context("worker embed response parse failed")?;
+        Self::run_with_timeout("embed", self.timeout_embed, async {
+            let response = self
+                .client
+                .post(url)
+                .json(&WorkerEmbedRequest {
+                    text: text.to_string(),
+                })
+                .send()
+                .await
+                .context("worker embed request failed")?
+                .error_for_status()
+                .context("worker embed returned error")?
+                .json::<WorkerEmbedResponse>()
+                .await
+                .context("worker embed response parse failed")?;
 
-        if response.embedding.is_empty() {
-            return Err(anyhow!("worker returned empty embedding"));
-        }
+            if response.embedding.is_empty() {
+                return Err(anyhow!("worker returned empty embedding"));
+            }
 
-        Ok(response.embedding)
+            Ok(response.embedding)
+        })
+        .await
     }
 
     /// Batched embedding. Preserves input order. Empty input strings come back
@@ -93,19 +134,22 @@ impl WorkerClient {
             return Ok(Vec::new());
         }
         let url = format!("{}/v1/embed/batch", self.base_url);
-        let response = self
-            .client
-            .post(url)
-            .json(&WorkerEmbedBatchRequest { texts })
-            .send()
-            .await
-            .context("worker embed_batch request failed")?
-            .error_for_status()
-            .context("worker embed_batch returned error")?
-            .json::<WorkerEmbedBatchResponse>()
-            .await
-            .context("worker embed_batch response parse failed")?;
-        Ok(response.embeddings)
+        Self::run_with_timeout("embed_batch", self.timeout_embed_batch, async {
+            let response = self
+                .client
+                .post(url)
+                .json(&WorkerEmbedBatchRequest { texts })
+                .send()
+                .await
+                .context("worker embed_batch request failed")?
+                .error_for_status()
+                .context("worker embed_batch returned error")?
+                .json::<WorkerEmbedBatchResponse>()
+                .await
+                .context("worker embed_batch response parse failed")?;
+            Ok(response.embeddings)
+        })
+        .await
     }
 
     /// Extract named entities from a query string. Returns an empty list when
@@ -117,37 +161,46 @@ impl WorkerClient {
         observation_date: Option<&str>,
     ) -> Result<Vec<EntityDraft>> {
         let url = format!("{}/v1/tasks/extract-entities", self.base_url);
-        let response = self
-            .client
-            .post(url)
-            .json(&WorkerExtractEntitiesRequest {
-                query: query.to_string(),
-                observation_date: observation_date.map(str::to_string),
-            })
-            .send()
-            .await
-            .context("worker extract_entities request failed")?
-            .error_for_status()
-            .context("worker extract_entities returned error")?
-            .json::<WorkerExtractEntitiesResponse>()
-            .await
-            .context("worker extract_entities response parse failed")?;
-        Ok(response.entities)
+        Self::run_with_timeout("extract_entities", self.timeout_extract_entities, async {
+            let response = self
+                .client
+                .post(url)
+                .json(&WorkerExtractEntitiesRequest {
+                    query: query.to_string(),
+                    observation_date: observation_date.map(str::to_string),
+                })
+                .send()
+                .await
+                .context("worker extract_entities request failed")?
+                .error_for_status()
+                .context("worker extract_entities returned error")?
+                .json::<WorkerExtractEntitiesResponse>()
+                .await
+                .context("worker extract_entities response parse failed")?;
+            Ok(response.entities)
+        })
+        .await
     }
 
-    pub async fn score_turn(&self, request: &WorkerScoreTurnRequest) -> Result<WorkerScoreTurnResponse> {
+    pub async fn score_turn(
+        &self,
+        request: &WorkerScoreTurnRequest,
+    ) -> Result<WorkerScoreTurnResponse> {
         let url = format!("{}/v1/tasks/score-turn", self.base_url);
-        self.client
-            .post(url)
-            .json(request)
-            .send()
-            .await
-            .context("worker score_turn request failed")?
-            .error_for_status()
-            .context("worker score_turn returned error")?
-            .json::<WorkerScoreTurnResponse>()
-            .await
-            .context("worker score_turn response parse failed")
+        Self::run_with_timeout("score_turn", self.timeout_score_turn, async {
+            self.client
+                .post(url)
+                .json(request)
+                .send()
+                .await
+                .context("worker score_turn request failed")?
+                .error_for_status()
+                .context("worker score_turn returned error")?
+                .json::<WorkerScoreTurnResponse>()
+                .await
+                .context("worker score_turn response parse failed")
+        })
+        .await
     }
 
     pub async fn reflect(
@@ -156,24 +209,29 @@ impl WorkerClient {
         memories: Vec<ReflectionMemoryInput>,
     ) -> Result<WorkerReflectionResponse> {
         let url = format!("{}/v1/tasks/reflect", self.base_url);
-        self.client
-            .post(url)
-            .json(&WorkerReflectionRequest {
-                agent_id: agent_id.to_string(),
-                memories,
-            })
-            .send()
-            .await
-            .context("worker reflection request failed")?
-            .error_for_status()
-            .context("worker reflection returned error")?
-            .json::<WorkerReflectionResponse>()
-            .await
-            .context("worker reflection response parse failed")
+        Self::run_with_timeout("reflect", self.timeout_reflect, async {
+            self.client
+                .post(url)
+                .json(&WorkerReflectionRequest {
+                    agent_id: agent_id.to_string(),
+                    memories,
+                })
+                .send()
+                .await
+                .context("worker reflection request failed")?
+                .error_for_status()
+                .context("worker reflection returned error")?
+                .json::<WorkerReflectionResponse>()
+                .await
+                .context("worker reflection response parse failed")
+        })
+        .await
     }
 }
 
-pub fn reflection_inputs_from_memories(memories: &[crate::types::MemoryRecord]) -> Vec<ReflectionMemoryInput> {
+pub fn reflection_inputs_from_memories(
+    memories: &[crate::types::MemoryRecord],
+) -> Vec<ReflectionMemoryInput> {
     memories
         .iter()
         .map(|memory| ReflectionMemoryInput {
@@ -186,7 +244,10 @@ pub fn reflection_inputs_from_memories(memories: &[crate::types::MemoryRecord]) 
         .collect()
 }
 
-pub fn memory_draft_metadata_with_task(task_id: i64, draft: &WorkerMemoryDraft) -> serde_json::Value {
+pub fn memory_draft_metadata_with_task(
+    task_id: i64,
+    draft: &WorkerMemoryDraft,
+) -> serde_json::Value {
     let mut metadata = draft.metadata.clone();
     if let Some(obj) = metadata.as_object_mut() {
         obj.insert("task_id".to_string(), json!(task_id));

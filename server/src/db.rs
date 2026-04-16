@@ -5,6 +5,7 @@ use std::time::Duration;
 
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
+use r2d2::{ManageConnection, Pool, PooledConnection};
 use rusqlite::{Connection, OptionalExtension, Transaction, params};
 use serde_json::Value;
 
@@ -16,6 +17,38 @@ use crate::types::{
 #[derive(Debug, Clone)]
 pub struct MetadataStore {
     db_path: PathBuf,
+    pool: Pool<SqliteConnectionManager>,
+}
+
+type SqlitePooledConnection = PooledConnection<SqliteConnectionManager>;
+
+#[derive(Debug, Clone)]
+struct SqliteConnectionManager {
+    db_path: PathBuf,
+}
+
+impl SqliteConnectionManager {
+    fn file(db_path: PathBuf) -> Self {
+        Self { db_path }
+    }
+}
+
+impl ManageConnection for SqliteConnectionManager {
+    type Connection = Connection;
+    type Error = rusqlite::Error;
+
+    fn connect(&self) -> std::result::Result<Self::Connection, Self::Error> {
+        Connection::open(&self.db_path)
+    }
+
+    fn is_valid(&self, conn: &mut Self::Connection) -> std::result::Result<(), Self::Error> {
+        conn.execute_batch("SELECT 1")?;
+        Ok(())
+    }
+
+    fn has_broken(&self, _conn: &mut Self::Connection) -> bool {
+        false
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -68,14 +101,36 @@ pub enum InsertMemoryOutcome {
 }
 
 impl MetadataStore {
-    pub fn new(db_path: PathBuf) -> Self {
-        Self { db_path }
+    pub fn new(db_path: PathBuf) -> Result<Self> {
+        if let Some(parent) = db_path.parent() {
+            fs::create_dir_all(parent).with_context(|| {
+                format!(
+                    "failed to create metadata db parent dir for pool: {}",
+                    parent.display()
+                )
+            })?;
+        }
+        let manager = SqliteConnectionManager::file(db_path.clone());
+        let pool = Pool::builder()
+            .max_size(16)
+            .connection_timeout(Duration::from_secs(5))
+            .build(manager)
+            .with_context(|| {
+                format!(
+                    "failed to build sqlite connection pool: {}",
+                    db_path.display()
+                )
+            })?;
+        Ok(Self { db_path, pool })
     }
 
     pub fn init(&self) -> Result<()> {
         if let Some(parent) = self.db_path.parent() {
             fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create metadata db parent dir: {}", parent.display())
+                format!(
+                    "failed to create metadata db parent dir: {}",
+                    parent.display()
+                )
             })?;
         }
 
@@ -412,8 +467,10 @@ impl MetadataStore {
                 LIMIT ?3
                 "#,
             )?;
-            stmt.query_map(params![agent_id, sid, limit as i64], |row| row.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?
+            stmt.query_map(params![agent_id, sid, limit as i64], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
         } else {
             let mut stmt = conn.prepare(
                 r#"
@@ -423,8 +480,10 @@ impl MetadataStore {
                 LIMIT ?2
                 "#,
             )?;
-            stmt.query_map(params![agent_id, limit as i64], |row| row.get::<_, String>(0))?
-                .collect::<rusqlite::Result<Vec<_>>>()?
+            stmt.query_map(params![agent_id, limit as i64], |row| {
+                row.get::<_, String>(0)
+            })?
+            .collect::<rusqlite::Result<Vec<_>>>()?
         };
         Ok(rows)
     }
@@ -597,7 +656,8 @@ impl MetadataStore {
             "#,
         )?;
         let rows = stmt.query_map(params![memory_id], row_to_entity_record)?;
-        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     /// Fetch a batch of entities by id. Preserves the SQL `IN (...)` order,
@@ -614,7 +674,9 @@ impl MetadataStore {
             FROM entities
             WHERE id IN ({})
             "#,
-            std::iter::repeat_n("?", ids.len()).collect::<Vec<_>>().join(", "),
+            std::iter::repeat_n("?", ids.len())
+                .collect::<Vec<_>>()
+                .join(", "),
         );
         let mut stmt = conn.prepare(&sql)?;
         let mut rows = stmt.query(rusqlite::params_from_iter(ids.iter()))?;
@@ -630,11 +692,41 @@ impl MetadataStore {
     /// their linked memories.
     pub fn list_linked_memory_ids_for_entity(&self, entity_id: i64) -> Result<Vec<i64>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
-            "SELECT memory_id FROM entity_memory_links WHERE entity_id = ?1",
-        )?;
+        let mut stmt =
+            conn.prepare("SELECT memory_id FROM entity_memory_links WHERE entity_id = ?1")?;
         let rows = stmt.query_map(params![entity_id], |row| row.get::<_, i64>(0))?;
-        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    /// Batch reverse lookup for entity links.
+    ///
+    /// Returns `entity_id -> [memory_id...]` and avoids the recall-time N+1
+    /// loop over `list_linked_memory_ids_for_entity`.
+    pub fn list_linked_memory_ids_for_entities(
+        &self,
+        entity_ids: &[i64],
+    ) -> Result<BTreeMap<i64, Vec<i64>>> {
+        if entity_ids.is_empty() {
+            return Ok(BTreeMap::new());
+        }
+        let conn = self.open_conn()?;
+        let sql = format!(
+            "SELECT entity_id, memory_id FROM entity_memory_links WHERE entity_id IN ({}) ORDER BY entity_id ASC, memory_id ASC",
+            (0..entity_ids.len())
+                .map(|_| "?")
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let mut rows = stmt.query(rusqlite::params_from_iter(entity_ids.iter()))?;
+        let mut out: BTreeMap<i64, Vec<i64>> = BTreeMap::new();
+        while let Some(row) = rows.next()? {
+            let entity_id: i64 = row.get(0)?;
+            let memory_id: i64 = row.get(1)?;
+            out.entry(entity_id).or_default().push(memory_id);
+        }
+        Ok(out)
     }
 
     /// Return the session-adjacent memory ids for a reference memory. Used by
@@ -681,7 +773,13 @@ impl MetadataStore {
                 )?;
                 let rows = stmt
                     .query_map(
-                        params![agent_id, sid, reference_memory_id, ref_created, before as i64],
+                        params![
+                            agent_id,
+                            sid,
+                            reference_memory_id,
+                            ref_created,
+                            before as i64
+                        ],
                         row_to_memory_record,
                     )?
                     .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -735,7 +833,13 @@ impl MetadataStore {
                 )?;
                 let rows = stmt
                     .query_map(
-                        params![agent_id, sid, reference_memory_id, ref_created, after as i64],
+                        params![
+                            agent_id,
+                            sid,
+                            reference_memory_id,
+                            ref_created,
+                            after as i64
+                        ],
                         row_to_memory_record,
                     )?
                     .collect::<rusqlite::Result<Vec<_>>>()?;
@@ -977,7 +1081,9 @@ impl MetadataStore {
             FROM memories
             WHERE id IN ({})
             "#,
-            std::iter::repeat_n("?", ids.len()).collect::<Vec<_>>().join(", ")
+            std::iter::repeat_n("?", ids.len())
+                .collect::<Vec<_>>()
+                .join(", ")
         );
 
         let mut stmt = conn.prepare(&sql)?;
@@ -1007,10 +1113,15 @@ impl MetadataStore {
         )?;
 
         let rows = stmt.query_map(params![agent_id, limit as i64], row_to_memory_record)?;
-        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
-    pub fn list_reflection_candidates(&self, agent_id: &str, limit: usize) -> Result<Vec<MemoryRecord>> {
+    pub fn list_reflection_candidates(
+        &self,
+        agent_id: &str,
+        limit: usize,
+    ) -> Result<Vec<MemoryRecord>> {
         let conn = self.open_conn()?;
         let mut stmt = conn.prepare(
             r#"
@@ -1028,7 +1139,8 @@ impl MetadataStore {
         )?;
 
         let rows = stmt.query_map(params![agent_id, limit as i64], row_to_memory_record)?;
-        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     pub fn mark_memories_accessed(&self, memory_ids: &[i64]) -> Result<()> {
@@ -1056,9 +1168,8 @@ impl MetadataStore {
         let conn = self.open_conn()?;
         let tx = conn.unchecked_transaction()?;
         let now = now_rfc3339();
-        let mut stmt = tx.prepare(
-            "UPDATE memories SET archived_at = ?1, updated_at = ?2 WHERE id = ?3",
-        )?;
+        let mut stmt =
+            tx.prepare("UPDATE memories SET archived_at = ?1, updated_at = ?2 WHERE id = ?3")?;
         for id in memory_ids {
             stmt.execute(params![now, now, id])?;
         }
@@ -1084,7 +1195,8 @@ impl MetadataStore {
         )?;
 
         let rows = stmt.query_map(params![agent_id], row_to_memory_record)?;
-        rows.collect::<rusqlite::Result<Vec<_>>>().map_err(Into::into)
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     pub fn get_latest_memory_id_for_agent(&self, agent_id: &str) -> Result<Option<i64>> {
@@ -1133,18 +1245,9 @@ impl MetadataStore {
         let current = self.get_agent_state(agent_id)?;
         let next = AgentStateResponse {
             agent_id: agent_id.to_string(),
-            mood: patch
-                .mood
-                .clone()
-                .unwrap_or(current.mood),
-            vibe: patch
-                .vibe
-                .clone()
-                .unwrap_or(current.vibe),
-            mind: patch
-                .mind
-                .clone()
-                .unwrap_or(current.mind),
+            mood: patch.mood.clone().unwrap_or(current.mood),
+            vibe: patch.vibe.clone().unwrap_or(current.vibe),
+            mind: patch.mind.clone().unwrap_or(current.mind),
             updated_at: now_rfc3339(),
         };
 
@@ -1183,10 +1286,11 @@ impl MetadataStore {
         let tx = conn.unchecked_transaction()?;
 
         if let Some(key) = dedupe_key
-            && let Some(existing) = find_active_task_by_dedupe(&tx, key)? {
-                tx.commit()?;
-                return Ok(existing);
-            }
+            && let Some(existing) = find_active_task_by_dedupe(&tx, key)?
+        {
+            tx.commit()?;
+            return Ok(existing);
+        }
 
         tx.execute(
             r#"
@@ -1229,8 +1333,11 @@ impl MetadataStore {
     pub fn claim_next_task(&self) -> Result<Option<TaskRecord>> {
         let conn = self.open_conn()?;
         let tx = conn.unchecked_transaction()?;
-        let stale_cutoff = Utc::now() - chrono::Duration::minutes(10);
-        let stale_cutoff = stale_cutoff.to_rfc3339();
+        let now = Utc::now();
+        let stale_cutoff_score_turn = (now - chrono::Duration::minutes(3)).to_rfc3339();
+        let stale_cutoff_reflection = (now - chrono::Duration::minutes(30)).to_rfc3339();
+        let stale_cutoff_rebuild = (now - chrono::Duration::minutes(60)).to_rfc3339();
+        let stale_cutoff_index = (now - chrono::Duration::minutes(5)).to_rfc3339();
         let maybe = tx
             .query_row(
                 r#"
@@ -1238,11 +1345,25 @@ impl MetadataStore {
                        last_error, retry_count, created_at, updated_at, started_at
                 FROM tasks
                 WHERE status = 'pending'
-                   OR (status = 'processing' AND started_at IS NOT NULL AND started_at < ?1)
+                   OR (
+                        status = 'processing'
+                    AND started_at IS NOT NULL
+                    AND (
+                        (task_type = 'score_turn' AND started_at < ?1)
+                        OR (task_type = 'reflection_run' AND started_at < ?2)
+                        OR (task_type = 'rebuild_trivium' AND started_at < ?3)
+                        OR (task_type = 'index_memory' AND started_at < ?4)
+                    )
+                   )
                 ORDER BY created_at ASC
                 LIMIT 1
                 "#,
-                params![stale_cutoff],
+                params![
+                    stale_cutoff_score_turn,
+                    stale_cutoff_reflection,
+                    stale_cutoff_rebuild,
+                    stale_cutoff_index
+                ],
                 row_to_task_record,
             )
             .optional()?;
@@ -1349,14 +1470,13 @@ impl MetadataStore {
         })
     }
 
-    fn open_conn(&self) -> Result<Connection> {
-        if let Some(parent) = self.db_path.parent() {
-            fs::create_dir_all(parent).with_context(|| {
-                format!("failed to create db parent dir: {}", parent.display())
-            })?;
-        }
-        let conn = Connection::open(&self.db_path)
-            .with_context(|| format!("failed to open sqlite db: {}", self.db_path.display()))?;
+    fn open_conn(&self) -> Result<SqlitePooledConnection> {
+        let conn = self.pool.get().with_context(|| {
+            format!(
+                "failed to borrow sqlite connection from pool: {}",
+                self.db_path.display()
+            )
+        })?;
         conn.busy_timeout(Duration::from_secs(5))?;
         conn.pragma_update(None, "foreign_keys", "ON")?;
         Ok(conn)
@@ -1442,7 +1562,10 @@ fn row_to_task_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<TaskRecord> {
     })
 }
 
-fn find_active_task_by_dedupe(tx: &Transaction<'_>, dedupe_key: &str) -> Result<Option<TaskRecord>> {
+fn find_active_task_by_dedupe(
+    tx: &Transaction<'_>,
+    dedupe_key: &str,
+) -> Result<Option<TaskRecord>> {
     let task = tx
         .query_row(
             r#"
@@ -1518,7 +1641,8 @@ mod tests {
     #[test]
     fn insert_raw_turn_returns_ids_in_order() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         let messages = vec![
@@ -1539,7 +1663,10 @@ mod tests {
             )
             .expect("insert raw turn");
         assert_eq!(ids.len(), 3);
-        assert!(ids[0] < ids[1] && ids[1] < ids[2], "ids must be monotonically increasing");
+        assert!(
+            ids[0] < ids[1] && ids[1] < ids[2],
+            "ids must be monotonically increasing"
+        );
 
         let events = store
             .list_recent_raw_events_for_session("shore", Some("s1"), 10)
@@ -1554,7 +1681,8 @@ mod tests {
     #[test]
     fn memory_hash_dedup_and_history_persist() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         // First insert with hash "abc" succeeds.
@@ -1621,12 +1749,16 @@ mod tests {
     #[test]
     fn entity_upsert_and_link_flow() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         // Insert a memory so we have a valid memory_id to link to.
         let mem = store
-            .insert_memory(&memory_for("Elena 昨晚去了 Osteria Francescana", Some("h1")))
+            .insert_memory(&memory_for(
+                "Elena 昨晚去了 Osteria Francescana",
+                Some("h1"),
+            ))
             .expect("insert memory");
 
         // First upsert creates the entity.
@@ -1674,12 +1806,20 @@ mod tests {
             .list_linked_memory_ids_for_entity(elena.id)
             .expect("list memory ids");
         assert_eq!(linked, vec![mem.id]);
+
+        // Batch reverse lookup returns a stable entity->memory mapping.
+        let linked_batch = store
+            .list_linked_memory_ids_for_entities(&[elena.id, elena_place.id])
+            .expect("list memory ids batch");
+        assert_eq!(linked_batch.get(&elena.id).cloned(), Some(vec![mem.id]));
+        assert_eq!(linked_batch.get(&elena_place.id), None);
     }
 
     #[test]
     fn session_memories_around_returns_neighbors() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         // Three memories in the same session with increasing created_at via
@@ -1719,7 +1859,8 @@ mod tests {
     #[test]
     fn supersede_and_invalidate_lifecycle() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         let keep = store
@@ -1761,7 +1902,10 @@ mod tests {
             .expect("load")
             .expect("exists");
         assert_eq!(keep_invalid.state, "invalidated");
-        assert_eq!(keep_invalid.invalid_at.as_deref(), Some("2026-04-10T00:00:00Z"));
+        assert_eq!(
+            keep_invalid.invalid_at.as_deref(),
+            Some("2026-04-10T00:00:00Z")
+        );
         // Once the state transitions away from "active", `is_currently_valid`
         // is always false regardless of the time cursor — callers wanting
         // time-travel use `RecallRequest::include_invalid=true`.
@@ -1775,7 +1919,8 @@ mod tests {
         // a still-active memory with a future expiration should be visible
         // until its deadline and invisible after it.
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         let mem = store
@@ -1798,7 +1943,8 @@ mod tests {
     #[test]
     fn supersede_is_noop_for_self() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init schema");
 
         let m = store
@@ -1807,10 +1953,7 @@ mod tests {
 
         // Self-supersede is a guarded no-op — state must stay `active`.
         store.supersede_memory(m.id, m.id).expect("self supersede");
-        let still = store
-            .get_memory_by_id(m.id)
-            .expect("load")
-            .expect("exists");
+        let still = store.get_memory_by_id(m.id).expect("load").expect("exists");
         assert_eq!(still.state, "active");
         assert_eq!(still.supersedes_memory_id, None);
         assert!(still.is_currently_valid("2099-01-01T00:00:00Z"));
@@ -1819,7 +1962,8 @@ mod tests {
     #[test]
     fn task_retry_and_summary_work() {
         let temp_dir = tempdir().expect("tempdir");
-        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"));
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
         store.init().expect("init sqlite schema");
 
         let task = store
@@ -1839,7 +1983,9 @@ mod tests {
         assert_eq!(claimed.id, task.id);
         assert_eq!(claimed.status, TaskStatus::Processing);
 
-        store.fail_task(task.id, "worker unavailable").expect("fail task");
+        store
+            .fail_task(task.id, "worker unavailable")
+            .expect("fail task");
         let summary = store.get_sync_summary().expect("summary after failure");
         assert_eq!(summary.failed_tasks, 1);
         assert_eq!(summary.pending_tasks, 0);

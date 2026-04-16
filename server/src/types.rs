@@ -70,6 +70,10 @@ impl TaskKind {
             Self::IndexMemory => "index_memory",
         }
     }
+
+    pub fn as_metric_label(&self) -> &'static str {
+        self.as_str()
+    }
 }
 
 impl std::fmt::Display for TaskKind {
@@ -605,10 +609,7 @@ pub struct ContradictionEntry {
     pub reason: Option<String>,
 }
 
-pub fn infer_scope(
-    scope_hint: Option<MemoryScopeHint>,
-    channel_uid: Option<&str>,
-) -> MemoryScope {
+pub fn infer_scope(scope_hint: Option<MemoryScopeHint>, channel_uid: Option<&str>) -> MemoryScope {
     match scope_hint.unwrap_or(MemoryScopeHint::Auto) {
         MemoryScopeHint::Private => MemoryScope::Private,
         MemoryScopeHint::Group => MemoryScope::Group,
@@ -654,7 +655,11 @@ mod tests {
     };
     use serde_json::json;
 
-    fn sample_memory(scope: MemoryScope, user_uid: Option<&str>, channel_uid: Option<&str>) -> MemoryRecord {
+    fn sample_memory(
+        scope: MemoryScope,
+        user_uid: Option<&str>,
+        channel_uid: Option<&str>,
+    ) -> MemoryRecord {
         MemoryRecord {
             id: 1,
             agent_id: "shore".to_string(),
@@ -687,11 +692,26 @@ mod tests {
 
     #[test]
     fn infer_scope_from_hint_and_channel() {
-        assert_eq!(infer_scope(Some(MemoryScopeHint::Private), Some("telegram:dm:1")), MemoryScope::Private);
-        assert_eq!(infer_scope(Some(MemoryScopeHint::Group), Some("telegram:dm:1")), MemoryScope::Group);
-        assert_eq!(infer_scope(Some(MemoryScopeHint::Auto), Some("telegram:group:1")), MemoryScope::Group);
-        assert_eq!(infer_scope(Some(MemoryScopeHint::Auto), Some("telegram:dm:1")), MemoryScope::Private);
-        assert_eq!(infer_scope(None, Some("desktop:session")), MemoryScope::Shared);
+        assert_eq!(
+            infer_scope(Some(MemoryScopeHint::Private), Some("telegram:dm:1")),
+            MemoryScope::Private
+        );
+        assert_eq!(
+            infer_scope(Some(MemoryScopeHint::Group), Some("telegram:dm:1")),
+            MemoryScope::Group
+        );
+        assert_eq!(
+            infer_scope(Some(MemoryScopeHint::Auto), Some("telegram:group:1")),
+            MemoryScope::Group
+        );
+        assert_eq!(
+            infer_scope(Some(MemoryScopeHint::Auto), Some("telegram:dm:1")),
+            MemoryScope::Private
+        );
+        assert_eq!(
+            infer_scope(None, Some("desktop:session")),
+            MemoryScope::Shared
+        );
     }
 
     #[test]
@@ -699,10 +719,22 @@ mod tests {
         use crate::types::RecallRecipe;
         assert_eq!(RecallRecipe::parse(Some("fast")), RecallRecipe::Fast);
         assert_eq!(RecallRecipe::parse(Some("hybrid")), RecallRecipe::Hybrid);
-        assert_eq!(RecallRecipe::parse(Some("entity")), RecallRecipe::EntityHeavy);
-        assert_eq!(RecallRecipe::parse(Some("entity_heavy")), RecallRecipe::EntityHeavy);
-        assert_eq!(RecallRecipe::parse(Some("entity-heavy")), RecallRecipe::EntityHeavy);
-        assert_eq!(RecallRecipe::parse(Some("contiguous")), RecallRecipe::Contiguous);
+        assert_eq!(
+            RecallRecipe::parse(Some("entity")),
+            RecallRecipe::EntityHeavy
+        );
+        assert_eq!(
+            RecallRecipe::parse(Some("entity_heavy")),
+            RecallRecipe::EntityHeavy
+        );
+        assert_eq!(
+            RecallRecipe::parse(Some("entity-heavy")),
+            RecallRecipe::EntityHeavy
+        );
+        assert_eq!(
+            RecallRecipe::parse(Some("contiguous")),
+            RecallRecipe::Contiguous
+        );
         assert_eq!(RecallRecipe::parse(Some("ctg")), RecallRecipe::Contiguous);
         assert_eq!(RecallRecipe::parse(None), RecallRecipe::Hybrid);
         assert_eq!(RecallRecipe::parse(Some("unknown")), RecallRecipe::Hybrid);
@@ -717,12 +749,28 @@ mod tests {
     #[test]
     fn scope_visibility_respects_private_and_group_boundaries() {
         let private_memory = sample_memory(MemoryScope::Private, Some("user:master"), None);
-        assert!(scope_visible_for_request(&private_memory, Some("user:master"), None));
-        assert!(!scope_visible_for_request(&private_memory, Some("user:other"), None));
+        assert!(scope_visible_for_request(
+            &private_memory,
+            Some("user:master"),
+            None
+        ));
+        assert!(!scope_visible_for_request(
+            &private_memory,
+            Some("user:other"),
+            None
+        ));
 
         let group_memory = sample_memory(MemoryScope::Group, None, Some("telegram:group:1"));
-        assert!(scope_visible_for_request(&group_memory, None, Some("telegram:group:1")));
-        assert!(!scope_visible_for_request(&group_memory, None, Some("telegram:group:2")));
+        assert!(scope_visible_for_request(
+            &group_memory,
+            None,
+            Some("telegram:group:1")
+        ));
+        assert!(!scope_visible_for_request(
+            &group_memory,
+            None,
+            Some("telegram:group:2")
+        ));
 
         let shared_memory = sample_memory(MemoryScope::Shared, None, None);
         assert!(scope_visible_for_request(&shared_memory, None, None));

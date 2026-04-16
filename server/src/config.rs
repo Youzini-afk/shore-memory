@@ -15,9 +15,15 @@ pub struct ServiceConfig {
     pub worker_base_url: String,
     pub embedding_timeout: Duration,
     pub worker_timeout: Duration,
+    pub worker_timeout_embed: Duration,
+    pub worker_timeout_embed_batch: Duration,
+    pub worker_timeout_extract_entities: Duration,
+    pub worker_timeout_score_turn: Duration,
+    pub worker_timeout_reflect: Duration,
     pub recall_cache_ttl: Duration,
     pub embedding_cache_ttl: Duration,
     pub task_poll_interval: Duration,
+    pub task_workers: usize,
     pub search_top_k: usize,
     pub search_expand_depth: usize,
     pub search_min_score: f32,
@@ -39,8 +45,7 @@ impl ServiceConfig {
         let host = env::var("PMS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
         let port = parse_u16("PMS_PORT", 7811);
         let bind_addr = SocketAddr::new(
-            host.parse()
-                .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            host.parse().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
             port,
         );
 
@@ -65,9 +70,33 @@ impl ServiceConfig {
                 .unwrap_or_else(|_| "http://127.0.0.1:7812".to_string()),
             embedding_timeout: Duration::from_millis(parse_u64("PMS_EMBEDDING_TIMEOUT_MS", 1800)),
             worker_timeout: Duration::from_millis(parse_u64("PMS_WORKER_TIMEOUT_MS", 10_000)),
+            worker_timeout_embed: Duration::from_millis(parse_u64(
+                "PMS_WORKER_TIMEOUT_EMBED_MS",
+                1_500,
+            )),
+            worker_timeout_embed_batch: Duration::from_millis(parse_u64(
+                "PMS_WORKER_TIMEOUT_EMBED_BATCH_MS",
+                3_000,
+            )),
+            worker_timeout_extract_entities: Duration::from_millis(parse_u64(
+                "PMS_WORKER_TIMEOUT_EXTRACT_ENTITIES_MS",
+                3_000,
+            )),
+            worker_timeout_score_turn: Duration::from_millis(parse_u64(
+                "PMS_WORKER_TIMEOUT_SCORE_TURN_MS",
+                8_000,
+            )),
+            worker_timeout_reflect: Duration::from_millis(parse_u64(
+                "PMS_WORKER_TIMEOUT_REFLECT_MS",
+                45_000,
+            )),
             recall_cache_ttl: Duration::from_secs(parse_u64("PMS_RECALL_CACHE_TTL_SECS", 30)),
-            embedding_cache_ttl: Duration::from_secs(parse_u64("PMS_EMBEDDING_CACHE_TTL_SECS", 600)),
+            embedding_cache_ttl: Duration::from_secs(parse_u64(
+                "PMS_EMBEDDING_CACHE_TTL_SECS",
+                600,
+            )),
             task_poll_interval: Duration::from_millis(parse_u64("PMS_TASK_POLL_INTERVAL_MS", 1500)),
+            task_workers: parse_usize("PMS_TASK_WORKERS", 4).max(1),
             search_top_k: parse_usize("PMS_SEARCH_TOP_K", 12),
             search_expand_depth: parse_usize("PMS_SEARCH_EXPAND_DEPTH", 2),
             search_min_score: parse_f32("PMS_SEARCH_MIN_SCORE", 0.03),

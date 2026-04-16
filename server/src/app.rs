@@ -4,15 +4,19 @@ use anyhow::{Context, Result, anyhow};
 use axum::extract::Path;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::StatusCode;
+use axum::http::{HeaderMap, HeaderName, StatusCode};
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
+use metrics::{counter, gauge, histogram};
+use metrics_exporter_prometheus::PrometheusHandle;
 use moka::future::Cache;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tokio::sync::broadcast;
 use tokio::time::{sleep, timeout};
+use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::trace::TraceLayer;
 use tracing::{error, warn};
 
 use crate::config::ServiceConfig;
@@ -23,14 +27,15 @@ use crate::recall_recipe::{
 };
 use crate::trivium::{EntityTriviumStore, TriviumStore};
 use crate::types::{
-    AgentStatePatch, AgentStateResponse, ContradictionEntry, CreateMemoryRequest, DuplicateGroup,
-    EntityDraft, EntityRecord, EventMessageRequest, ExistingMemoryHint, MemoryRecord,
-    MemorySnippet, RecallRecipe, RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent,
-    SyncSummaryResponse, TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage,
-    WorkerMemoryDraft, WorkerReflectionResponse, WorkerScoreTurnRequest, infer_scope,
-    scope_visible_for_request,
+    AgentStatePatch, AgentStateResponse, CreateMemoryRequest, EntityDraft, EntityRecord,
+    EventMessageRequest, ExistingMemoryHint, MemoryRecord, MemorySnippet, RecallRecipe,
+    RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse,
+    TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage, WorkerMemoryDraft,
+    WorkerScoreTurnRequest, infer_scope, scope_visible_for_request,
 };
-use crate::worker::{WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories};
+use crate::worker::{
+    WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories,
+};
 
 /// Number of previous raw events from the same session to send to the scorer.
 const SCORER_LAST_K_EVENTS: usize = 10;
@@ -40,6 +45,7 @@ const SCORER_RECENTLY_EXTRACTED: usize = 10;
 /// deduplication & linking. Opaque indices ("0", "1", ...) are used so the LLM
 /// never sees real UUIDs.
 const SCORER_EXISTING_POOL_SIZE: usize = 10;
+const RECALL_CACHE_KEY_VERSION: &str = "v2";
 
 #[derive(Clone)]
 pub struct AppState {
@@ -47,8 +53,10 @@ pub struct AppState {
     pub store: Arc<MetadataStore>,
     pub trivium: Arc<TriviumStore>,
     pub entity_trivium: Arc<EntityTriviumStore>,
+    pub metrics_handle: Arc<PrometheusHandle>,
     pub worker: WorkerClient,
     pub recall_cache: Cache<String, RecallResponse>,
+    pub recall_epoch: Cache<String, u64>,
     pub embedding_cache: Cache<String, Vec<f32>>,
     pub events: broadcast::Sender<ServerEvent>,
 }
@@ -59,14 +67,21 @@ impl AppState {
         store: MetadataStore,
         trivium: TriviumStore,
         entity_trivium: EntityTriviumStore,
+        metrics_handle: PrometheusHandle,
         worker: WorkerClient,
     ) -> Self {
-        let (events, _) = broadcast::channel(1024);
+        let event_channel_cap = std::env::var("PMS_EVENT_CHANNEL_CAP")
+            .ok()
+            .and_then(|s| s.parse::<usize>().ok())
+            .unwrap_or(1024)
+            .max(16);
+        let (events, _) = broadcast::channel(event_channel_cap);
         Self {
             recall_cache: Cache::builder()
                 .time_to_live(config.recall_cache_ttl)
                 .max_capacity(2_048)
                 .build(),
+            recall_epoch: Cache::builder().max_capacity(4_096).build(),
             embedding_cache: Cache::builder()
                 .time_to_live(config.embedding_cache_ttl)
                 .max_capacity(8_192)
@@ -75,14 +90,17 @@ impl AppState {
             store: Arc::new(store),
             trivium: Arc::new(trivium),
             entity_trivium: Arc::new(entity_trivium),
+            metrics_handle: Arc::new(metrics_handle),
             worker,
             events,
         }
     }
 
     pub fn router(self) -> Router {
+        let request_id_header = HeaderName::from_static("x-request-id");
         Router::new()
             .route("/health", get(health))
+            .route("/metrics", get(metrics))
             .route("/v1/context/recall", post(recall))
             .route("/v1/events/turn", post(events_turn))
             .route("/v1/events/message", post(events_message))
@@ -97,35 +115,54 @@ impl AppState {
             .route("/v1/maintenance/sync-summary", get(sync_summary))
             .route("/v1/events", get(events_ws))
             .with_state(self)
+            .layer(TraceLayer::new_for_http())
+            .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
+            .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))
     }
 
     pub fn spawn_background_loops(self: Arc<Self>) {
-        tokio::spawn({
-            let state = Arc::clone(&self);
-            async move {
-                loop {
-                    if let Err(err) = state.tick_task_queue().await {
-                        error!("task queue tick failed: {err:#}");
+        for worker_idx in 0..self.config.task_workers {
+            tokio::spawn({
+                let state = Arc::clone(&self);
+                async move {
+                    loop {
+                        if let Err(err) = state.tick_task_queue().await {
+                            error!("task queue tick failed (worker={}): {err:#}", worker_idx);
+                        }
+                        sleep(state.config.task_poll_interval).await;
                     }
-                    sleep(state.config.task_poll_interval).await;
                 }
-            }
-        });
+            });
+        }
     }
 
     async fn tick_task_queue(&self) -> Result<()> {
+        if let Ok(summary) = self.store.get_sync_summary() {
+            gauge!("shore_memory_task_queue_depth", "status" => "pending")
+                .set(summary.pending_tasks as f64);
+            gauge!("shore_memory_task_queue_depth", "status" => "failed")
+                .set(summary.failed_tasks as f64);
+        }
         let Some(task) = self.store.claim_next_task()? else {
             return Ok(());
         };
+
+        let kind_label = task.task_type.as_metric_label();
+        let started = std::time::Instant::now();
 
         let result = self.process_task(task.clone()).await;
         match result {
             Ok(()) => {
                 self.store.complete_task(task.id)?;
+                histogram!("shore_memory_task_processing_duration_seconds", "kind" => kind_label, "status" => "ok")
+                    .record(started.elapsed().as_secs_f64());
             }
             Err(err) => {
                 let message = err.to_string();
                 self.store.fail_task(task.id, &message)?;
+                counter!("shore_memory_task_errors_total", "kind" => kind_label).increment(1);
+                histogram!("shore_memory_task_processing_duration_seconds", "kind" => kind_label, "status" => "error")
+                    .record(started.elapsed().as_secs_f64());
                 self.emit_event("sync.failed", json!({"task_id": task.id, "error": message}))
                     .await;
             }
@@ -142,6 +179,7 @@ impl AppState {
         }
     }
 
+    #[tracing::instrument(skip(self, task), fields(task_id = task.id, task_kind = "score_turn"))]
     async fn process_score_turn(&self, task: TaskRecord) -> Result<()> {
         let payload: TurnTaskPayload =
             serde_json::from_str(&task.payload_json).context("invalid score_turn payload")?;
@@ -208,7 +246,13 @@ impl AppState {
             enriched.observation_date = Some(chrono::Utc::now().to_rfc3339());
         }
 
-        let response = self.worker.score_turn(&enriched).await?;
+        let score_started = std::time::Instant::now();
+        let response = self.worker.score_turn(&enriched).await.map_err(|err| {
+            counter!("shore_memory_worker_call_errors_total", "op" => "score_turn").increment(1);
+            err
+        })?;
+        histogram!("shore_memory_worker_call_duration_seconds", "op" => "score_turn")
+            .record(score_started.elapsed().as_secs_f64());
 
         // Phase 4: per-draft hash dedup + linked memory mapping + history.
         // Entities extracted by the LLM are collected here; Phase 5 lands them
@@ -280,7 +324,11 @@ impl AppState {
         // failure here is logged but must not block a successful score pass.
         if !entity_pairs.is_empty() {
             if let Err(err) = self
-                .land_entities_for_drafts(&agent_id, payload.request.user_uid.as_deref(), entity_pairs)
+                .land_entities_for_drafts(
+                    &agent_id,
+                    payload.request.user_uid.as_deref(),
+                    entity_pairs,
+                )
                 .await
             {
                 warn!("stage2 entity landing failed: {err:#}");
@@ -334,6 +382,7 @@ impl AppState {
                 SCORER_EXISTING_POOL_SIZE.saturating_mul(2).max(1),
                 self.config.search_expand_depth,
                 self.config.search_min_score,
+                false,
             )
             .await
             .unwrap_or_default();
@@ -344,10 +393,8 @@ impl AppState {
 
         let ids: Vec<i64> = hits.iter().map(|hit| hit.id as i64).collect();
         let records = self.store.list_memories_by_ids(&ids)?;
-        let record_by_id: std::collections::HashMap<i64, MemoryRecord> = records
-            .into_iter()
-            .map(|mem| (mem.id, mem))
-            .collect();
+        let record_by_id: std::collections::HashMap<i64, MemoryRecord> =
+            records.into_iter().map(|mem| (mem.id, mem)).collect();
 
         let now = chrono::Utc::now().to_rfc3339();
         let mut out: Vec<(String, MemoryRecord)> = Vec::new();
@@ -451,10 +498,12 @@ impl AppState {
         let mut entity_records: Vec<EntityRecord> = Vec::with_capacity(unique_entities.len());
         let mut newly_created: Vec<usize> = Vec::new();
         for (i, unique) in unique_entities.iter().enumerate() {
-            match self
-                .store
-                .upsert_entity(agent_id, user_uid, &unique.name_raw, &unique.entity_type)
-            {
+            match self.store.upsert_entity(
+                agent_id,
+                user_uid,
+                &unique.name_raw,
+                &unique.entity_type,
+            ) {
                 Ok((record, created)) => {
                     if created {
                         newly_created.push(i);
@@ -533,10 +582,7 @@ impl AppState {
             if entity.id < 0 {
                 continue;
             }
-            if let Err(err) = self
-                .store
-                .link_entity_to_memory(entity.id, *memory_id, 1.0)
-            {
+            if let Err(err) = self.store.link_entity_to_memory(entity.id, *memory_id, 1.0) {
                 warn!(
                     "link_entity_to_memory failed for (entity={}, memory={}): {:#}",
                     entity.id, memory_id, err
@@ -547,10 +593,13 @@ impl AppState {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, task), fields(task_id = task.id, task_kind = "reflection_run"))]
     async fn process_reflection(&self, task: TaskRecord) -> Result<()> {
         let payload: MaintenanceAgentRequest =
             serde_json::from_str(&task.payload_json).context("invalid reflection payload")?;
-        let candidates = self.store.list_reflection_candidates(&payload.agent_id, 24)?;
+        let candidates = self
+            .store
+            .list_reflection_candidates(&payload.agent_id, 24)?;
         if candidates.len() < 4 {
             self.emit_event(
                 "maintenance.completed",
@@ -560,10 +609,20 @@ impl AppState {
             return Ok(());
         }
 
+        let reflect_started = std::time::Instant::now();
         let result = self
             .worker
-            .reflect(&payload.agent_id, reflection_inputs_from_memories(&candidates))
-            .await?;
+            .reflect(
+                &payload.agent_id,
+                reflection_inputs_from_memories(&candidates),
+            )
+            .await
+            .map_err(|err| {
+                counter!("shore_memory_worker_call_errors_total", "op" => "reflect").increment(1);
+                err
+            })?;
+        histogram!("shore_memory_worker_call_duration_seconds", "op" => "reflect")
+            .record(reflect_started.elapsed().as_secs_f64());
 
         // Step 1: insert every summary memory first so `contradictions` can
         // reference them via `new_summary_idx`.
@@ -585,6 +644,26 @@ impl AppState {
             }
         }
 
+        // Preload old-memory snapshots once (avoid get_memory_by_id N+1).
+        let mut old_snapshot_ids: std::collections::BTreeSet<i64> =
+            std::collections::BTreeSet::new();
+        for group in &result.duplicate_groups {
+            for drop_id in &group.drop_ids {
+                if *drop_id != group.keep_id {
+                    old_snapshot_ids.insert(*drop_id);
+                }
+            }
+        }
+        for entry in &result.contradictions {
+            old_snapshot_ids.insert(entry.old_id);
+        }
+        let old_snapshot_map: std::collections::HashMap<i64, MemoryRecord> = self
+            .store
+            .list_memories_by_ids(&old_snapshot_ids.into_iter().collect::<Vec<_>>())?
+            .into_iter()
+            .map(|m| (m.id, m))
+            .collect();
+
         // Step 2: duplicate groups — drop_ids become `superseded` by keep_id.
         let mut supersede_events = 0usize;
         for group in &result.duplicate_groups {
@@ -592,7 +671,7 @@ impl AppState {
                 if *drop_id == group.keep_id {
                     continue;
                 }
-                let old_snapshot = self.store.get_memory_by_id(*drop_id).ok().flatten();
+                let old_snapshot = old_snapshot_map.get(drop_id);
                 if let Err(err) = self.store.supersede_memory(*drop_id, group.keep_id) {
                     warn!(
                         "supersede_memory failed (drop={}, keep={}): {:#}",
@@ -600,6 +679,7 @@ impl AppState {
                     );
                     continue;
                 }
+                self.sync_trivium_payload_for_memory(*drop_id).await;
                 supersede_events += 1;
                 let history_meta = json!({
                     "superseded_by": group.keep_id,
@@ -610,9 +690,9 @@ impl AppState {
                     Some(*drop_id),
                     &payload.agent_id,
                     "supersede",
-                    old_snapshot.as_ref().map(|m| m.content.as_str()),
+                    old_snapshot.map(|m| m.content.as_str()),
                     None,
-                    old_snapshot.as_ref().map(|m| &m.metadata),
+                    old_snapshot.map(|m| &m.metadata),
                     Some(&history_meta),
                     Some(task.id),
                 );
@@ -628,7 +708,7 @@ impl AppState {
                     .new_summary_idx
                     .and_then(|idx| summary_ids.get(idx).copied())
             });
-            let old_snapshot = self.store.get_memory_by_id(entry.old_id).ok().flatten();
+            let old_snapshot = old_snapshot_map.get(&entry.old_id);
 
             let op = match resolved_new_id {
                 Some(new_id) => {
@@ -659,6 +739,7 @@ impl AppState {
                 );
                 continue;
             }
+            self.sync_trivium_payload_for_memory(entry.old_id).await;
             invalidate_events += 1;
             let history_meta = json!({
                 "contradicted_by": resolved_new_id,
@@ -667,14 +748,18 @@ impl AppState {
                 "reason": entry.reason,
                 "source": "contradiction",
             });
-            let event = if resolved_new_id.is_some() { "supersede" } else { "invalidate" };
+            let event = if resolved_new_id.is_some() {
+                "supersede"
+            } else {
+                "invalidate"
+            };
             let _ = self.store.insert_memory_history(
                 Some(entry.old_id),
                 &payload.agent_id,
                 event,
-                old_snapshot.as_ref().map(|m| m.content.as_str()),
+                old_snapshot.map(|m| m.content.as_str()),
                 None,
-                old_snapshot.as_ref().map(|m| &m.metadata),
+                old_snapshot.map(|m| &m.metadata),
                 Some(&history_meta),
                 Some(task.id),
             );
@@ -683,11 +768,15 @@ impl AppState {
         // Any supersede / invalidate mutation requires a recall cache flush,
         // otherwise stale (pre-Stage-3) responses may leak back to callers.
         if supersede_events > 0 || invalidate_events > 0 {
-            self.recall_cache.invalidate_all();
+            self.bump_recall_epoch(&payload.agent_id).await;
         }
 
         if !result.retire_memory_ids.is_empty() {
             self.store.archive_memories(&result.retire_memory_ids)?;
+            for memory_id in &result.retire_memory_ids {
+                self.sync_trivium_payload_for_memory(*memory_id).await;
+            }
+            self.bump_recall_epoch(&payload.agent_id).await;
             self.enqueue_task(
                 TaskKind::RebuildTrivium,
                 &payload.agent_id,
@@ -697,7 +786,9 @@ impl AppState {
         }
 
         if let Some(state_patch) = result.state_patch {
-            let state = self.store.upsert_agent_state(&payload.agent_id, &state_patch)?;
+            let state = self
+                .store
+                .upsert_agent_state(&payload.agent_id, &state_patch)?;
             self.emit_event(
                 "agent.state.updated",
                 json!({
@@ -728,6 +819,7 @@ impl AppState {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, task), fields(task_id = task.id, task_kind = "rebuild_trivium"))]
     async fn process_rebuild(&self, task: TaskRecord) -> Result<()> {
         let payload: MaintenanceAgentRequest =
             serde_json::from_str(&task.payload_json).context("invalid rebuild payload")?;
@@ -754,7 +846,7 @@ impl AppState {
         }
 
         let inserted = self.trivium.rebuild(rebuild_items).await?;
-        self.recall_cache.invalidate_all();
+        self.bump_recall_epoch(&payload.agent_id).await;
         self.emit_event(
             "maintenance.completed",
             json!({
@@ -767,6 +859,7 @@ impl AppState {
         Ok(())
     }
 
+    #[tracing::instrument(skip(self, task), fields(task_id = task.id, task_kind = "index_memory"))]
     async fn process_index_memory(&self, task: TaskRecord) -> Result<()> {
         let payload: IndexMemoryPayload =
             serde_json::from_str(&task.payload_json).context("invalid index_memory payload")?;
@@ -781,7 +874,7 @@ impl AppState {
         self.trivium
             .insert_memory(memory.clone(), embedding, payload.previous_memory_id)
             .await?;
-        self.recall_cache.invalidate_all();
+        self.bump_recall_epoch(&memory.agent_id).await;
         self.emit_event(
             "memory.indexed",
             json!({"task_id": task.id, "memory_id": memory.id, "agent_id": memory.agent_id}),
@@ -802,15 +895,22 @@ impl AppState {
     ///   4. Contiguity: for the top-N semantic hits, pull session-adjacent
     ///      memories and give them a fixed boost.
     ///   5. Fuse via `additive_fuse` with weights derived from the recipe.
+    #[tracing::instrument(skip(self, request), fields(agent_id = %request.agent_id))]
     pub async fn handle_recall(&self, request: RecallRequest) -> Result<RecallResponse> {
         use std::collections::{HashMap, HashSet};
+        let started = std::time::Instant::now();
+        let recipe = RecallRecipe::parse(request.recipe.as_deref());
+        let recipe_label = recipe.as_str();
 
-        let cache_key = cache_key_for_recall(&request);
+        let recall_epoch = self.recall_epoch.get(&request.agent_id).await.unwrap_or(0);
+        let cache_key = cache_key_for_recall(&request, recall_epoch);
         if let Some(cached) = self.recall_cache.get(&cache_key).await {
+            counter!("shore_memory_cache_hit_total", "cache" => "recall").increment(1);
+            histogram!("shore_memory_recall_duration_seconds", "recipe" => recipe_label, "degraded" => "false")
+                .record(started.elapsed().as_secs_f64());
             return Ok(cached);
         }
-
-        let recipe = RecallRecipe::parse(request.recipe.as_deref());
+        counter!("shore_memory_cache_miss_total", "cache" => "recall").increment(1);
         let limit = request
             .limit
             .unwrap_or(self.config.search_top_k)
@@ -825,10 +925,15 @@ impl AppState {
         // Semantic is always required — lack of embedding flags `degraded`.
         let query_embedding = self.get_or_fetch_embedding(&request.query).await.ok();
         let degraded = query_embedding.is_none();
+        if degraded {
+            counter!("shore_memory_recall_degraded_total", "reason" => "embedding_unavailable")
+                .increment(1);
+        }
 
         // Signal A: semantic vector similarity.
         let mut semantic_map: HashMap<i64, f32> = HashMap::new();
         if let Some(vec) = query_embedding.clone() {
+            let semantic_started = std::time::Instant::now();
             let hits = self
                 .trivium
                 .search_semantic_only(
@@ -839,9 +944,12 @@ impl AppState {
                     fetch_size,
                     self.config.search_expand_depth,
                     self.config.search_min_score,
+                    include_invalid_flag,
                 )
                 .await
                 .unwrap_or_default();
+            histogram!("shore_memory_trivium_search_duration_seconds", "kind" => "semantic")
+                .record(semantic_started.elapsed().as_secs_f64());
             for hit in hits {
                 semantic_map.insert(hit.id as i64, hit.score);
             }
@@ -850,6 +958,7 @@ impl AppState {
         // Signal B: BM25.
         let mut bm25_map: HashMap<i64, f32> = HashMap::new();
         if recipe.use_bm25() && !request.query.trim().is_empty() {
+            let bm25_started = std::time::Instant::now();
             let bm25_hits = self
                 .trivium
                 .search_text_only(
@@ -859,9 +968,12 @@ impl AppState {
                     request.query.clone(),
                     fetch_size,
                     self.config.search_min_score,
+                    include_invalid_flag,
                 )
                 .await
                 .unwrap_or_default();
+            histogram!("shore_memory_trivium_search_duration_seconds", "kind" => "bm25")
+                .record(bm25_started.elapsed().as_secs_f64());
             let (mid, steep) = bm25_params_for_query(&request.query);
             for hit in bm25_hits {
                 bm25_map.insert(hit.id as i64, normalize_bm25(hit.score, mid, steep));
@@ -872,23 +984,39 @@ impl AppState {
         let mut entity_map: HashMap<i64, f32> = HashMap::new();
         let mut entities_by_memory: HashMap<i64, Vec<EntityDraft>> = HashMap::new();
         if recipe.use_entity() && !request.query.trim().is_empty() {
-            let extracted = self
-                .worker
-                .extract_entities(&request.query, None)
-                .await
-                .unwrap_or_default();
+            let extract_started = std::time::Instant::now();
+            let extracted = match self.worker.extract_entities(&request.query, None).await {
+                Ok(v) => v,
+                Err(_) => {
+                    counter!("shore_memory_worker_call_errors_total", "op" => "extract_entities")
+                        .increment(1);
+                    Vec::new()
+                }
+            };
+            histogram!("shore_memory_worker_call_duration_seconds", "op" => "extract_entities")
+                .record(extract_started.elapsed().as_secs_f64());
             if !extracted.is_empty() {
                 let names: Vec<String> = extracted.iter().map(|e| e.name.clone()).collect();
-                let embeddings = self
-                    .worker
-                    .embed_batch(names)
-                    .await
-                    .unwrap_or_default();
+                let embed_batch_started = std::time::Instant::now();
+                let embeddings = match self.worker.embed_batch(names).await {
+                    Ok(v) => v,
+                    Err(_) => {
+                        counter!("shore_memory_worker_call_errors_total", "op" => "embed_batch")
+                            .increment(1);
+                        Vec::new()
+                    }
+                };
+                histogram!("shore_memory_worker_call_duration_seconds", "op" => "embed_batch")
+                    .record(embed_batch_started.elapsed().as_secs_f64());
+                let mut propagated_hits: Vec<(i64, f32, EntityDraft)> = Vec::new();
                 for (idx, entity) in extracted.iter().enumerate() {
-                    let Some(embedding) = embeddings.get(idx) else { continue };
+                    let Some(embedding) = embeddings.get(idx) else {
+                        continue;
+                    };
                     if embedding.is_empty() {
                         continue;
                     }
+                    let entity_started = std::time::Instant::now();
                     let hits = self
                         .entity_trivium
                         .search_entities(
@@ -900,6 +1028,8 @@ impl AppState {
                         )
                         .await
                         .unwrap_or_default();
+                    histogram!("shore_memory_trivium_search_duration_seconds", "kind" => "entity")
+                        .record(entity_started.elapsed().as_secs_f64());
                     for entity_hit in hits {
                         let entity_id = entity_hit.id as i64;
                         let linked_count = entity_hit
@@ -909,19 +1039,34 @@ impl AppState {
                             .unwrap_or(1);
                         let attenuation = entity_spread_attenuation(linked_count);
                         let signal = entity_hit.score * attenuation;
-                        if let Ok(memory_ids) =
-                            self.store.list_linked_memory_ids_for_entity(entity_id)
-                        {
-                            for mem_id in memory_ids {
-                                let slot = entity_map.entry(mem_id).or_insert(0.0);
-                                if signal > *slot {
-                                    *slot = signal;
-                                }
-                                entities_by_memory
-                                    .entry(mem_id)
-                                    .or_default()
-                                    .push(entity.clone());
+                        propagated_hits.push((entity_id, signal, entity.clone()));
+                    }
+                }
+                if !propagated_hits.is_empty()
+                    && let Ok(linked_map) = {
+                        let mut seen = HashSet::new();
+                        let mut unique_ids = Vec::new();
+                        for (entity_id, _, _) in &propagated_hits {
+                            if seen.insert(*entity_id) {
+                                unique_ids.push(*entity_id);
                             }
+                        }
+                        self.store.list_linked_memory_ids_for_entities(&unique_ids)
+                    }
+                {
+                    for (entity_id, signal, entity) in propagated_hits {
+                        let Some(memory_ids) = linked_map.get(&entity_id) else {
+                            continue;
+                        };
+                        for mem_id in memory_ids {
+                            let slot = entity_map.entry(*mem_id).or_insert(0.0);
+                            if signal > *slot {
+                                *slot = signal;
+                            }
+                            entities_by_memory
+                                .entry(*mem_id)
+                                .or_default()
+                                .push(entity.clone());
                         }
                     }
                 }
@@ -961,15 +1106,14 @@ impl AppState {
         // semantic picks when the recipe enables it.
         let mut contiguity_map: HashMap<i64, f32> = HashMap::new();
         if recipe.use_contiguity() && !semantic_map.is_empty() {
-            let mut sorted: Vec<(i64, f32)> =
-                semantic_map.iter().map(|(k, v)| (*k, *v)).collect();
-            sorted.sort_by(|a, b| {
-                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
-            });
+            let mut sorted: Vec<(i64, f32)> = semantic_map.iter().map(|(k, v)| (*k, *v)).collect();
+            sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             let seed_count = limit.min(sorted.len());
             let mut extra_ids: Vec<i64> = Vec::new();
             for (mem_id, _) in sorted.iter().take(seed_count) {
-                let Some(mem) = record_by_id.get(mem_id) else { continue };
+                let Some(mem) = record_by_id.get(mem_id) else {
+                    continue;
+                };
                 let neighbors = self
                     .store
                     .list_session_memories_around(
@@ -1026,7 +1170,9 @@ impl AppState {
 
         let mut scored_candidates: Vec<Scored> = Vec::new();
         for id in &candidate_order {
-            let Some(memory) = record_by_id.get(id) else { continue };
+            let Some(memory) = record_by_id.get(id) else {
+                continue;
+            };
             if memory.archived_at.is_some() {
                 continue;
             }
@@ -1082,9 +1228,7 @@ impl AppState {
                 } else {
                     None
                 };
-                let entities = entities_by_memory
-                    .remove(&s.memory.id)
-                    .unwrap_or_default();
+                let entities = entities_by_memory.remove(&s.memory.id).unwrap_or_default();
                 // Expose the memory lifecycle when the caller is actively
                 // poking at state (debug or time-travel). Keeping it `None`
                 // by default avoids leaking superseded data to callers that
@@ -1119,6 +1263,8 @@ impl AppState {
             degraded,
         };
         self.recall_cache.insert(cache_key, response.clone()).await;
+        histogram!("shore_memory_recall_duration_seconds", "recipe" => recipe_label, "degraded" => if degraded { "true" } else { "false" })
+            .record(started.elapsed().as_secs_f64());
         Ok(response)
     }
 
@@ -1175,7 +1321,7 @@ impl AppState {
         self.trivium
             .insert_memory(updated.clone(), embedding, previous_memory_id)
             .await?;
-        self.recall_cache.invalidate_all();
+        self.bump_recall_epoch(agent_id).await;
         self.emit_event(
             "memory.indexed",
             json!({"memory_id": updated.id, "agent_id": updated.agent_id, "scope": updated.scope.as_str()}),
@@ -1187,14 +1333,23 @@ impl AppState {
     async fn get_or_fetch_embedding(&self, text: &str) -> Result<Vec<f32>> {
         let key = cache_key_for_text(text);
         if let Some(embedding) = self.embedding_cache.get(&key).await {
+            counter!("shore_memory_cache_hit_total", "cache" => "embedding").increment(1);
             return Ok(embedding);
         }
+        counter!("shore_memory_cache_miss_total", "cache" => "embedding").increment(1);
 
+        let embed_started = std::time::Instant::now();
         let future = self.worker.embed(text);
         let embedding = timeout(self.config.embedding_timeout, future)
             .await
             .context("embedding timeout elapsed")?
-            .context("embedding worker returned error")?;
+            .context("embedding worker returned error")
+            .map_err(|err| {
+                counter!("shore_memory_worker_call_errors_total", "op" => "embed").increment(1);
+                err
+            })?;
+        histogram!("shore_memory_worker_call_duration_seconds", "op" => "embed")
+            .record(embed_started.elapsed().as_secs_f64());
 
         self.embedding_cache.insert(key, embedding.clone()).await;
         Ok(embedding)
@@ -1206,6 +1361,30 @@ impl AppState {
             payload,
             at: chrono::Utc::now(),
         });
+    }
+
+    async fn bump_recall_epoch(&self, agent_id: &str) {
+        let epoch = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos() as u64)
+            .unwrap_or(0);
+        self.recall_epoch.insert(agent_id.to_string(), epoch).await;
+    }
+
+    async fn sync_trivium_payload_for_memory(&self, memory_id: i64) {
+        let memory = match self.store.get_memory_by_id(memory_id) {
+            Ok(Some(memory)) => memory,
+            Ok(None) => return,
+            Err(err) => {
+                warn!(
+                    "get_memory_by_id failed while syncing trivium payload id={memory_id}: {err:#}"
+                );
+                return;
+            }
+        };
+        if let Err(err) = self.trivium.update_memory_payload(memory).await {
+            warn!("trivium payload sync failed id={memory_id}: {err:#}");
+        }
     }
 }
 
@@ -1258,21 +1437,31 @@ struct IndexMemoryPayload {
 }
 
 async fn health(State(state): State<AppState>) -> Result<Json<Value>, ServiceError> {
+    let started = std::time::Instant::now();
     let worker = state.worker.health().await.is_ok();
     let summary = state.store.get_sync_summary()?;
+    let trace_id = tracing::Span::current().id().map(|id| id.into_u64());
+    histogram!("shore_memory_http_duration_seconds", "route" => "/health", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
     Ok(Json(json!({
         "status": "ok",
         "worker_available": worker,
         "pending_tasks": summary.pending_tasks,
         "failed_tasks": summary.failed_tasks,
+        "trace_id": trace_id,
         "metadata_db_path": state.store.db_path().display().to_string(),
     })))
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn recall(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<RecallRequest>,
 ) -> Result<Json<RecallResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     if request.agent_id.trim().is_empty() {
         return Err(ServiceError::BadRequest("agent_id is required".to_string()));
     }
@@ -1280,18 +1469,27 @@ async fn recall(
         return Err(ServiceError::BadRequest("query is required".to_string()));
     }
     let response = state.handle_recall(request).await?;
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/context/recall", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
     Ok(Json(response))
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn events_turn(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<TurnEventRequest>,
 ) -> Result<(StatusCode, Json<TaskActionResponse>), ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     if request.agent_id.trim().is_empty() {
         return Err(ServiceError::BadRequest("agent_id is required".to_string()));
     }
     if request.messages.is_empty() {
-        return Err(ServiceError::BadRequest("messages cannot be empty".to_string()));
+        return Err(ServiceError::BadRequest(
+            "messages cannot be empty".to_string(),
+        ));
     }
 
     let scope = infer_scope(request.scope_hint.clone(), request.channel_uid.as_deref());
@@ -1331,8 +1529,20 @@ async fn events_turn(
         Some(format!(
             "score_turn:{}:{}:{}",
             request.agent_id,
-            request.session_uid.clone().unwrap_or_else(|| "none".to_string()),
-            blake3::hash(request.messages.iter().map(|item| item.content.as_str()).collect::<Vec<_>>().join("\n").as_bytes()).to_hex()
+            request
+                .session_uid
+                .clone()
+                .unwrap_or_else(|| "none".to_string()),
+            blake3::hash(
+                request
+                    .messages
+                    .iter()
+                    .map(|item| item.content.as_str())
+                    .collect::<Vec<_>>()
+                    .join("\n")
+                    .as_bytes()
+            )
+            .to_hex()
         )),
     )?;
 
@@ -1344,12 +1554,22 @@ async fn events_turn(
             message: "turn persisted and scoring queued".to_string(),
         }),
     ))
+    .map(|resp| {
+        histogram!("shore_memory_http_duration_seconds", "route" => "/v1/events/turn", "status" => "accepted")
+            .record(started.elapsed().as_secs_f64());
+        resp
+    })
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn events_message(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<EventMessageRequest>,
 ) -> Result<(StatusCode, Json<TaskActionResponse>), ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     if request.agent_id.trim().is_empty() {
         return Err(ServiceError::BadRequest("agent_id is required".to_string()));
     }
@@ -1404,12 +1624,22 @@ async fn events_message(
             message: "message event persisted".to_string(),
         }),
     ))
+    .map(|resp| {
+        histogram!("shore_memory_http_duration_seconds", "route" => "/v1/events/message", "status" => "accepted")
+            .record(started.elapsed().as_secs_f64());
+        resp
+    })
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn create_memory(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<CreateMemoryRequest>,
 ) -> Result<(StatusCode, Json<Value>), ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     if request.agent_id.trim().is_empty() {
         return Err(ServiceError::BadRequest("agent_id is required".to_string()));
     }
@@ -1417,12 +1647,18 @@ async fn create_memory(
         return Err(ServiceError::BadRequest("content is required".to_string()));
     }
 
-    let previous_memory_id = state.store.get_latest_memory_id_for_agent(&request.agent_id)?;
+    let previous_memory_id = state
+        .store
+        .get_latest_memory_id_for_agent(&request.agent_id)?;
     let normalized_content = request.content.trim();
     let content_hash = if normalized_content.is_empty() {
         None
     } else {
-        Some(blake3::hash(normalized_content.as_bytes()).to_hex().to_string())
+        Some(
+            blake3::hash(normalized_content.as_bytes())
+                .to_hex()
+                .to_string(),
+        )
     };
     let record = state.store.insert_memory(&NewMemoryRecord {
         agent_id: request.agent_id.clone(),
@@ -1430,7 +1666,10 @@ async fn create_memory(
         channel_uid: request.channel_uid.clone(),
         session_uid: request.session_uid.clone(),
         scope: request.scope.clone(),
-        memory_type: request.memory_type.clone().unwrap_or_else(|| "event".to_string()),
+        memory_type: request
+            .memory_type
+            .clone()
+            .unwrap_or_else(|| "event".to_string()),
         content: request.content.clone(),
         content_hash,
         source_event_ids: Vec::new(),
@@ -1439,7 +1678,10 @@ async fn create_memory(
         metadata: request.metadata.clone().unwrap_or_else(|| json!({})),
         importance: request.importance.unwrap_or(5.0),
         sentiment: request.sentiment.clone(),
-        source: request.source.clone().unwrap_or_else(|| "manual".to_string()),
+        source: request
+            .source
+            .clone()
+            .unwrap_or_else(|| "manual".to_string()),
         embedding_json: None,
         state: "active".to_string(),
         valid_at: None,
@@ -1471,20 +1713,38 @@ async fn create_memory(
             "task_id": task.id,
         })),
     ))
+    .map(|resp| {
+        histogram!("shore_memory_http_duration_seconds", "route" => "/v1/memories", "status" => "accepted")
+            .record(started.elapsed().as_secs_f64());
+        resp
+    })
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn get_agent_state(
+    headers: HeaderMap,
     Path(agent_id): Path<String>,
     State(state): State<AppState>,
 ) -> Result<Json<AgentStateResponse>, ServiceError> {
-    Ok(Json(state.store.get_agent_state(&agent_id)?))
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    let out = Json(state.store.get_agent_state(&agent_id)?);
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/agents/state:get", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(out)
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn update_agent_state(
+    headers: HeaderMap,
     Path(agent_id): Path<String>,
     State(state): State<AppState>,
     Json(patch): Json<AgentStatePatch>,
 ) -> Result<Json<AgentStateResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     if patch.mood.is_none() && patch.vibe.is_none() && patch.mind.is_none() {
         return Err(ServiceError::BadRequest(
             "at least one of mood/vibe/mind must be set".to_string(),
@@ -1503,13 +1763,20 @@ async fn update_agent_state(
             }),
         )
         .await;
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/agents/state:patch", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
     Ok(Json(response))
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn retry_scorer(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<MaintenanceAgentRequest>,
 ) -> Result<Json<TaskActionResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     let retried = state
         .store
         .retry_failed_tasks(TaskKind::ScoreTurn, Some(&request.agent_id))?;
@@ -1528,12 +1795,22 @@ async fn retry_scorer(
         task_id: None,
         message: format!("retried {retried} failed scorer tasks"),
     }))
+    .map(|resp| {
+        histogram!("shore_memory_http_duration_seconds", "route" => "/v1/maintenance/scorer/retry", "status" => "ok")
+            .record(started.elapsed().as_secs_f64());
+        resp
+    })
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn run_reflection(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<MaintenanceAgentRequest>,
 ) -> Result<(StatusCode, Json<TaskActionResponse>), ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     let task = state.enqueue_task(
         TaskKind::ReflectionRun,
         &request.agent_id,
@@ -1548,12 +1825,22 @@ async fn run_reflection(
             message: "reflection queued".to_string(),
         }),
     ))
+    .map(|resp| {
+        histogram!("shore_memory_http_duration_seconds", "route" => "/v1/maintenance/reflection/run", "status" => "accepted")
+            .record(started.elapsed().as_secs_f64());
+        resp
+    })
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn rebuild_trivium(
+    headers: HeaderMap,
     State(state): State<AppState>,
     Json(request): Json<MaintenanceAgentRequest>,
 ) -> Result<(StatusCode, Json<TaskActionResponse>), ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
     let task = state.enqueue_task(
         TaskKind::RebuildTrivium,
         &request.agent_id,
@@ -1568,22 +1855,59 @@ async fn rebuild_trivium(
             message: "rebuild queued".to_string(),
         }),
     ))
+    .map(|resp| {
+        histogram!("shore_memory_http_duration_seconds", "route" => "/v1/maintenance/trivium/rebuild", "status" => "accepted")
+            .record(started.elapsed().as_secs_f64());
+        resp
+    })
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn sync_summary(
+    headers: HeaderMap,
     State(state): State<AppState>,
 ) -> Result<Json<SyncSummaryResponse>, ServiceError> {
-    Ok(Json(state.store.get_sync_summary()?))
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    let out = Json(state.store.get_sync_summary()?);
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/maintenance/sync-summary", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(out)
 }
 
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn metrics(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Response, ServiceError> {
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    let started = std::time::Instant::now();
+    let body = state.metrics_handle.render();
+    let mut response = Response::new(axum::body::Body::from(body));
+    response.headers_mut().insert(
+        axum::http::header::CONTENT_TYPE,
+        axum::http::HeaderValue::from_static("text/plain; version=0.0.4; charset=utf-8"),
+    );
+    histogram!("shore_memory_http_duration_seconds", "route" => "/metrics", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(response)
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn events_ws(
+    headers: HeaderMap,
     ws: WebSocketUpgrade,
     State(state): State<AppState>,
 ) -> impl IntoResponse {
-    ws.on_upgrade(move |socket| handle_events_socket(socket, state))
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(&rid));
+    ws.on_upgrade(move |socket| handle_events_socket(socket, state, rid))
 }
 
-async fn handle_events_socket(mut socket: WebSocket, state: AppState) {
+#[tracing::instrument(skip(state, socket), fields(request_id = %request_id))]
+async fn handle_events_socket(mut socket: WebSocket, state: AppState, request_id: String) {
     let mut rx = state.events.subscribe();
     loop {
         tokio::select! {
@@ -1616,6 +1940,18 @@ async fn handle_events_socket(mut socket: WebSocket, state: AppState) {
                             }
                         }
                     }
+                    Err(broadcast::error::RecvError::Lagged(skipped)) => {
+                        let lagged_notice = ServerEvent {
+                            event: "lagged".to_string(),
+                            payload: json!({"dropped": skipped}),
+                            at: chrono::Utc::now(),
+                        };
+                        if let Ok(text) = serde_json::to_string(&lagged_notice) {
+                            if socket.send(Message::Text(text.into())).await.is_err() {
+                                break;
+                            }
+                        }
+                    }
                     Err(err) => {
                         warn!("event broadcast receive error: {err}");
                         break;
@@ -1626,16 +1962,28 @@ async fn handle_events_socket(mut socket: WebSocket, state: AppState) {
     }
 }
 
-fn cache_key_for_recall(request: &RecallRequest) -> String {
-    blake3::hash(
+fn cache_key_for_recall(request: &RecallRequest, recall_epoch: u64) -> String {
+    let request_hash = blake3::hash(
         serde_json::to_string(request)
             .unwrap_or_else(|_| request.query.clone())
             .as_bytes(),
     )
     .to_hex()
-    .to_string()
+    .to_string();
+    format!(
+        "{}:{}:{}:{}",
+        RECALL_CACHE_KEY_VERSION, request.agent_id, recall_epoch, request_hash
+    )
 }
 
 fn cache_key_for_text(text: &str) -> String {
     blake3::hash(text.trim().as_bytes()).to_hex().to_string()
+}
+
+fn request_id_from_headers(headers: &HeaderMap) -> String {
+    headers
+        .get("x-request-id")
+        .and_then(|v| v.to_str().ok())
+        .map(str::to_string)
+        .unwrap_or_else(|| "unknown".to_string())
 }

@@ -9,6 +9,7 @@ mod worker;
 use std::sync::Arc;
 
 use anyhow::Result;
+use metrics_exporter_prometheus::PrometheusBuilder;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
 
@@ -29,13 +30,21 @@ async fn main() -> Result<()> {
         .init();
 
     let config = ServiceConfig::from_env();
-    let store = MetadataStore::new(config.metadata_db_path.clone());
+    let metrics_handle = PrometheusBuilder::new().install_recorder()?;
+    let store = MetadataStore::new(config.metadata_db_path.clone())?;
     store.init()?;
     let trivium = TriviumStore::new(config.trivium_db_path.clone())?;
     let entity_trivium = EntityTriviumStore::new(config.entity_trivium_db_path.clone())?;
     let worker = WorkerClient::new(&config)?;
 
-    let app_state = AppState::new(config.clone(), store, trivium, entity_trivium, worker);
+    let app_state = AppState::new(
+        config.clone(),
+        store,
+        trivium,
+        entity_trivium,
+        metrics_handle,
+        worker,
+    );
     let app = app_state.clone().router();
     Arc::new(app_state).spawn_background_loops();
 

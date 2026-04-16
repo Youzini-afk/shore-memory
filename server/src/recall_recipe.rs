@@ -98,8 +98,16 @@ impl FusionWeights {
     pub fn for_recipe(recipe: RecallRecipe, entity_weight: f32, contiguity_weight: f32) -> Self {
         Self {
             bm25: if recipe.use_bm25() { 1.0 } else { 0.0 },
-            entity: if recipe.use_entity() { entity_weight } else { 0.0 },
-            contiguity: if recipe.use_contiguity() { contiguity_weight } else { 0.0 },
+            entity: if recipe.use_entity() {
+                entity_weight
+            } else {
+                0.0
+            },
+            contiguity: if recipe.use_contiguity() {
+                contiguity_weight
+            } else {
+                0.0
+            },
         }
     }
 
@@ -167,24 +175,48 @@ mod tests {
     fn additive_fuse_uses_adaptive_divisor() {
         // Semantic-only: divisor = 1.
         let semantic_only = additive_fuse(
-            FusionInputs { semantic: 0.8, ..Default::default() },
-            FusionWeights { bm25: 0.0, entity: 0.0, contiguity: 0.0 },
+            FusionInputs {
+                semantic: 0.8,
+                ..Default::default()
+            },
+            FusionWeights {
+                bm25: 0.0,
+                entity: 0.0,
+                contiguity: 0.0,
+            },
         );
         assert!((semantic_only.0 - 0.8).abs() < 1e-6);
         assert!((semantic_only.1 - 1.0).abs() < 1e-6);
 
         // Semantic + BM25: divisor = 2.
         let hybrid = additive_fuse(
-            FusionInputs { semantic: 0.6, bm25: 0.4, ..Default::default() },
-            FusionWeights { bm25: 1.0, entity: 0.0, contiguity: 0.0 },
+            FusionInputs {
+                semantic: 0.6,
+                bm25: 0.4,
+                ..Default::default()
+            },
+            FusionWeights {
+                bm25: 1.0,
+                entity: 0.0,
+                contiguity: 0.0,
+            },
         );
         assert!((hybrid.1 - 2.0).abs() < 1e-6);
         assert!((hybrid.0 - 0.5).abs() < 1e-6);
 
         // Semantic + BM25 + entity(0.5): divisor = 2.5.
         let entity_heavy = additive_fuse(
-            FusionInputs { semantic: 0.6, bm25: 0.4, entity: 1.0, ..Default::default() },
-            FusionWeights { bm25: 1.0, entity: 0.5, contiguity: 0.0 },
+            FusionInputs {
+                semantic: 0.6,
+                bm25: 0.4,
+                entity: 1.0,
+                ..Default::default()
+            },
+            FusionWeights {
+                bm25: 1.0,
+                entity: 0.5,
+                contiguity: 0.0,
+            },
         );
         assert!((entity_heavy.1 - 2.5).abs() < 1e-6);
         // raw = 0.6 + 1.0 * 0.4 + 0.5 * 1.0 = 1.5; combined = 1.5 / 2.5 = 0.6
@@ -194,19 +226,47 @@ mod tests {
     #[test]
     fn weights_for_recipe_matches_expectation() {
         let fast = FusionWeights::for_recipe(RecallRecipe::Fast, 0.5, 0.3);
-        assert_eq!(fast, FusionWeights { bm25: 0.0, entity: 0.0, contiguity: 0.0 });
+        assert_eq!(
+            fast,
+            FusionWeights {
+                bm25: 0.0,
+                entity: 0.0,
+                contiguity: 0.0
+            }
+        );
         assert!((fast.divisor() - 1.0).abs() < 1e-6);
 
         let hybrid = FusionWeights::for_recipe(RecallRecipe::Hybrid, 0.5, 0.3);
-        assert_eq!(hybrid, FusionWeights { bm25: 1.0, entity: 0.0, contiguity: 0.0 });
+        assert_eq!(
+            hybrid,
+            FusionWeights {
+                bm25: 1.0,
+                entity: 0.0,
+                contiguity: 0.0
+            }
+        );
         assert!((hybrid.divisor() - 2.0).abs() < 1e-6);
 
         let entity_heavy = FusionWeights::for_recipe(RecallRecipe::EntityHeavy, 0.5, 0.3);
-        assert_eq!(entity_heavy, FusionWeights { bm25: 1.0, entity: 0.5, contiguity: 0.0 });
+        assert_eq!(
+            entity_heavy,
+            FusionWeights {
+                bm25: 1.0,
+                entity: 0.5,
+                contiguity: 0.0
+            }
+        );
         assert!((entity_heavy.divisor() - 2.5).abs() < 1e-6);
 
         let contiguous = FusionWeights::for_recipe(RecallRecipe::Contiguous, 0.5, 0.3);
-        assert_eq!(contiguous, FusionWeights { bm25: 1.0, entity: 0.0, contiguity: 0.3 });
+        assert_eq!(
+            contiguous,
+            FusionWeights {
+                bm25: 1.0,
+                entity: 0.0,
+                contiguity: 0.3
+            }
+        );
         assert!((contiguous.divisor() - 2.3).abs() < 1e-6);
     }
 }
