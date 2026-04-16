@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod db;
+mod recall_recipe;
 mod trivium;
 mod types;
 mod worker;
@@ -14,7 +15,7 @@ use tracing_subscriber::EnvFilter;
 use crate::app::AppState;
 use crate::config::ServiceConfig;
 use crate::db::MetadataStore;
-use crate::trivium::TriviumStore;
+use crate::trivium::{EntityTriviumStore, TriviumStore};
 use crate::worker::WorkerClient;
 
 #[tokio::main]
@@ -31,9 +32,10 @@ async fn main() -> Result<()> {
     let store = MetadataStore::new(config.metadata_db_path.clone());
     store.init()?;
     let trivium = TriviumStore::new(config.trivium_db_path.clone())?;
+    let entity_trivium = EntityTriviumStore::new(config.entity_trivium_db_path.clone())?;
     let worker = WorkerClient::new(&config)?;
 
-    let app_state = AppState::new(config.clone(), store, trivium, worker);
+    let app_state = AppState::new(config.clone(), store, trivium, entity_trivium, worker);
     let app = app_state.clone().router();
     Arc::new(app_state).spawn_background_loops();
 

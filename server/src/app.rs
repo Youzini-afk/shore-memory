@@ -17,20 +17,36 @@ use tracing::{error, warn};
 
 use crate::config::ServiceConfig;
 use crate::db::{MetadataStore, NewMemoryRecord};
-use crate::trivium::TriviumStore;
+use crate::recall_recipe::{
+    FusionInputs, FusionWeights, additive_fuse, bm25_params_for_query, entity_spread_attenuation,
+    normalize_bm25,
+};
+use crate::trivium::{EntityTriviumStore, TriviumStore};
 use crate::types::{
-    AgentStatePatch, AgentStateResponse, CreateMemoryRequest, EventMessageRequest, MemoryRecord,
-    RecallRequest, RecallResponse, ServerEvent, SyncSummaryResponse, TaskActionResponse, TaskKind,
-    TaskRecord, TurnEventRequest, WorkerMemoryDraft,
-    infer_scope, scope_visible_for_request,
+    AgentStatePatch, AgentStateResponse, ContradictionEntry, CreateMemoryRequest, DuplicateGroup,
+    EntityDraft, EntityRecord, EventMessageRequest, ExistingMemoryHint, MemoryRecord,
+    MemorySnippet, RecallRecipe, RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent,
+    SyncSummaryResponse, TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage,
+    WorkerMemoryDraft, WorkerReflectionResponse, WorkerScoreTurnRequest, infer_scope,
+    scope_visible_for_request,
 };
 use crate::worker::{WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories};
+
+/// Number of previous raw events from the same session to send to the scorer.
+const SCORER_LAST_K_EVENTS: usize = 10;
+/// Number of recently extracted memories (same session) to send to the scorer.
+const SCORER_RECENTLY_EXTRACTED: usize = 10;
+/// Number of semantically related existing memories offered to the scorer for
+/// deduplication & linking. Opaque indices ("0", "1", ...) are used so the LLM
+/// never sees real UUIDs.
+const SCORER_EXISTING_POOL_SIZE: usize = 10;
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: ServiceConfig,
     pub store: Arc<MetadataStore>,
     pub trivium: Arc<TriviumStore>,
+    pub entity_trivium: Arc<EntityTriviumStore>,
     pub worker: WorkerClient,
     pub recall_cache: Cache<String, RecallResponse>,
     pub embedding_cache: Cache<String, Vec<f32>>,
@@ -42,6 +58,7 @@ impl AppState {
         config: ServiceConfig,
         store: MetadataStore,
         trivium: TriviumStore,
+        entity_trivium: EntityTriviumStore,
         worker: WorkerClient,
     ) -> Self {
         let (events, _) = broadcast::channel(1024);
@@ -57,6 +74,7 @@ impl AppState {
             config,
             store: Arc::new(store),
             trivium: Arc::new(trivium),
+            entity_trivium: Arc::new(entity_trivium),
             worker,
             events,
         }
@@ -127,17 +145,150 @@ impl AppState {
     async fn process_score_turn(&self, task: TaskRecord) -> Result<()> {
         let payload: TurnTaskPayload =
             serde_json::from_str(&task.payload_json).context("invalid score_turn payload")?;
-        let response = self.worker.score_turn(&payload.request).await?;
+        let agent_id = payload.request.agent_id.clone();
+        let session_uid = payload.request.session_uid.clone();
+        let source_event_ids = payload.source_event_ids.clone();
 
-        for memory in response.memories {
-            self.insert_and_index_draft(task.id, payload.request.agent_id.as_str(), memory)
+        // Phase 1: gather session-scoped short-term context.
+        let last_k_raw = self
+            .store
+            .list_recent_raw_events_for_session(
+                &agent_id,
+                session_uid.as_deref(),
+                SCORER_LAST_K_EVENTS,
+            )
+            .unwrap_or_default();
+        let last_k_events: Vec<TurnMessage> = last_k_raw
+            .into_iter()
+            .map(|ev| TurnMessage {
+                role: ev.role,
+                content: ev.content,
+            })
+            .collect();
+        let recently_extracted = self
+            .store
+            .list_recent_memories_by_session(
+                &agent_id,
+                session_uid.as_deref(),
+                SCORER_RECENTLY_EXTRACTED,
+            )
+            .unwrap_or_default();
+
+        // Phase 2: retrieve top-k semantically related existing memories for
+        // dedup + linking. Opaque indices ("0", "1", ...) are used so the LLM
+        // never sees real UUIDs and cannot hallucinate identifiers.
+        let query_text = payload
+            .request
+            .messages
+            .iter()
+            .map(|msg| msg.content.as_str())
+            .collect::<Vec<_>>()
+            .join("\n");
+        let existing_pool = self
+            .fetch_existing_dedup_pool(&query_text, &payload.request)
+            .await
+            .unwrap_or_default();
+        let id_by_index: std::collections::HashMap<String, i64> = existing_pool
+            .iter()
+            .map(|(idx, mem)| (idx.clone(), mem.id))
+            .collect();
+
+        // Phase 3: build the enriched request and call the scorer.
+        let mut enriched = payload.request.clone();
+        enriched.last_k_events = last_k_events;
+        enriched.recently_extracted = recently_extracted;
+        enriched.existing_memories = existing_pool
+            .iter()
+            .map(|(idx, mem)| ExistingMemoryHint {
+                index: idx.clone(),
+                content: mem.content.clone(),
+            })
+            .collect();
+        if enriched.observation_date.is_none() {
+            enriched.observation_date = Some(chrono::Utc::now().to_rfc3339());
+        }
+
+        let response = self.worker.score_turn(&enriched).await?;
+
+        // Phase 4: per-draft hash dedup + linked memory mapping + history.
+        // Entities extracted by the LLM are collected here; Phase 5 lands them
+        // once we know the concrete memory_id each draft landed as.
+        let mut entity_pairs: Vec<(i64, EntityDraft)> = Vec::new();
+        for mut draft in response.memories {
+            let normalized = draft.content.trim();
+            if normalized.is_empty() {
+                continue;
+            }
+            let content_hash = blake3::hash(normalized.as_bytes()).to_hex().to_string();
+
+            if let Some(existing) = self.store.find_memory_by_hash(&agent_id, &content_hash)? {
+                // Same agent already has this exact content. Record the skip for
+                // observability (so operators can tell a noop from a lost turn).
+                self.store.insert_memory_history(
+                    Some(existing.id),
+                    &agent_id,
+                    "skip_dup",
+                    Some(&existing.content),
+                    Some(&draft.content),
+                    None,
+                    None,
+                    Some(task.id),
+                )?;
+                continue;
+            }
+
+            // Map opaque indices from `linked_existing_indices` (e.g. "0", "3")
+            // back to real memory ids. Unknown indices are silently dropped.
+            let linked_memory_ids: Vec<i64> = draft
+                .linked_existing_indices
+                .iter()
+                .filter_map(|idx| id_by_index.get(idx.as_str()).copied())
+                .collect();
+
+            // Pull entities out before we move the draft into `insert_and_index_draft`.
+            let draft_entities = std::mem::take(&mut draft.entities);
+
+            let inserted = self
+                .insert_and_index_draft(
+                    task.id,
+                    &agent_id,
+                    draft,
+                    Some(content_hash),
+                    source_event_ids.clone(),
+                    linked_memory_ids,
+                )
                 .await?;
+
+            for entity in draft_entities {
+                entity_pairs.push((inserted.id, entity));
+            }
+
+            self.store.insert_memory_history(
+                Some(inserted.id),
+                &agent_id,
+                "add",
+                None,
+                Some(&inserted.content),
+                None,
+                Some(&inserted.metadata),
+                Some(task.id),
+            )?;
+        }
+
+        // Phase 5: entity landing — dedup, upsert into `entities`, index new
+        // ones into the entity Trivium, and link to memory_ids. Non-fatal: any
+        // failure here is logged but must not block a successful score pass.
+        if !entity_pairs.is_empty() {
+            if let Err(err) = self
+                .land_entities_for_drafts(&agent_id, payload.request.user_uid.as_deref(), entity_pairs)
+                .await
+            {
+                warn!("stage2 entity landing failed: {err:#}");
+            }
         }
 
         if let Some(state_patch) = response.state_patch {
-            let state = self
-                .store
-                .upsert_agent_state(payload.request.agent_id.as_str(), &state_patch)?;
+            let state = self.store.upsert_agent_state(&agent_id, &state_patch)?;
             self.emit_event(
                 "agent.state.updated",
                 json!({
@@ -148,6 +299,249 @@ impl AppState {
                 }),
             )
             .await;
+        }
+
+        Ok(())
+    }
+
+    /// Assemble an opaque existing-memory pool for the scorer prompt.
+    ///
+    /// The returned vec is indexed by position-as-string ("0", "1", ...); the
+    /// server later uses this mapping to translate the LLM's
+    /// `linked_existing_indices` back into real memory ids. Scope-visibility
+    /// filtering is applied so cross-user contamination is impossible.
+    async fn fetch_existing_dedup_pool(
+        &self,
+        query_text: &str,
+        request: &WorkerScoreTurnRequest,
+    ) -> Result<Vec<(String, MemoryRecord)>> {
+        if query_text.trim().is_empty() {
+            return Ok(Vec::new());
+        }
+
+        // Embedding is best-effort: if the worker is unavailable we still hand
+        // over any BM25 hits trivium returns.
+        let embedding = self.get_or_fetch_embedding(query_text).await.ok();
+
+        let hits = self
+            .trivium
+            .search(
+                request.agent_id.clone(),
+                request.user_uid.clone(),
+                request.channel_uid.clone(),
+                query_text.to_string(),
+                embedding,
+                SCORER_EXISTING_POOL_SIZE.saturating_mul(2).max(1),
+                self.config.search_expand_depth,
+                self.config.search_min_score,
+            )
+            .await
+            .unwrap_or_default();
+
+        if hits.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let ids: Vec<i64> = hits.iter().map(|hit| hit.id as i64).collect();
+        let records = self.store.list_memories_by_ids(&ids)?;
+        let record_by_id: std::collections::HashMap<i64, MemoryRecord> = records
+            .into_iter()
+            .map(|mem| (mem.id, mem))
+            .collect();
+
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut out: Vec<(String, MemoryRecord)> = Vec::new();
+        for id in ids {
+            if out.len() >= SCORER_EXISTING_POOL_SIZE {
+                break;
+            }
+            if let Some(mem) = record_by_id.get(&id) {
+                if mem.archived_at.is_some() {
+                    continue;
+                }
+                if !scope_visible_for_request(
+                    mem,
+                    request.user_uid.as_deref(),
+                    request.channel_uid.as_deref(),
+                ) {
+                    continue;
+                }
+                // Stage 3: don't feed superseded / invalidated memories into
+                // the scorer pool — the LLM would otherwise be tempted to
+                // re-link or re-extract a fact we've already retired.
+                if !mem.is_currently_valid(&now) {
+                    continue;
+                }
+                let idx = out.len().to_string();
+                out.push((idx, mem.clone()));
+            }
+        }
+        Ok(out)
+    }
+
+    /// Stage 2 entity landing pipeline.
+    ///
+    /// Given the `(memory_id, entity_draft)` pairs produced by Phase 4, this
+    /// method:
+    ///   1. Dedups by `(name_norm, entity_type)` within the batch.
+    ///   2. Upserts each unique entity into `entities` via `MetadataStore`.
+    ///   3. Batch-embeds the names of newly-created entities and inserts them
+    ///      into the entity Trivium.
+    ///   4. Creates `entity_memory_links` rows for every `(memory, entity)`.
+    ///
+    /// Failures at any individual step are logged; the method as a whole still
+    /// returns `Ok(())` unless the SQL upsert itself fails, because entity
+    /// landing is a recall-quality enhancer rather than a correctness
+    /// requirement.
+    async fn land_entities_for_drafts(
+        &self,
+        agent_id: &str,
+        user_uid: Option<&str>,
+        pairs: Vec<(i64, EntityDraft)>,
+    ) -> Result<()> {
+        use crate::db::MetadataStore;
+        use std::collections::HashMap;
+
+        if pairs.is_empty() {
+            return Ok(());
+        }
+
+        // Step 1: dedup by (name_norm, entity_type) across the batch.
+        struct UniqueEntity {
+            name_raw: String,
+            entity_type: String,
+        }
+        let mut unique_entities: Vec<UniqueEntity> = Vec::new();
+        let mut key_to_idx: HashMap<(String, String), usize> = HashMap::new();
+        let mut draft_to_key_idx: Vec<Option<usize>> = Vec::with_capacity(pairs.len());
+
+        for (_memory_id, entity) in &pairs {
+            let name_raw = entity.name.trim().to_string();
+            let entity_type = if entity.entity_type.trim().is_empty() {
+                "OTHER".to_string()
+            } else {
+                entity.entity_type.trim().to_string()
+            };
+            let name_norm = MetadataStore::normalize_entity_name(&name_raw);
+            if name_norm.is_empty() {
+                draft_to_key_idx.push(None);
+                continue;
+            }
+            let key = (name_norm, entity_type.clone());
+            let idx = if let Some(&existing) = key_to_idx.get(&key) {
+                existing
+            } else {
+                let new_idx = unique_entities.len();
+                unique_entities.push(UniqueEntity {
+                    name_raw,
+                    entity_type,
+                });
+                key_to_idx.insert(key, new_idx);
+                new_idx
+            };
+            draft_to_key_idx.push(Some(idx));
+        }
+
+        if unique_entities.is_empty() {
+            return Ok(());
+        }
+
+        // Step 2: upsert each unique entity. Track which ones were newly
+        // created so we only pay the embed + Trivium-insert cost for those.
+        let mut entity_records: Vec<EntityRecord> = Vec::with_capacity(unique_entities.len());
+        let mut newly_created: Vec<usize> = Vec::new();
+        for (i, unique) in unique_entities.iter().enumerate() {
+            match self
+                .store
+                .upsert_entity(agent_id, user_uid, &unique.name_raw, &unique.entity_type)
+            {
+                Ok((record, created)) => {
+                    if created {
+                        newly_created.push(i);
+                    }
+                    entity_records.push(record);
+                }
+                Err(err) => {
+                    warn!(
+                        "upsert_entity failed for name='{}' type='{}': {:#}",
+                        unique.name_raw, unique.entity_type, err
+                    );
+                    // Record a sentinel so the index layout stays aligned.
+                    entity_records.push(EntityRecord {
+                        id: -1,
+                        agent_id: agent_id.to_string(),
+                        user_uid: user_uid.map(str::to_string),
+                        name_raw: unique.name_raw.clone(),
+                        name_norm: MetadataStore::normalize_entity_name(&unique.name_raw),
+                        entity_type: unique.entity_type.clone(),
+                        linked_memory_count: 0,
+                        created_at: String::new(),
+                        updated_at: String::new(),
+                    });
+                }
+            }
+        }
+
+        // Step 3: batch-embed names of newly-created entities and index them
+        // into the entity Trivium. Best-effort — embedding failures don't
+        // block the memory_entity_links write in step 4.
+        if !newly_created.is_empty() {
+            let texts: Vec<String> = newly_created
+                .iter()
+                .map(|&i| entity_records[i].name_raw.clone())
+                .collect();
+            match self.worker.embed_batch(texts.clone()).await {
+                Ok(embeddings) if embeddings.len() == texts.len() => {
+                    for (slot, &entity_idx) in newly_created.iter().enumerate() {
+                        let record = &entity_records[entity_idx];
+                        if record.id < 0 {
+                            continue;
+                        }
+                        let embedding = match embeddings.get(slot) {
+                            Some(v) if !v.is_empty() => v.clone(),
+                            _ => continue,
+                        };
+                        if let Err(err) = self
+                            .entity_trivium
+                            .insert_entity(record.clone(), embedding)
+                            .await
+                        {
+                            warn!(
+                                "entity_trivium.insert_entity failed for id={}: {:#}",
+                                record.id, err
+                            );
+                        }
+                    }
+                }
+                Ok(embeddings) => {
+                    warn!(
+                        "entity embed_batch size mismatch: expected {} got {}",
+                        texts.len(),
+                        embeddings.len()
+                    );
+                }
+                Err(err) => {
+                    warn!("entity embed_batch failed: {err:#}");
+                }
+            }
+        }
+
+        // Step 4: link each draft's memory_id to its resolved entity_id.
+        for ((memory_id, _draft), maybe_idx) in pairs.iter().zip(draft_to_key_idx.iter()) {
+            let Some(idx) = *maybe_idx else { continue };
+            let entity = &entity_records[idx];
+            if entity.id < 0 {
+                continue;
+            }
+            if let Err(err) = self
+                .store
+                .link_entity_to_memory(entity.id, *memory_id, 1.0)
+            {
+                warn!(
+                    "link_entity_to_memory failed for (entity={}, memory={}): {:#}",
+                    entity.id, memory_id, err
+                );
+            }
         }
 
         Ok(())
@@ -171,9 +565,125 @@ impl AppState {
             .reflect(&payload.agent_id, reflection_inputs_from_memories(&candidates))
             .await?;
 
+        // Step 1: insert every summary memory first so `contradictions` can
+        // reference them via `new_summary_idx`.
+        let mut summary_ids: Vec<i64> = Vec::with_capacity(result.summary_memories.len());
         for memory in result.summary_memories {
-            self.insert_and_index_draft(task.id, &payload.agent_id, memory)
-                .await?;
+            match self
+                .insert_and_index_draft(
+                    task.id,
+                    &payload.agent_id,
+                    memory,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                )
+                .await
+            {
+                Ok(inserted) => summary_ids.push(inserted.id),
+                Err(err) => warn!("reflection summary insert failed: {err:#}"),
+            }
+        }
+
+        // Step 2: duplicate groups — drop_ids become `superseded` by keep_id.
+        let mut supersede_events = 0usize;
+        for group in &result.duplicate_groups {
+            for drop_id in &group.drop_ids {
+                if *drop_id == group.keep_id {
+                    continue;
+                }
+                let old_snapshot = self.store.get_memory_by_id(*drop_id).ok().flatten();
+                if let Err(err) = self.store.supersede_memory(*drop_id, group.keep_id) {
+                    warn!(
+                        "supersede_memory failed (drop={}, keep={}): {:#}",
+                        drop_id, group.keep_id, err
+                    );
+                    continue;
+                }
+                supersede_events += 1;
+                let history_meta = json!({
+                    "superseded_by": group.keep_id,
+                    "reason": group.reason,
+                    "source": "duplicate_group",
+                });
+                let _ = self.store.insert_memory_history(
+                    Some(*drop_id),
+                    &payload.agent_id,
+                    "supersede",
+                    old_snapshot.as_ref().map(|m| m.content.as_str()),
+                    None,
+                    old_snapshot.as_ref().map(|m| &m.metadata),
+                    Some(&history_meta),
+                    Some(task.id),
+                );
+            }
+        }
+
+        // Step 3: contradictions — invalidate old_id, optionally pointing to
+        // a replacement memory (existing new_id or a newly-authored summary).
+        let mut invalidate_events = 0usize;
+        for entry in &result.contradictions {
+            let resolved_new_id = entry.new_id.or_else(|| {
+                entry
+                    .new_summary_idx
+                    .and_then(|idx| summary_ids.get(idx).copied())
+            });
+            let old_snapshot = self.store.get_memory_by_id(entry.old_id).ok().flatten();
+
+            let op = match resolved_new_id {
+                Some(new_id) => {
+                    // supersede_memory sets state=superseded + invalid_at=now by default;
+                    // override invalid_at if the LLM supplied a specific timestamp.
+                    let res = self.store.supersede_memory(entry.old_id, new_id);
+                    if res.is_ok()
+                        && let Some(custom) = entry.invalid_at.as_deref()
+                    {
+                        let _ = self.store.set_memory_invalid(
+                            entry.old_id,
+                            Some(custom),
+                            Some("superseded"),
+                        );
+                    }
+                    res
+                }
+                None => self.store.set_memory_invalid(
+                    entry.old_id,
+                    entry.invalid_at.as_deref(),
+                    Some("invalidated"),
+                ),
+            };
+            if let Err(err) = op {
+                warn!(
+                    "contradiction apply failed for old_id={}: {:#}",
+                    entry.old_id, err
+                );
+                continue;
+            }
+            invalidate_events += 1;
+            let history_meta = json!({
+                "contradicted_by": resolved_new_id,
+                "new_summary_idx": entry.new_summary_idx,
+                "invalid_at": entry.invalid_at,
+                "reason": entry.reason,
+                "source": "contradiction",
+            });
+            let event = if resolved_new_id.is_some() { "supersede" } else { "invalidate" };
+            let _ = self.store.insert_memory_history(
+                Some(entry.old_id),
+                &payload.agent_id,
+                event,
+                old_snapshot.as_ref().map(|m| m.content.as_str()),
+                None,
+                old_snapshot.as_ref().map(|m| &m.metadata),
+                Some(&history_meta),
+                Some(task.id),
+            );
+        }
+
+        // Any supersede / invalidate mutation requires a recall cache flush,
+        // otherwise stale (pre-Stage-3) responses may leak back to callers.
+        if supersede_events > 0 || invalidate_events > 0 {
+            self.recall_cache.invalidate_all();
         }
 
         if !result.retire_memory_ids.is_empty() {
@@ -206,6 +716,11 @@ impl AppState {
                 "task_id": task.id,
                 "kind": "reflection_run",
                 "report": result.report,
+                "stage3": {
+                    "summary_count": summary_ids.len(),
+                    "superseded": supersede_events,
+                    "invalidated": invalidate_events,
+                },
             }),
         )
         .await;
@@ -275,102 +790,320 @@ impl AppState {
         Ok(())
     }
 
+    /// Stage 2 recall pipeline: recipe-driven multi-signal additive fusion.
+    ///
+    /// Pipeline:
+    ///   1. Semantic signal via `search_semantic_only` (vector only).
+    ///   2. BM25 signal via `search_text_only` when the recipe enables it,
+    ///      normalized through `normalize_bm25`.
+    ///   3. Entity boost: extract entities from the query, embed them in a
+    ///      batch, search the entity Trivium, and propagate spread-attenuated
+    ///      scores onto each linked memory.
+    ///   4. Contiguity: for the top-N semantic hits, pull session-adjacent
+    ///      memories and give them a fixed boost.
+    ///   5. Fuse via `additive_fuse` with weights derived from the recipe.
     pub async fn handle_recall(&self, request: RecallRequest) -> Result<RecallResponse> {
+        use std::collections::{HashMap, HashSet};
+
         let cache_key = cache_key_for_recall(&request);
         if let Some(cached) = self.recall_cache.get(&cache_key).await {
             return Ok(cached);
         }
 
+        let recipe = RecallRecipe::parse(request.recipe.as_deref());
         let limit = request
             .limit
             .unwrap_or(self.config.search_top_k)
             .clamp(1, 32);
-        let embedding = self.get_or_fetch_embedding(&request.query).await.ok();
-        let degraded = embedding.is_none();
+        let want_debug = request.debug.unwrap_or(false);
+        let include_invalid_flag = request.include_invalid.unwrap_or(false);
+        // Snapshot "now" once at the top so every `is_currently_valid` check
+        // in this call sees the same cutoff.
+        let now = chrono::Utc::now().to_rfc3339();
+        let fetch_size = limit.saturating_mul(8).max(32);
 
-        let hits = self
-            .trivium
-            .search(
-                request.agent_id.clone(),
-                request.user_uid.clone(),
-                request.channel_uid.clone(),
-                request.query.clone(),
-                embedding.clone(),
-                limit.saturating_mul(8),
-                self.config.search_expand_depth,
-                self.config.search_min_score,
-            )
-            .await
-            .unwrap_or_default();
+        // Semantic is always required — lack of embedding flags `degraded`.
+        let query_embedding = self.get_or_fetch_embedding(&request.query).await.ok();
+        let degraded = query_embedding.is_none();
 
-        let mut scored = std::collections::BTreeMap::<i64, f32>::new();
-        for hit in &hits {
-            scored.insert(hit.id as i64, hit.score);
+        // Signal A: semantic vector similarity.
+        let mut semantic_map: HashMap<i64, f32> = HashMap::new();
+        if let Some(vec) = query_embedding.clone() {
+            let hits = self
+                .trivium
+                .search_semantic_only(
+                    request.agent_id.clone(),
+                    request.user_uid.clone(),
+                    request.channel_uid.clone(),
+                    vec,
+                    fetch_size,
+                    self.config.search_expand_depth,
+                    self.config.search_min_score,
+                )
+                .await
+                .unwrap_or_default();
+            for hit in hits {
+                semantic_map.insert(hit.id as i64, hit.score);
+            }
         }
 
-        let mut selected = Vec::new();
-        if !hits.is_empty() {
-            let ids: Vec<i64> = hits.iter().map(|hit| hit.id as i64).collect();
-            let memory_map = self
-                .store
-                .list_memories_by_ids(&ids)?
-                .into_iter()
-                .map(|memory| (memory.id, memory))
-                .collect::<std::collections::HashMap<_, _>>();
+        // Signal B: BM25.
+        let mut bm25_map: HashMap<i64, f32> = HashMap::new();
+        if recipe.use_bm25() && !request.query.trim().is_empty() {
+            let bm25_hits = self
+                .trivium
+                .search_text_only(
+                    request.agent_id.clone(),
+                    request.user_uid.clone(),
+                    request.channel_uid.clone(),
+                    request.query.clone(),
+                    fetch_size,
+                    self.config.search_min_score,
+                )
+                .await
+                .unwrap_or_default();
+            let (mid, steep) = bm25_params_for_query(&request.query);
+            for hit in bm25_hits {
+                bm25_map.insert(hit.id as i64, normalize_bm25(hit.score, mid, steep));
+            }
+        }
 
-            for id in ids {
-                if selected.len() >= limit {
-                    break;
-                }
-                if let Some(memory) = memory_map.get(&id)
-                    && memory.archived_at.is_none()
-                    && scope_visible_for_request(
-                        memory,
-                        request.user_uid.as_deref(),
-                        request.channel_uid.as_deref(),
-                    ) {
-                        selected.push(memory.clone());
+        // Signal C: entity boost with spread attenuation.
+        let mut entity_map: HashMap<i64, f32> = HashMap::new();
+        let mut entities_by_memory: HashMap<i64, Vec<EntityDraft>> = HashMap::new();
+        if recipe.use_entity() && !request.query.trim().is_empty() {
+            let extracted = self
+                .worker
+                .extract_entities(&request.query, None)
+                .await
+                .unwrap_or_default();
+            if !extracted.is_empty() {
+                let names: Vec<String> = extracted.iter().map(|e| e.name.clone()).collect();
+                let embeddings = self
+                    .worker
+                    .embed_batch(names)
+                    .await
+                    .unwrap_or_default();
+                for (idx, entity) in extracted.iter().enumerate() {
+                    let Some(embedding) = embeddings.get(idx) else { continue };
+                    if embedding.is_empty() {
+                        continue;
                     }
+                    let hits = self
+                        .entity_trivium
+                        .search_entities(
+                            request.agent_id.clone(),
+                            request.user_uid.clone(),
+                            embedding.clone(),
+                            8,
+                            self.config.entity_min_score,
+                        )
+                        .await
+                        .unwrap_or_default();
+                    for entity_hit in hits {
+                        let entity_id = entity_hit.id as i64;
+                        let linked_count = entity_hit
+                            .payload
+                            .get("linked_memory_count")
+                            .and_then(|v| v.as_i64())
+                            .unwrap_or(1);
+                        let attenuation = entity_spread_attenuation(linked_count);
+                        let signal = entity_hit.score * attenuation;
+                        if let Ok(memory_ids) =
+                            self.store.list_linked_memory_ids_for_entity(entity_id)
+                        {
+                            for mem_id in memory_ids {
+                                let slot = entity_map.entry(mem_id).or_insert(0.0);
+                                if signal > *slot {
+                                    *slot = signal;
+                                }
+                                entities_by_memory
+                                    .entry(mem_id)
+                                    .or_default()
+                                    .push(entity.clone());
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        if selected.len() < limit {
-            let query = request.query.to_lowercase();
-            let recent = self.store.list_recent_memories(&request.agent_id, 64)?;
+        // Union of all candidate ids (semantic ∪ bm25 ∪ entity).
+        let mut candidate_set: HashSet<i64> = HashSet::new();
+        let mut candidate_order: Vec<i64> = Vec::new();
+        let push_candidate = |set: &mut HashSet<i64>, order: &mut Vec<i64>, id: i64| {
+            if set.insert(id) {
+                order.push(id);
+            }
+        };
+        for id in semantic_map.keys() {
+            push_candidate(&mut candidate_set, &mut candidate_order, *id);
+        }
+        for id in bm25_map.keys() {
+            push_candidate(&mut candidate_set, &mut candidate_order, *id);
+        }
+        for id in entity_map.keys() {
+            push_candidate(&mut candidate_set, &mut candidate_order, *id);
+        }
+
+        // Load records for the union.
+        let mut record_by_id: HashMap<i64, MemoryRecord> = if candidate_order.is_empty() {
+            HashMap::new()
+        } else {
+            self.store
+                .list_memories_by_ids(&candidate_order)?
+                .into_iter()
+                .map(|m| (m.id, m))
+                .collect()
+        };
+
+        // Signal D: contiguity — pull session-adjacent neighbors for the top
+        // semantic picks when the recipe enables it.
+        let mut contiguity_map: HashMap<i64, f32> = HashMap::new();
+        if recipe.use_contiguity() && !semantic_map.is_empty() {
+            let mut sorted: Vec<(i64, f32)> =
+                semantic_map.iter().map(|(k, v)| (*k, *v)).collect();
+            sorted.sort_by(|a, b| {
+                b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal)
+            });
+            let seed_count = limit.min(sorted.len());
+            let mut extra_ids: Vec<i64> = Vec::new();
+            for (mem_id, _) in sorted.iter().take(seed_count) {
+                let Some(mem) = record_by_id.get(mem_id) else { continue };
+                let neighbors = self
+                    .store
+                    .list_session_memories_around(
+                        &request.agent_id,
+                        mem.session_uid.as_deref(),
+                        *mem_id,
+                        self.config.contiguity_before,
+                        self.config.contiguity_after,
+                    )
+                    .unwrap_or_default();
+                for neighbor in neighbors {
+                    if candidate_set.insert(neighbor.id) {
+                        candidate_order.push(neighbor.id);
+                        extra_ids.push(neighbor.id);
+                    }
+                    contiguity_map
+                        .entry(neighbor.id)
+                        .or_insert(self.config.contiguity_boost_value);
+                    record_by_id.entry(neighbor.id).or_insert(neighbor);
+                }
+            }
+            // Any ids that sneaked in and aren't yet loaded would be loaded above;
+            // `extra_ids` is kept for observability / future logging.
+            let _ = extra_ids;
+        }
+
+        // If we still have nothing, fall back to recent memories (so the Bot
+        // is never completely blind during a cold start or degraded worker).
+        if candidate_order.is_empty() {
+            let recent = self
+                .store
+                .list_recent_memories(&request.agent_id, limit.saturating_mul(2).max(16))?;
             for memory in recent {
-                if selected.len() >= limit {
-                    break;
-                }
-                if selected.iter().any(|item| item.id == memory.id) {
-                    continue;
-                }
-                if memory.archived_at.is_some() {
-                    continue;
-                }
-                if !scope_visible_for_request(
-                    &memory,
-                    request.user_uid.as_deref(),
-                    request.channel_uid.as_deref(),
-                ) {
-                    continue;
-                }
-                if query.is_empty() || memory.content.to_lowercase().contains(&query) {
-                    selected.push(memory);
+                if candidate_set.insert(memory.id) {
+                    candidate_order.push(memory.id);
+                    record_by_id.entry(memory.id).or_insert(memory);
                 }
             }
         }
 
-        let accessed_ids = selected.iter().map(|item| item.id).collect::<Vec<_>>();
+        // Apply the additive fusion.
+        let weights = FusionWeights::for_recipe(
+            recipe,
+            self.config.entity_boost_weight,
+            self.config.contiguity_boost_weight,
+        );
+
+        struct Scored {
+            memory: MemoryRecord,
+            signals: FusionInputs,
+            combined: f32,
+            divisor: f32,
+        }
+
+        let mut scored_candidates: Vec<Scored> = Vec::new();
+        for id in &candidate_order {
+            let Some(memory) = record_by_id.get(id) else { continue };
+            if memory.archived_at.is_some() {
+                continue;
+            }
+            if !scope_visible_for_request(
+                memory,
+                request.user_uid.as_deref(),
+                request.channel_uid.as_deref(),
+            ) {
+                continue;
+            }
+            // Stage 3: drop superseded / invalidated / future-dated memories
+            // unless the caller explicitly opted into time-travel.
+            if !include_invalid_flag && !memory.is_currently_valid(&now) {
+                continue;
+            }
+            let signals = FusionInputs {
+                semantic: semantic_map.get(id).copied().unwrap_or(0.0),
+                bm25: bm25_map.get(id).copied().unwrap_or(0.0),
+                entity: entity_map.get(id).copied().unwrap_or(0.0),
+                contiguity: contiguity_map.get(id).copied().unwrap_or(0.0),
+            };
+            let (combined, divisor) = additive_fuse(signals, weights);
+            scored_candidates.push(Scored {
+                memory: memory.clone(),
+                signals,
+                combined,
+                divisor,
+            });
+        }
+
+        scored_candidates.sort_by(|a, b| {
+            b.combined
+                .partial_cmp(&a.combined)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+        scored_candidates.truncate(limit);
+
+        let accessed_ids: Vec<i64> = scored_candidates.iter().map(|s| s.memory.id).collect();
         self.store.mark_memories_accessed(&accessed_ids)?;
 
-        let memory_context = selected
-            .iter()
-            .map(|memory| crate::types::MemorySnippet {
-                id: memory.id,
-                time: memory.created_at.clone(),
-                content: memory.content.clone(),
-                scope: memory.scope.clone(),
-                score: scored.get(&memory.id).copied(),
+        let memory_context = scored_candidates
+            .into_iter()
+            .map(|s| {
+                let score_breakdown = if want_debug {
+                    Some(ScoreBreakdown {
+                        semantic: s.signals.semantic,
+                        bm25: s.signals.bm25,
+                        entity: s.signals.entity,
+                        contiguity: s.signals.contiguity,
+                        combined: s.combined,
+                        divisor: s.divisor,
+                    })
+                } else {
+                    None
+                };
+                let entities = entities_by_memory
+                    .remove(&s.memory.id)
+                    .unwrap_or_default();
+                // Expose the memory lifecycle when the caller is actively
+                // poking at state (debug or time-travel). Keeping it `None`
+                // by default avoids leaking superseded data to callers that
+                // don't know about it.
+                let lifecycle = if want_debug || include_invalid_flag {
+                    Some(s.memory.lifecycle())
+                } else {
+                    None
+                };
+                MemorySnippet {
+                    id: s.memory.id,
+                    time: s.memory.created_at,
+                    content: s.memory.content,
+                    scope: s.memory.scope,
+                    score: Some(s.combined),
+                    score_breakdown,
+                    entities,
+                    lifecycle,
+                }
             })
             .collect::<Vec<_>>();
 
@@ -405,6 +1138,9 @@ impl AppState {
         task_id: i64,
         agent_id: &str,
         draft: WorkerMemoryDraft,
+        content_hash: Option<String>,
+        source_event_ids: Vec<i64>,
+        linked_memory_ids: Vec<i64>,
     ) -> Result<MemoryRecord> {
         let previous_memory_id = self.store.get_latest_memory_id_for_agent(agent_id)?;
         let record = self.store.insert_memory(&NewMemoryRecord {
@@ -415,12 +1151,18 @@ impl AppState {
             scope: draft.scope.clone(),
             memory_type: draft.memory_type.clone(),
             content: draft.content.clone(),
+            content_hash,
+            source_event_ids,
+            linked_memory_ids,
             tags: draft.tags.clone(),
             metadata: memory_draft_metadata_with_task(task_id, &draft),
             importance: draft.importance,
             sentiment: draft.sentiment.clone(),
             source: draft.source.clone(),
             embedding_json: None,
+            state: "active".to_string(),
+            valid_at: draft.valid_at.clone(),
+            supersedes_memory_id: None,
         })?;
 
         let embedding = self.get_or_fetch_embedding(&record.content).await?;
@@ -497,9 +1239,16 @@ struct MaintenanceAgentRequest {
     agent_id: String,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+/// Payload that accompanies every `ScoreTurn` task.
+///
+/// `source_event_ids` captures the row ids returned by `insert_raw_turn` (or a
+/// single-entry vector from `insert_raw_message`) so that the memory produced
+/// by scoring can point back at the exact raw events it was distilled from.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct TurnTaskPayload {
     request: crate::types::WorkerScoreTurnRequest,
+    #[serde(default)]
+    source_event_ids: Vec<i64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -552,7 +1301,7 @@ async fn events_turn(
         .iter()
         .map(|msg| (msg.role.clone(), msg.content.clone()))
         .collect::<Vec<_>>();
-    state.store.insert_raw_turn(
+    let source_event_ids = state.store.insert_raw_turn(
         &request.agent_id,
         request.user_uid.as_deref(),
         request.channel_uid.as_deref(),
@@ -576,7 +1325,8 @@ async fn events_turn(
                 "source": request.source,
                 "messages": request.messages,
                 "metadata": metadata,
-            }
+            },
+            "source_event_ids": source_event_ids,
         }),
         Some(format!(
             "score_turn:{}:{}:{}",
@@ -610,7 +1360,7 @@ async fn events_message(
     let metadata = request.metadata.clone().unwrap_or_else(|| json!({}));
     let role = request.role.clone().unwrap_or_else(|| "system".to_string());
 
-    state.store.insert_raw_message(
+    let source_event_id = state.store.insert_raw_message(
         &request.event_kind,
         &request.agent_id,
         request.user_uid.as_deref(),
@@ -637,7 +1387,8 @@ async fn events_message(
                     "source": request.source,
                     "messages": [{ "role": role, "content": request.content }],
                     "metadata": metadata,
-                }
+                },
+                "source_event_ids": [source_event_id],
             }),
             None,
         )?)
@@ -667,6 +1418,12 @@ async fn create_memory(
     }
 
     let previous_memory_id = state.store.get_latest_memory_id_for_agent(&request.agent_id)?;
+    let normalized_content = request.content.trim();
+    let content_hash = if normalized_content.is_empty() {
+        None
+    } else {
+        Some(blake3::hash(normalized_content.as_bytes()).to_hex().to_string())
+    };
     let record = state.store.insert_memory(&NewMemoryRecord {
         agent_id: request.agent_id.clone(),
         user_uid: request.user_uid.clone(),
@@ -675,13 +1432,29 @@ async fn create_memory(
         scope: request.scope.clone(),
         memory_type: request.memory_type.clone().unwrap_or_else(|| "event".to_string()),
         content: request.content.clone(),
+        content_hash,
+        source_event_ids: Vec::new(),
+        linked_memory_ids: Vec::new(),
         tags: request.tags.clone().unwrap_or_default(),
         metadata: request.metadata.clone().unwrap_or_else(|| json!({})),
         importance: request.importance.unwrap_or(5.0),
         sentiment: request.sentiment.clone(),
         source: request.source.clone().unwrap_or_else(|| "manual".to_string()),
         embedding_json: None,
+        state: "active".to_string(),
+        valid_at: None,
+        supersedes_memory_id: None,
     })?;
+    state.store.insert_memory_history(
+        Some(record.id),
+        &request.agent_id,
+        "manual",
+        None,
+        Some(&record.content),
+        None,
+        Some(&record.metadata),
+        None,
+    )?;
 
     let task = state.enqueue_task(
         TaskKind::IndexMemory,

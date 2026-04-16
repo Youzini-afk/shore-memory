@@ -1,13 +1,36 @@
 use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 
 use crate::config::ServiceConfig;
 use crate::types::{
-    ReflectionMemoryInput, WorkerEmbedRequest, WorkerEmbedResponse, WorkerMemoryDraft,
+    EntityDraft, ReflectionMemoryInput, WorkerEmbedRequest, WorkerEmbedResponse, WorkerMemoryDraft,
     WorkerReflectionRequest, WorkerReflectionResponse, WorkerScoreTurnRequest,
     WorkerScoreTurnResponse,
 };
+
+#[derive(Debug, Clone, Serialize)]
+struct WorkerEmbedBatchRequest {
+    texts: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorkerEmbedBatchResponse {
+    embeddings: Vec<Vec<f32>>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct WorkerExtractEntitiesRequest {
+    query: String,
+    observation_date: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorkerExtractEntitiesResponse {
+    #[serde(default)]
+    entities: Vec<EntityDraft>,
+}
 
 #[derive(Clone)]
 pub struct WorkerClient {
@@ -61,6 +84,55 @@ impl WorkerClient {
         }
 
         Ok(response.embedding)
+    }
+
+    /// Batched embedding. Preserves input order. Empty input strings come back
+    /// as empty vectors so callers can map indices 1:1.
+    pub async fn embed_batch(&self, texts: Vec<String>) -> Result<Vec<Vec<f32>>> {
+        if texts.is_empty() {
+            return Ok(Vec::new());
+        }
+        let url = format!("{}/v1/embed/batch", self.base_url);
+        let response = self
+            .client
+            .post(url)
+            .json(&WorkerEmbedBatchRequest { texts })
+            .send()
+            .await
+            .context("worker embed_batch request failed")?
+            .error_for_status()
+            .context("worker embed_batch returned error")?
+            .json::<WorkerEmbedBatchResponse>()
+            .await
+            .context("worker embed_batch response parse failed")?;
+        Ok(response.embeddings)
+    }
+
+    /// Extract named entities from a query string. Returns an empty list when
+    /// the worker is not configured with an LLM — recall falls back to
+    /// semantic + BM25 in that case.
+    pub async fn extract_entities(
+        &self,
+        query: &str,
+        observation_date: Option<&str>,
+    ) -> Result<Vec<EntityDraft>> {
+        let url = format!("{}/v1/tasks/extract-entities", self.base_url);
+        let response = self
+            .client
+            .post(url)
+            .json(&WorkerExtractEntitiesRequest {
+                query: query.to_string(),
+                observation_date: observation_date.map(str::to_string),
+            })
+            .send()
+            .await
+            .context("worker extract_entities request failed")?
+            .error_for_status()
+            .context("worker extract_entities returned error")?
+            .json::<WorkerExtractEntitiesResponse>()
+            .await
+            .context("worker extract_entities response parse failed")?;
+        Ok(response.entities)
     }
 
     pub async fn score_turn(&self, request: &WorkerScoreTurnRequest) -> Result<WorkerScoreTurnResponse> {

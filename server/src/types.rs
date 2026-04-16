@@ -143,6 +143,16 @@ pub struct RecallRequest {
     pub limit: Option<usize>,
     pub include_state: Option<bool>,
     pub scope_hint: Option<MemoryScopeHint>,
+    #[serde(default)]
+    pub debug: Option<bool>,
+    /// Stage 2 recall recipes (fast / hybrid / entity_heavy / contiguous).
+    #[serde(default)]
+    pub recipe: Option<String>,
+    /// Stage 3 time-travel switch. When `true`, recall considers memories
+    /// whose `state != active` or whose `invalid_at` has passed. Default is
+    /// `false` — only currently-valid memories are returned.
+    #[serde(default)]
+    pub include_invalid: Option<bool>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +169,48 @@ pub struct MemorySnippet {
     pub content: String,
     pub scope: MemoryScope,
     pub score: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score_breakdown: Option<ScoreBreakdown>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub entities: Vec<EntityDraft>,
+    /// Stage 3 fact-lifetime metadata. Only populated when the caller asked
+    /// for `debug=true` or explicitly requested `include_invalid=true` —
+    /// active memories with no interesting state look the same as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lifecycle: Option<MemoryLifecycle>,
+}
+
+/// Snapshot of a memory's temporal-fact lifecycle. Mirrors
+/// `MemoryRecord.state / valid_at / invalid_at / supersedes_memory_id`.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MemoryLifecycle {
+    pub state: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub valid_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub invalid_at: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub supersedes_memory_id: Option<i64>,
+}
+
+/// Score breakdown exposed when `RecallRequest::debug == true`.
+///
+/// Stage 1 only populates `semantic`; the other signals stay at 0 until
+/// Stage 2 wires in BM25 / entity / contiguity boosts.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScoreBreakdown {
+    #[serde(default)]
+    pub semantic: f32,
+    #[serde(default)]
+    pub bm25: f32,
+    #[serde(default)]
+    pub entity: f32,
+    #[serde(default)]
+    pub contiguity: f32,
+    #[serde(default)]
+    pub combined: f32,
+    #[serde(default)]
+    pub divisor: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -259,17 +311,125 @@ pub struct MemoryRecord {
     pub scope: MemoryScope,
     pub memory_type: String,
     pub content: String,
+    pub content_hash: Option<String>,
+    pub source_event_ids: Vec<i64>,
+    pub linked_memory_ids: Vec<i64>,
     pub tags: Vec<String>,
     pub metadata: Value,
     pub importance: f32,
     pub sentiment: Option<String>,
     pub source: String,
     pub embedding_json: Option<String>,
+    /// Stage 3 lifecycle state. One of: `active / superseded / invalidated / archived`.
+    pub state: String,
+    pub valid_at: Option<String>,
+    pub invalid_at: Option<String>,
+    pub supersedes_memory_id: Option<i64>,
     pub created_at: String,
     pub updated_at: String,
     pub archived_at: Option<String>,
     pub access_count: i64,
     pub last_accessed_at: Option<String>,
+}
+
+impl MemoryRecord {
+    /// `true` when this memory is currently valid — no supersede, no
+    /// invalidation, no archival. Used by recall to drop superseded facts
+    /// unless the caller explicitly asked for time-travel.
+    pub fn is_currently_valid(&self, now: &str) -> bool {
+        if self.state != "active" {
+            return false;
+        }
+        if self.archived_at.is_some() {
+            return false;
+        }
+        if let Some(expired) = &self.invalid_at {
+            if expired.as_str() <= now {
+                return false;
+            }
+        }
+        true
+    }
+
+    pub fn lifecycle(&self) -> MemoryLifecycle {
+        MemoryLifecycle {
+            state: self.state.clone(),
+            valid_at: self.valid_at.clone(),
+            invalid_at: self.invalid_at.clone(),
+            supersedes_memory_id: self.supersedes_memory_id,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RawEventRecord {
+    pub id: i64,
+    pub role: String,
+    pub content: String,
+    pub created_at: String,
+}
+
+/// Stage 2 entity row. `name_norm` is the lowercased/trimmed version of
+/// `name_raw` and is the canonical key for `(agent_id, user_uid, entity_type,
+/// name_norm)` dedup.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityRecord {
+    pub id: i64,
+    pub agent_id: String,
+    pub user_uid: Option<String>,
+    pub name_raw: String,
+    pub name_norm: String,
+    pub entity_type: String,
+    pub linked_memory_count: i64,
+    pub created_at: String,
+    pub updated_at: String,
+}
+
+/// Named recall recipes. See `RECALL_RECIPES.md` for rationale; the enum
+/// values are the `recipe` field of `RecallRequest`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RecallRecipe {
+    /// Semantic-only, no BM25 / entity / contiguity. Lowest latency.
+    Fast,
+    /// Semantic + BM25 additive fusion. Default.
+    Hybrid,
+    /// Semantic + BM25 + entity boost (spread-attenuated).
+    EntityHeavy,
+    /// Semantic + BM25 + contiguity buffer (session-adjacent memories).
+    Contiguous,
+}
+
+impl RecallRecipe {
+    pub fn parse(raw: Option<&str>) -> Self {
+        match raw.map(str::trim).filter(|s| !s.is_empty()) {
+            Some("fast") => Self::Fast,
+            Some("hybrid") => Self::Hybrid,
+            Some("entity_heavy") | Some("entity-heavy") | Some("entity") => Self::EntityHeavy,
+            Some("contiguous") | Some("ctg") => Self::Contiguous,
+            _ => Self::Hybrid,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::Fast => "fast",
+            Self::Hybrid => "hybrid",
+            Self::EntityHeavy => "entity_heavy",
+            Self::Contiguous => "contiguous",
+        }
+    }
+
+    pub fn use_bm25(&self) -> bool {
+        !matches!(self, Self::Fast)
+    }
+
+    pub fn use_entity(&self) -> bool {
+        matches!(self, Self::EntityHeavy)
+    }
+
+    pub fn use_contiguity(&self) -> bool {
+        matches!(self, Self::Contiguous)
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -307,6 +467,31 @@ pub struct WorkerScoreTurnRequest {
     pub source: String,
     pub messages: Vec<TurnMessage>,
     pub metadata: Value,
+    /// Session-scoped previous raw messages (most recent last). Stage 1 addition.
+    #[serde(default)]
+    pub last_k_events: Vec<TurnMessage>,
+    /// Recently extracted memory contents from the same session (most recent first). Stage 1 addition.
+    #[serde(default)]
+    pub recently_extracted: Vec<String>,
+    /// Top-k semantically related existing memories for dedup/linking.
+    /// Server hands the worker opaque string indices ("0", "1", ...) to avoid UUID hallucination.
+    #[serde(default)]
+    pub existing_memories: Vec<ExistingMemoryHint>,
+    /// ISO-8601 timestamp describing when the conversation actually happened.
+    /// Used by the LLM prompt to ground relative temporal references.
+    #[serde(default)]
+    pub observation_date: Option<String>,
+}
+
+/// Opaque reference to an existing memory passed to the scorer for linking.
+///
+/// `index` is a stable string identifier for the current scoring call only.
+/// The worker echoes selected indices via `WorkerMemoryDraft::linked_existing_indices`,
+/// and the server maps them back to real memory ids.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExistingMemoryHint {
+    pub index: String,
+    pub content: String,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -328,6 +513,27 @@ pub struct WorkerMemoryDraft {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    /// "user" | "assistant" | other — for attribution accounting.
+    #[serde(default)]
+    pub attributed_to: Option<String>,
+    /// Opaque indices from `ExistingMemoryHint::index` that the worker wants to link this draft to.
+    /// Server maps these back to real memory ids before persisting.
+    #[serde(default)]
+    pub linked_existing_indices: Vec<String>,
+    /// Entities mentioned by this memory (Stage 2 feature, Stage 1 accepts them as pass-through).
+    #[serde(default)]
+    pub entities: Vec<EntityDraft>,
+    /// Optional ISO-8601 "valid from" timestamp for the fact expressed by this memory.
+    /// Populated later in Stage 3 but the field is accepted from day one.
+    #[serde(default)]
+    pub valid_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EntityDraft {
+    pub name: String,
+    #[serde(default, alias = "type")]
+    pub entity_type: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -347,10 +553,56 @@ pub struct ReflectionMemoryInput {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct WorkerReflectionResponse {
+    #[serde(default)]
     pub summary_memories: Vec<WorkerMemoryDraft>,
+    #[serde(default)]
     pub retire_memory_ids: Vec<i64>,
+    #[serde(default)]
     pub state_patch: Option<AgentStatePatch>,
+    #[serde(default = "default_empty_report")]
     pub report: Value,
+    /// Stage 3: groups of memories the LLM judges to be exact duplicates.
+    /// The `keep_id` wins; every `drop_ids` entry becomes `state = superseded`
+    /// with `supersedes_memory_id = keep_id`.
+    #[serde(default)]
+    pub duplicate_groups: Vec<DuplicateGroup>,
+    /// Stage 3: memories whose facts are contradicted by a newer memory.
+    /// Each entry invalidates `old_id` and (optionally) sets `invalid_at`.
+    #[serde(default)]
+    pub contradictions: Vec<ContradictionEntry>,
+}
+
+fn default_empty_report() -> Value {
+    Value::Object(Default::default())
+}
+
+/// LLM-identified duplicate cluster. `keep_id` is the canonical memory
+/// the remaining `drop_ids` defer to.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DuplicateGroup {
+    pub keep_id: i64,
+    #[serde(default)]
+    pub drop_ids: Vec<i64>,
+    #[serde(default)]
+    pub reason: Option<String>,
+}
+
+/// LLM-identified contradiction between two memories. The `old_id` is the
+/// one whose fact no longer holds; the contradiction is either resolved by
+/// an existing memory (`new_id`) or by a freshly-authored summary memory
+/// (`new_summary_idx` pointing into `summary_memories`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ContradictionEntry {
+    pub old_id: i64,
+    #[serde(default)]
+    pub new_id: Option<i64>,
+    #[serde(default)]
+    pub new_summary_idx: Option<usize>,
+    /// ISO-8601 timestamp. Defaults to `now` at the server when absent.
+    #[serde(default)]
+    pub invalid_at: Option<String>,
+    #[serde(default)]
+    pub reason: Option<String>,
 }
 
 pub fn infer_scope(
@@ -412,12 +664,19 @@ mod tests {
             scope,
             memory_type: "event".to_string(),
             content: "hello".to_string(),
+            content_hash: None,
+            source_event_ids: vec![],
+            linked_memory_ids: vec![],
             tags: vec![],
             metadata: json!({}),
             importance: 1.0,
             sentiment: None,
             source: "test".to_string(),
             embedding_json: None,
+            state: "active".to_string(),
+            valid_at: None,
+            invalid_at: None,
+            supersedes_memory_id: None,
             created_at: "2026-01-01T00:00:00Z".to_string(),
             updated_at: "2026-01-01T00:00:00Z".to_string(),
             archived_at: None,
@@ -433,6 +692,26 @@ mod tests {
         assert_eq!(infer_scope(Some(MemoryScopeHint::Auto), Some("telegram:group:1")), MemoryScope::Group);
         assert_eq!(infer_scope(Some(MemoryScopeHint::Auto), Some("telegram:dm:1")), MemoryScope::Private);
         assert_eq!(infer_scope(None, Some("desktop:session")), MemoryScope::Shared);
+    }
+
+    #[test]
+    fn recall_recipe_parse_covers_aliases() {
+        use crate::types::RecallRecipe;
+        assert_eq!(RecallRecipe::parse(Some("fast")), RecallRecipe::Fast);
+        assert_eq!(RecallRecipe::parse(Some("hybrid")), RecallRecipe::Hybrid);
+        assert_eq!(RecallRecipe::parse(Some("entity")), RecallRecipe::EntityHeavy);
+        assert_eq!(RecallRecipe::parse(Some("entity_heavy")), RecallRecipe::EntityHeavy);
+        assert_eq!(RecallRecipe::parse(Some("entity-heavy")), RecallRecipe::EntityHeavy);
+        assert_eq!(RecallRecipe::parse(Some("contiguous")), RecallRecipe::Contiguous);
+        assert_eq!(RecallRecipe::parse(Some("ctg")), RecallRecipe::Contiguous);
+        assert_eq!(RecallRecipe::parse(None), RecallRecipe::Hybrid);
+        assert_eq!(RecallRecipe::parse(Some("unknown")), RecallRecipe::Hybrid);
+
+        // Flag toggles reflect the intended signal mix.
+        assert!(!RecallRecipe::Fast.use_bm25());
+        assert!(RecallRecipe::Hybrid.use_bm25());
+        assert!(RecallRecipe::EntityHeavy.use_entity());
+        assert!(RecallRecipe::Contiguous.use_contiguity());
     }
 
     #[test]
