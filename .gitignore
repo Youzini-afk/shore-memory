@@ -1,0 +1,8 @@
+server/.env
+server/data/
+server/target/
+worker/.env
+worker/.venv/
+worker/__pycache__/
+worker/.pytest_cache/
+vendor/TriviumDB/target/

@@ -1,0 +1,85 @@
+use std::env;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
+use std::path::PathBuf;
+use std::time::Duration;
+
+#[derive(Debug, Clone)]
+pub struct ServiceConfig {
+    pub bind_addr: SocketAddr,
+    pub metadata_db_path: PathBuf,
+    pub trivium_db_path: PathBuf,
+    pub worker_base_url: String,
+    pub embedding_timeout: Duration,
+    pub worker_timeout: Duration,
+    pub recall_cache_ttl: Duration,
+    pub embedding_cache_ttl: Duration,
+    pub task_poll_interval: Duration,
+    pub search_top_k: usize,
+    pub search_expand_depth: usize,
+    pub search_min_score: f32,
+}
+
+impl ServiceConfig {
+    pub fn from_env() -> Self {
+        let host = env::var("PMS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
+        let port = parse_u16("PMS_PORT", 7811);
+        let bind_addr = SocketAddr::new(
+            host.parse()
+                .unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
+            port,
+        );
+
+        let data_dir =
+            PathBuf::from(env::var("PMS_DATA_DIR").unwrap_or_else(|_| "./data".to_string()));
+        let metadata_db_path = env::var("PMS_METADATA_DB_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| data_dir.join("metadata.sqlite3"));
+        let trivium_db_path = env::var("PMS_TRIVIUM_DB_PATH")
+            .map(PathBuf::from)
+            .unwrap_or_else(|_| data_dir.join("memory.tdb"));
+
+        Self {
+            bind_addr,
+            metadata_db_path,
+            trivium_db_path,
+            worker_base_url: env::var("PMS_WORKER_BASE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:7812".to_string()),
+            embedding_timeout: Duration::from_millis(parse_u64("PMS_EMBEDDING_TIMEOUT_MS", 1800)),
+            worker_timeout: Duration::from_millis(parse_u64("PMS_WORKER_TIMEOUT_MS", 10_000)),
+            recall_cache_ttl: Duration::from_secs(parse_u64("PMS_RECALL_CACHE_TTL_SECS", 30)),
+            embedding_cache_ttl: Duration::from_secs(parse_u64("PMS_EMBEDDING_CACHE_TTL_SECS", 600)),
+            task_poll_interval: Duration::from_millis(parse_u64("PMS_TASK_POLL_INTERVAL_MS", 1500)),
+            search_top_k: parse_usize("PMS_SEARCH_TOP_K", 12),
+            search_expand_depth: parse_usize("PMS_SEARCH_EXPAND_DEPTH", 2),
+            search_min_score: parse_f32("PMS_SEARCH_MIN_SCORE", 0.03),
+        }
+    }
+}
+
+fn parse_u16(key: &str, default: u16) -> u16 {
+    env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
+
+fn parse_u64(key: &str, default: u64) -> u64 {
+    env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
+
+fn parse_usize(key: &str, default: usize) -> usize {
+    env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
+
+fn parse_f32(key: &str, default: f32) -> f32 {
+    env::var(key)
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(default)
+}
