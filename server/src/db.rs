@@ -6,12 +6,13 @@ use std::time::Duration;
 use anyhow::{Context, Result, anyhow};
 use chrono::Utc;
 use r2d2::{ManageConnection, Pool, PooledConnection};
-use rusqlite::{Connection, OptionalExtension, Transaction, params};
+use rusqlite::{Connection, OptionalExtension, Transaction, params, types::Value as SqlValue};
 use serde_json::Value;
 
 use crate::types::{
-    AgentStatePatch, AgentStateResponse, EntityRecord, MemoryRecord, MemoryScope, RawEventRecord,
-    SyncSummaryResponse, TaskKind, TaskRecord, TaskStatus,
+    AgentStatePatch, AgentStateResponse, EntityRecord, ListMemoriesRequest, MemoryHistoryRecord,
+    MemoryRecord, MemoryScope, RawEventRecord, SyncSummaryResponse, TaskKind, TaskRecord,
+    TaskStatus, UpdateMemoryRequest,
 };
 
 #[derive(Debug, Clone)]
@@ -1064,6 +1065,112 @@ impl MetadataStore {
             .map_err(Into::into)
     }
 
+    pub fn list_memories_page(
+        &self,
+        request: &ListMemoriesRequest,
+    ) -> Result<(Vec<MemoryRecord>, usize)> {
+        let limit = request.limit.unwrap_or(50).clamp(1, 200);
+        let offset = request.offset.unwrap_or(0);
+        let include_archived = request.include_archived.unwrap_or(false);
+
+        let mut where_clauses = vec!["agent_id = ?".to_string()];
+        let mut params = vec![SqlValue::Text(request.agent_id.clone())];
+
+        if let Some(user_uid) = request.user_uid.as_deref() {
+            where_clauses.push("user_uid = ?".to_string());
+            params.push(SqlValue::Text(user_uid.to_string()));
+        }
+        if let Some(channel_uid) = request.channel_uid.as_deref() {
+            where_clauses.push("channel_uid = ?".to_string());
+            params.push(SqlValue::Text(channel_uid.to_string()));
+        }
+        if let Some(session_uid) = request.session_uid.as_deref() {
+            where_clauses.push("session_uid = ?".to_string());
+            params.push(SqlValue::Text(session_uid.to_string()));
+        }
+        if let Some(scope) = request.scope.as_ref() {
+            where_clauses.push("scope = ?".to_string());
+            params.push(SqlValue::Text(scope.as_str().to_string()));
+        }
+        if let Some(state) = request.state.as_deref() {
+            where_clauses.push("state = ?".to_string());
+            params.push(SqlValue::Text(state.to_string()));
+        }
+        if let Some(memory_type) = request.memory_type.as_deref() {
+            where_clauses.push("memory_type = ?".to_string());
+            params.push(SqlValue::Text(memory_type.to_string()));
+        }
+        if let Some(content_query) = request.content_query.as_deref() {
+            let trimmed = content_query.trim();
+            if !trimmed.is_empty() {
+                where_clauses.push("content LIKE ?".to_string());
+                params.push(SqlValue::Text(format!("%{}%", trimmed)));
+            }
+        }
+        if !include_archived {
+            where_clauses.push("archived_at IS NULL".to_string());
+        }
+
+        let where_sql = where_clauses.join(" AND ");
+        let count_sql = format!("SELECT COUNT(*) FROM memories WHERE {where_sql}");
+        let conn = self.open_conn()?;
+        let total = conn.query_row(
+            &count_sql,
+            rusqlite::params_from_iter(params.iter()),
+            |row| row.get::<_, i64>(0),
+        )? as usize;
+
+        let mut page_params = params.clone();
+        page_params.push(SqlValue::Integer(limit as i64));
+        page_params.push(SqlValue::Integer(offset as i64));
+        let sql = format!(
+            r#"
+            SELECT
+                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
+                content_hash, source_event_ids, linked_memory_ids,
+                tags_json, metadata_json, importance, sentiment, source, embedding_json,
+                state, valid_at, invalid_at, supersedes_memory_id,
+                created_at, updated_at, archived_at, access_count, last_accessed_at
+            FROM memories
+            WHERE {where_sql}
+            ORDER BY created_at DESC, id DESC
+            LIMIT ? OFFSET ?
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
+        let rows = stmt.query_map(
+            rusqlite::params_from_iter(page_params.iter()),
+            row_to_memory_record,
+        )?;
+        let items = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+        Ok((items, total))
+    }
+
+    pub fn list_memory_history(
+        &self,
+        memory_id: i64,
+        limit: usize,
+    ) -> Result<Vec<MemoryHistoryRecord>> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT
+                id, memory_id, agent_id, event, old_content, new_content,
+                old_metadata, new_metadata, source_task_id, created_at
+            FROM memory_history
+            WHERE memory_id = ?1
+            ORDER BY created_at DESC, id DESC
+            LIMIT ?2
+            "#,
+        )?;
+        let rows = stmt.query_map(
+            params![memory_id, limit as i64],
+            row_to_memory_history_record,
+        )?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
     pub fn list_memories_by_ids(&self, ids: &[i64]) -> Result<Vec<MemoryRecord>> {
         if ids.is_empty() {
             return Ok(Vec::new());
@@ -1168,14 +1275,180 @@ impl MetadataStore {
         let conn = self.open_conn()?;
         let tx = conn.unchecked_transaction()?;
         let now = now_rfc3339();
-        let mut stmt =
-            tx.prepare("UPDATE memories SET archived_at = ?1, updated_at = ?2 WHERE id = ?3")?;
+        let mut stmt = tx.prepare(
+            "UPDATE memories SET archived_at = ?1, state = 'archived', updated_at = ?2 WHERE id = ?3",
+        )?;
         for id in memory_ids {
             stmt.execute(params![now, now, id])?;
         }
         drop(stmt);
         tx.commit()?;
         Ok(())
+    }
+
+    pub fn export_memories(
+        &self,
+        agent_id: &str,
+        include_archived: bool,
+    ) -> Result<Vec<MemoryRecord>> {
+        let conn = self.open_conn()?;
+        let sql = if include_archived {
+            r#"
+            SELECT
+                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
+                content_hash, source_event_ids, linked_memory_ids,
+                tags_json, metadata_json, importance, sentiment, source, embedding_json,
+                state, valid_at, invalid_at, supersedes_memory_id,
+                created_at, updated_at, archived_at, access_count, last_accessed_at
+            FROM memories
+            WHERE agent_id = ?1
+            ORDER BY created_at ASC, id ASC
+            "#
+        } else {
+            r#"
+            SELECT
+                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
+                content_hash, source_event_ids, linked_memory_ids,
+                tags_json, metadata_json, importance, sentiment, source, embedding_json,
+                state, valid_at, invalid_at, supersedes_memory_id,
+                created_at, updated_at, archived_at, access_count, last_accessed_at
+            FROM memories
+            WHERE agent_id = ?1 AND archived_at IS NULL
+            ORDER BY created_at ASC, id ASC
+            "#
+        };
+        let mut stmt = conn.prepare(sql)?;
+        let rows = stmt.query_map(params![agent_id], row_to_memory_record)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    pub fn update_memory(
+        &self,
+        memory_id: i64,
+        patch: &UpdateMemoryRequest,
+    ) -> Result<MemoryRecord> {
+        let current = self
+            .get_memory_by_id(memory_id)?
+            .ok_or_else(|| anyhow!("memory not found: {memory_id}"))?;
+        let now = now_rfc3339();
+        let next_content = patch
+            .content
+            .clone()
+            .unwrap_or_else(|| current.content.clone());
+        let normalized_content = next_content.trim();
+        if normalized_content.is_empty() {
+            return Err(anyhow!("content cannot be empty"));
+        }
+        let content_changed = patch.content.is_some();
+        let next_content_hash = if content_changed {
+            Some(
+                blake3::hash(normalized_content.as_bytes())
+                    .to_hex()
+                    .to_string(),
+            )
+        } else {
+            current.content_hash.clone()
+        };
+        if let Some(hash) = next_content_hash.as_deref()
+            && let Some(existing) = self.find_memory_by_hash(&current.agent_id, hash)?
+            && existing.id != memory_id
+        {
+            return Err(anyhow!(
+                "memory content duplicates existing memory {} for agent {}",
+                existing.id,
+                current.agent_id
+            ));
+        }
+
+        let next_state = match patch.archived {
+            Some(true) if patch.state.is_none() => "archived".to_string(),
+            Some(false) if patch.state.is_none() && current.state == "archived" => {
+                "active".to_string()
+            }
+            _ => patch.state.clone().unwrap_or_else(|| current.state.clone()),
+        };
+        let next_tags = patch.tags.clone().unwrap_or_else(|| current.tags.clone());
+        let next_metadata = patch
+            .metadata
+            .clone()
+            .unwrap_or_else(|| current.metadata.clone());
+        let next_importance = patch.importance.unwrap_or(current.importance);
+        let next_sentiment = match patch.sentiment.as_ref() {
+            Some(value) => value.clone(),
+            None => current.sentiment.clone(),
+        };
+        let next_source = patch
+            .source
+            .clone()
+            .unwrap_or_else(|| current.source.clone());
+        let next_valid_at = match patch.valid_at.as_ref() {
+            Some(value) => value.clone(),
+            None => current.valid_at.clone(),
+        };
+        let next_invalid_at = match patch.invalid_at.as_ref() {
+            Some(value) => value.clone(),
+            None => current.invalid_at.clone(),
+        };
+        let next_supersedes = match patch.supersedes_memory_id.as_ref() {
+            Some(value) => *value,
+            None => current.supersedes_memory_id,
+        };
+        let next_archived_at = match patch.archived {
+            Some(true) => current.archived_at.clone().or_else(|| Some(now.clone())),
+            Some(false) => None,
+            None => current.archived_at.clone(),
+        };
+
+        let conn = self.open_conn()?;
+        conn.execute(
+            r#"
+            UPDATE memories
+            SET content = ?1,
+                content_hash = ?2,
+                tags_json = ?3,
+                metadata_json = ?4,
+                importance = ?5,
+                sentiment = ?6,
+                source = ?7,
+                embedding_json = ?8,
+                state = ?9,
+                valid_at = ?10,
+                invalid_at = ?11,
+                supersedes_memory_id = ?12,
+                archived_at = ?13,
+                updated_at = ?14
+            WHERE id = ?15
+            "#,
+            params![
+                next_content,
+                next_content_hash,
+                to_json_text(&Value::Array(
+                    next_tags
+                        .iter()
+                        .map(|tag| Value::String(tag.clone()))
+                        .collect()
+                )),
+                to_json_text(&next_metadata),
+                next_importance,
+                next_sentiment,
+                next_source,
+                if content_changed {
+                    None::<String>
+                } else {
+                    current.embedding_json.clone()
+                },
+                next_state,
+                next_valid_at,
+                next_invalid_at,
+                next_supersedes,
+                next_archived_at,
+                now,
+                memory_id,
+            ],
+        )?;
+        self.get_memory_by_id(memory_id)?
+            .ok_or_else(|| anyhow!("memory updated but not found: {memory_id}"))
     }
 
     pub fn all_active_memories(&self, agent_id: &str) -> Result<Vec<MemoryRecord>> {
@@ -1526,6 +1799,23 @@ fn row_to_memory_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRecor
     })
 }
 
+fn row_to_memory_history_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryHistoryRecord> {
+    let old_metadata: Option<String> = row.get(6)?;
+    let new_metadata: Option<String> = row.get(7)?;
+    Ok(MemoryHistoryRecord {
+        id: row.get(0)?,
+        memory_id: row.get(1)?,
+        agent_id: row.get(2)?,
+        event: row.get(3)?,
+        old_content: row.get(4)?,
+        new_content: row.get(5)?,
+        old_metadata: old_metadata.as_deref().map(parse_json_value),
+        new_metadata: new_metadata.as_deref().map(parse_json_value),
+        source_task_id: row.get(8)?,
+        created_at: row.get(9)?,
+    })
+}
+
 fn parse_i64_array(raw: &str) -> Vec<i64> {
     serde_json::from_str::<Vec<i64>>(raw).unwrap_or_default()
 }
@@ -1610,7 +1900,9 @@ fn to_from_sql_error(err: String) -> rusqlite::Error {
 #[cfg(test)]
 mod tests {
     use super::{MetadataStore, NewMemoryRecord};
-    use crate::types::{MemoryScope, TaskKind, TaskStatus};
+    use crate::types::{
+        ListMemoriesRequest, MemoryScope, TaskKind, TaskStatus, UpdateMemoryRequest,
+    };
     use serde_json::json;
     use tempfile::tempdir;
 
@@ -1998,5 +2290,119 @@ mod tests {
         let summary = store.get_sync_summary().expect("summary after retry");
         assert_eq!(summary.failed_tasks, 0);
         assert_eq!(summary.pending_tasks, 1);
+    }
+
+    #[test]
+    fn list_memories_page_filters_and_counts() {
+        let temp_dir = tempdir().expect("tempdir");
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
+        store.init().expect("init sqlite schema");
+
+        let first = store
+            .insert_memory(&memory_for("用户爱喝拿铁", Some("m1")))
+            .expect("insert first");
+        std::thread::sleep(std::time::Duration::from_millis(5));
+        let second = store
+            .insert_memory(&memory_for("用户喜欢冷萃", Some("m2")))
+            .expect("insert second");
+        store
+            .archive_memories(&[second.id])
+            .expect("archive second");
+
+        let (items, total) = store
+            .list_memories_page(&ListMemoriesRequest {
+                agent_id: "shore".to_string(),
+                user_uid: None,
+                channel_uid: None,
+                session_uid: None,
+                scope: None,
+                state: None,
+                memory_type: None,
+                content_query: Some("拿铁".to_string()),
+                include_archived: Some(false),
+                limit: Some(10),
+                offset: Some(0),
+            })
+            .expect("list filtered memories");
+        assert_eq!(total, 1);
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0].id, first.id);
+
+        let (all_items, all_total) = store
+            .list_memories_page(&ListMemoriesRequest {
+                agent_id: "shore".to_string(),
+                user_uid: None,
+                channel_uid: None,
+                session_uid: None,
+                scope: None,
+                state: Some("archived".to_string()),
+                memory_type: None,
+                content_query: None,
+                include_archived: Some(true),
+                limit: Some(10),
+                offset: Some(0),
+            })
+            .expect("list archived memories");
+        assert_eq!(all_total, 1);
+        assert_eq!(all_items.len(), 1);
+        assert_eq!(all_items[0].id, second.id);
+        assert_eq!(all_items[0].state, "archived");
+    }
+
+    #[test]
+    fn update_memory_rewrites_content_and_history_view() {
+        let temp_dir = tempdir().expect("tempdir");
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
+        store.init().expect("init sqlite schema");
+
+        let memory = store
+            .insert_memory(&memory_for("用户喜欢散步", Some("walk-1")))
+            .expect("insert memory");
+        let updated = store
+            .update_memory(
+                memory.id,
+                &UpdateMemoryRequest {
+                    content: Some("用户喜欢夜间散步".to_string()),
+                    tags: Some(vec!["habit".to_string(), "night".to_string()]),
+                    metadata: Some(json!({"edited": true})),
+                    importance: Some(7.0),
+                    sentiment: Some(Some("positive".to_string())),
+                    source: Some("manual-edit".to_string()),
+                    state: None,
+                    valid_at: None,
+                    invalid_at: None,
+                    supersedes_memory_id: None,
+                    archived: Some(false),
+                },
+            )
+            .expect("update memory");
+        assert_eq!(updated.content, "用户喜欢夜间散步");
+        assert_eq!(updated.tags, vec!["habit".to_string(), "night".to_string()]);
+        assert_eq!(updated.importance, 7.0);
+        assert_eq!(updated.sentiment.as_deref(), Some("positive"));
+        assert_eq!(updated.source, "manual-edit");
+        assert_eq!(updated.embedding_json, None);
+        assert!(updated.content_hash.is_some());
+
+        store
+            .insert_memory_history(
+                Some(memory.id),
+                "shore",
+                "update",
+                Some("用户喜欢散步"),
+                Some("用户喜欢夜间散步"),
+                Some(&json!({"edited": false})),
+                Some(&json!({"edited": true})),
+                None,
+            )
+            .expect("write history");
+        let history = store
+            .list_memory_history(memory.id, 10)
+            .expect("load history");
+        assert_eq!(history.len(), 1);
+        assert_eq!(history[0].event, "update");
+        assert_eq!(history[0].new_content.as_deref(), Some("用户喜欢夜间散步"));
     }
 }

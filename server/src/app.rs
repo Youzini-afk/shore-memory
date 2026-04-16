@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
 use axum::extract::Path;
+use axum::extract::Query;
 use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::http::{HeaderMap, HeaderName, StatusCode};
@@ -28,10 +29,12 @@ use crate::recall_recipe::{
 use crate::trivium::{EntityTriviumStore, TriviumStore};
 use crate::types::{
     AgentStatePatch, AgentStateResponse, CreateMemoryRequest, EntityDraft, EntityRecord,
-    EventMessageRequest, ExistingMemoryHint, MemoryRecord, MemorySnippet, RecallRecipe,
-    RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse,
-    TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage, WorkerMemoryDraft,
-    WorkerScoreTurnRequest, infer_scope, scope_visible_for_request,
+    EventMessageRequest, ExistingMemoryHint, ExportMemoriesRequest, ExportMemoriesResponse,
+    ListMemoriesRequest, ListMemoriesResponse, MemoryDetailResponse, MemoryRecord, MemorySnippet,
+    RecallRecipe, RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse,
+    TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage, UpdateMemoryRequest,
+    UpdateMemoryResponse, WorkerMemoryDraft, WorkerScoreTurnRequest, infer_scope,
+    scope_visible_for_request,
 };
 use crate::worker::{
     WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories,
@@ -104,7 +107,12 @@ impl AppState {
             .route("/v1/context/recall", post(recall))
             .route("/v1/events/turn", post(events_turn))
             .route("/v1/events/message", post(events_message))
-            .route("/v1/memories", post(create_memory))
+            .route("/v1/memories", get(list_memories).post(create_memory))
+            .route("/v1/memories/export", get(export_memories))
+            .route(
+                "/v1/memories/{memory_id}",
+                get(get_memory).patch(update_memory),
+            )
             .route(
                 "/v1/agents/{agent_id}/state",
                 get(get_agent_state).patch(update_agent_state),
@@ -1393,6 +1401,8 @@ pub enum ServiceError {
     #[error("{0}")]
     BadRequest(String),
     #[error("{0}")]
+    NotFound(String),
+    #[error("{0}")]
     Internal(String),
 }
 
@@ -1400,6 +1410,7 @@ impl IntoResponse for ServiceError {
     fn into_response(self) -> Response {
         let (status, message) = match self {
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
+            Self::NotFound(message) => (StatusCode::NOT_FOUND, message),
             Self::Internal(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
         };
 
@@ -1632,6 +1643,38 @@ async fn events_message(
 }
 
 #[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn list_memories(
+    headers: HeaderMap,
+    Query(request): Query<ListMemoriesRequest>,
+    State(state): State<AppState>,
+) -> Result<Json<ListMemoriesResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    if request.agent_id.trim().is_empty() {
+        return Err(ServiceError::BadRequest("agent_id is required".to_string()));
+    }
+    if let Some(state_filter) = request.state.as_deref()
+        && !is_valid_memory_state(state_filter)
+    {
+        return Err(ServiceError::BadRequest(format!(
+            "invalid memory state: {state_filter}"
+        )));
+    }
+    let limit = request.limit.unwrap_or(50).clamp(1, 200);
+    let offset = request.offset.unwrap_or(0);
+    let (items, total) = state.store.list_memories_page(&request)?;
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/memories:list", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(ListMemoriesResponse {
+        items,
+        total,
+        limit,
+        offset,
+    }))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn create_memory(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -1718,6 +1761,165 @@ async fn create_memory(
             .record(started.elapsed().as_secs_f64());
         resp
     })
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn get_memory(
+    headers: HeaderMap,
+    Path(memory_id): Path<i64>,
+    State(state): State<AppState>,
+) -> Result<Json<MemoryDetailResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    let memory = state
+        .store
+        .get_memory_by_id(memory_id)?
+        .ok_or_else(|| ServiceError::NotFound(format!("memory not found: {memory_id}")))?;
+    let entities = state.store.list_entities_for_memory(memory_id)?;
+    let history = state.store.list_memory_history(memory_id, 100)?;
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/memories:get", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(MemoryDetailResponse {
+        memory,
+        entities,
+        history,
+    }))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn update_memory(
+    headers: HeaderMap,
+    Path(memory_id): Path<i64>,
+    State(state): State<AppState>,
+    Json(patch): Json<UpdateMemoryRequest>,
+) -> Result<Json<UpdateMemoryResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    if !memory_patch_has_changes(&patch) {
+        return Err(ServiceError::BadRequest(
+            "at least one patch field is required".to_string(),
+        ));
+    }
+    if let Some(content) = patch.content.as_deref()
+        && content.trim().is_empty()
+    {
+        return Err(ServiceError::BadRequest(
+            "content cannot be empty".to_string(),
+        ));
+    }
+    if let Some(state_value) = patch.state.as_deref()
+        && !is_valid_memory_state(state_value)
+    {
+        return Err(ServiceError::BadRequest(format!(
+            "invalid memory state: {state_value}"
+        )));
+    }
+    if let Some(Some(supersedes_memory_id)) = patch.supersedes_memory_id.as_ref()
+        && *supersedes_memory_id == memory_id
+    {
+        return Err(ServiceError::BadRequest(
+            "supersedes_memory_id cannot equal memory_id".to_string(),
+        ));
+    }
+
+    let before = state
+        .store
+        .get_memory_by_id(memory_id)?
+        .ok_or_else(|| ServiceError::NotFound(format!("memory not found: {memory_id}")))?;
+    if let Some(content) = patch.content.as_deref() {
+        let content_hash = blake3::hash(content.trim().as_bytes()).to_hex().to_string();
+        if let Some(existing) = state
+            .store
+            .find_memory_by_hash(&before.agent_id, &content_hash)?
+            && existing.id != memory_id
+        {
+            return Err(ServiceError::BadRequest(format!(
+                "memory content duplicates existing memory {}",
+                existing.id
+            )));
+        }
+    }
+
+    let updated = state.store.update_memory(memory_id, &patch)?;
+    let content_changed = before.content != updated.content;
+    let event_name = match patch.archived {
+        Some(true) => "archive",
+        Some(false) => "unarchive",
+        None => "update",
+    };
+    state.store.insert_memory_history(
+        Some(memory_id),
+        &updated.agent_id,
+        event_name,
+        Some(&before.content),
+        Some(&updated.content),
+        Some(&before.metadata),
+        Some(&updated.metadata),
+        None,
+    )?;
+    state.sync_trivium_payload_for_memory(memory_id).await;
+    let rebuild_task_id = if content_changed {
+        Some(
+            state
+                .enqueue_task(
+                    TaskKind::RebuildTrivium,
+                    &updated.agent_id,
+                    json!({ "agent_id": updated.agent_id }),
+                    Some(format!("rebuild:{}", updated.agent_id)),
+                )?
+                .id,
+        )
+    } else {
+        None
+    };
+    state.bump_recall_epoch(&updated.agent_id).await;
+    state
+        .emit_event(
+            "memory.updated",
+            json!({
+                "memory_id": updated.id,
+                "agent_id": updated.agent_id,
+                "state": updated.state,
+                "archived": updated.archived_at.is_some(),
+                "rebuild_queued": rebuild_task_id.is_some(),
+                "rebuild_task_id": rebuild_task_id,
+            }),
+        )
+        .await;
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/memories:patch", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(UpdateMemoryResponse {
+        memory: updated,
+        rebuild_task_id,
+        rebuild_queued: rebuild_task_id.is_some(),
+    }))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn export_memories(
+    headers: HeaderMap,
+    Query(request): Query<ExportMemoriesRequest>,
+    State(state): State<AppState>,
+) -> Result<Json<ExportMemoriesResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+    if request.agent_id.trim().is_empty() {
+        return Err(ServiceError::BadRequest("agent_id is required".to_string()));
+    }
+    let items = state
+        .store
+        .export_memories(&request.agent_id, request.include_archived.unwrap_or(false))?;
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/memories/export", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(ExportMemoriesResponse {
+        agent_id: request.agent_id,
+        exported_at: chrono::Utc::now().to_rfc3339(),
+        count: items.len(),
+        items,
+    }))
 }
 
 #[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
@@ -1986,4 +2188,22 @@ fn request_id_from_headers(headers: &HeaderMap) -> String {
         .and_then(|v| v.to_str().ok())
         .map(str::to_string)
         .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn is_valid_memory_state(state: &str) -> bool {
+    matches!(state, "active" | "superseded" | "invalidated" | "archived")
+}
+
+fn memory_patch_has_changes(patch: &UpdateMemoryRequest) -> bool {
+    patch.content.is_some()
+        || patch.tags.is_some()
+        || patch.metadata.is_some()
+        || patch.importance.is_some()
+        || patch.sentiment.is_some()
+        || patch.source.is_some()
+        || patch.state.is_some()
+        || patch.valid_at.is_some()
+        || patch.invalid_at.is_some()
+        || patch.supersedes_memory_id.is_some()
+        || patch.archived.is_some()
 }

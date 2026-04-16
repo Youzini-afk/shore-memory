@@ -266,6 +266,65 @@ pub struct CreateMemoryRequest {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListMemoriesRequest {
+    pub agent_id: String,
+    pub user_uid: Option<String>,
+    pub channel_uid: Option<String>,
+    pub session_uid: Option<String>,
+    pub scope: Option<MemoryScope>,
+    pub state: Option<String>,
+    pub memory_type: Option<String>,
+    pub content_query: Option<String>,
+    pub include_archived: Option<bool>,
+    pub limit: Option<usize>,
+    pub offset: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListMemoriesResponse {
+    pub items: Vec<MemoryRecord>,
+    pub total: usize,
+    pub limit: usize,
+    pub offset: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateMemoryRequest {
+    pub content: Option<String>,
+    pub tags: Option<Vec<String>>,
+    pub metadata: Option<Value>,
+    pub importance: Option<f32>,
+    pub sentiment: Option<Option<String>>,
+    pub source: Option<String>,
+    pub state: Option<String>,
+    pub valid_at: Option<Option<String>>,
+    pub invalid_at: Option<Option<String>>,
+    pub supersedes_memory_id: Option<Option<i64>>,
+    pub archived: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateMemoryResponse {
+    pub memory: MemoryRecord,
+    pub rebuild_task_id: Option<i64>,
+    pub rebuild_queued: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportMemoriesResponse {
+    pub agent_id: String,
+    pub exported_at: String,
+    pub count: usize,
+    pub items: Vec<MemoryRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ExportMemoriesRequest {
+    pub agent_id: String,
+    pub include_archived: Option<bool>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentStatePatch {
     pub mood: Option<String>,
     pub vibe: Option<String>,
@@ -305,7 +364,7 @@ pub struct ServerEvent {
     pub at: DateTime<Utc>,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct MemoryRecord {
     pub id: i64,
     pub agent_id: String,
@@ -334,6 +393,27 @@ pub struct MemoryRecord {
     pub archived_at: Option<String>,
     pub access_count: i64,
     pub last_accessed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryHistoryRecord {
+    pub id: i64,
+    pub memory_id: Option<i64>,
+    pub agent_id: String,
+    pub event: String,
+    pub old_content: Option<String>,
+    pub new_content: Option<String>,
+    pub old_metadata: Option<Value>,
+    pub new_metadata: Option<Value>,
+    pub source_task_id: Option<i64>,
+    pub created_at: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryDetailResponse {
+    pub memory: MemoryRecord,
+    pub entities: Vec<EntityRecord>,
+    pub history: Vec<MemoryHistoryRecord>,
 }
 
 impl MemoryRecord {
