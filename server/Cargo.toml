@@ -2,6 +2,7 @@
 name = "shore-memory-server"
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.88"
 
 [dependencies]
 axum = { version = "0.8.1", features = ["ws", "macros", "json"] }
