@@ -1,3 +1,5 @@
+import { getApiKey } from './runtimeAuth'
+
 /**
  * 统一 HTTP 客户端：
  * - 注入 x-request-id
@@ -25,6 +27,10 @@ export interface RequestOptions extends Omit<RequestInit, 'body'> {
   baseUrl?: string
 }
 
+type UnauthorizedListener = (error: ShoreApiError) => void
+
+const unauthorizedListeners = new Set<UnauthorizedListener>()
+
 function resolveBase(): string {
   // 生产：同源（axum 托管）
   // 开发：经 Vite proxy（也是同源 /v1）
@@ -32,16 +38,6 @@ function resolveBase(): string {
   const injected = (typeof window !== 'undefined' &&
     (window as unknown as { __SHORE_API__?: string }).__SHORE_API__) as string | undefined
   return injected || import.meta.env.VITE_SHORE_API || ''
-}
-
-function resolveApiKey(): string | undefined {
-  const injected =
-    typeof window !== 'undefined'
-      ? (window as unknown as { __SHORE_API_KEY__?: string }).__SHORE_API_KEY__
-      : undefined
-  const raw = injected ?? import.meta.env.VITE_SHORE_API_KEY
-  const key = raw?.trim()
-  return key ? key : undefined
 }
 
 function buildUrl(path: string, query?: Record<string, unknown>, base?: string): string {
@@ -71,6 +67,11 @@ function genRequestId(): string {
   return `r-${Math.random().toString(36).slice(2)}-${Date.now().toString(36)}`
 }
 
+export function onUnauthorized(listener: UnauthorizedListener): () => void {
+  unauthorizedListeners.add(listener)
+  return () => unauthorizedListeners.delete(listener)
+}
+
 export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Promise<T> {
   const { query, body, timeoutMs = 15000, baseUrl, headers, method, ...rest } = opts
 
@@ -83,7 +84,7 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   const finalHeaders = new Headers(headers || {})
   finalHeaders.set('x-request-id', reqId)
   if (!finalHeaders.has('accept')) finalHeaders.set('accept', 'application/json')
-  const apiKey = resolveApiKey()
+  const apiKey = getApiKey()
   if (apiKey && !finalHeaders.has('x-api-key') && !finalHeaders.has('authorization')) {
     finalHeaders.set('x-api-key', apiKey)
   }
@@ -127,7 +128,11 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
         : typeof parsed === 'string'
           ? parsed
           : res.statusText) || `HTTP ${res.status}`
-    throw new ShoreApiError(res.status, message, parsed)
+    const error = new ShoreApiError(res.status, message, parsed)
+    if (res.status === 401 || res.status === 403) {
+      unauthorizedListeners.forEach((listener) => listener(error))
+    }
+    throw error
   }
 
   return parsed as T

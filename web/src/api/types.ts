@@ -314,7 +314,9 @@ export interface ServerEvent {
 
 export interface HealthResponse {
   status: string
-  trace_id?: string
-  worker_reachable?: boolean
-  task_queue_depth?: number
+  trace_id?: string | number | null
+  api_auth_required?: boolean
+  worker_available?: boolean
+  pending_tasks?: number
+  failed_tasks?: number
 }

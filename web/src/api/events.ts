@@ -6,6 +6,7 @@
  */
 
 import type { ServerEvent, ServerEventType } from './types'
+import { getApiKey } from './runtimeAuth'
 
 export type EventsStatus = 'disconnected' | 'connecting' | 'open' | 'error' | 'lagged'
 
@@ -41,21 +42,11 @@ export class EventsClient {
     this.autoReconnect = opts.autoReconnect ?? true
   }
 
-  private resolveApiKey(): string | null {
-    const injected =
-      typeof window !== 'undefined'
-        ? (window as unknown as { __SHORE_API_KEY__?: string }).__SHORE_API_KEY__
-        : undefined
-    const raw = injected ?? import.meta.env.VITE_SHORE_API_KEY
-    const key = raw?.trim()
-    return key ? key : null
-  }
-
   private defaultUrl(): string {
     if (typeof window === 'undefined') return '/v1/events'
     const proto = window.location.protocol === 'https:' ? 'wss' : 'ws'
     const base = `${proto}://${window.location.host}/v1/events`
-    const apiKey = this.resolveApiKey()
+    const apiKey = getApiKey()
     if (!apiKey) return base
     const sep = base.includes('?') ? '&' : '?'
     return `${base}${sep}api_key=${encodeURIComponent(apiKey)}`
@@ -63,7 +54,14 @@ export class EventsClient {
 
   connect(): void {
     this.shouldRun = true
+    if (this.ws) return
     this.open()
+  }
+
+  reconnect(): void {
+    const wasRunning = this.shouldRun
+    this.disconnect()
+    if (wasRunning) this.connect()
   }
 
   disconnect(): void {
@@ -114,6 +112,7 @@ export class EventsClient {
 
   private open(): void {
     this.setStatus('connecting')
+    this.url = this.defaultUrl()
     try {
       this.ws = new WebSocket(this.url)
     } catch (err) {

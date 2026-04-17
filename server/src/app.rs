@@ -1541,6 +1541,7 @@ async fn health(State(state): State<AppState>) -> Result<Json<Value>, ServiceErr
         .record(started.elapsed().as_secs_f64());
     Ok(Json(json!({
         "status": "ok",
+        "api_auth_required": state.config.api_key.is_some(),
         "worker_available": worker,
         "pending_tasks": summary.pending_tasks,
         "failed_tasks": summary.failed_tasks,

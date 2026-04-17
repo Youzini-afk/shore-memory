@@ -2,17 +2,21 @@
 import { useRoute } from 'vue-router'
 import { computed } from 'vue'
 import { useAppStore } from '@/stores/app'
-import { RefreshCw, Activity } from 'lucide-vue-next'
+import { RefreshCw, Activity, ShieldCheck, KeyRound } from 'lucide-vue-next'
 
 const route = useRoute()
 const app = useAppStore()
 
 const title = computed(() => (route.meta?.title as string | undefined) ?? 'Shore Memory')
-const queueDepth = computed(() => app.health?.task_queue_depth ?? 0)
+const queueDepth = computed(() => app.health?.pending_tasks ?? 0)
 const envLabel = computed(() => {
   if (app.apiBase) return app.apiBase
   if (typeof window !== 'undefined') return `${window.location.host}`
   return '127.0.0.1:7811'
+})
+const authLabel = computed(() => {
+  if (!app.authRequired) return 'Auth · Off'
+  return `Auth · ${app.authSourceLabel}`
 })
 </script>
 
@@ -48,10 +52,28 @@ const envLabel = computed(() => {
       </div>
 
       <div
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-btn bg-shore-card/80 border border-shore-line/80 text-[11px] text-ink-4"
+        :title="app.authRequired ? '当前控制台正在使用 API Key 鉴权' : '当前服务未要求 API Key'"
+      >
+        <ShieldCheck class="h-3.5 w-3.5 text-ink-4" :stroke-width="1.75" />
+        <span class="font-display text-ink-2">{{ authLabel }}</span>
+      </div>
+
+      <div
         class="px-2.5 py-1 rounded-btn bg-shore-card/80 border border-shore-line/80 text-[11px] text-ink-4 font-mono"
       >
         {{ envLabel }}
       </div>
+
+      <button
+        v-if="app.hasStoredApiKey"
+        class="h-8 px-2.5 flex items-center justify-center gap-1.5 rounded-btn text-ink-3 hover:text-ink-1 hover:bg-shore-hover transition-colors"
+        title="清除浏览器中已保存的 API Key"
+        @click="app.clearSavedApiKey"
+      >
+        <KeyRound class="h-4 w-4" :stroke-width="1.75" />
+        <span class="text-[11px] font-display">clear key</span>
+      </button>
 
       <button
         class="h-8 w-8 flex items-center justify-center rounded-btn text-ink-3 hover:text-ink-1 hover:bg-shore-hover transition-colors"
