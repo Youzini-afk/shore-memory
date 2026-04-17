@@ -27,6 +27,8 @@ export interface MemoryRecord {
   memory_type: MemoryType
   content: string
   content_hash?: string | null
+  source_event_ids: number[]
+  linked_memory_ids: number[]
   tags: string[]
   metadata: Record<string, unknown>
   importance: number
@@ -40,7 +42,7 @@ export interface MemoryRecord {
   archived_at?: string | null
   created_at: string
   updated_at: string
-  access_count?: number
+  access_count: number
   last_accessed_at?: string | null
 }
 
@@ -62,8 +64,22 @@ export interface MemoryHistoryRecord {
   new_content?: string | null
   old_metadata?: Record<string, unknown> | null
   new_metadata?: Record<string, unknown> | null
-  note?: string | null
+  source_task_id?: number | null
   created_at: string
+}
+
+export interface ListMemoriesRequest {
+  agent_id: string
+  user_uid?: string | null
+  channel_uid?: string | null
+  session_uid?: string | null
+  scope?: MemoryScope
+  state?: MemoryState
+  memory_type?: string
+  content_query?: string
+  include_archived?: boolean
+  limit?: number
+  offset?: number
 }
 
 export interface ListMemoriesResponse {
@@ -97,6 +113,11 @@ export interface UpdateMemoryResponse {
   memory: MemoryRecord
   rebuild_task_id?: number | null
   rebuild_queued: boolean
+}
+
+export interface ExportMemoriesRequest {
+  agent_id: string
+  include_archived?: boolean
 }
 
 export interface ExportMemoriesResponse {
@@ -216,7 +237,8 @@ export type ServerEventType =
   | string
 
 export interface ServerEvent {
-  type: ServerEventType
+  /** server 发送字段名为 `event`（对齐 `ServerEvent` 结构体） */
+  event: ServerEventType
   payload: Record<string, unknown>
   at?: string
 }

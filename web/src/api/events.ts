@@ -122,8 +122,8 @@ export class EventsClient {
       } catch {
         return
       }
-      if (!parsed || !parsed.type) return
-      if (parsed.type === 'lagged') {
+      if (!parsed || !parsed.event) return
+      if (parsed.event === 'lagged') {
         this.setStatus('lagged')
         // lagged 只是提示丢事件，仍继续跑
         setTimeout(() => {
@@ -166,7 +166,7 @@ export class EventsClient {
         console.warn('[EventsClient] listener error', err)
       }
     })
-    const typeSet = this.typeListeners.get(evt.type)
+    const typeSet = this.typeListeners.get(evt.event)
     typeSet?.forEach((fn) => {
       try {
         fn(evt)
