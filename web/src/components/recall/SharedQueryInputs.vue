@@ -34,8 +34,9 @@ async function run() {
       </div>
       <button
         type="button"
-        class="h-7 px-2 rounded-btn text-[11px] text-ink-3 hover:text-ink-1 hover:bg-shore-hover transition-colors flex items-center gap-1"
+        class="h-7 px-2 rounded-btn text-[11px] text-ink-3 hover:text-ink-1 hover:bg-shore-hover transition-colors flex items-center gap-1 disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:bg-transparent"
         title="交换 A / B"
+        :disabled="compareLoading"
         @click="store.swapVariants()"
       >
         <ArrowLeftRight class="h-3.5 w-3.5" :stroke-width="1.75" />

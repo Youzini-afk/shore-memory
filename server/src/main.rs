@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use metrics_exporter_prometheus::PrometheusBuilder;
-use tracing::info;
+use tracing::{info, warn};
 use tracing_subscriber::EnvFilter;
 
 use crate::app::AppState;
@@ -30,6 +30,12 @@ async fn main() -> Result<()> {
         .init();
 
     let config = ServiceConfig::from_env();
+    if !config.bind_addr.ip().is_loopback() && config.api_key.is_none() {
+        warn!(
+            "server is bound to non-loopback address ({}) without PMS_API_KEY; /v1 routes are publicly accessible",
+            config.bind_addr
+        );
+    }
     let metrics_handle = PrometheusBuilder::new().install_recorder()?;
     let store = MetadataStore::new(config.metadata_db_path.clone())?;
     store.init()?;

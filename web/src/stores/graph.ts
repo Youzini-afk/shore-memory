@@ -11,6 +11,13 @@ import { ShoreApiError } from '@/api/http'
 import { getEventsClient } from '@/api/events'
 
 type NodeKind = 'memory' | 'entity'
+type GraphStateFilter = 'active' | 'superseded' | 'invalidated' | 'archived'
+
+interface GraphFetchOptions {
+  limit?: number
+  includeArchived?: boolean
+  state?: GraphStateFilter
+}
 
 export interface GraphNodeAttrs {
   kind: NodeKind
@@ -164,6 +171,9 @@ export const useGraphStore = defineStore('graph', () => {
   const response = ref<GraphResponse | null>(null)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  const queryLimit = ref(500)
+  const queryIncludeArchived = ref(false)
+  const queryState = ref<GraphStateFilter | undefined>(undefined)
 
   /* ---------------- graph instance ---------------- */
   const graph = shallowRef<Graph<GraphNodeAttrs, GraphEdgeAttrs> | null>(null)
@@ -347,21 +357,26 @@ export const useGraphStore = defineStore('graph', () => {
 
   /* ---------------- fetching ---------------- */
 
-  async function fetch(options: {
-    limit?: number
-    includeArchived?: boolean
-    state?: 'active' | 'superseded' | 'invalidated' | 'archived'
-  } = {}) {
+  async function fetch(options: GraphFetchOptions = {}) {
     if (!app.agentId) return
+    if (options.limit !== undefined) {
+      queryLimit.value = options.limit
+    }
+    if (options.includeArchived !== undefined) {
+      queryIncludeArchived.value = options.includeArchived
+    }
+    if ('state' in options) {
+      queryState.value = options.state
+    }
     loading.value = true
     error.value = null
     killLayoutInternal()
     try {
       const res = await fetchGraph({
         agent_id: app.agentId,
-        limit: options.limit ?? 500,
-        include_archived: options.includeArchived ?? false,
-        state: options.state
+        limit: queryLimit.value,
+        include_archived: queryIncludeArchived.value,
+        state: queryState.value
       })
       response.value = res
       graph.value = buildGraphFromResponse(res)
@@ -380,6 +395,10 @@ export const useGraphStore = defineStore('graph', () => {
 
   function dispose() {
     killLayoutInternal()
+    if (refreshTimer !== null) {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
     graph.value = null
     response.value = null
     selectedNodeId.value = null
@@ -399,11 +418,18 @@ export const useGraphStore = defineStore('graph', () => {
 
   /* ---------------- live refresh on memory.updated ---------------- */
 
+  let refreshTimer: number | null = null
   let eventsBound = false
+  let unbindMemoryUpdated: (() => void) | null = null
+
   function bindEvents() {
     if (eventsBound) return
     eventsBound = true
-    getEventsClient().onType('memory.updated', () => {
+    unbindMemoryUpdated = getEventsClient().onType('memory.updated', (evt) => {
+      const payload = evt.payload as { agent_id?: string } | undefined
+      if (payload?.agent_id && payload.agent_id !== app.agentId) {
+        return
+      }
       // 轻量节流：仅在没有进行布局时，防抖后拉一次（让前端保持上下文稳定）
       // 正在跑布局就暂不打扰；用户手动 reload 可得到最新结构
       if (!layoutRunning.value) {
@@ -412,7 +438,18 @@ export const useGraphStore = defineStore('graph', () => {
     })
   }
 
-  let refreshTimer: number | null = null
+  function unbindEvents() {
+    if (refreshTimer !== null) {
+      window.clearTimeout(refreshTimer)
+      refreshTimer = null
+    }
+    if (unbindMemoryUpdated) {
+      unbindMemoryUpdated()
+      unbindMemoryUpdated = null
+    }
+    eventsBound = false
+  }
+
   function scheduleRefresh() {
     if (refreshTimer !== null) window.clearTimeout(refreshTimer)
     refreshTimer = window.setTimeout(() => {
@@ -460,6 +497,9 @@ export const useGraphStore = defineStore('graph', () => {
     graph,
     loading,
     error,
+    queryLimit,
+    queryIncludeArchived,
+    queryState,
     layoutRunning,
     selectedNodeId,
     hoveredNodeId,
@@ -482,6 +522,7 @@ export const useGraphStore = defineStore('graph', () => {
     flushPendingPings,
     dispose,
     bindEvents,
+    unbindEvents,
     scheduleRefresh
   }
 })

@@ -24,10 +24,11 @@ const canvasRef = ref<InstanceType<typeof GraphCanvas> | null>(null)
 
 onMounted(() => {
   store.bindEvents()
-  void store.fetch({ limit: 500 })
+  void store.fetch()
 })
 
 onBeforeUnmount(() => {
+  store.unbindEvents()
   store.dispose()
 })
 

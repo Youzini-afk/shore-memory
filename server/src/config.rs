@@ -17,6 +17,11 @@ pub struct ServiceConfig {
     /// fallback route for unknown paths.
     pub web_dist_path: Option<PathBuf>,
     pub worker_base_url: String,
+    /// Optional API key required for all `/v1/*` routes.
+    ///
+    /// The key can be passed via `x-api-key`, `Authorization: Bearer ...`,
+    /// or `?api_key=` (used by browser WebSocket clients).
+    pub api_key: Option<String>,
     pub embedding_timeout: Duration,
     pub worker_timeout: Duration,
     pub worker_timeout_embed: Duration,
@@ -85,6 +90,10 @@ impl ServiceConfig {
             web_dist_path,
             worker_base_url: env::var("PMS_WORKER_BASE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:7812".to_string()),
+            api_key: env::var("PMS_API_KEY")
+                .ok()
+                .map(|v| v.trim().to_string())
+                .filter(|v| !v.is_empty()),
             embedding_timeout: Duration::from_millis(parse_u64("PMS_EMBEDDING_TIMEOUT_MS", 1800)),
             worker_timeout: Duration::from_millis(parse_u64("PMS_WORKER_TIMEOUT_MS", 10_000)),
             worker_timeout_embed: Duration::from_millis(parse_u64(

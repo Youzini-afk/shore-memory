@@ -21,6 +21,7 @@ const overlayRef = ref<HTMLCanvasElement | null>(null)
 
 let sigma: Sigma<GraphNodeAttrs, GraphEdgeAttrs> | null = null
 let rafId: number | null = null
+const MAX_HALO_NODES = 96
 
 /* ---------- Reducers ---------- */
 
@@ -130,30 +131,45 @@ function drawOverlay() {
     rafId = requestAnimationFrame(drawOverlay)
     return
   }
-  const rect = canvas.getBoundingClientRect()
-  ctx.clearRect(0, 0, rect.width, rect.height)
+  const canvasWidth = canvas.clientWidth
+  const canvasHeight = canvas.clientHeight
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight)
 
-  const focused = focusedNodes.value
   const selected = selectedNodeId.value
   const hovered = hoveredNodeId.value
+  const pingSet = pingedNodeIds.value
   const now = performance.now()
 
   ctx.save()
   ctx.globalCompositeOperation = 'lighter'
 
-  g.forEachNode((nid, attrs) => {
-    const inFocus = !focused || focused.has(nid)
-    if (!inFocus) return
+  const haloNodeIds = new Set<string>()
+  if (selected && g.hasNode(selected)) {
+    haloNodeIds.add(selected)
+  }
+  if (hovered && g.hasNode(hovered)) {
+    haloNodeIds.add(hovered)
+  }
+  if (pingSet.size > 0) {
+    for (const nid of pingSet) {
+      if (!g.hasNode(nid)) continue
+      haloNodeIds.add(nid)
+      if (haloNodeIds.size >= MAX_HALO_NODES) break
+    }
+  }
+
+  haloNodeIds.forEach((nid) => {
+    const attrs = g.getNodeAttributes(nid)
     const vp = s.graphToViewport({ x: attrs.x, y: attrs.y })
     const radius = Math.max(4, attrs.size)
-    const base = selected === nid ? 6 : hovered === nid ? 4 : 2.4
+    const base = selected === nid ? 6 : hovered === nid ? 4 : pingSet.has(nid) ? 3.2 : 2.4
     const haloRadius = radius * base
     const color = attrs.color
     const rgb = toRgb(color)
     if (!rgb) return
 
     const grad = ctx.createRadialGradient(vp.x, vp.y, radius * 0.4, vp.x, vp.y, haloRadius)
-    const alphaCore = selected === nid ? 0.85 : hovered === nid ? 0.55 : 0.28
+    const alphaCore = selected === nid ? 0.85 : hovered === nid ? 0.55 : pingSet.has(nid) ? 0.4 : 0.28
     grad.addColorStop(0, `rgba(${rgb.r},${rgb.g},${rgb.b},${alphaCore})`)
     grad.addColorStop(0.4, `rgba(${rgb.r},${rgb.g},${rgb.b},${alphaCore * 0.5})`)
     grad.addColorStop(1, `rgba(${rgb.r},${rgb.g},${rgb.b},0)`)
@@ -164,7 +180,6 @@ function drawOverlay() {
   })
 
   // Ping pulse: radar-style concentric rings around recall-hit nodes.
-  const pingSet = pingedNodeIds.value
   if (pingSet.size > 0 && pingStartTs.value > 0) {
     const elapsed = Date.now() - pingStartTs.value
     if (elapsed >= PING_DURATION_MS) {

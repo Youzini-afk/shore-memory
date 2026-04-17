@@ -14,7 +14,7 @@ interface Props {
 const props = defineProps<Props>()
 
 const store = useGraphStore()
-const { searchQuery, layoutRunning, neighborhoodDepth, loading } = storeToRefs(store)
+const { searchQuery, layoutRunning, neighborhoodDepth, loading, queryLimit } = storeToRefs(store)
 
 const localSearch = ref(searchQuery.value)
 let debounceTimer: number | null = null
@@ -25,7 +25,6 @@ watch(localSearch, (v) => {
   }, 180)
 })
 
-const limit = ref<number>(500)
 const limitOptions = [
   { label: '100', value: 100 },
   { label: '500', value: 500 },
@@ -34,7 +33,7 @@ const limitOptions = [
 ]
 
 async function reload() {
-  await store.fetch({ limit: limit.value })
+  await store.fetch({ limit: queryLimit.value })
 }
 
 function toggleLayout() {
@@ -45,7 +44,7 @@ function clearSelection() {
   store.selectedNodeId = null
 }
 
-watch(limit, () => {
+watch(queryLimit, () => {
   void reload()
 })
 </script>
@@ -94,7 +93,7 @@ watch(limit, () => {
       <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
         limit
       </span>
-      <PSegment v-model="limit" :options="limitOptions" size="sm" />
+      <PSegment v-model="queryLimit" :options="limitOptions" size="sm" />
     </div>
 
     <div class="flex-1" />

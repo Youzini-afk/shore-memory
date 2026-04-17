@@ -8,6 +8,7 @@ declare module '*.vue' {
 
 interface ImportMetaEnv {
   readonly VITE_SHORE_API?: string
+  readonly VITE_SHORE_API_KEY?: string
 }
 
 interface ImportMeta {

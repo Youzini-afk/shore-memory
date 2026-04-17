@@ -34,6 +34,16 @@ function resolveBase(): string {
   return injected || import.meta.env.VITE_SHORE_API || ''
 }
 
+function resolveApiKey(): string | undefined {
+  const injected =
+    typeof window !== 'undefined'
+      ? (window as unknown as { __SHORE_API_KEY__?: string }).__SHORE_API_KEY__
+      : undefined
+  const raw = injected ?? import.meta.env.VITE_SHORE_API_KEY
+  const key = raw?.trim()
+  return key ? key : undefined
+}
+
 function buildUrl(path: string, query?: Record<string, unknown>, base?: string): string {
   const prefix = base ?? resolveBase()
   const sep = path.startsWith('/') ? '' : '/'
@@ -73,6 +83,10 @@ export async function apiRequest<T>(path: string, opts: RequestOptions = {}): Pr
   const finalHeaders = new Headers(headers || {})
   finalHeaders.set('x-request-id', reqId)
   if (!finalHeaders.has('accept')) finalHeaders.set('accept', 'application/json')
+  const apiKey = resolveApiKey()
+  if (apiKey && !finalHeaders.has('x-api-key') && !finalHeaders.has('authorization')) {
+    finalHeaders.set('x-api-key', apiKey)
+  }
 
   let serializedBody: BodyInit | undefined
   if (body !== undefined && body !== null) {

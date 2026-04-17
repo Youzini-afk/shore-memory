@@ -1,11 +1,10 @@
 use std::sync::Arc;
 
 use anyhow::{Context, Result, anyhow};
-use axum::extract::Path;
-use axum::extract::Query;
-use axum::extract::State;
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
-use axum::http::{HeaderMap, HeaderName, StatusCode};
+use axum::extract::{Path, Query, Request, State};
+use axum::http::{HeaderMap, HeaderName, StatusCode, header};
+use axum::middleware::from_fn_with_state;
 use axum::response::{IntoResponse, Response};
 use axum::routing::{get, post};
 use axum::{Json, Router};
@@ -104,9 +103,7 @@ impl AppState {
     pub fn router(self) -> Router {
         let request_id_header = HeaderName::from_static("x-request-id");
         let web_dist = self.config.web_dist_path.clone();
-        let api_router = Router::new()
-            .route("/health", get(health))
-            .route("/metrics", get(metrics))
+        let mut v1_router = Router::new()
             .route("/v1/context/recall", post(recall))
             .route("/v1/events/turn", post(events_turn))
             .route("/v1/events/message", post(events_message))
@@ -125,7 +122,16 @@ impl AppState {
             .route("/v1/maintenance/reflection/run", post(run_reflection))
             .route("/v1/maintenance/trivium/rebuild", post(rebuild_trivium))
             .route("/v1/maintenance/sync-summary", get(sync_summary))
-            .route("/v1/events", get(events_ws))
+            .route("/v1/events", get(events_ws));
+
+        if self.config.api_key.is_some() {
+            v1_router = v1_router.layer(from_fn_with_state(self.clone(), require_api_key));
+        }
+
+        let api_router = Router::new()
+            .route("/health", get(health))
+            .route("/metrics", get(metrics))
+            .merge(v1_router)
             .with_state(self);
 
         let router = match web_dist.as_ref() {
@@ -1428,7 +1434,13 @@ impl IntoResponse for ServiceError {
         let (status, message) = match self {
             Self::BadRequest(message) => (StatusCode::BAD_REQUEST, message),
             Self::NotFound(message) => (StatusCode::NOT_FOUND, message),
-            Self::Internal(message) => (StatusCode::INTERNAL_SERVER_ERROR, message),
+            Self::Internal(message) => {
+                error!("internal service error: {message}");
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    "internal server error".to_string(),
+                )
+            }
         };
 
         (status, Json(json!({ "error": message }))).into_response()
@@ -1437,7 +1449,7 @@ impl IntoResponse for ServiceError {
 
 impl From<anyhow::Error> for ServiceError {
     fn from(value: anyhow::Error) -> Self {
-        Self::Internal(value.to_string())
+        Self::Internal(format!("{value:#}"))
     }
 }
 
@@ -1477,7 +1489,6 @@ async fn health(State(state): State<AppState>) -> Result<Json<Value>, ServiceErr
         "pending_tasks": summary.pending_tasks,
         "failed_tasks": summary.failed_tasks,
         "trace_id": trace_id,
-        "metadata_db_path": state.store.db_path().display().to_string(),
     })))
 }
 
@@ -1982,32 +1993,13 @@ async fn graph(
         request.state.as_deref(),
         include_archived,
         limit,
+        request.user_uid.as_deref(),
+        request.channel_uid.as_deref(),
     )?;
-
-    // Optional scope visibility pass: if caller passes user_uid / channel_uid,
-    // drop private/group memories that aren't visible to them. We do this post
-    // hoc on the already-paged slice so the limit remains per the raw SQL
-    // count (otherwise the truncated/total stats would get confusing).
-    let visible_memories: Vec<MemoryRecord> = if request.user_uid.is_some()
-        || request.channel_uid.is_some()
-    {
-        memories
-            .into_iter()
-            .filter(|m| {
-                scope_visible_for_request(
-                    m,
-                    request.user_uid.as_deref(),
-                    request.channel_uid.as_deref(),
-                )
-            })
-            .collect()
-    } else {
-        memories
-    };
 
     // Fast lookup sets for the edge/entity pruning pass.
     let kept_memory_ids: std::collections::HashSet<i64> =
-        visible_memories.iter().map(|m| m.id).collect();
+        memories.iter().map(|m| m.id).collect();
 
     // Map entity -> list of memory ids (within the kept set) for the
     // per-memory `entity_ids` field.
@@ -2032,7 +2024,7 @@ async fn graph(
         });
     }
 
-    let memory_nodes: Vec<GraphMemoryNode> = visible_memories
+    let memory_nodes: Vec<GraphMemoryNode> = memories
         .iter()
         .map(|m| {
             let preview = if m.content.chars().count() > 160 {
@@ -2356,6 +2348,97 @@ async fn handle_events_socket(mut socket: WebSocket, state: AppState, request_id
             }
         }
     }
+}
+
+async fn require_api_key(
+    State(state): State<AppState>,
+    request: Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let Some(expected) = state.config.api_key.as_deref() else {
+        return next.run(request).await;
+    };
+    let provided = provided_api_key(&request);
+    if provided.as_deref() == Some(expected) {
+        return next.run(request).await;
+    }
+    (
+        StatusCode::UNAUTHORIZED,
+        Json(json!({ "error": "unauthorized" })),
+    )
+        .into_response()
+}
+
+fn provided_api_key(request: &Request) -> Option<String> {
+    request
+        .headers()
+        .get("x-api-key")
+        .and_then(|v| v.to_str().ok())
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+        .map(str::to_string)
+        .or_else(|| {
+            request
+                .headers()
+                .get(header::AUTHORIZATION)
+                .and_then(|v| v.to_str().ok())
+                .and_then(parse_bearer_token)
+                .map(str::to_string)
+        })
+        .or_else(|| api_key_from_query(request.uri().query()))
+}
+
+fn parse_bearer_token(raw: &str) -> Option<&str> {
+    raw.strip_prefix("Bearer ")
+        .or_else(|| raw.strip_prefix("bearer "))
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+}
+
+fn api_key_from_query(query: Option<&str>) -> Option<String> {
+    let raw = query?;
+    for pair in raw.split('&') {
+        let mut parts = pair.splitn(2, '=');
+        let key = parts.next().unwrap_or_default();
+        if key != "api_key" {
+            continue;
+        }
+        let value = parts.next().unwrap_or_default();
+        let decoded = decode_query_component(value)?;
+        let trimmed = decoded.trim();
+        if !trimmed.is_empty() {
+            return Some(trimmed.to_string());
+        }
+    }
+    None
+}
+
+fn decode_query_component(raw: &str) -> Option<String> {
+    let bytes = raw.as_bytes();
+    let mut out: Vec<u8> = Vec::with_capacity(bytes.len());
+    let mut i = 0usize;
+    while i < bytes.len() {
+        match bytes[i] {
+            b'+' => {
+                out.push(b' ');
+                i += 1;
+            }
+            b'%' => {
+                if i + 2 >= bytes.len() {
+                    return None;
+                }
+                let hi = (bytes[i + 1] as char).to_digit(16)?;
+                let lo = (bytes[i + 2] as char).to_digit(16)?;
+                out.push((hi * 16 + lo) as u8);
+                i += 3;
+            }
+            byte => {
+                out.push(byte);
+                i += 1;
+            }
+        }
+    }
+    String::from_utf8(out).ok()
 }
 
 fn cache_key_for_recall(request: &RecallRequest, recall_epoch: u64) -> String {

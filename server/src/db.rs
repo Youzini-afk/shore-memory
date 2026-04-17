@@ -273,6 +273,9 @@ impl MetadataStore {
             CREATE INDEX IF NOT EXISTS idx_memories_agent_archived
             ON memories(agent_id, archived_at, created_at DESC);
 
+            CREATE INDEX IF NOT EXISTS idx_memories_agent_archived_updated
+            ON memories(agent_id, archived_at, updated_at DESC);
+
             CREATE INDEX IF NOT EXISTS idx_memories_session_created
             ON memories(agent_id, session_uid, created_at DESC);
 
@@ -282,6 +285,9 @@ impl MetadataStore {
 
             CREATE INDEX IF NOT EXISTS idx_memories_agent_state_created
             ON memories(agent_id, state, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_memories_agent_state_updated
+            ON memories(agent_id, state, updated_at DESC);
 
             CREATE INDEX IF NOT EXISTS idx_memories_supersedes
             ON memories(supersedes_memory_id)
@@ -1301,6 +1307,8 @@ impl MetadataStore {
         state_filter: Option<&str>,
         include_archived: bool,
         limit: usize,
+        user_uid: Option<&str>,
+        channel_uid: Option<&str>,
     ) -> Result<LoadedMemoryGraph> {
         if agent_id.trim().is_empty() {
             return Err(anyhow!("agent_id must not be empty"));
@@ -1308,29 +1316,38 @@ impl MetadataStore {
         let limit = limit.clamp(1, 5000);
         let conn = self.open_conn()?;
 
-        // Dynamic WHERE: agent_id + optional state + optional archived filter.
-        let mut filters: Vec<&str> = vec!["agent_id = ?1"];
-        if state_filter.is_some() {
-            filters.push("state = ?2");
+        // Dynamic WHERE: agent_id + optional state + optional archived filter
+        // + optional scope visibility boundary.
+        let mut filters: Vec<String> = vec!["agent_id = ?".to_string()];
+        let mut filter_params: Vec<SqlValue> = vec![SqlValue::Text(agent_id.to_string())];
+        if let Some(state) = state_filter {
+            filters.push("state = ?".to_string());
+            filter_params.push(SqlValue::Text(state.to_string()));
         }
         if !include_archived {
-            filters.push("archived_at IS NULL");
+            filters.push("archived_at IS NULL".to_string());
+        }
+        if user_uid.is_some() || channel_uid.is_some() {
+            filters.push(
+                "(scope IN ('system','shared') OR (scope = 'private' AND user_uid = ?) OR (scope = 'group' AND channel_uid = ?))"
+                    .to_string(),
+            );
+            filter_params.push(SqlValue::Text(user_uid.unwrap_or_default().to_string()));
+            filter_params.push(SqlValue::Text(channel_uid.unwrap_or_default().to_string()));
         }
         let where_sql = filters.join(" AND ");
 
         // Total count (for "truncated" stat).
         let total_sql = format!("SELECT COUNT(*) FROM memories WHERE {where_sql}");
-        let total_memories: usize = match state_filter {
-            Some(state) => conn.query_row(&total_sql, params![agent_id, state], |r| {
-                r.get::<_, i64>(0)
-            })? as usize,
-            None => {
-                conn.query_row(&total_sql, params![agent_id], |r| r.get::<_, i64>(0))? as usize
-            }
-        };
+        let total_memories: usize = conn.query_row(
+            &total_sql,
+            rusqlite::params_from_iter(filter_params.iter()),
+            |r| r.get::<_, i64>(0),
+        )? as usize;
 
         // Page of memories (top-N by updated_at DESC).
-        let limit_marker = if state_filter.is_some() { "?3" } else { "?2" };
+        let mut page_params = filter_params.clone();
+        page_params.push(SqlValue::Integer(limit as i64));
         let page_sql = format!(
             r#"
             SELECT
@@ -1342,18 +1359,16 @@ impl MetadataStore {
             FROM memories
             WHERE {where_sql}
             ORDER BY updated_at DESC, id DESC
-            LIMIT {limit_marker}
+            LIMIT ?
             "#
         );
         let mut stmt = conn.prepare(&page_sql)?;
-        let memories: Vec<MemoryRecord> = match state_filter {
-            Some(state) => stmt
-                .query_map(params![agent_id, state, limit as i64], row_to_memory_record)?
-                .collect::<rusqlite::Result<Vec<_>>>()?,
-            None => stmt
-                .query_map(params![agent_id, limit as i64], row_to_memory_record)?
-                .collect::<rusqlite::Result<Vec<_>>>()?,
-        };
+        let memories: Vec<MemoryRecord> = stmt
+            .query_map(
+                rusqlite::params_from_iter(page_params.iter()),
+                row_to_memory_record,
+            )?
+            .collect::<rusqlite::Result<Vec<_>>>()?;
         drop(stmt);
 
         if memories.is_empty() {
@@ -2624,7 +2639,7 @@ mod tests {
 
         // include_archived = false should drop m3.
         let graph = store
-            .load_memory_graph("shore", None, false, 10)
+            .load_memory_graph("shore", None, false, 10, None, None)
             .expect("graph load");
         let ids: Vec<i64> = graph.memories.iter().map(|m| m.id).collect();
         assert_eq!(ids.len(), 2);
@@ -2654,9 +2669,77 @@ mod tests {
 
         // Sanity: include_archived=true pulls m3 back in.
         let graph_all = store
-            .load_memory_graph("shore", None, true, 10)
+            .load_memory_graph("shore", None, true, 10, None, None)
             .expect("graph load archived");
         assert_eq!(graph_all.memories.len(), 3);
         assert_eq!(graph_all.total_memories, 3);
+    }
+
+    #[test]
+    fn load_memory_graph_applies_scope_visibility_filters() {
+        let temp_dir = tempdir().expect("tempdir");
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
+        store.init().expect("init schema");
+
+        let mut private = memory_for("private", Some("hp"));
+        private.scope = MemoryScope::Private;
+        private.user_uid = Some("user:alice".to_string());
+        private.channel_uid = None;
+        let private_mem = store.insert_memory(&private).expect("insert private");
+
+        let mut group = memory_for("group", Some("hg"));
+        group.scope = MemoryScope::Group;
+        group.user_uid = None;
+        group.channel_uid = Some("telegram:group:42".to_string());
+        let group_mem = store.insert_memory(&group).expect("insert group");
+
+        let mut shared = memory_for("shared", Some("hs"));
+        shared.scope = MemoryScope::Shared;
+        shared.user_uid = None;
+        shared.channel_uid = None;
+        let shared_mem = store.insert_memory(&shared).expect("insert shared");
+
+        // With matching user + channel, all three scopes are visible.
+        let full_visible = store
+            .load_memory_graph(
+                "shore",
+                None,
+                false,
+                10,
+                Some("user:alice"),
+                Some("telegram:group:42"),
+            )
+            .expect("load graph full visible");
+        let full_ids: Vec<i64> = full_visible.memories.iter().map(|m| m.id).collect();
+        assert!(full_ids.contains(&private_mem.id));
+        assert!(full_ids.contains(&group_mem.id));
+        assert!(full_ids.contains(&shared_mem.id));
+        assert_eq!(full_visible.total_memories, 3);
+
+        // Only user matches => private + shared.
+        let user_visible = store
+            .load_memory_graph("shore", None, false, 10, Some("user:alice"), None)
+            .expect("load graph user visible");
+        let user_ids: Vec<i64> = user_visible.memories.iter().map(|m| m.id).collect();
+        assert!(user_ids.contains(&private_mem.id));
+        assert!(user_ids.contains(&shared_mem.id));
+        assert!(!user_ids.contains(&group_mem.id));
+        assert_eq!(user_visible.total_memories, 2);
+
+        // Mismatched user/channel => shared only.
+        let shared_only = store
+            .load_memory_graph(
+                "shore",
+                None,
+                false,
+                10,
+                Some("user:bob"),
+                Some("telegram:group:99"),
+            )
+            .expect("load graph shared only");
+        let shared_ids: Vec<i64> = shared_only.memories.iter().map(|m| m.id).collect();
+        assert_eq!(shared_ids, vec![shared_mem.id]);
+        assert_eq!(shared_only.total_memories, 1);
     }
 }

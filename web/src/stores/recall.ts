@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia'
-import { computed, reactive, ref } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import { ShoreApiError } from '@/api/http'
 import { recall as recallApi } from '@/api/recall'
 import type {
@@ -69,6 +69,7 @@ export interface RecallVariantState {
   error: string | null
   latencyMs: number | null
   at: number | null
+  requestSeq: number
 }
 
 export interface CompareDiffSummary {
@@ -103,7 +104,8 @@ function defaultVariant(
     loading: false,
     error: null,
     latencyMs: null,
-    at: null
+    at: null,
+    requestSeq: 0
   }
 }
 
@@ -141,6 +143,7 @@ function writeJson(key: string, value: unknown): void {
 }
 
 export const useRecallStore = defineStore('recall', () => {
+  const app = useAppStore()
   const form = reactive<RecallForm>(defaultForm())
   const loading = ref(false)
   const error = ref<string | null>(null)
@@ -160,6 +163,17 @@ export const useRecallStore = defineStore('recall', () => {
   const variantA = reactive<RecallVariantState>(defaultVariant('A', 'hybrid'))
   const variantB = reactive<RecallVariantState>(defaultVariant('B', 'entity_heavy'))
   const compareSeededFromSingle = ref(false)
+
+  let singleRequestSeq = 0
+
+  function resetVariantRuntime(variant: RecallVariantState): void {
+    variant.requestSeq += 1
+    variant.response = null
+    variant.loading = false
+    variant.error = null
+    variant.latencyMs = null
+    variant.at = null
+  }
 
   function seedVariantAFromSingleForm(): void {
     variantA.config.recipe = form.recipe
@@ -182,13 +196,15 @@ export const useRecallStore = defineStore('recall', () => {
   }
 
   function swapVariants(): void {
+    if (compareLoading.value) return
     const snap: RecallVariantState = {
       config: { ...variantA.config },
       response: variantA.response,
       loading: variantA.loading,
       error: variantA.error,
       latencyMs: variantA.latencyMs,
-      at: variantA.at
+      at: variantA.at,
+      requestSeq: variantA.requestSeq
     }
     variantA.config = { ...variantB.config, label: 'A' }
     variantA.response = variantB.response
@@ -196,16 +212,17 @@ export const useRecallStore = defineStore('recall', () => {
     variantA.error = variantB.error
     variantA.latencyMs = variantB.latencyMs
     variantA.at = variantB.at
+    variantA.requestSeq = variantB.requestSeq
     variantB.config = { ...snap.config, label: 'B' }
     variantB.response = snap.response
     variantB.loading = snap.loading
     variantB.error = snap.error
     variantB.latencyMs = snap.latencyMs
     variantB.at = snap.at
+    variantB.requestSeq = snap.requestSeq
   }
 
   function buildVariantRequest(variant: RecallVariantState): RecallRequest {
-    const app = useAppStore()
     const trimmed = <T extends string | undefined>(v: T): T => {
       if (v === undefined || v === null) return v
       const s = String(v).trim()
@@ -232,21 +249,33 @@ export const useRecallStore = defineStore('recall', () => {
       return null
     }
     if (variant.loading) return variant.response
+    const requestSeq = variant.requestSeq + 1
+    variant.requestSeq = requestSeq
     variant.loading = true
     variant.error = null
     const started = performance.now()
+    const request = buildVariantRequest(variant)
+    const requestAgentId = request.agent_id
     try {
-      const res = await recallApi(buildVariantRequest(variant))
+      const res = await recallApi(request)
+      if (requestSeq !== variant.requestSeq || app.agentId !== requestAgentId) {
+        return null
+      }
       variant.response = res
       variant.latencyMs = Math.round(performance.now() - started)
       variant.at = Date.now()
       return res
     } catch (err) {
+      if (requestSeq !== variant.requestSeq) {
+        return null
+      }
       variant.error =
         err instanceof ShoreApiError ? err.message : (err as Error).message || '未知错误'
       return null
     } finally {
-      variant.loading = false
+      if (requestSeq === variant.requestSeq) {
+        variant.loading = false
+      }
     }
   }
 
@@ -344,7 +373,6 @@ export const useRecallStore = defineStore('recall', () => {
   }
 
   function buildRequest(): RecallRequest {
-    const app = useAppStore()
     const trimmed = <T extends string | undefined>(v: T): T => {
       if (v === undefined || v === null) return v
       const s = String(v).trim()
@@ -371,13 +399,17 @@ export const useRecallStore = defineStore('recall', () => {
       return null
     }
     if (loading.value) return null
-    const app = useAppStore()
+    const requestSeq = ++singleRequestSeq
     loading.value = true
     error.value = null
     const started = performance.now()
     const request = buildRequest()
+    const requestAgentId = request.agent_id
     try {
       const res = await recallApi(request)
+      if (requestSeq !== singleRequestSeq || app.agentId !== requestAgentId) {
+        return null
+      }
       const elapsed = Math.round(performance.now() - started)
       response.value = res
       lastLatencyMs.value = elapsed
@@ -396,14 +428,34 @@ export const useRecallStore = defineStore('recall', () => {
       writeJson(HISTORY_KEY, history.value)
       return res
     } catch (err) {
+      if (requestSeq !== singleRequestSeq) {
+        return null
+      }
       const message =
         err instanceof ShoreApiError ? err.message : (err as Error).message || '\u672a\u77e5\u9519\u8bef'
       error.value = message
       return null
     } finally {
-      loading.value = false
+      if (requestSeq === singleRequestSeq) {
+        loading.value = false
+      }
     }
   }
+
+  watch(
+    () => app.agentId,
+    () => {
+      singleRequestSeq += 1
+      loading.value = false
+      error.value = null
+      response.value = null
+      lastLatencyMs.value = null
+      lastAt.value = null
+      resetVariantRuntime(variantA)
+      resetVariantRuntime(variantB)
+      compareSeededFromSingle.value = false
+    }
+  )
 
   return {
     // single-mode state
