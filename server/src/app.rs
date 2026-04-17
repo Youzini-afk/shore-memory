@@ -17,8 +17,9 @@ use serde_json::{Value, json};
 use tokio::sync::broadcast;
 use tokio::time::{sleep, timeout};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
+use tower_http::services::{ServeDir, ServeFile};
 use tower_http::trace::TraceLayer;
-use tracing::{error, warn};
+use tracing::{error, info, warn};
 
 use crate::config::ServiceConfig;
 use crate::db::{MetadataStore, NewMemoryRecord};
@@ -101,7 +102,8 @@ impl AppState {
 
     pub fn router(self) -> Router {
         let request_id_header = HeaderName::from_static("x-request-id");
-        Router::new()
+        let web_dist = self.config.web_dist_path.clone();
+        let api_router = Router::new()
             .route("/health", get(health))
             .route("/metrics", get(metrics))
             .route("/v1/context/recall", post(recall))
@@ -122,7 +124,20 @@ impl AppState {
             .route("/v1/maintenance/trivium/rebuild", post(rebuild_trivium))
             .route("/v1/maintenance/sync-summary", get(sync_summary))
             .route("/v1/events", get(events_ws))
-            .with_state(self)
+            .with_state(self);
+
+        let router = match web_dist.as_ref() {
+            Some(dir) if dir.join("index.html").exists() => {
+                info!("serving web UI from {}", dir.display());
+                let index = dir.join("index.html");
+                let spa_fallback = ServeFile::new(index);
+                let static_service = ServeDir::new(dir).fallback(spa_fallback);
+                api_router.fallback_service(static_service)
+            }
+            _ => api_router,
+        };
+
+        router
             .layer(TraceLayer::new_for_http())
             .layer(PropagateRequestIdLayer::new(request_id_header.clone()))
             .layer(SetRequestIdLayer::new(request_id_header, MakeRequestUuid))

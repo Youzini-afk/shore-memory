@@ -12,6 +12,10 @@ pub struct ServiceConfig {
     /// Keeps entity vectors isolated from memory vectors so scope-level
     /// filters and rebuilds don't cross-contaminate.
     pub entity_trivium_db_path: PathBuf,
+    /// Optional path to the compiled Web UI (`web/dist`). If present and the
+    /// directory contains an `index.html`, the server serves the SPA as the
+    /// fallback route for unknown paths.
+    pub web_dist_path: Option<PathBuf>,
     pub worker_base_url: String,
     pub embedding_timeout: Duration,
     pub worker_timeout: Duration,
@@ -60,12 +64,25 @@ impl ServiceConfig {
         let entity_trivium_db_path = env::var("PMS_ENTITY_TRIVIUM_DB_PATH")
             .map(PathBuf::from)
             .unwrap_or_else(|_| data_dir.join("entities.tdb"));
+        let web_dist_path = env::var("PMS_WEB_DIST")
+            .ok()
+            .map(PathBuf::from)
+            .or_else(|| {
+                // 默认相对 server 工作目录向上找 `../web/dist`；若不存在则返回 None。
+                let candidate = PathBuf::from("../web/dist");
+                if candidate.join("index.html").exists() {
+                    Some(candidate)
+                } else {
+                    None
+                }
+            });
 
         Self {
             bind_addr,
             metadata_db_path,
             trivium_db_path,
             entity_trivium_db_path,
+            web_dist_path,
             worker_base_url: env::var("PMS_WORKER_BASE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:7812".to_string()),
             embedding_timeout: Duration::from_millis(parse_u64("PMS_EMBEDDING_TIMEOUT_MS", 1800)),

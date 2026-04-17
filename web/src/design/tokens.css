@@ -1,0 +1,57 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Shore Memory Console · Design Tokens
+ * 深色专业数据感 + 紫罗兰主色，不以玻璃拟态为主风格。
+ */
+:root {
+  /* background layers */
+  --shore-bg: #0b0b12;
+  --shore-surface: #11121a;
+  --shore-card: #161827;
+  --shore-elev: #191a26;
+  --shore-hover: #14151f;
+  --shore-selected: #1a1b28;
+  --shore-line: #1f2130;
+  --shore-border: #242636;
+
+  /* ink */
+  --ink-0: #ffffff;
+  --ink-1: #edeef7;
+  --ink-2: #c2c6d9;
+  --ink-3: #9097ab;
+  --ink-4: #666b80;
+  --ink-5: #414657;
+  --ink-6: #2a2d3a;
+
+  /* brand */
+  --accent: #7c5cff;
+  --accent-hi: #8e7bff;
+  --accent-lo: #6a4dff;
+  --accent-soft: rgba(124, 92, 255, 0.12);
+  --accent-ring: rgba(124, 92, 255, 0.35);
+
+  /* lifecycle */
+  --state-active: #10b981;
+  --state-superseded: #7c5cff;
+  --state-invalidated: #f43f5e;
+  --state-archived: #64748b;
+
+  /* signal */
+  --sig-blue: #38bdf8;
+  --sig-amber: #f59e0b;
+
+  /* motion */
+  --ease-shore: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 160ms;
+  --dur-normal: 240ms;
+  --dur-slow: 360ms;
+}
+
+/* 为 Graph shader / SVG 读取使用 */
+[data-color="active"] { color: var(--state-active); }
+[data-color="superseded"] { color: var(--state-superseded); }
+[data-color="invalidated"] { color: var(--state-invalidated); }
+[data-color="archived"] { color: var(--state-archived); }
