@@ -7,3 +7,4 @@ worker/__pycache__/
 worker/app/__pycache__/
 worker/.pytest_cache/
 vendor/TriviumDB/target/
+data/

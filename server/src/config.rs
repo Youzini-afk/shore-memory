@@ -51,8 +51,18 @@ pub struct ServiceConfig {
 
 impl ServiceConfig {
     pub fn from_env() -> Self {
-        let host = env::var("PMS_HOST").unwrap_or_else(|_| "127.0.0.1".to_string());
-        let port = parse_u16("PMS_PORT", 7811);
+        let port = env::var("PMS_PORT")
+            .ok()
+            .and_then(|v| v.parse::<u16>().ok())
+            .or_else(|| env::var("PORT").ok().and_then(|v| v.parse::<u16>().ok()))
+            .unwrap_or(7811);
+        let host = env::var("PMS_HOST").unwrap_or_else(|_| {
+            if env::var("PORT").is_ok() {
+                "0.0.0.0".to_string()
+            } else {
+                "127.0.0.1".to_string()
+            }
+        });
         let bind_addr = SocketAddr::new(
             host.parse().unwrap_or(IpAddr::V4(Ipv4Addr::LOCALHOST)),
             port,
@@ -72,15 +82,7 @@ impl ServiceConfig {
         let web_dist_path = env::var("PMS_WEB_DIST")
             .ok()
             .map(PathBuf::from)
-            .or_else(|| {
-                // 默认相对 server 工作目录向上找 `../web/dist`；若不存在则返回 None。
-                let candidate = PathBuf::from("../web/dist");
-                if candidate.join("index.html").exists() {
-                    Some(candidate)
-                } else {
-                    None
-                }
-            });
+            .or_else(resolve_default_web_dist_path);
 
         Self {
             bind_addr,
@@ -136,11 +138,19 @@ impl ServiceConfig {
     }
 }
 
-fn parse_u16(key: &str, default: u16) -> u16 {
-    env::var(key)
-        .ok()
-        .and_then(|v| v.parse().ok())
-        .unwrap_or(default)
+fn resolve_default_web_dist_path() -> Option<PathBuf> {
+    let mut candidates = vec![PathBuf::from("../web/dist"), PathBuf::from("./web/dist")];
+    if let Ok(current_exe) = env::current_exe() {
+        if let Some(exe_dir) = current_exe.parent() {
+            candidates.push(exe_dir.join("web/dist"));
+            candidates.push(exe_dir.join("../web/dist"));
+            candidates.push(exe_dir.join("dist"));
+            candidates.push(exe_dir.join("../dist"));
+        }
+    }
+    candidates
+        .into_iter()
+        .find(|candidate| candidate.join("index.html").exists())
 }
 
 fn parse_u64(key: &str, default: u64) -> u64 {
