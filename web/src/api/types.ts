@@ -3,7 +3,9 @@
  */
 
 export type MemoryState = 'active' | 'superseded' | 'invalidated' | 'archived'
-export type MemoryScope = 'private' | 'shared' | 'public'
+/** 对齐 server MemoryScope 枚举：private / group / shared / system */
+export type MemoryScope = 'private' | 'group' | 'shared' | 'system'
+export type MemoryScopeHint = 'auto' | 'private' | 'group' | 'shared' | 'system'
 export type MemoryType =
   | 'event'
   | 'fact'
@@ -106,15 +108,33 @@ export interface ExportMemoriesResponse {
 
 /* ---------------- Recall ---------------- */
 
+/**
+ * 与 server/src/types.rs::RecallRequest 对齐。
+ * 字段全部 snake_case（原生传透）。
+ */
 export interface RecallRequest {
   agent_id: string
   query: string
-  user_uid?: string
-  channel_uid?: string
-  session_uid?: string
+  user_uid?: string | null
+  channel_uid?: string | null
+  session_uid?: string | null
+  source?: string | null
   limit?: number
-  recipe?: string
+  include_state?: boolean
+  scope_hint?: MemoryScopeHint
+  debug?: boolean
+  /** fast / hybrid / entity_heavy / contiguous */
+  recipe?: RecallRecipeId
   include_invalid?: boolean
+}
+
+export type RecallRecipeId = 'fast' | 'hybrid' | 'entity_heavy' | 'contiguous'
+
+export interface EntityDraft {
+  name: string
+  entity_type?: string
+  scope?: MemoryScope
+  confidence?: number
 }
 
 export interface ScoreBreakdown {
@@ -122,37 +142,34 @@ export interface ScoreBreakdown {
   bm25: number
   entity: number
   contiguity: number
-  final: number
+  /** 融合后的最终分数 */
+  combined: number
+  /** 融合自适应分母 */
+  divisor: number
 }
 
 export interface MemoryLifecycle {
   state: string
   valid_at?: string | null
   invalid_at?: string | null
-  supersedes?: number | null
-  archived_at?: string | null
+  supersedes_memory_id?: number | null
 }
 
 export interface MemorySnippet {
   id: number
+  time: string
   content: string
-  importance: number
-  scope: string
-  memory_type: string
-  score: number
-  score_breakdown?: ScoreBreakdown
-  lifecycle?: MemoryLifecycle
-  tags?: string[]
-  entities?: string[]
+  scope: MemoryScope
+  score?: number | null
+  score_breakdown?: ScoreBreakdown | null
+  entities?: EntityDraft[]
+  lifecycle?: MemoryLifecycle | null
 }
 
 export interface RecallResponse {
-  memories: MemorySnippet[]
-  trace_id: string
-  latency_ms: number
-  cache: 'hit' | 'miss'
+  memory_context: MemorySnippet[]
+  agent_state?: AgentStateResponse | null
   degraded: boolean
-  degraded_reason?: string
 }
 
 /* ---------------- Agent state ---------------- */
@@ -174,10 +191,12 @@ export interface AgentStateResponse {
 /* ---------------- Maintenance ---------------- */
 
 export interface SyncSummaryResponse {
-  pending_tasks: number
-  running_tasks: number
+  by_status: Record<string, number>
+  by_kind: Record<string, number>
   failed_tasks: number
-  succeeded_tasks_24h?: number
+  pending_tasks: number
+  oldest_pending_created_at?: string | null
+  latest_error?: string | null
 }
 
 export interface TaskActionResponse {
