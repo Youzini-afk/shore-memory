@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { storeToRefs } from 'pinia'
 import PBadge from '@/components/ui/PBadge.vue'
 import PSegment from '@/components/ui/PSegment.vue'
@@ -24,26 +24,28 @@ const modeOptions: Array<{ value: RecallMode; label: string; hint: string }> = [
   { value: 'compare', label: 'A/B Compare', hint: '双变体并跑 · diff 视图' }
 ]
 
-onMounted(() => {
+function onKey(ev: KeyboardEvent) {
   // ⌘K focus（保留原有行为）
-  const onKey = (ev: KeyboardEvent) => {
-    if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'k' || ev.key === 'K')) {
-      ev.preventDefault()
-      queryBuilderRef.value?.focusQuery?.()
-    }
-    if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
-      ev.preventDefault()
-      if (mode.value === 'compare') {
-        void recall.runCompare()
-      } else {
-        void recall.submit()
-      }
+  if ((ev.metaKey || ev.ctrlKey) && (ev.key === 'k' || ev.key === 'K')) {
+    ev.preventDefault()
+    queryBuilderRef.value?.focusQuery?.()
+  }
+  if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
+    ev.preventDefault()
+    if (mode.value === 'compare') {
+      void recall.runCompare()
+    } else {
+      void recall.submit()
     }
   }
+}
+
+onMounted(() => {
   window.addEventListener('keydown', onKey)
-  // Cleanup
-  const abort = new AbortController()
-  abort.signal.addEventListener('abort', () => window.removeEventListener('keydown', onKey))
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onKey)
 })
 </script>
 

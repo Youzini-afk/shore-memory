@@ -4,12 +4,18 @@
  * 交集计数、rank drift。给用户一眼看出两组 recipe 在本次 query 下的差异。
  */
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { GitCompare, CircleDot, Circle, Minus, Sigma as SigmaIcon } from 'lucide-vue-next'
+import { GitCompare, CircleDot, Circle, Minus, Sigma as SigmaIcon, Target } from 'lucide-vue-next'
 import { useRecallStore } from '@/stores/recall'
+import { useGraphStore } from '@/stores/graph'
 
 const store = useRecallStore()
+const router = useRouter()
+const graph = useGraphStore()
 const { compareDiff, variantA, variantB } = storeToRefs(store)
+
+type PingGroup = 'aOnly' | 'shared' | 'bOnly' | 'union'
 
 const hasData = computed(
   () => !!variantA.value.response && !!variantB.value.response
@@ -26,11 +32,30 @@ const jaccardTone = computed<'accent' | 'amber' | 'muted' | 'invalid'>(() => {
   if (j >= 0.4) return 'amber'
   return 'invalid'
 })
+
+function idsFor(group: PingGroup): number[] {
+  if (!hasData.value) return []
+  if (group === 'aOnly') return compareDiff.value.aOnly
+  if (group === 'shared') return compareDiff.value.intersection
+  if (group === 'bOnly') return compareDiff.value.bOnly
+  return compareDiff.value.union
+}
+
+function canPing(group: PingGroup): boolean {
+  return idsFor(group).length > 0
+}
+
+function pingGroup(group: PingGroup): void {
+  const ids = idsFor(group)
+  if (!ids.length) return
+  graph.pingMemories(ids)
+  void router.push({ name: 'graph' })
+}
 </script>
 
 <template>
   <div
-    class="rounded-panel border border-shore-line/80 bg-shore-surface/85 px-4 py-3 flex items-center gap-5"
+    class="rounded-panel border border-shore-line/80 bg-shore-surface/85 px-4 py-3 flex flex-wrap items-center gap-x-5 gap-y-3"
   >
     <div class="flex items-center gap-2">
       <div
@@ -119,6 +144,52 @@ const jaccardTone = computed<'accent' | 'amber' | 'muted' | 'invalid'>(() => {
           <template v-else>—</template>
         </div>
       </div>
+    </div>
+
+    <div class="h-8 w-px bg-shore-line/80" />
+
+    <div class="flex items-center gap-1.5">
+      <button
+        type="button"
+        class="h-7 px-2 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors"
+        :class="canPing('aOnly') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
+        :disabled="!canPing('aOnly')"
+        title="把 A-only 命中在 graph 上脉冲定位"
+        @click="pingGroup('aOnly')"
+      >
+        ping A-only
+      </button>
+      <button
+        type="button"
+        class="h-7 px-2 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors"
+        :class="canPing('shared') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
+        :disabled="!canPing('shared')"
+        title="把 shared 命中在 graph 上脉冲定位"
+        @click="pingGroup('shared')"
+      >
+        ping shared
+      </button>
+      <button
+        type="button"
+        class="h-7 px-2 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors"
+        :class="canPing('bOnly') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
+        :disabled="!canPing('bOnly')"
+        title="把 B-only 命中在 graph 上脉冲定位"
+        @click="pingGroup('bOnly')"
+      >
+        ping B-only
+      </button>
+      <button
+        type="button"
+        class="h-7 px-2.5 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors inline-flex items-center gap-1"
+        :class="canPing('union') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
+        :disabled="!canPing('union')"
+        title="把全部命中在 graph 上脉冲定位"
+        @click="pingGroup('union')"
+      >
+        <Target class="h-3.5 w-3.5" :stroke-width="1.75" />
+        ping all
+      </button>
     </div>
 
     <div class="flex-1" />

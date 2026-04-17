@@ -159,6 +159,15 @@ export const useRecallStore = defineStore('recall', () => {
   const mode = ref<RecallMode>('single')
   const variantA = reactive<RecallVariantState>(defaultVariant('A', 'hybrid'))
   const variantB = reactive<RecallVariantState>(defaultVariant('B', 'entity_heavy'))
+  const compareSeededFromSingle = ref(false)
+
+  function seedVariantAFromSingleForm(): void {
+    variantA.config.recipe = form.recipe
+    variantA.config.scope_hint = form.scope_hint
+    variantA.config.include_invalid = form.include_invalid
+    variantA.config.include_state = form.include_state
+    variantA.config.debug = form.debug
+  }
 
   function setMode(next: RecallMode): void {
     if (mode.value === next) return
@@ -166,12 +175,9 @@ export const useRecallStore = defineStore('recall', () => {
     // Seed variant A from the single-mode form the first time we enter compare,
     // so the user's last setup carries over. Variant B keeps its distinct
     // recipe by default (so the diff is immediately informative).
-    if (next === 'compare') {
-      variantA.config.recipe = form.recipe
-      variantA.config.scope_hint = form.scope_hint
-      variantA.config.include_invalid = form.include_invalid
-      variantA.config.include_state = form.include_state
-      variantA.config.debug = form.debug
+    if (next === 'compare' && !compareSeededFromSingle.value) {
+      seedVariantAFromSingleForm()
+      compareSeededFromSingle.value = true
     }
   }
 
@@ -225,6 +231,7 @@ export const useRecallStore = defineStore('recall', () => {
       variant.error = '请输入查询文本'
       return null
     }
+    if (variant.loading) return variant.response
     variant.loading = true
     variant.error = null
     const started = performance.now()
@@ -248,6 +255,7 @@ export const useRecallStore = defineStore('recall', () => {
       error.value = '请输入查询文本'
       return
     }
+    if (variantA.loading || variantB.loading) return
     error.value = null
     await Promise.allSettled([runVariant(variantA), runVariant(variantB)])
   }
