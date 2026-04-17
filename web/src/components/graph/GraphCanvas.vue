@@ -2,11 +2,19 @@
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { storeToRefs } from 'pinia'
 import Sigma from 'sigma'
-import { useGraphStore } from '@/stores/graph'
+import { useGraphStore, PING_DURATION_MS } from '@/stores/graph'
 import type { GraphEdgeAttrs, GraphNodeAttrs } from '@/stores/graph'
 
 const store = useGraphStore()
-const { graph, selectedNodeId, hoveredNodeId, focusedNodes, layoutRunning } = storeToRefs(store)
+const {
+  graph,
+  selectedNodeId,
+  hoveredNodeId,
+  focusedNodes,
+  layoutRunning,
+  pingedNodeIds,
+  pingStartTs
+} = storeToRefs(store)
 
 const containerRef = ref<HTMLElement | null>(null)
 const overlayRef = ref<HTMLCanvasElement | null>(null)
@@ -154,6 +162,50 @@ function drawOverlay() {
     ctx.arc(vp.x, vp.y, haloRadius, 0, Math.PI * 2)
     ctx.fill()
   })
+
+  // Ping pulse: radar-style concentric rings around recall-hit nodes.
+  const pingSet = pingedNodeIds.value
+  if (pingSet.size > 0 && pingStartTs.value > 0) {
+    const elapsed = Date.now() - pingStartTs.value
+    if (elapsed >= PING_DURATION_MS) {
+      // Animation finished — defer the store mutation so we don't
+      // thrash reactivity inside the rAF loop. Canvas clears on the
+      // next frame naturally.
+      queueMicrotask(() => store.clearPing())
+    } else {
+      const t = elapsed / PING_DURATION_MS // 0..1
+      const RING_COUNT = 3
+      ctx.globalCompositeOperation = 'lighter'
+      for (const nid of pingSet) {
+        if (!g.hasNode(nid)) continue
+        const attrs = g.getNodeAttributes(nid)
+        const vp = s.graphToViewport({ x: attrs.x, y: attrs.y })
+        const baseR = Math.max(4, attrs.size)
+        const coreRgb = toRgb(attrs.color) ?? { r: 124, g: 92, b: 255 }
+        // Steady bright core (makes it readable even when zoomed out).
+        const coreGrad = ctx.createRadialGradient(vp.x, vp.y, 0, vp.x, vp.y, baseR * 3.5)
+        coreGrad.addColorStop(0, `rgba(${coreRgb.r},${coreRgb.g},${coreRgb.b},0.95)`)
+        coreGrad.addColorStop(0.5, `rgba(${coreRgb.r},${coreRgb.g},${coreRgb.b},0.35)`)
+        coreGrad.addColorStop(1, `rgba(${coreRgb.r},${coreRgb.g},${coreRgb.b},0)`)
+        ctx.fillStyle = coreGrad
+        ctx.beginPath()
+        ctx.arc(vp.x, vp.y, baseR * 3.5, 0, Math.PI * 2)
+        ctx.fill()
+        // Expanding rings, phase-offset.
+        for (let ring = 0; ring < RING_COUNT; ring += 1) {
+          const phase = (t * RING_COUNT - ring) % RING_COUNT
+          if (phase <= 0 || phase >= 1) continue
+          const ringR = baseR * (1.5 + phase * 8)
+          const alpha = (1 - phase) * 0.85
+          ctx.strokeStyle = `rgba(${coreRgb.r},${coreRgb.g},${coreRgb.b},${alpha})`
+          ctx.lineWidth = 2 + (1 - phase) * 2
+          ctx.beginPath()
+          ctx.arc(vp.x, vp.y, ringR, 0, Math.PI * 2)
+          ctx.stroke()
+        }
+      }
+    }
+  }
 
   // 脉冲边：仅 selected 节点的直连边
   if (selected && g.hasNode(selected)) {

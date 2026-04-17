@@ -155,6 +155,8 @@ export function buildGraphFromResponse(resp: GraphResponse): Graph<GraphNodeAttr
   return g
 }
 
+export const PING_DURATION_MS = 2400
+
 export const useGraphStore = defineStore('graph', () => {
   const app = useAppStore()
 
@@ -246,6 +248,64 @@ export const useGraphStore = defineStore('graph', () => {
     return Number.isFinite(n) ? n : null
   })
 
+  /* ---------------- ping (cross-view spotlight) ---------------- */
+  // Nodes currently rendering a ping ring in the overlay canvas. Populated
+  // via `pingMemories()` — typically from the recall view when the user
+  // asks "show these hits on the graph". Values follow the `m:<id>` /
+  // `e:<id>` node-id convention defined above.
+  const pingedNodeIds = ref<Set<string>>(new Set())
+  // Timestamp (`Date.now()` basis) at which the current ping animation
+  // started. The overlay canvas uses this + `PING_DURATION_MS` to drive
+  // the ring expansion / fade.
+  const pingStartTs = ref<number>(0)
+  // Memory ids requested while the graph was not yet loaded. Flushed into
+  // `pingedNodeIds` as soon as `fetch()` resolves, so the recall → graph
+  // hand-off works even if the graph view is being mounted cold.
+  const pendingPingIds = ref<number[]>([])
+
+  function flushPendingPings(): void {
+    const g = graph.value
+    if (!g || pendingPingIds.value.length === 0) return
+    const resolved = new Set<string>()
+    for (const id of pendingPingIds.value) {
+      const nid = memoryNodeId(id)
+      if (g.hasNode(nid)) resolved.add(nid)
+    }
+    if (resolved.size) {
+      pingedNodeIds.value = resolved
+      pingStartTs.value = Date.now()
+      selectedNodeId.value = Array.from(resolved)[0] ?? null
+    }
+    pendingPingIds.value = []
+  }
+
+  function pingMemories(memoryIds: number[]): void {
+    if (memoryIds.length === 0) return
+    const g = graph.value
+    if (!g) {
+      pendingPingIds.value = Array.from(new Set(memoryIds))
+      return
+    }
+    const resolved = new Set<string>()
+    for (const id of memoryIds) {
+      const nid = memoryNodeId(id)
+      if (g.hasNode(nid)) resolved.add(nid)
+    }
+    if (resolved.size === 0) {
+      // Not in the currently loaded slice — stash for after the next fetch.
+      pendingPingIds.value = Array.from(new Set(memoryIds))
+      return
+    }
+    pingedNodeIds.value = resolved
+    pingStartTs.value = Date.now()
+    selectedNodeId.value = Array.from(resolved)[0] ?? null
+  }
+
+  function clearPing(): void {
+    if (pingedNodeIds.value.size) pingedNodeIds.value = new Set()
+    pingStartTs.value = 0
+  }
+
   /**
    * 计算当前需要高亮的节点集合：
    *   - 若有搜索，匹配节点 + 其邻域
@@ -305,6 +365,8 @@ export const useGraphStore = defineStore('graph', () => {
       })
       response.value = res
       graph.value = buildGraphFromResponse(res)
+      // If anything was queued (recall → graph hand-off before mount), resolve it now.
+      if (pendingPingIds.value.length > 0) flushPendingPings()
     } catch (err) {
       response.value = null
       graph.value = null
@@ -323,6 +385,8 @@ export const useGraphStore = defineStore('graph', () => {
     selectedNodeId.value = null
     hoveredNodeId.value = null
     searchQuery.value = ''
+    clearPing()
+    pendingPingIds.value = []
   }
 
   watch(
@@ -404,12 +468,18 @@ export const useGraphStore = defineStore('graph', () => {
     selectedMemoryId,
     selectedEntityId,
     focusedNodes,
+    pingedNodeIds,
+    pingStartTs,
+    pendingPingIds,
     stats,
     // actions
     fetch,
     startLayout,
     stopLayout,
     toggleLayout,
+    pingMemories,
+    clearPing,
+    flushPendingPings,
     dispose,
     bindEvents,
     scheduleRefresh

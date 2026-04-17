@@ -46,6 +46,67 @@ export interface RecallTemplate {
   updatedAt: number
 }
 
+export type RecallMode = 'single' | 'compare'
+
+/**
+ * Fields that can differ between the two A/B variants. Shared fields
+ * (query, uids, limit) live on the main `form` so toggling between
+ * single and compare modes stays friction-free.
+ */
+export interface RecallVariantConfig {
+  label: string
+  recipe: RecallRecipeId
+  scope_hint: MemoryScopeHint
+  include_invalid: boolean
+  include_state: boolean
+  debug: boolean
+}
+
+export interface RecallVariantState {
+  config: RecallVariantConfig
+  response: RecallResponse | null
+  loading: boolean
+  error: string | null
+  latencyMs: number | null
+  at: number | null
+}
+
+export interface CompareDiffSummary {
+  aIds: number[]
+  bIds: number[]
+  intersection: number[]
+  aOnly: number[]
+  bOnly: number[]
+  union: number[]
+  jaccard: number
+  avgRankDrift: number
+  maxRankDrift: number
+  /** 每个共同命中在 A/B 的排名，供 UI 画漂移可视化 */
+  rankPairs: Array<{ id: number; rankA: number; rankB: number; drift: number }>
+}
+
+function defaultVariant(
+  label: string,
+  recipe: RecallRecipeId,
+  scope_hint: MemoryScopeHint = 'auto'
+): RecallVariantState {
+  return {
+    config: {
+      label,
+      recipe,
+      scope_hint,
+      include_invalid: false,
+      include_state: false,
+      debug: true
+    },
+    response: null,
+    loading: false,
+    error: null,
+    latencyMs: null,
+    at: null
+  }
+}
+
 function defaultForm(): RecallForm {
   return {
     query: '',
@@ -92,6 +153,149 @@ export const useRecallStore = defineStore('recall', () => {
   const memories = computed<MemorySnippet[]>(() => response.value?.memory_context ?? [])
   const hits = computed(() => memories.value.length)
   const degraded = computed(() => response.value?.degraded ?? false)
+
+  /* ---------------- A/B compare ---------------- */
+
+  const mode = ref<RecallMode>('single')
+  const variantA = reactive<RecallVariantState>(defaultVariant('A', 'hybrid'))
+  const variantB = reactive<RecallVariantState>(defaultVariant('B', 'entity_heavy'))
+
+  function setMode(next: RecallMode): void {
+    if (mode.value === next) return
+    mode.value = next
+    // Seed variant A from the single-mode form the first time we enter compare,
+    // so the user's last setup carries over. Variant B keeps its distinct
+    // recipe by default (so the diff is immediately informative).
+    if (next === 'compare') {
+      variantA.config.recipe = form.recipe
+      variantA.config.scope_hint = form.scope_hint
+      variantA.config.include_invalid = form.include_invalid
+      variantA.config.include_state = form.include_state
+      variantA.config.debug = form.debug
+    }
+  }
+
+  function swapVariants(): void {
+    const snap: RecallVariantState = {
+      config: { ...variantA.config },
+      response: variantA.response,
+      loading: variantA.loading,
+      error: variantA.error,
+      latencyMs: variantA.latencyMs,
+      at: variantA.at
+    }
+    variantA.config = { ...variantB.config, label: 'A' }
+    variantA.response = variantB.response
+    variantA.loading = variantB.loading
+    variantA.error = variantB.error
+    variantA.latencyMs = variantB.latencyMs
+    variantA.at = variantB.at
+    variantB.config = { ...snap.config, label: 'B' }
+    variantB.response = snap.response
+    variantB.loading = snap.loading
+    variantB.error = snap.error
+    variantB.latencyMs = snap.latencyMs
+    variantB.at = snap.at
+  }
+
+  function buildVariantRequest(variant: RecallVariantState): RecallRequest {
+    const app = useAppStore()
+    const trimmed = <T extends string | undefined>(v: T): T => {
+      if (v === undefined || v === null) return v
+      const s = String(v).trim()
+      return (s.length === 0 ? undefined : s) as T
+    }
+    return {
+      agent_id: app.agentId,
+      query: form.query,
+      recipe: variant.config.recipe,
+      user_uid: trimmed(form.user_uid) ?? undefined,
+      channel_uid: trimmed(form.channel_uid) ?? undefined,
+      session_uid: trimmed(form.session_uid) ?? undefined,
+      scope_hint: variant.config.scope_hint,
+      limit: form.limit,
+      include_invalid: variant.config.include_invalid,
+      include_state: variant.config.include_state,
+      debug: variant.config.debug
+    }
+  }
+
+  async function runVariant(variant: RecallVariantState): Promise<RecallResponse | null> {
+    if (!form.query.trim()) {
+      variant.error = '请输入查询文本'
+      return null
+    }
+    variant.loading = true
+    variant.error = null
+    const started = performance.now()
+    try {
+      const res = await recallApi(buildVariantRequest(variant))
+      variant.response = res
+      variant.latencyMs = Math.round(performance.now() - started)
+      variant.at = Date.now()
+      return res
+    } catch (err) {
+      variant.error =
+        err instanceof ShoreApiError ? err.message : (err as Error).message || '未知错误'
+      return null
+    } finally {
+      variant.loading = false
+    }
+  }
+
+  async function runCompare(): Promise<void> {
+    if (!form.query.trim()) {
+      error.value = '请输入查询文本'
+      return
+    }
+    error.value = null
+    await Promise.allSettled([runVariant(variantA), runVariant(variantB)])
+  }
+
+  const compareLoading = computed(() => variantA.loading || variantB.loading)
+
+  /** 两次召回结果集合论比较：重合 / Jaccard / 排名漂移 */
+  const compareDiff = computed<CompareDiffSummary>(() => {
+    const aPairs = (variantA.response?.memory_context ?? []).map(
+      (m, i) => [m.id, i] as const
+    )
+    const bPairs = (variantB.response?.memory_context ?? []).map(
+      (m, i) => [m.id, i] as const
+    )
+    const ranksA = new Map(aPairs.map(([id, rank]) => [id, rank]))
+    const ranksB = new Map(bPairs.map(([id, rank]) => [id, rank]))
+    const aIds = aPairs.map(([id]) => id)
+    const bIds = bPairs.map(([id]) => id)
+    const bSet = new Set(bIds)
+    const aSet = new Set(aIds)
+    const intersection = aIds.filter((id) => bSet.has(id))
+    const aOnly = aIds.filter((id) => !bSet.has(id))
+    const bOnly = bIds.filter((id) => !aSet.has(id))
+    const union = Array.from(new Set([...aIds, ...bIds]))
+    const jaccard = union.length ? intersection.length / union.length : 0
+    const rankPairs = intersection.map((id) => {
+      const ra = ranksA.get(id) ?? 0
+      const rb = ranksB.get(id) ?? 0
+      return { id, rankA: ra, rankB: rb, drift: Math.abs(ra - rb) }
+    })
+    const drifts = rankPairs.map((p) => p.drift)
+    const avgRankDrift = drifts.length
+      ? drifts.reduce((acc, v) => acc + v, 0) / drifts.length
+      : 0
+    const maxRankDrift = drifts.length ? Math.max(...drifts) : 0
+    return {
+      aIds,
+      bIds,
+      intersection,
+      aOnly,
+      bOnly,
+      union,
+      jaccard,
+      avgRankDrift,
+      maxRankDrift,
+      rankPairs
+    }
+  })
 
   function reset(): void {
     Object.assign(form, defaultForm())
@@ -194,6 +398,7 @@ export const useRecallStore = defineStore('recall', () => {
   }
 
   return {
+    // single-mode state
     form,
     loading,
     error,
@@ -205,6 +410,7 @@ export const useRecallStore = defineStore('recall', () => {
     memories,
     hits,
     degraded,
+    // single-mode actions
     submit,
     reset,
     buildRequest,
@@ -212,6 +418,16 @@ export const useRecallStore = defineStore('recall', () => {
     loadFromTemplate,
     saveTemplate,
     deleteTemplate,
-    clearHistory
+    clearHistory,
+    // compare mode
+    mode,
+    variantA,
+    variantB,
+    compareLoading,
+    compareDiff,
+    setMode,
+    swapVariants,
+    runVariant,
+    runCompare
   }
 })

@@ -1,14 +1,25 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import { AlertTriangle, Sparkles } from 'lucide-vue-next'
+import { AlertTriangle, Sparkles, Target } from 'lucide-vue-next'
 import { useRecallStore } from '@/stores/recall'
+import { useGraphStore } from '@/stores/graph'
 import PCard from '@/components/ui/PCard.vue'
 import MetricTile from './MetricTile.vue'
 import HitCard from './HitCard.vue'
 
 const store = useRecallStore()
+const router = useRouter()
+const graph = useGraphStore()
 const { loading, response, memories, lastLatencyMs, degraded, form } = storeToRefs(store)
+
+function pingAllInGraph() {
+  const ids = memories.value.map((m) => m.id)
+  if (!ids.length) return
+  graph.pingMemories(ids)
+  void router.push({ name: 'graph' })
+}
 
 const hitCount = computed(() => memories.value.length)
 const latencyDisplay = computed(() => {
@@ -92,9 +103,21 @@ const agentState = computed(() => response.value?.agent_state ?? null)
           <span class="h-1 w-1 rounded-full bg-accent" />
           命中结果
         </div>
-        <div v-if="agentState" class="text-[10.5px] text-ink-4 font-display tracking-tight">
-          Agent <span class="text-ink-2">{{ agentState.agent_id }}</span>
-          · mood <span class="text-ink-2">{{ agentState.mood }}</span>
+        <div class="flex items-center gap-3">
+          <div v-if="agentState" class="text-[10.5px] text-ink-4 font-display tracking-tight">
+            Agent <span class="text-ink-2">{{ agentState.agent_id }}</span>
+            · mood <span class="text-ink-2">{{ agentState.mood }}</span>
+          </div>
+          <button
+            v-if="memories.length"
+            type="button"
+            class="h-7 px-2.5 rounded-btn border border-shore-line bg-shore-card text-[11px] text-ink-2 hover:text-accent hover:border-accent/60 transition-colors flex items-center gap-1.5 font-display"
+            title="把这组命中在 Memory Graph 上做脉冲定位"
+            @click="pingAllInGraph"
+          >
+            <Target class="h-3.5 w-3.5" :stroke-width="1.75" />
+            ping in graph
+          </button>
         </div>
       </div>
 
