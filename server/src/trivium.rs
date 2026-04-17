@@ -44,6 +44,7 @@ impl TriviumStore {
         agent_id: String,
         user_uid: Option<String>,
         channel_uid: Option<String>,
+        allowed_scopes: Vec<MemoryScope>,
         query_text: String,
         query_vector: Option<Vec<f32>>,
         limit: usize,
@@ -61,6 +62,7 @@ impl TriviumStore {
                 &agent_id,
                 user_uid.as_deref(),
                 channel_uid.as_deref(),
+                &allowed_scopes,
                 include_invalid,
             );
             let config = SearchConfig {
@@ -90,6 +92,7 @@ impl TriviumStore {
         agent_id: String,
         user_uid: Option<String>,
         channel_uid: Option<String>,
+        allowed_scopes: Vec<MemoryScope>,
         query_vector: Vec<f32>,
         limit: usize,
         expand_depth: usize,
@@ -106,6 +109,7 @@ impl TriviumStore {
                 &agent_id,
                 user_uid.as_deref(),
                 channel_uid.as_deref(),
+                &allowed_scopes,
                 include_invalid,
             );
             let config = SearchConfig {
@@ -136,6 +140,7 @@ impl TriviumStore {
         agent_id: String,
         user_uid: Option<String>,
         channel_uid: Option<String>,
+        allowed_scopes: Vec<MemoryScope>,
         query_text: String,
         limit: usize,
         min_score: f32,
@@ -151,6 +156,7 @@ impl TriviumStore {
                 &agent_id,
                 user_uid.as_deref(),
                 channel_uid.as_deref(),
+                &allowed_scopes,
                 include_invalid,
             );
             let config = SearchConfig {
@@ -469,37 +475,42 @@ fn build_visibility_filter(
     agent_id: &str,
     user_uid: Option<&str>,
     channel_uid: Option<&str>,
+    allowed_scopes: &[MemoryScope],
     include_invalid: bool,
 ) -> Filter {
-    let mut visible: Vec<Filter> = vec![
-        Filter::eq(
-            "scope",
-            Value::String(MemoryScope::System.as_str().to_string()),
-        ),
-        Filter::eq(
-            "scope",
-            Value::String(MemoryScope::Shared.as_str().to_string()),
-        ),
-    ];
-
-    if let Some(user_uid) = user_uid {
-        visible.push(Filter::and(vec![
-            Filter::eq(
-                "scope",
-                Value::String(MemoryScope::Private.as_str().to_string()),
-            ),
-            Filter::eq("user_uid", Value::String(user_uid.to_string())),
-        ]));
+    let mut visible: Vec<Filter> = Vec::new();
+    for scope in allowed_scopes {
+        match scope {
+            MemoryScope::System | MemoryScope::Shared => {
+                visible.push(Filter::eq("scope", Value::String(scope.as_str().to_string())));
+            }
+            MemoryScope::Private => {
+                if let Some(user_uid) = user_uid {
+                    visible.push(Filter::and(vec![
+                        Filter::eq(
+                            "scope",
+                            Value::String(MemoryScope::Private.as_str().to_string()),
+                        ),
+                        Filter::eq("user_uid", Value::String(user_uid.to_string())),
+                    ]));
+                }
+            }
+            MemoryScope::Group => {
+                if let Some(channel_uid) = channel_uid {
+                    visible.push(Filter::and(vec![
+                        Filter::eq(
+                            "scope",
+                            Value::String(MemoryScope::Group.as_str().to_string()),
+                        ),
+                        Filter::eq("channel_uid", Value::String(channel_uid.to_string())),
+                    ]));
+                }
+            }
+        }
     }
 
-    if let Some(channel_uid) = channel_uid {
-        visible.push(Filter::and(vec![
-            Filter::eq(
-                "scope",
-                Value::String(MemoryScope::Group.as_str().to_string()),
-            ),
-            Filter::eq("channel_uid", Value::String(channel_uid.to_string())),
-        ]));
+    if visible.is_empty() {
+        visible.push(Filter::eq("scope", Value::String("__never__".to_string())));
     }
 
     let mut predicates = vec![

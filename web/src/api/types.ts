@@ -208,6 +208,7 @@ export interface RecallRequest {
   limit?: number
   include_state?: boolean
   scope_hint?: MemoryScopeHint
+  selected_scopes?: MemoryScope[]
   debug?: boolean
   /** fast / hybrid / entity_heavy / contiguous */
   recipe?: RecallRecipeId
@@ -228,6 +229,7 @@ export interface ScoreBreakdown {
   bm25: number
   entity: number
   contiguity: number
+  scope_weight: number
   /** 融合后的最终分数 */
   combined: number
   /** 融合自适应分母 */

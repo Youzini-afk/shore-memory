@@ -32,10 +32,11 @@ use crate::types::{
     EventMessageRequest, ExistingMemoryHint, ExportMemoriesRequest, ExportMemoriesResponse,
     GraphEntityNode, GraphMemoryEntityEdge, GraphMemoryNode, GraphRequest, GraphResponse,
     GraphStats, GraphSupersedeEdge, ListMemoriesRequest, ListMemoriesResponse,
-    MemoryDetailResponse, MemoryRecord, MemorySnippet, RecallRecipe, RecallRequest, RecallResponse,
-    ScoreBreakdown, ServerEvent, SyncSummaryResponse, TaskActionResponse, TaskKind, TaskRecord,
-    TurnEventRequest, TurnMessage, UpdateMemoryRequest, UpdateMemoryResponse, WorkerMemoryDraft,
-    WorkerScoreTurnRequest, infer_scope, scope_visible_for_request,
+    MemoryDetailResponse, MemoryRecord, MemoryScope, MemorySnippet, RecallRecipe,
+    RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse,
+    TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage,
+    UpdateMemoryRequest, UpdateMemoryResponse, WorkerMemoryDraft, WorkerScoreTurnRequest,
+    infer_scope, scope_visible_for_selected_request, selected_recall_scopes,
 };
 use crate::worker::{
     WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories,
@@ -165,6 +166,45 @@ impl AppState {
                 }
             });
         }
+        if let Some(reflection_interval) = self.config.reflection_interval {
+            tokio::spawn({
+                let state = Arc::clone(&self);
+                async move {
+                    loop {
+                        sleep(reflection_interval).await;
+                        if let Err(err) = state.enqueue_periodic_reflection() {
+                            error!("periodic reflection scheduling failed: {err:#}");
+                        }
+                    }
+                }
+            });
+        }
+    }
+
+    fn allowed_recall_scopes(
+        &self,
+        request_scope: MemoryScope,
+        selected_scopes: &[MemoryScope],
+    ) -> Vec<MemoryScope> {
+        selected_scopes
+            .iter()
+            .copied()
+            .filter(|scope| self.config.scope_recall.weight(request_scope, *scope).is_some())
+            .collect()
+    }
+
+    fn enqueue_periodic_reflection(&self) -> Result<()> {
+        for agent_id in self.store.list_agents_with_memories()? {
+            let payload = json!({ "agent_id": agent_id.clone() });
+            let dedupe_key = format!("reflection:{agent_id}");
+            let _ = self.enqueue_task(
+                TaskKind::ReflectionRun,
+                &agent_id,
+                payload,
+                Some(dedupe_key),
+            )?;
+        }
+        Ok(())
     }
 
     async fn tick_task_queue(&self) -> Result<()> {
@@ -401,6 +441,8 @@ impl AppState {
         // Embedding is best-effort: if the worker is unavailable we still hand
         // over any BM25 hits trivium returns.
         let embedding = self.get_or_fetch_embedding(query_text).await.ok();
+        let selected_scopes = selected_recall_scopes(request.scope, None);
+        let allowed_scopes = self.allowed_recall_scopes(request.scope, &selected_scopes);
 
         let hits = self
             .trivium
@@ -408,6 +450,7 @@ impl AppState {
                 request.agent_id.clone(),
                 request.user_uid.clone(),
                 request.channel_uid.clone(),
+                allowed_scopes.clone(),
                 query_text.to_string(),
                 embedding,
                 SCORER_EXISTING_POOL_SIZE.saturating_mul(2).max(1),
@@ -437,10 +480,11 @@ impl AppState {
                 if mem.archived_at.is_some() {
                     continue;
                 }
-                if !scope_visible_for_request(
+                if !scope_visible_for_selected_request(
                     mem,
                     request.user_uid.as_deref(),
                     request.channel_uid.as_deref(),
+                    &allowed_scopes,
                 ) {
                     continue;
                 }
@@ -932,6 +976,9 @@ impl AppState {
         let started = std::time::Instant::now();
         let recipe = RecallRecipe::parse(request.recipe.as_deref());
         let recipe_label = recipe.as_str();
+        let request_scope = infer_scope(request.scope_hint, request.channel_uid.as_deref());
+        let selected_scopes = selected_recall_scopes(request_scope, request.selected_scopes.as_deref());
+        let allowed_scopes = self.allowed_recall_scopes(request_scope, &selected_scopes);
 
         let recall_epoch = self.recall_epoch.get(&request.agent_id).await.unwrap_or(0);
         let cache_key = cache_key_for_recall(&request, recall_epoch);
@@ -971,6 +1018,7 @@ impl AppState {
                     request.agent_id.clone(),
                     request.user_uid.clone(),
                     request.channel_uid.clone(),
+                    allowed_scopes.clone(),
                     vec,
                     fetch_size,
                     self.config.search_expand_depth,
@@ -996,6 +1044,7 @@ impl AppState {
                     request.agent_id.clone(),
                     request.user_uid.clone(),
                     request.channel_uid.clone(),
+                    allowed_scopes.clone(),
                     request.query.clone(),
                     fetch_size,
                     self.config.search_min_score,
@@ -1195,6 +1244,7 @@ impl AppState {
         struct Scored {
             memory: MemoryRecord,
             signals: FusionInputs,
+            scope_weight: f32,
             combined: f32,
             divisor: f32,
         }
@@ -1207,13 +1257,17 @@ impl AppState {
             if memory.archived_at.is_some() {
                 continue;
             }
-            if !scope_visible_for_request(
+            if !scope_visible_for_selected_request(
                 memory,
                 request.user_uid.as_deref(),
                 request.channel_uid.as_deref(),
+                &allowed_scopes,
             ) {
                 continue;
             }
+            let Some(scope_weight) = self.config.scope_recall.weight(request_scope, memory.scope) else {
+                continue;
+            };
             // Stage 3: drop superseded / invalidated / future-dated memories
             // unless the caller explicitly opted into time-travel.
             if !include_invalid_flag && !memory.is_currently_valid(&now) {
@@ -1229,7 +1283,8 @@ impl AppState {
             scored_candidates.push(Scored {
                 memory: memory.clone(),
                 signals,
-                combined,
+                scope_weight,
+                combined: combined * scope_weight,
                 divisor,
             });
         }
@@ -1253,6 +1308,7 @@ impl AppState {
                         bm25: s.signals.bm25,
                         entity: s.signals.entity,
                         contiguity: s.signals.contiguity,
+                        scope_weight: s.scope_weight,
                         combined: s.combined,
                         divisor: s.divisor,
                     })

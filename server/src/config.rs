@@ -1,7 +1,91 @@
+use std::collections::HashMap;
 use std::env;
 use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::PathBuf;
 use std::time::Duration;
+
+use tracing::warn;
+
+use crate::types::MemoryScope;
+
+#[derive(Debug, Clone)]
+pub struct ScopeRecallConfig {
+    weights: HashMap<(MemoryScope, MemoryScope), f32>,
+}
+
+impl ScopeRecallConfig {
+    pub fn from_env() -> Self {
+        let mut out = Self::default();
+        let Ok(raw) = env::var("PMS_SCOPE_RECALL_RULES") else {
+            return out;
+        };
+        let trimmed = raw.trim();
+        if trimmed.is_empty() {
+            return out;
+        }
+        let parsed = match serde_json::from_str::<HashMap<String, HashMap<String, f32>>>(trimmed) {
+            Ok(value) => value,
+            Err(err) => {
+                warn!("invalid PMS_SCOPE_RECALL_RULES: {err}");
+                return out;
+            }
+        };
+        for (from_raw, inner) in parsed {
+            let from_scope = match from_raw.parse::<MemoryScope>() {
+                Ok(scope) => scope,
+                Err(err) => {
+                    warn!("invalid recall scope source '{from_raw}': {err}");
+                    continue;
+                }
+            };
+            for (to_raw, weight) in inner {
+                let to_scope = match to_raw.parse::<MemoryScope>() {
+                    Ok(scope) => scope,
+                    Err(err) => {
+                        warn!("invalid recall scope target '{to_raw}': {err}");
+                        continue;
+                    }
+                };
+                out.set_weight(from_scope, to_scope, weight);
+            }
+        }
+        out
+    }
+
+    pub fn weight(&self, from_scope: MemoryScope, to_scope: MemoryScope) -> Option<f32> {
+        if from_scope == to_scope {
+            return Some(1.0);
+        }
+        self.weights.get(&(from_scope, to_scope)).copied()
+    }
+
+    fn set_weight(&mut self, from_scope: MemoryScope, to_scope: MemoryScope, weight: f32) {
+        if weight > 0.0 {
+            self.weights.insert((from_scope, to_scope), weight);
+        } else {
+            self.weights.remove(&(from_scope, to_scope));
+        }
+    }
+}
+
+impl Default for ScopeRecallConfig {
+    fn default() -> Self {
+        let mut out = Self {
+            weights: HashMap::new(),
+        };
+        out.set_weight(MemoryScope::Private, MemoryScope::Private, 1.0);
+        out.set_weight(MemoryScope::Private, MemoryScope::Shared, 1.0);
+        out.set_weight(MemoryScope::Private, MemoryScope::System, 1.0);
+        out.set_weight(MemoryScope::Group, MemoryScope::Group, 1.0);
+        out.set_weight(MemoryScope::Group, MemoryScope::Shared, 1.0);
+        out.set_weight(MemoryScope::Group, MemoryScope::System, 1.0);
+        out.set_weight(MemoryScope::Shared, MemoryScope::Shared, 1.0);
+        out.set_weight(MemoryScope::Shared, MemoryScope::System, 1.0);
+        out.set_weight(MemoryScope::System, MemoryScope::System, 1.0);
+        out.set_weight(MemoryScope::System, MemoryScope::Shared, 1.0);
+        out
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ServiceConfig {
@@ -33,6 +117,8 @@ pub struct ServiceConfig {
     pub embedding_cache_ttl: Duration,
     pub task_poll_interval: Duration,
     pub task_workers: usize,
+    pub reflection_interval: Option<Duration>,
+    pub scope_recall: ScopeRecallConfig,
     pub search_top_k: usize,
     pub search_expand_depth: usize,
     pub search_min_score: f32,
@@ -125,6 +211,11 @@ impl ServiceConfig {
             )),
             task_poll_interval: Duration::from_millis(parse_u64("PMS_TASK_POLL_INTERVAL_MS", 1500)),
             task_workers: parse_usize("PMS_TASK_WORKERS", 4).max(1),
+            reflection_interval: match parse_u64("PMS_REFLECTION_INTERVAL_SECS", 0) {
+                0 => None,
+                secs => Some(Duration::from_secs(secs)),
+            },
+            scope_recall: ScopeRecallConfig::from_env(),
             search_top_k: parse_usize("PMS_SEARCH_TOP_K", 12),
             search_expand_depth: parse_usize("PMS_SEARCH_EXPAND_DEPTH", 2),
             search_min_score: parse_f32("PMS_SEARCH_MIN_SCORE", 0.03),

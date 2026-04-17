@@ -1275,6 +1275,21 @@ impl MetadataStore {
             .map_err(Into::into)
     }
 
+    pub fn list_agents_with_memories(&self) -> Result<Vec<String>> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT DISTINCT agent_id
+            FROM memories
+            WHERE archived_at IS NULL
+            ORDER BY agent_id ASC
+            "#,
+        )?;
+        let rows = stmt.query_map([], |row| row.get::<_, String>(0))?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
     pub fn mark_memories_accessed(&self, memory_ids: &[i64]) -> Result<()> {
         if memory_ids.is_empty() {
             return Ok(());

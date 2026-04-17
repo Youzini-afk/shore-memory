@@ -2,7 +2,7 @@ use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryScope {
     Private,
@@ -42,7 +42,31 @@ impl std::str::FromStr for MemoryScope {
     }
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub fn default_recall_scopes(request_scope: MemoryScope) -> Vec<MemoryScope> {
+    match request_scope {
+        MemoryScope::Private => vec![MemoryScope::Private, MemoryScope::Shared, MemoryScope::System],
+        MemoryScope::Group => vec![MemoryScope::Group, MemoryScope::Shared, MemoryScope::System],
+        MemoryScope::Shared => vec![MemoryScope::Shared, MemoryScope::System],
+        MemoryScope::System => vec![MemoryScope::System, MemoryScope::Shared],
+    }
+}
+
+pub fn selected_recall_scopes(
+    request_scope: MemoryScope,
+    selected_scopes: Option<&[MemoryScope]>,
+) -> Vec<MemoryScope> {
+    let mut out = default_recall_scopes(request_scope);
+    if let Some(extra_scopes) = selected_scopes {
+        for scope in extra_scopes {
+            if !out.contains(scope) {
+                out.push(*scope);
+            }
+        }
+    }
+    out
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum MemoryScopeHint {
     Auto,
@@ -147,6 +171,8 @@ pub struct RecallRequest {
     pub limit: Option<usize>,
     pub include_state: Option<bool>,
     pub scope_hint: Option<MemoryScopeHint>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_scopes: Option<Vec<MemoryScope>>,
     #[serde(default)]
     pub debug: Option<bool>,
     /// Stage 2 recall recipes (fast / hybrid / entity_heavy / contiguous).
@@ -211,6 +237,8 @@ pub struct ScoreBreakdown {
     pub entity: f32,
     #[serde(default)]
     pub contiguity: f32,
+    #[serde(default)]
+    pub scope_weight: f32,
     #[serde(default)]
     pub combined: f32,
     #[serde(default)]
@@ -803,10 +831,23 @@ pub fn scope_visible_for_request(
     }
 }
 
+pub fn scope_visible_for_selected_request(
+    memory: &MemoryRecord,
+    user_uid: Option<&str>,
+    channel_uid: Option<&str>,
+    selected_scopes: &[MemoryScope],
+) -> bool {
+    if !selected_scopes.contains(&memory.scope) {
+        return false;
+    }
+    scope_visible_for_request(memory, user_uid, channel_uid)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        MemoryRecord, MemoryScope, MemoryScopeHint, infer_scope, scope_visible_for_request,
+        MemoryRecord, MemoryScope, MemoryScopeHint, default_recall_scopes, infer_scope,
+        scope_visible_for_request, scope_visible_for_selected_request, selected_recall_scopes,
     };
     use serde_json::json;
 
@@ -902,6 +943,23 @@ mod tests {
     }
 
     #[test]
+    fn selected_recall_scopes_extend_default_scope_set() {
+        assert_eq!(
+            default_recall_scopes(MemoryScope::Group),
+            vec![MemoryScope::Group, MemoryScope::Shared, MemoryScope::System]
+        );
+        assert_eq!(
+            selected_recall_scopes(MemoryScope::Group, Some(&[MemoryScope::Private])),
+            vec![
+                MemoryScope::Group,
+                MemoryScope::Shared,
+                MemoryScope::System,
+                MemoryScope::Private,
+            ]
+        );
+    }
+
+    #[test]
     fn scope_visibility_respects_private_and_group_boundaries() {
         let private_memory = sample_memory(MemoryScope::Private, Some("user:master"), None);
         assert!(scope_visible_for_request(
@@ -929,5 +987,22 @@ mod tests {
 
         let shared_memory = sample_memory(MemoryScope::Shared, None, None);
         assert!(scope_visible_for_request(&shared_memory, None, None));
+    }
+
+    #[test]
+    fn selected_scope_visibility_rejects_unselected_scope() {
+        let private_memory = sample_memory(MemoryScope::Private, Some("user:master"), None);
+        assert!(!scope_visible_for_selected_request(
+            &private_memory,
+            Some("user:master"),
+            None,
+            &[MemoryScope::Group, MemoryScope::Shared],
+        ));
+        assert!(scope_visible_for_selected_request(
+            &private_memory,
+            Some("user:master"),
+            None,
+            &[MemoryScope::Private],
+        ));
     }
 }
