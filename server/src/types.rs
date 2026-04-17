@@ -324,6 +324,81 @@ pub struct ExportMemoriesRequest {
     pub include_archived: Option<bool>,
 }
 
+/* ---------------- graph ---------------- */
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphRequest {
+    pub agent_id: String,
+    pub limit: Option<usize>,
+    pub include_archived: Option<bool>,
+    pub state: Option<String>,
+    pub user_uid: Option<String>,
+    pub channel_uid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphMemoryNode {
+    pub id: i64,
+    pub scope: MemoryScope,
+    pub memory_type: String,
+    pub content_preview: String,
+    pub state: String,
+    pub importance: f32,
+    pub session_uid: Option<String>,
+    pub supersedes_memory_id: Option<i64>,
+    pub archived_at: Option<String>,
+    pub created_at: String,
+    pub updated_at: String,
+    /// 该记忆挂载的 entity ID 列表（去重，顺序不保证）
+    pub entity_ids: Vec<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphEntityNode {
+    pub id: i64,
+    pub name: String,
+    pub entity_type: String,
+    pub linked_memory_count: i64,
+    /// 仅统计当前 graph 子集中挂载的记忆数量；用于渲染节点大小
+    pub local_memory_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphMemoryEntityEdge {
+    pub memory_id: i64,
+    pub entity_id: i64,
+    pub weight: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphSupersedeEdge {
+    /// 较新的 memory id（来自 `memories.id`）
+    pub from_memory_id: i64,
+    /// 被替代的 memory id（来自 `supersedes_memory_id`）
+    pub to_memory_id: i64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct GraphStats {
+    pub memory_count: usize,
+    pub entity_count: usize,
+    pub memory_entity_edges: usize,
+    pub supersede_edges: usize,
+    pub total_memories_for_agent: usize,
+    pub truncated: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GraphResponse {
+    pub agent_id: String,
+    pub memories: Vec<GraphMemoryNode>,
+    pub entities: Vec<GraphEntityNode>,
+    pub memory_entity_edges: Vec<GraphMemoryEntityEdge>,
+    pub supersede_edges: Vec<GraphSupersedeEdge>,
+    pub stats: GraphStats,
+    pub generated_at: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AgentStatePatch {
     pub mood: Option<String>,

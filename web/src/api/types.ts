@@ -127,6 +127,71 @@ export interface ExportMemoriesResponse {
   items: MemoryRecord[]
 }
 
+/* ---------------- Graph ---------------- */
+
+/** GET /v1/graph 查询参数 */
+export interface GraphRequest {
+  agent_id: string
+  limit?: number
+  include_archived?: boolean
+  state?: MemoryState
+  user_uid?: string | null
+  channel_uid?: string | null
+}
+
+export interface GraphMemoryNode {
+  id: number
+  scope: MemoryScope
+  memory_type: MemoryType
+  content_preview: string
+  state: MemoryState | string
+  importance: number
+  session_uid?: string | null
+  supersedes_memory_id?: number | null
+  archived_at?: string | null
+  created_at: string
+  updated_at: string
+  entity_ids: number[]
+}
+
+export interface GraphEntityNode {
+  id: number
+  name: string
+  entity_type: string
+  linked_memory_count: number
+  local_memory_count: number
+}
+
+export interface GraphMemoryEntityEdge {
+  memory_id: number
+  entity_id: number
+  weight: number
+}
+
+export interface GraphSupersedeEdge {
+  from_memory_id: number
+  to_memory_id: number
+}
+
+export interface GraphStats {
+  memory_count: number
+  entity_count: number
+  memory_entity_edges: number
+  supersede_edges: number
+  total_memories_for_agent: number
+  truncated: boolean
+}
+
+export interface GraphResponse {
+  agent_id: string
+  memories: GraphMemoryNode[]
+  entities: GraphEntityNode[]
+  memory_entity_edges: GraphMemoryEntityEdge[]
+  supersede_edges: GraphSupersedeEdge[]
+  stats: GraphStats
+  generated_at: string
+}
+
 /* ---------------- Recall ---------------- */
 
 /**

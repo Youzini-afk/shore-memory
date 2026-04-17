@@ -101,6 +101,25 @@ pub enum InsertMemoryOutcome {
     DuplicateOf(MemoryRecord),
 }
 
+/// Intermediate aggregate returned by `MetadataStore::load_memory_graph`.
+/// Kept separate from the public `GraphResponse` so db knows only about
+/// internal record shapes; the conversion into the wire format happens in
+/// `app.rs`.
+#[derive(Debug, Clone)]
+pub struct LoadedMemoryGraph {
+    pub memories: Vec<MemoryRecord>,
+    pub entities: Vec<EntityRecord>,
+    /// `(entity_id, memory_id, weight)` triples, constrained so
+    /// `memory_id` is always present in `memories`.
+    pub memory_entity_links: Vec<(i64, i64, f32)>,
+    /// `(from_memory_id, to_memory_id)` pairs, both endpoints constrained
+    /// to `memories`. Used to draw the Stage-3 "fact supersede" chain.
+    pub supersede_edges: Vec<(i64, i64)>,
+    /// Total memory count for the agent under the same filter, for the
+    /// `truncated` flag in the response's `stats`.
+    pub total_memories: usize,
+}
+
 impl MetadataStore {
     pub fn new(db_path: PathBuf) -> Result<Self> {
         if let Some(parent) = db_path.parent() {
@@ -1268,6 +1287,140 @@ impl MetadataStore {
         Ok(())
     }
 
+    /// Payload returned by `load_memory_graph`. Owners map this into the
+    /// public `GraphResponse` wire format; the db layer only deals in the
+    /// internal `MemoryRecord` / `EntityRecord` types.
+    ///
+    /// `memory_entity_links` is `(entity_id, memory_id, weight)` triples,
+    /// filtered so both endpoints are present in `memories`.
+    /// `supersede_edges` is `(from_memory_id, to_memory_id)` pairs, again
+    /// both endpoints constrained to the returned memory set.
+    pub fn load_memory_graph(
+        &self,
+        agent_id: &str,
+        state_filter: Option<&str>,
+        include_archived: bool,
+        limit: usize,
+    ) -> Result<LoadedMemoryGraph> {
+        if agent_id.trim().is_empty() {
+            return Err(anyhow!("agent_id must not be empty"));
+        }
+        let limit = limit.clamp(1, 5000);
+        let conn = self.open_conn()?;
+
+        // Dynamic WHERE: agent_id + optional state + optional archived filter.
+        let mut filters: Vec<&str> = vec!["agent_id = ?1"];
+        if state_filter.is_some() {
+            filters.push("state = ?2");
+        }
+        if !include_archived {
+            filters.push("archived_at IS NULL");
+        }
+        let where_sql = filters.join(" AND ");
+
+        // Total count (for "truncated" stat).
+        let total_sql = format!("SELECT COUNT(*) FROM memories WHERE {where_sql}");
+        let total_memories: usize = match state_filter {
+            Some(state) => conn.query_row(&total_sql, params![agent_id, state], |r| {
+                r.get::<_, i64>(0)
+            })? as usize,
+            None => {
+                conn.query_row(&total_sql, params![agent_id], |r| r.get::<_, i64>(0))? as usize
+            }
+        };
+
+        // Page of memories (top-N by updated_at DESC).
+        let limit_marker = if state_filter.is_some() { "?3" } else { "?2" };
+        let page_sql = format!(
+            r#"
+            SELECT
+                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
+                content_hash, source_event_ids, linked_memory_ids,
+                tags_json, metadata_json, importance, sentiment, source, embedding_json,
+                state, valid_at, invalid_at, supersedes_memory_id,
+                created_at, updated_at, archived_at, access_count, last_accessed_at
+            FROM memories
+            WHERE {where_sql}
+            ORDER BY updated_at DESC, id DESC
+            LIMIT {limit_marker}
+            "#
+        );
+        let mut stmt = conn.prepare(&page_sql)?;
+        let memories: Vec<MemoryRecord> = match state_filter {
+            Some(state) => stmt
+                .query_map(params![agent_id, state, limit as i64], row_to_memory_record)?
+                .collect::<rusqlite::Result<Vec<_>>>()?,
+            None => stmt
+                .query_map(params![agent_id, limit as i64], row_to_memory_record)?
+                .collect::<rusqlite::Result<Vec<_>>>()?,
+        };
+        drop(stmt);
+
+        if memories.is_empty() {
+            return Ok(LoadedMemoryGraph {
+                memories,
+                entities: Vec::new(),
+                memory_entity_links: Vec::new(),
+                supersede_edges: Vec::new(),
+                total_memories,
+            });
+        }
+
+        let memory_ids: Vec<i64> = memories.iter().map(|m| m.id).collect();
+        let id_set: std::collections::HashSet<i64> = memory_ids.iter().copied().collect();
+        let placeholders = std::iter::repeat_n("?", memory_ids.len())
+            .collect::<Vec<_>>()
+            .join(",");
+
+        // Entity-memory links (constrained to returned memory set).
+        let link_sql = format!(
+            r#"
+            SELECT entity_id, memory_id, weight
+            FROM entity_memory_links
+            WHERE memory_id IN ({placeholders})
+            "#
+        );
+        let mut stmt = conn.prepare(&link_sql)?;
+        let link_rows = stmt.query_map(
+            rusqlite::params_from_iter(memory_ids.iter()),
+            |row| -> rusqlite::Result<(i64, i64, f32)> {
+                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, f64>(2)? as f32))
+            },
+        )?;
+        let memory_entity_links: Vec<(i64, i64, f32)> = link_rows
+            .collect::<rusqlite::Result<Vec<_>>>()?;
+        drop(stmt);
+
+        // Entities referenced by those links.
+        let mut entity_ids: Vec<i64> = memory_entity_links.iter().map(|(eid, _, _)| *eid).collect();
+        entity_ids.sort_unstable();
+        entity_ids.dedup();
+        let entities = self.list_entities_by_ids(&entity_ids)?;
+
+        // Supersede edges: from `memory.id` -> `memory.supersedes_memory_id`,
+        // with both endpoints in the returned set.
+        let supersede_edges: Vec<(i64, i64)> = memories
+            .iter()
+            .filter_map(|m| {
+                m.supersedes_memory_id.and_then(|target| {
+                    if id_set.contains(&target) {
+                        Some((m.id, target))
+                    } else {
+                        None
+                    }
+                })
+            })
+            .collect();
+
+        Ok(LoadedMemoryGraph {
+            memories,
+            entities,
+            memory_entity_links,
+            supersede_edges,
+            total_memories,
+        })
+    }
+
     pub fn archive_memories(&self, memory_ids: &[i64]) -> Result<()> {
         if memory_ids.is_empty() {
             return Ok(());
@@ -2404,5 +2557,106 @@ mod tests {
         assert_eq!(history.len(), 1);
         assert_eq!(history[0].event, "update");
         assert_eq!(history[0].new_content.as_deref(), Some("用户喜欢夜间散步"));
+    }
+
+    #[test]
+    fn load_memory_graph_returns_constrained_subgraph() {
+        let temp_dir = tempdir().expect("tempdir");
+        let store = MetadataStore::new(temp_dir.path().join("test.sqlite3"))
+            .expect("create metadata store");
+        store.init().expect("init schema");
+
+        // 4 memories; #4 supersedes #1 (both inside the top-3 slice, so the
+        // supersede edge must be emitted). #4 also references #5 as its
+        // supersede target, but #5 is not in the top-3 slice so that edge
+        // should get pruned.
+        let m1 = store
+            .insert_memory(&memory_for("m1", Some("h1")))
+            .expect("insert m1");
+        let m2 = store
+            .insert_memory(&memory_for("m2", Some("h2")))
+            .expect("insert m2");
+        let m3 = store
+            .insert_memory(&memory_for("m3", Some("h3")))
+            .expect("insert m3");
+
+        // Archive m3 so we can test include_archived=false filter.
+        store
+            .archive_memories(&[m3.id])
+            .expect("archive m3");
+
+        // Register entities and link: e1 <-> (m1, m2), e2 <-> (m2 only).
+        let (e1, _) = store
+            .upsert_entity("shore", Some("u1"), "Elena", "person")
+            .expect("upsert e1");
+        let (e2, _) = store
+            .upsert_entity("shore", Some("u1"), "Moonwalk", "concept")
+            .expect("upsert e2");
+        store
+            .link_entity_to_memory(e1.id, m1.id, 1.0)
+            .expect("link e1 m1");
+        store
+            .link_entity_to_memory(e1.id, m2.id, 1.0)
+            .expect("link e1 m2");
+        store
+            .link_entity_to_memory(e2.id, m2.id, 1.0)
+            .expect("link e2 m2");
+
+        // m2 supersedes m1 (both in the returned slice).
+        store
+            .update_memory(
+                m2.id,
+                &UpdateMemoryRequest {
+                    content: None,
+                    tags: None,
+                    metadata: None,
+                    importance: None,
+                    sentiment: None,
+                    source: None,
+                    state: None,
+                    valid_at: None,
+                    invalid_at: None,
+                    supersedes_memory_id: Some(Some(m1.id)),
+                    archived: None,
+                },
+            )
+            .expect("supersede");
+
+        // include_archived = false should drop m3.
+        let graph = store
+            .load_memory_graph("shore", None, false, 10)
+            .expect("graph load");
+        let ids: Vec<i64> = graph.memories.iter().map(|m| m.id).collect();
+        assert_eq!(ids.len(), 2);
+        assert!(ids.contains(&m1.id));
+        assert!(ids.contains(&m2.id));
+        assert!(!ids.contains(&m3.id));
+
+        // Links pruned to the returned memory set; e2->m2 should stay.
+        assert_eq!(graph.memory_entity_links.len(), 3);
+        assert!(
+            graph
+                .memory_entity_links
+                .iter()
+                .any(|(eid, mid, _)| *eid == e1.id && *mid == m1.id)
+        );
+
+        // Entities returned are the union across the links above (e1 + e2).
+        let entity_ids: Vec<i64> = graph.entities.iter().map(|e| e.id).collect();
+        assert!(entity_ids.contains(&e1.id));
+        assert!(entity_ids.contains(&e2.id));
+
+        // Supersede edge (m2 -> m1) exists and both endpoints are in the set.
+        assert_eq!(graph.supersede_edges, vec![(m2.id, m1.id)]);
+
+        // total_memories_for_agent counts all non-archived (since state=None).
+        assert_eq!(graph.total_memories, 2);
+
+        // Sanity: include_archived=true pulls m3 back in.
+        let graph_all = store
+            .load_memory_graph("shore", None, true, 10)
+            .expect("graph load archived");
+        assert_eq!(graph_all.memories.len(), 3);
+        assert_eq!(graph_all.total_memories, 3);
     }
 }

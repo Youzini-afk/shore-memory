@@ -22,7 +22,7 @@ use tower_http::trace::TraceLayer;
 use tracing::{error, info, warn};
 
 use crate::config::ServiceConfig;
-use crate::db::{MetadataStore, NewMemoryRecord};
+use crate::db::{LoadedMemoryGraph, MetadataStore, NewMemoryRecord};
 use crate::recall_recipe::{
     FusionInputs, FusionWeights, additive_fuse, bm25_params_for_query, entity_spread_attenuation,
     normalize_bm25,
@@ -31,11 +31,12 @@ use crate::trivium::{EntityTriviumStore, TriviumStore};
 use crate::types::{
     AgentStatePatch, AgentStateResponse, CreateMemoryRequest, EntityDraft, EntityRecord,
     EventMessageRequest, ExistingMemoryHint, ExportMemoriesRequest, ExportMemoriesResponse,
-    ListMemoriesRequest, ListMemoriesResponse, MemoryDetailResponse, MemoryRecord, MemorySnippet,
-    RecallRecipe, RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse,
-    TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage, UpdateMemoryRequest,
-    UpdateMemoryResponse, WorkerMemoryDraft, WorkerScoreTurnRequest, infer_scope,
-    scope_visible_for_request,
+    GraphEntityNode, GraphMemoryEntityEdge, GraphMemoryNode, GraphRequest, GraphResponse,
+    GraphStats, GraphSupersedeEdge, ListMemoriesRequest, ListMemoriesResponse,
+    MemoryDetailResponse, MemoryRecord, MemorySnippet, RecallRecipe, RecallRequest, RecallResponse,
+    ScoreBreakdown, ServerEvent, SyncSummaryResponse, TaskActionResponse, TaskKind, TaskRecord,
+    TurnEventRequest, TurnMessage, UpdateMemoryRequest, UpdateMemoryResponse, WorkerMemoryDraft,
+    WorkerScoreTurnRequest, infer_scope, scope_visible_for_request,
 };
 use crate::worker::{
     WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories,
@@ -115,6 +116,7 @@ impl AppState {
                 "/v1/memories/{memory_id}",
                 get(get_memory).patch(update_memory),
             )
+            .route("/v1/graph", get(graph))
             .route(
                 "/v1/agents/{agent_id}/state",
                 get(get_agent_state).patch(update_agent_state),
@@ -1934,6 +1936,183 @@ async fn export_memories(
         exported_at: chrono::Utc::now().to_rfc3339(),
         count: items.len(),
         items,
+    }))
+}
+
+/// `GET /v1/graph` — returns the memory/entity subgraph for a given agent,
+/// capped at `limit` memories (default 500, max 5000). Used by the web
+/// "Memory Graph" view.
+///
+/// Nodes/edges are intentionally projected into a compact wire format
+/// (`GraphMemoryNode`, `GraphEntityNode`, etc.) instead of the full
+/// `MemoryRecord`, both to shrink the payload and to avoid exposing
+/// internal fields (e.g. `embedding_json`) that the UI has no use for.
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn graph(
+    headers: HeaderMap,
+    Query(request): Query<GraphRequest>,
+    State(state): State<AppState>,
+) -> Result<Json<GraphResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    if request.agent_id.trim().is_empty() {
+        return Err(ServiceError::BadRequest("agent_id is required".to_string()));
+    }
+    if let Some(state_filter) = request.state.as_deref()
+        && !is_valid_memory_state(state_filter)
+    {
+        return Err(ServiceError::BadRequest(format!(
+            "invalid memory state: {state_filter}"
+        )));
+    }
+
+    let limit = request.limit.unwrap_or(500).clamp(1, 5000);
+    let include_archived = request.include_archived.unwrap_or(false);
+
+    let LoadedMemoryGraph {
+        memories,
+        entities,
+        memory_entity_links,
+        supersede_edges,
+        total_memories,
+    } = state.store.load_memory_graph(
+        &request.agent_id,
+        request.state.as_deref(),
+        include_archived,
+        limit,
+    )?;
+
+    // Optional scope visibility pass: if caller passes user_uid / channel_uid,
+    // drop private/group memories that aren't visible to them. We do this post
+    // hoc on the already-paged slice so the limit remains per the raw SQL
+    // count (otherwise the truncated/total stats would get confusing).
+    let visible_memories: Vec<MemoryRecord> = if request.user_uid.is_some()
+        || request.channel_uid.is_some()
+    {
+        memories
+            .into_iter()
+            .filter(|m| {
+                scope_visible_for_request(
+                    m,
+                    request.user_uid.as_deref(),
+                    request.channel_uid.as_deref(),
+                )
+            })
+            .collect()
+    } else {
+        memories
+    };
+
+    // Fast lookup sets for the edge/entity pruning pass.
+    let kept_memory_ids: std::collections::HashSet<i64> =
+        visible_memories.iter().map(|m| m.id).collect();
+
+    // Map entity -> list of memory ids (within the kept set) for the
+    // per-memory `entity_ids` field.
+    let mut entity_ids_by_memory: std::collections::HashMap<i64, Vec<i64>> =
+        std::collections::HashMap::new();
+    let mut memory_count_by_entity: std::collections::HashMap<i64, usize> =
+        std::collections::HashMap::new();
+    let mut filtered_links: Vec<GraphMemoryEntityEdge> = Vec::new();
+    for (entity_id, memory_id, weight) in &memory_entity_links {
+        if !kept_memory_ids.contains(memory_id) {
+            continue;
+        }
+        entity_ids_by_memory
+            .entry(*memory_id)
+            .or_default()
+            .push(*entity_id);
+        *memory_count_by_entity.entry(*entity_id).or_insert(0) += 1;
+        filtered_links.push(GraphMemoryEntityEdge {
+            memory_id: *memory_id,
+            entity_id: *entity_id,
+            weight: *weight,
+        });
+    }
+
+    let memory_nodes: Vec<GraphMemoryNode> = visible_memories
+        .iter()
+        .map(|m| {
+            let preview = if m.content.chars().count() > 160 {
+                let mut buf = m.content.chars().take(160).collect::<String>();
+                buf.push('…');
+                buf
+            } else {
+                m.content.clone()
+            };
+            let mut ids = entity_ids_by_memory
+                .get(&m.id)
+                .cloned()
+                .unwrap_or_default();
+            ids.sort_unstable();
+            ids.dedup();
+            GraphMemoryNode {
+                id: m.id,
+                scope: m.scope.clone(),
+                memory_type: m.memory_type.clone(),
+                content_preview: preview,
+                state: m.state.clone(),
+                importance: m.importance,
+                session_uid: m.session_uid.clone(),
+                supersedes_memory_id: m.supersedes_memory_id,
+                archived_at: m.archived_at.clone(),
+                created_at: m.created_at.clone(),
+                updated_at: m.updated_at.clone(),
+                entity_ids: ids,
+            }
+        })
+        .collect();
+
+    // Only emit entity nodes that still have at least one linked memory in
+    // the kept set.
+    let entity_nodes: Vec<GraphEntityNode> = entities
+        .iter()
+        .filter_map(|e| {
+            memory_count_by_entity
+                .get(&e.id)
+                .copied()
+                .filter(|c| *c > 0)
+                .map(|count| GraphEntityNode {
+                    id: e.id,
+                    name: e.name_raw.clone(),
+                    entity_type: e.entity_type.clone(),
+                    linked_memory_count: e.linked_memory_count,
+                    local_memory_count: count,
+                })
+        })
+        .collect();
+
+    let filtered_supersede_edges: Vec<GraphSupersedeEdge> = supersede_edges
+        .into_iter()
+        .filter(|(from, to)| kept_memory_ids.contains(from) && kept_memory_ids.contains(to))
+        .map(|(from, to)| GraphSupersedeEdge {
+            from_memory_id: from,
+            to_memory_id: to,
+        })
+        .collect();
+
+    let stats = GraphStats {
+        memory_count: memory_nodes.len(),
+        entity_count: entity_nodes.len(),
+        memory_entity_edges: filtered_links.len(),
+        supersede_edges: filtered_supersede_edges.len(),
+        total_memories_for_agent: total_memories,
+        truncated: total_memories > memory_nodes.len(),
+    };
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/graph", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+
+    Ok(Json(GraphResponse {
+        agent_id: request.agent_id,
+        memories: memory_nodes,
+        entities: entity_nodes,
+        memory_entity_edges: filtered_links,
+        supersede_edges: filtered_supersede_edges,
+        stats,
+        generated_at: chrono::Utc::now().to_rfc3339(),
     }))
 }
 
