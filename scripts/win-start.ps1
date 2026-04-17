@@ -27,13 +27,14 @@ if (-not (Test-Path $serverExe)) {
   throw 'server release binary not found. Run scripts\win-build.ps1 first.'
 }
 
+$env:PMS_DATA_DIR = $dataDir
+
 $workerCommand = 'Set-Location "{0}"; & "{1}" -m uvicorn app.main:app --host "{2}" --port {3}' -f $workerDir, $venvPython, $BindHost, $WorkerPort
 $workerProcess = Start-Process powershell -ArgumentList '-NoExit', '-Command', $workerCommand -PassThru
 Set-Content -Path $workerPidFile -Value $workerProcess.Id
 
 $env:PMS_HOST = $BindHost
 $env:PMS_PORT = [string]$ServerPort
-$env:PMS_DATA_DIR = $dataDir
 $env:PMS_WEB_DIST = $webDist
 $env:PMS_WORKER_BASE_URL = "http://${BindHost}:${WorkerPort}"
 

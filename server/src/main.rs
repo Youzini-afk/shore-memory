@@ -1,6 +1,7 @@
 mod app;
 mod config;
 mod db;
+mod model_config;
 mod recall_recipe;
 mod trivium;
 mod types;
@@ -39,8 +40,9 @@ async fn main() -> Result<()> {
     let metrics_handle = PrometheusBuilder::new().install_recorder()?;
     let store = MetadataStore::new(config.metadata_db_path.clone())?;
     store.init()?;
-    let trivium = TriviumStore::new(config.trivium_db_path.clone())?;
-    let entity_trivium = EntityTriviumStore::new(config.entity_trivium_db_path.clone())?;
+    let trivium = TriviumStore::new(config.trivium_db_path.clone(), config.embedding_dim)?;
+    let entity_trivium =
+        EntityTriviumStore::new(config.entity_trivium_db_path.clone(), config.embedding_dim)?;
     let worker = WorkerClient::new(&config)?;
 
     let app_state = AppState::new(

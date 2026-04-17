@@ -713,6 +713,21 @@ impl MetadataStore {
         Ok(out)
     }
 
+    pub fn list_all_entities(&self) -> Result<Vec<EntityRecord>> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT id, agent_id, user_uid, name_raw, name_norm, entity_type,
+                   linked_memory_count, created_at, updated_at
+            FROM entities
+            ORDER BY agent_id ASC, id ASC
+            "#,
+        )?;
+        let rows = stmt.query_map([], row_to_entity_record)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
     /// Return every memory id that an entity is attached to.
     /// Used by recall's entity-boost pass to propagate entity hits onto
     /// their linked memories.
@@ -1290,6 +1305,35 @@ impl MetadataStore {
             .map_err(Into::into)
     }
 
+    pub fn all_unarchived_memories(&self) -> Result<Vec<MemoryRecord>> {
+        let conn = self.open_conn()?;
+        let mut stmt = conn.prepare(
+            r#"
+            SELECT
+                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
+                content_hash, source_event_ids, linked_memory_ids,
+                tags_json, metadata_json, importance, sentiment, source, embedding_json,
+                state, valid_at, invalid_at, supersedes_memory_id,
+                created_at, updated_at, archived_at, access_count, last_accessed_at
+            FROM memories
+            WHERE archived_at IS NULL
+            ORDER BY agent_id ASC, created_at ASC, id ASC
+            "#,
+        )?;
+        let rows = stmt.query_map([], row_to_memory_record)?;
+        rows.collect::<rusqlite::Result<Vec<_>>>()
+            .map_err(Into::into)
+    }
+
+    pub fn clear_all_memory_embeddings(&self) -> Result<usize> {
+        let conn = self.open_conn()?;
+        let changed = conn.execute(
+            "UPDATE memories SET embedding_json = NULL, updated_at = ?1 WHERE archived_at IS NULL",
+            params![now_rfc3339()],
+        )?;
+        Ok(changed)
+    }
+
     pub fn mark_memories_accessed(&self, memory_ids: &[i64]) -> Result<()> {
         if memory_ids.is_empty() {
             return Ok(());
@@ -1414,11 +1458,15 @@ impl MetadataStore {
         let link_rows = stmt.query_map(
             rusqlite::params_from_iter(memory_ids.iter()),
             |row| -> rusqlite::Result<(i64, i64, f32)> {
-                Ok((row.get::<_, i64>(0)?, row.get::<_, i64>(1)?, row.get::<_, f64>(2)? as f32))
+                Ok((
+                    row.get::<_, i64>(0)?,
+                    row.get::<_, i64>(1)?,
+                    row.get::<_, f64>(2)? as f32,
+                ))
             },
         )?;
-        let memory_entity_links: Vec<(i64, i64, f32)> = link_rows
-            .collect::<rusqlite::Result<Vec<_>>>()?;
+        let memory_entity_links: Vec<(i64, i64, f32)> =
+            link_rows.collect::<rusqlite::Result<Vec<_>>>()?;
         drop(stmt);
 
         // Entities referenced by those links.
@@ -2611,9 +2659,7 @@ mod tests {
             .expect("insert m3");
 
         // Archive m3 so we can test include_archived=false filter.
-        store
-            .archive_memories(&[m3.id])
-            .expect("archive m3");
+        store.archive_memories(&[m3.id]).expect("archive m3");
 
         // Register entities and link: e1 <-> (m1, m2), e2 <-> (m2 only).
         let (e1, _) = store

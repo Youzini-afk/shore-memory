@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use anyhow::{Context, Result, anyhow};
+use anyhow::{Context, Result, anyhow, bail};
 use axum::extract::ws::{Message, WebSocket, WebSocketUpgrade};
 use axum::extract::{Path, Query, Request, State};
 use axum::http::{HeaderMap, HeaderName, StatusCode, header};
@@ -13,7 +13,7 @@ use metrics_exporter_prometheus::PrometheusHandle;
 use moka::future::Cache;
 use serde::Deserialize;
 use serde_json::{Value, json};
-use tokio::sync::broadcast;
+use tokio::sync::{RwLock, broadcast};
 use tokio::time::{sleep, timeout};
 use tower_http::request_id::{MakeRequestUuid, PropagateRequestIdLayer, SetRequestIdLayer};
 use tower_http::services::{ServeDir, ServeFile};
@@ -22,6 +22,12 @@ use tracing::{error, info, warn};
 
 use crate::config::ServiceConfig;
 use crate::db::{LoadedMemoryGraph, MetadataStore, NewMemoryRecord};
+use crate::model_config::{
+    ModelConfigFile, ModelConfigResponse, ModelConfigTestResponse, ProviderTestResponse,
+    RuntimeModelConfig, UpdateModelConfigRequest, UpdateModelConfigResponse, apply_update,
+    delete_model_config_file, load_runtime_model_config, resolve_runtime_model_config,
+    write_model_config_file,
+};
 use crate::recall_recipe::{
     FusionInputs, FusionWeights, additive_fuse, bm25_params_for_query, entity_spread_attenuation,
     normalize_bm25,
@@ -32,11 +38,11 @@ use crate::types::{
     EventMessageRequest, ExistingMemoryHint, ExportMemoriesRequest, ExportMemoriesResponse,
     GraphEntityNode, GraphMemoryEntityEdge, GraphMemoryNode, GraphRequest, GraphResponse,
     GraphStats, GraphSupersedeEdge, ListMemoriesRequest, ListMemoriesResponse,
-    MemoryDetailResponse, MemoryRecord, MemoryScope, MemorySnippet, RecallRecipe,
-    RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse,
-    TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage,
-    UpdateMemoryRequest, UpdateMemoryResponse, WorkerMemoryDraft, WorkerScoreTurnRequest,
-    infer_scope, scope_visible_for_selected_request, selected_recall_scopes,
+    MemoryDetailResponse, MemoryRecord, MemoryScope, MemorySnippet, RecallRecipe, RecallRequest,
+    RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse, TaskActionResponse, TaskKind,
+    TaskRecord, TurnEventRequest, TurnMessage, UpdateMemoryRequest, UpdateMemoryResponse,
+    WorkerMemoryDraft, WorkerScoreTurnRequest, infer_scope, scope_visible_for_selected_request,
+    selected_recall_scopes,
 };
 use crate::worker::{
     WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories,
@@ -64,6 +70,7 @@ pub struct AppState {
     pub recall_epoch: Cache<String, u64>,
     pub embedding_cache: Cache<String, Vec<f32>>,
     pub events: broadcast::Sender<ServerEvent>,
+    pub reindex_lock: Arc<RwLock<()>>,
 }
 
 impl AppState {
@@ -98,6 +105,7 @@ impl AppState {
             metrics_handle: Arc::new(metrics_handle),
             worker,
             events,
+            reindex_lock: Arc::new(RwLock::new(())),
         }
     }
 
@@ -123,6 +131,13 @@ impl AppState {
             .route("/v1/maintenance/reflection/run", post(run_reflection))
             .route("/v1/maintenance/trivium/rebuild", post(rebuild_trivium))
             .route("/v1/maintenance/sync-summary", get(sync_summary))
+            .route(
+                "/v1/model-config",
+                get(get_model_config)
+                    .put(update_model_config)
+                    .delete(restore_model_config_defaults),
+            )
+            .route("/v1/model-config/test", post(test_model_config))
             .route("/v1/events", get(events_ws));
 
         if self.config.api_key.is_some() {
@@ -189,7 +204,12 @@ impl AppState {
         selected_scopes
             .iter()
             .copied()
-            .filter(|scope| self.config.scope_recall.weight(request_scope, *scope).is_some())
+            .filter(|scope| {
+                self.config
+                    .scope_recall
+                    .weight(request_scope, *scope)
+                    .is_some()
+            })
             .collect()
     }
 
@@ -434,6 +454,7 @@ impl AppState {
         query_text: &str,
         request: &WorkerScoreTurnRequest,
     ) -> Result<Vec<(String, MemoryRecord)>> {
+        let _reindex_guard = self.reindex_lock.read().await;
         if query_text.trim().is_empty() {
             return Ok(Vec::new());
         }
@@ -521,6 +542,7 @@ impl AppState {
         user_uid: Option<&str>,
         pairs: Vec<(i64, EntityDraft)>,
     ) -> Result<()> {
+        let _reindex_guard = self.reindex_lock.read().await;
         use crate::db::MetadataStore;
         use std::collections::HashMap;
 
@@ -856,7 +878,7 @@ impl AppState {
                 TaskKind::RebuildTrivium,
                 &payload.agent_id,
                 json!({ "agent_id": payload.agent_id }),
-                Some(format!("rebuild:{}", payload.agent_id)),
+                Some("rebuild:all".to_string()),
             )?;
         }
 
@@ -896,9 +918,10 @@ impl AppState {
 
     #[tracing::instrument(skip(self, task), fields(task_id = task.id, task_kind = "rebuild_trivium"))]
     async fn process_rebuild(&self, task: TaskRecord) -> Result<()> {
+        let _reindex_guard = self.reindex_lock.write().await;
         let payload: MaintenanceAgentRequest =
             serde_json::from_str(&task.payload_json).context("invalid rebuild payload")?;
-        let memories = self.store.all_active_memories(&payload.agent_id)?;
+        let memories = self.store.all_unarchived_memories()?;
         let mut rebuild_items = Vec::with_capacity(memories.len());
 
         for memory in memories {
@@ -921,13 +944,16 @@ impl AppState {
         }
 
         let inserted = self.trivium.rebuild(rebuild_items).await?;
-        self.bump_recall_epoch(&payload.agent_id).await;
+        for agent_id in self.store.list_agents_with_memories()? {
+            self.bump_recall_epoch(&agent_id).await;
+        }
         self.emit_event(
             "maintenance.completed",
             json!({
                 "task_id": task.id,
                 "kind": "rebuild_trivium",
                 "inserted": inserted,
+                "requested_agent_id": payload.agent_id,
             }),
         )
         .await;
@@ -936,6 +962,7 @@ impl AppState {
 
     #[tracing::instrument(skip(self, task), fields(task_id = task.id, task_kind = "index_memory"))]
     async fn process_index_memory(&self, task: TaskRecord) -> Result<()> {
+        let _reindex_guard = self.reindex_lock.read().await;
         let payload: IndexMemoryPayload =
             serde_json::from_str(&task.payload_json).context("invalid index_memory payload")?;
         let memory = self
@@ -972,12 +999,14 @@ impl AppState {
     ///   5. Fuse via `additive_fuse` with weights derived from the recipe.
     #[tracing::instrument(skip(self, request), fields(agent_id = %request.agent_id))]
     pub async fn handle_recall(&self, request: RecallRequest) -> Result<RecallResponse> {
+        let _reindex_guard = self.reindex_lock.read().await;
         use std::collections::{HashMap, HashSet};
         let started = std::time::Instant::now();
         let recipe = RecallRecipe::parse(request.recipe.as_deref());
         let recipe_label = recipe.as_str();
         let request_scope = infer_scope(request.scope_hint, request.channel_uid.as_deref());
-        let selected_scopes = selected_recall_scopes(request_scope, request.selected_scopes.as_deref());
+        let selected_scopes =
+            selected_recall_scopes(request_scope, request.selected_scopes.as_deref());
         let allowed_scopes = self.allowed_recall_scopes(request_scope, &selected_scopes);
 
         let recall_epoch = self.recall_epoch.get(&request.agent_id).await.unwrap_or(0);
@@ -1265,7 +1294,8 @@ impl AppState {
             ) {
                 continue;
             }
-            let Some(scope_weight) = self.config.scope_recall.weight(request_scope, memory.scope) else {
+            let Some(scope_weight) = self.config.scope_recall.weight(request_scope, memory.scope)
+            else {
                 continue;
             };
             // Stage 3: drop superseded / invalidated / future-dated memories
@@ -1375,6 +1405,7 @@ impl AppState {
         source_event_ids: Vec<i64>,
         linked_memory_ids: Vec<i64>,
     ) -> Result<MemoryRecord> {
+        let _reindex_guard = self.reindex_lock.read().await;
         let previous_memory_id = self.store.get_latest_memory_id_for_agent(agent_id)?;
         let record = self.store.insert_memory(&NewMemoryRecord {
             agent_id: agent_id.to_string(),
@@ -1448,6 +1479,154 @@ impl AppState {
             payload,
             at: chrono::Utc::now(),
         });
+    }
+
+    fn current_runtime_model_config(
+        &self,
+    ) -> Result<(RuntimeModelConfig, Option<ModelConfigFile>)> {
+        load_runtime_model_config(&self.config.model_config_path)
+    }
+
+    async fn test_runtime_model_config(
+        &self,
+        runtime: &RuntimeModelConfig,
+    ) -> ModelConfigTestResponse {
+        let embedding = if runtime.embedding.configured() {
+            let started = std::time::Instant::now();
+            let result = self.worker.embed("shore-memory model-config test").await;
+            histogram!("shore_memory_worker_call_duration_seconds", "op" => "embed")
+                .record(started.elapsed().as_secs_f64());
+            match result {
+                Ok(vector) if !vector.is_empty() => ProviderTestResponse {
+                    ok: true,
+                    configured: true,
+                    message: "embedding call succeeded".to_string(),
+                    dimension: Some(vector.len()),
+                    source: runtime.embedding.source.clone(),
+                },
+                Ok(_) => ProviderTestResponse {
+                    ok: false,
+                    configured: true,
+                    message: "embedding call returned empty vector".to_string(),
+                    dimension: runtime.embedding.dimension,
+                    source: runtime.embedding.source.clone(),
+                },
+                Err(err) => {
+                    counter!("shore_memory_worker_call_errors_total", "op" => "embed").increment(1);
+                    ProviderTestResponse {
+                        ok: false,
+                        configured: true,
+                        message: format!("embedding call failed: {err:#}"),
+                        dimension: runtime.embedding.dimension,
+                        source: runtime.embedding.source.clone(),
+                    }
+                }
+            }
+        } else {
+            ProviderTestResponse {
+                ok: false,
+                configured: false,
+                message: "embedding provider is not configured".to_string(),
+                dimension: runtime.embedding.dimension,
+                source: runtime.embedding.source.clone(),
+            }
+        };
+
+        let llm = if runtime.llm.configured() {
+            let started = std::time::Instant::now();
+            let result = self
+                .worker
+                .extract_entities("shore memory config test for OpenAI", None)
+                .await;
+            histogram!("shore_memory_worker_call_duration_seconds", "op" => "extract_entities")
+                .record(started.elapsed().as_secs_f64());
+            match result {
+                Ok(_) => ProviderTestResponse {
+                    ok: true,
+                    configured: true,
+                    message: "llm call succeeded".to_string(),
+                    dimension: None,
+                    source: runtime.llm.source.clone(),
+                },
+                Err(err) => {
+                    counter!("shore_memory_worker_call_errors_total", "op" => "extract_entities")
+                        .increment(1);
+                    ProviderTestResponse {
+                        ok: false,
+                        configured: true,
+                        message: format!("llm call failed: {err:#}"),
+                        dimension: None,
+                        source: runtime.llm.source.clone(),
+                    }
+                }
+            }
+        } else {
+            ProviderTestResponse {
+                ok: false,
+                configured: false,
+                message: "llm provider is not configured".to_string(),
+                dimension: None,
+                source: runtime.llm.source.clone(),
+            }
+        };
+
+        ModelConfigTestResponse { embedding, llm }
+    }
+
+    async fn rebuild_all_embeddings_with_dim(&self, dim: usize) -> Result<(usize, usize, usize)> {
+        self.embedding_cache.invalidate_all();
+        self.embedding_cache.run_pending_tasks().await;
+
+        let memories = self.store.all_unarchived_memories()?;
+        let mut memory_items = Vec::with_capacity(memories.len());
+        for memory in memories {
+            let embedding = self.get_or_fetch_embedding(&memory.content).await?;
+            memory_items.push((memory, embedding));
+        }
+        let refreshed_embeddings = memory_items.len();
+
+        for (memory, embedding) in &memory_items {
+            self.store
+                .update_memory_embedding(memory.id, &serde_json::to_string(embedding)?)?;
+        }
+
+        let reindexed_memories = self.trivium.rebuild_with_dim(memory_items, dim).await?;
+
+        let entities = self.store.list_all_entities()?;
+        let mut entity_items = Vec::with_capacity(entities.len());
+        if !entities.is_empty() {
+            let names: Vec<String> = entities
+                .iter()
+                .map(|entity| entity.name_raw.clone())
+                .collect();
+            let embeddings = self.worker.embed_batch(names).await?;
+            if embeddings.len() != entities.len() {
+                bail!(
+                    "entity embedding count mismatch during reindex: expected {}, got {}",
+                    entities.len(),
+                    embeddings.len()
+                );
+            }
+            for (entity, vector) in entities.into_iter().zip(embeddings.into_iter()) {
+                if vector.is_empty() {
+                    bail!(
+                        "entity embedding is empty during reindex: entity_id={}",
+                        entity.id
+                    );
+                }
+                entity_items.push((entity, vector));
+            }
+        }
+        let reindexed_entities = self
+            .entity_trivium
+            .rebuild_with_dim(entity_items, dim)
+            .await?;
+
+        for agent_id in self.store.list_agents_with_memories()? {
+            self.bump_recall_epoch(&agent_id).await;
+        }
+
+        Ok((refreshed_embeddings, reindexed_memories, reindexed_entities))
     }
 
     async fn bump_recall_epoch(&self, agent_id: &str) {
@@ -1952,7 +2131,7 @@ async fn update_memory(
                     TaskKind::RebuildTrivium,
                     &updated.agent_id,
                     json!({ "agent_id": updated.agent_id }),
-                    Some(format!("rebuild:{}", updated.agent_id)),
+                    Some("rebuild:all".to_string()),
                 )?
                 .id,
         )
@@ -2055,8 +2234,7 @@ async fn graph(
     )?;
 
     // Fast lookup sets for the edge/entity pruning pass.
-    let kept_memory_ids: std::collections::HashSet<i64> =
-        memories.iter().map(|m| m.id).collect();
+    let kept_memory_ids: std::collections::HashSet<i64> = memories.iter().map(|m| m.id).collect();
 
     // Map entity -> list of memory ids (within the kept set) for the
     // per-memory `entity_ids` field.
@@ -2091,10 +2269,7 @@ async fn graph(
             } else {
                 m.content.clone()
             };
-            let mut ids = entity_ids_by_memory
-                .get(&m.id)
-                .cloned()
-                .unwrap_or_default();
+            let mut ids = entity_ids_by_memory.get(&m.id).cloned().unwrap_or_default();
             ids.sort_unstable();
             ids.dedup();
             GraphMemoryNode {
@@ -2214,6 +2389,188 @@ async fn update_agent_state(
 }
 
 #[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn get_model_config(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<ModelConfigResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let _reindex_guard = state.reindex_lock.read().await;
+    let (runtime, file) = state.current_runtime_model_config()?;
+    let response = runtime.to_response(&state.config.model_config_path, file.as_ref());
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn update_model_config(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(request): Json<UpdateModelConfigRequest>,
+) -> Result<Json<UpdateModelConfigResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let _exclusive = state.reindex_lock.write().await;
+
+    let (previous_runtime, previous_file) = state.current_runtime_model_config()?;
+    let previous_file_for_rollback = previous_file.clone();
+    let next_file = apply_update(previous_file, request)
+        .map_err(|err| ServiceError::BadRequest(err.to_string()))?;
+    let next_runtime = resolve_runtime_model_config(Some(&next_file));
+
+    let embedding_changed = embedding_effective_changed(&previous_runtime, &next_runtime);
+    let embedding_dimension_changed =
+        previous_runtime.embedding.dimension != next_runtime.embedding.dimension;
+
+    write_model_config_file(&state.config.model_config_path, &next_file)?;
+
+    let mut memory_embeddings_refreshed = 0usize;
+    let mut reindexed_memories = 0usize;
+    let mut reindexed_entities = 0usize;
+    if embedding_changed {
+        let dim = next_runtime.embedding.dimension.unwrap_or(1536).max(1);
+        match state.rebuild_all_embeddings_with_dim(dim).await {
+            Ok((refreshed, memory_count, entity_count)) => {
+                memory_embeddings_refreshed = refreshed;
+                reindexed_memories = memory_count;
+                reindexed_entities = entity_count;
+            }
+            Err(err) => {
+                if let Some(file) = previous_file_for_rollback.as_ref() {
+                    let _ = write_model_config_file(&state.config.model_config_path, file);
+                } else {
+                    let _ = delete_model_config_file(&state.config.model_config_path);
+                }
+                return Err(ServiceError::Internal(format!(
+                    "model config applied but reindex failed and rollback attempted: {err:#}"
+                )));
+            }
+        }
+    }
+
+    let (runtime, file) = state.current_runtime_model_config()?;
+    let response = UpdateModelConfigResponse {
+        config: runtime.to_response(&state.config.model_config_path, file.as_ref()),
+        embedding_changed,
+        embedding_dimension_changed,
+        embedding_cache_cleared: embedding_changed,
+        memory_embeddings_refreshed,
+        reindexed_memories,
+        reindexed_entities,
+    };
+
+    state
+        .emit_event(
+            "model_config.updated",
+            json!({
+                "embedding_changed": embedding_changed,
+                "embedding_dimension_changed": embedding_dimension_changed,
+                "memory_embeddings_refreshed": memory_embeddings_refreshed,
+                "reindexed_memories": reindexed_memories,
+                "reindexed_entities": reindexed_entities,
+            }),
+        )
+        .await;
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn restore_model_config_defaults(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<UpdateModelConfigResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let _exclusive = state.reindex_lock.write().await;
+
+    let (previous_runtime, previous_file) = state.current_runtime_model_config()?;
+    delete_model_config_file(&state.config.model_config_path)?;
+    let (runtime_after, file_after) = state.current_runtime_model_config()?;
+
+    let embedding_changed = embedding_effective_changed(&previous_runtime, &runtime_after);
+    let embedding_dimension_changed =
+        previous_runtime.embedding.dimension != runtime_after.embedding.dimension;
+
+    let mut memory_embeddings_refreshed = 0usize;
+    let mut reindexed_memories = 0usize;
+    let mut reindexed_entities = 0usize;
+    if embedding_changed {
+        let dim = runtime_after.embedding.dimension.unwrap_or(1536).max(1);
+        match state.rebuild_all_embeddings_with_dim(dim).await {
+            Ok((refreshed, memory_count, entity_count)) => {
+                memory_embeddings_refreshed = refreshed;
+                reindexed_memories = memory_count;
+                reindexed_entities = entity_count;
+            }
+            Err(err) => {
+                if let Some(file) = previous_file.as_ref() {
+                    let _ = write_model_config_file(&state.config.model_config_path, file);
+                }
+                return Err(ServiceError::Internal(format!(
+                    "restore defaults applied but reindex failed and rollback attempted: {err:#}"
+                )));
+            }
+        }
+    }
+
+    let response = UpdateModelConfigResponse {
+        config: runtime_after.to_response(&state.config.model_config_path, file_after.as_ref()),
+        embedding_changed,
+        embedding_dimension_changed,
+        embedding_cache_cleared: embedding_changed,
+        memory_embeddings_refreshed,
+        reindexed_memories,
+        reindexed_entities,
+    };
+
+    state
+        .emit_event(
+            "model_config.restored",
+            json!({
+                "embedding_changed": embedding_changed,
+                "embedding_dimension_changed": embedding_dimension_changed,
+                "memory_embeddings_refreshed": memory_embeddings_refreshed,
+                "reindexed_memories": reindexed_memories,
+                "reindexed_entities": reindexed_entities,
+            }),
+        )
+        .await;
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config:restore", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn test_model_config(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<ModelConfigTestResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let _reindex_guard = state.reindex_lock.read().await;
+    let (runtime, _) = state.current_runtime_model_config()?;
+    let response = state.test_runtime_model_config(&runtime).await;
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config/test", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn retry_scorer(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -2290,7 +2647,7 @@ async fn rebuild_trivium(
         TaskKind::RebuildTrivium,
         &request.agent_id,
         json!({ "agent_id": request.agent_id }),
-        Some(format!("rebuild:{}", request.agent_id)),
+        Some("rebuild:all".to_string()),
     )?;
     Ok((
         StatusCode::ACCEPTED,
@@ -2514,6 +2871,13 @@ fn cache_key_for_recall(request: &RecallRequest, recall_epoch: u64) -> String {
 
 fn cache_key_for_text(text: &str) -> String {
     blake3::hash(text.trim().as_bytes()).to_hex().to_string()
+}
+
+fn embedding_effective_changed(before: &RuntimeModelConfig, after: &RuntimeModelConfig) -> bool {
+    before.embedding.api_base != after.embedding.api_base
+        || before.embedding.model != after.embedding.model
+        || before.embedding.dimension != after.embedding.dimension
+        || before.embedding.api_key != after.embedding.api_key
 }
 
 fn request_id_from_headers(headers: &HeaderMap) -> String {

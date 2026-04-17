@@ -1,6 +1,7 @@
 import json
 import os
 import re
+from pathlib import Path
 from typing import Any, Optional
 
 import httpx
@@ -11,6 +12,106 @@ from pydantic import BaseModel, Field
 load_dotenv()
 
 app = FastAPI(title="shore-memory-worker", version="0.1.0")
+
+
+def _model_config_file_path() -> Path:
+    data_dir = os.getenv("PMS_DATA_DIR", "./data").strip() or "./data"
+    return Path(data_dir) / "model-config.json"
+
+
+def _read_model_config_override() -> dict[str, Any]:
+    path = _model_config_file_path()
+    try:
+        raw = path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    except OSError:
+        return {}
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError:
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _as_dict(value: Any) -> dict[str, Any]:
+    return value if isinstance(value, dict) else {}
+
+
+def _env_positive_int(keys: list[str], default: int) -> int:
+    for key in keys:
+        raw = os.getenv(key, "").strip()
+        if not raw:
+            continue
+        try:
+            parsed = int(raw)
+        except ValueError:
+            continue
+        if parsed > 0:
+            return parsed
+    return default
+
+
+def _resolve_provider_config(
+    prefix: str,
+    section: dict[str, Any],
+    *,
+    include_dimension: bool,
+) -> dict[str, Any]:
+    api_key = os.getenv(f"{prefix}_API_KEY", "").strip()
+    api_base = os.getenv(f"{prefix}_API_BASE", "https://api.openai.com/v1").strip()
+    model = os.getenv(f"{prefix}_MODEL", "").strip()
+
+    override_base = as_optional_str(section.get("api_base"))
+    if override_base:
+        api_base = override_base
+    if not api_base:
+        api_base = "https://api.openai.com/v1"
+
+    override_model = as_optional_str(section.get("model"))
+    if override_model:
+        model = override_model
+
+    api_key_mode = str(section.get("api_key_mode", "inherit")).strip().lower()
+    if api_key_mode == "clear":
+        api_key = ""
+    elif api_key_mode == "set":
+        api_key = as_optional_str(section.get("api_key")) or ""
+
+    out: dict[str, Any] = {
+        "api_key": api_key,
+        "api_base": api_base,
+        "model": model,
+    }
+    if include_dimension:
+        dimension = _env_positive_int(["PMS_EMBEDDING_DIM", "PMW_EMBEDDING_DIM"], 1536)
+        raw_dimension = section.get("dimension")
+        if isinstance(raw_dimension, int) and raw_dimension > 0:
+            dimension = raw_dimension
+        elif isinstance(raw_dimension, str):
+            try:
+                parsed = int(raw_dimension.strip())
+                if parsed > 0:
+                    dimension = parsed
+            except ValueError:
+                pass
+        out["dimension"] = dimension
+    return out
+
+
+def _load_runtime_model_config() -> dict[str, dict[str, Any]]:
+    override = _read_model_config_override()
+    embedding = _resolve_provider_config(
+        "PMW_EMBEDDING",
+        _as_dict(override.get("embedding")),
+        include_dimension=True,
+    )
+    llm = _resolve_provider_config(
+        "PMW_LLM",
+        _as_dict(override.get("llm")),
+        include_dimension=False,
+    )
+    return {"embedding": embedding, "llm": llm}
 
 
 class EmbedRequest(BaseModel):
@@ -264,14 +365,16 @@ async def _call_embedding_api(texts: list[str]) -> list[list[float]]:
     if not texts:
         return []
 
-    api_key = os.getenv("PMW_EMBEDDING_API_KEY", "").strip()
-    api_base = os.getenv("PMW_EMBEDDING_API_BASE", "https://api.openai.com/v1").strip().rstrip("/")
-    model = os.getenv("PMW_EMBEDDING_MODEL", "").strip()
+    runtime = _load_runtime_model_config()
+    embedding_cfg = runtime["embedding"]
+    api_key = str(embedding_cfg.get("api_key", "")).strip()
+    api_base = str(embedding_cfg.get("api_base", "https://api.openai.com/v1")).strip().rstrip("/")
+    model = str(embedding_cfg.get("model", "")).strip()
 
     if not api_key or not model:
         raise HTTPException(
             status_code=503,
-            detail="embedding worker is not configured with PMW_EMBEDDING_API_KEY and PMW_EMBEDDING_MODEL",
+            detail="embedding provider is not configured (api_key/model required)",
         )
 
     url = f"{api_base}/embeddings" if not api_base.endswith("/embeddings") else api_base
@@ -814,9 +917,15 @@ class OpenAICompatClient:
 
     @classmethod
     def from_env(cls, prefix: str) -> Optional["OpenAICompatClient"]:
-        api_key = os.getenv(f"{prefix}_API_KEY", "").strip()
-        api_base = os.getenv(f"{prefix}_API_BASE", "https://api.openai.com/v1").strip()
-        model = os.getenv(f"{prefix}_MODEL", "").strip()
+        if prefix == "PMW_LLM":
+            runtime = _load_runtime_model_config().get("llm", {})
+            api_key = str(runtime.get("api_key", "")).strip()
+            api_base = str(runtime.get("api_base", "https://api.openai.com/v1")).strip()
+            model = str(runtime.get("model", "")).strip()
+        else:
+            api_key = os.getenv(f"{prefix}_API_KEY", "").strip()
+            api_base = os.getenv(f"{prefix}_API_BASE", "https://api.openai.com/v1").strip()
+            model = os.getenv(f"{prefix}_MODEL", "").strip()
         if not api_key or not model:
             return None
         return cls(api_key=api_key, api_base=api_base, model=model)

@@ -17,16 +17,17 @@ pub struct TriviumStore {
     db_path: PathBuf,
     db: Arc<RwLock<Option<Database<f32>>>>,
     config: TriviumConfig,
+    current_dim: Arc<RwLock<usize>>,
 }
 
 impl TriviumStore {
-    pub fn new(db_path: PathBuf) -> Result<Self> {
+    pub fn new(db_path: PathBuf, dim: usize) -> Result<Self> {
         if let Some(parent) = db_path.parent() {
             fs::create_dir_all(parent)
                 .with_context(|| format!("failed to create trivium dir: {}", parent.display()))?;
         }
         let config = TriviumConfig {
-            dim: 1536,
+            dim,
             ..Default::default()
         };
         let db = Database::<f32>::open_with_config(path_as_str(&db_path)?, config)
@@ -36,7 +37,15 @@ impl TriviumStore {
             db_path,
             db: Arc::new(RwLock::new(Some(db))),
             config,
+            current_dim: Arc::new(RwLock::new(dim)),
         })
+    }
+
+    pub fn current_dim(&self) -> Result<usize> {
+        self.current_dim
+            .read()
+            .map(|value| *value)
+            .map_err(|_| anyhow!("trivium dim lock poisoned"))
     }
 
     pub async fn search(
@@ -242,9 +251,20 @@ impl TriviumStore {
     }
 
     pub async fn rebuild(&self, items: Vec<(MemoryRecord, Vec<f32>)>) -> Result<usize> {
+        let dim = self.current_dim()?;
+        self.rebuild_with_dim(items, dim).await
+    }
+
+    pub async fn rebuild_with_dim(
+        &self,
+        items: Vec<(MemoryRecord, Vec<f32>)>,
+        dim: usize,
+    ) -> Result<usize> {
         let db = Arc::clone(&self.db);
         let db_path = self.db_path.clone();
-        let config = self.config;
+        let mut config = self.config;
+        config.dim = dim;
+        let current_dim = Arc::clone(&self.current_dim);
         spawn_blocking(move || {
             let mut guard = db
                 .write()
@@ -256,6 +276,7 @@ impl TriviumStore {
                 .with_context(|| format!("failed to reopen trivium db: {}", db_path.display()))?;
 
             let mut previous_memory_id = None;
+            let mut previous_agent_id: Option<String> = None;
             let mut inserted = 0usize;
             for (memory, embedding) in items {
                 database
@@ -264,7 +285,9 @@ impl TriviumStore {
                 database
                     .index_text(memory.id as u64, &memory.content)
                     .map_err(|err| anyhow!(err.to_string()))?;
-                if let Some(prev_id) = previous_memory_id {
+                if let Some(prev_id) = previous_memory_id
+                    && previous_agent_id.as_deref() == Some(memory.agent_id.as_str())
+                {
                     database
                         .link(memory.id as u64, prev_id as u64, "associative", 0.2)
                         .map_err(|err| anyhow!(err.to_string()))?;
@@ -273,10 +296,14 @@ impl TriviumStore {
                         .map_err(|err| anyhow!(err.to_string()))?;
                 }
                 previous_memory_id = Some(memory.id);
+                previous_agent_id = Some(memory.agent_id.clone());
                 inserted += 1;
             }
             database.flush().map_err(|err| anyhow!(err.to_string()))?;
             *guard = Some(database);
+            *current_dim
+                .write()
+                .map_err(|_| anyhow!("trivium dim lock poisoned"))? = dim;
             Ok(inserted)
         })
         .await
@@ -316,17 +343,18 @@ pub struct EntityTriviumStore {
     db_path: PathBuf,
     db: Arc<RwLock<Option<Database<f32>>>>,
     config: TriviumConfig,
+    current_dim: Arc<RwLock<usize>>,
 }
 
 impl EntityTriviumStore {
-    pub fn new(db_path: PathBuf) -> Result<Self> {
+    pub fn new(db_path: PathBuf, dim: usize) -> Result<Self> {
         if let Some(parent) = db_path.parent() {
             fs::create_dir_all(parent).with_context(|| {
                 format!("failed to create entity trivium dir: {}", parent.display())
             })?;
         }
         let config = TriviumConfig {
-            dim: 1536,
+            dim,
             ..Default::default()
         };
         let db = Database::<f32>::open_with_config(path_as_str(&db_path)?, config)
@@ -336,7 +364,15 @@ impl EntityTriviumStore {
             db_path,
             db: Arc::new(RwLock::new(Some(db))),
             config,
+            current_dim: Arc::new(RwLock::new(dim)),
         })
+    }
+
+    pub fn current_dim(&self) -> Result<usize> {
+        self.current_dim
+            .read()
+            .map(|value| *value)
+            .map_err(|_| anyhow!("entity trivium dim lock poisoned"))
     }
 
     pub async fn insert_entity(&self, entity: EntityRecord, embedding: Vec<f32>) -> Result<()> {
@@ -413,9 +449,20 @@ impl EntityTriviumStore {
     }
 
     pub async fn rebuild(&self, items: Vec<(EntityRecord, Vec<f32>)>) -> Result<usize> {
+        let dim = self.current_dim()?;
+        self.rebuild_with_dim(items, dim).await
+    }
+
+    pub async fn rebuild_with_dim(
+        &self,
+        items: Vec<(EntityRecord, Vec<f32>)>,
+        dim: usize,
+    ) -> Result<usize> {
         let db = Arc::clone(&self.db);
         let db_path = self.db_path.clone();
-        let config = self.config;
+        let mut config = self.config;
+        config.dim = dim;
+        let current_dim = Arc::clone(&self.current_dim);
         spawn_blocking(move || {
             let mut guard = db
                 .write()
@@ -440,6 +487,9 @@ impl EntityTriviumStore {
             }
             database.flush().map_err(|err| anyhow!(err.to_string()))?;
             *guard = Some(database);
+            *current_dim
+                .write()
+                .map_err(|_| anyhow!("entity trivium dim lock poisoned"))? = dim;
             Ok(inserted)
         })
         .await
@@ -482,7 +532,10 @@ fn build_visibility_filter(
     for scope in allowed_scopes {
         match scope {
             MemoryScope::System | MemoryScope::Shared => {
-                visible.push(Filter::eq("scope", Value::String(scope.as_str().to_string())));
+                visible.push(Filter::eq(
+                    "scope",
+                    Value::String(scope.as_str().to_string()),
+                ));
             }
             MemoryScope::Private => {
                 if let Some(user_uid) = user_uid {

@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use tracing::warn;
 
+use crate::model_config::{embedding_dim_from_env_or_file, model_config_path};
 use crate::types::MemoryScope;
 
 #[derive(Debug, Clone)]
@@ -90,6 +91,9 @@ impl Default for ScopeRecallConfig {
 #[derive(Debug, Clone)]
 pub struct ServiceConfig {
     pub bind_addr: SocketAddr,
+    pub data_dir: PathBuf,
+    pub model_config_path: PathBuf,
+    pub embedding_dim: usize,
     pub metadata_db_path: PathBuf,
     pub trivium_db_path: PathBuf,
     /// Separate Trivium DB file for the entity vector index.
@@ -170,8 +174,14 @@ impl ServiceConfig {
             .map(PathBuf::from)
             .or_else(resolve_default_web_dist_path);
 
+        let model_config_path = model_config_path(&data_dir);
+        let embedding_dim = embedding_dim_from_env_or_file(&model_config_path).unwrap_or(1536);
+
         Self {
             bind_addr,
+            data_dir,
+            model_config_path,
+            embedding_dim,
             metadata_db_path,
             trivium_db_path,
             entity_trivium_db_path,

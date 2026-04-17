@@ -293,6 +293,68 @@ export interface TaskActionResponse {
   message?: string
 }
 
+/* ---------------- Model config ---------------- */
+
+export interface ProviderConfigResponse {
+  api_base: string
+  model: string
+  dimension?: number
+  configured: boolean
+  api_key_configured: boolean
+  api_key_masked?: string | null
+  source: string
+  api_key_source: string
+  override_active: boolean
+}
+
+export interface ModelConfigStorageResponse {
+  path: string
+  override_active: boolean
+  updated_at?: string | null
+}
+
+export interface ModelConfigResponse {
+  embedding: ProviderConfigResponse
+  llm: ProviderConfigResponse
+  storage: ModelConfigStorageResponse
+}
+
+export interface UpdateProviderConfigRequest {
+  api_base: string
+  model: string
+  dimension?: number
+  api_key?: string
+  clear_api_key: boolean
+}
+
+export interface UpdateModelConfigRequest {
+  embedding: UpdateProviderConfigRequest
+  llm: UpdateProviderConfigRequest
+}
+
+export interface UpdateModelConfigResponse {
+  config: ModelConfigResponse
+  embedding_changed: boolean
+  embedding_dimension_changed: boolean
+  embedding_cache_cleared: boolean
+  memory_embeddings_refreshed: number
+  reindexed_memories: number
+  reindexed_entities: number
+}
+
+export interface ProviderTestResponse {
+  ok: boolean
+  configured: boolean
+  message: string
+  dimension?: number | null
+  source: string
+}
+
+export interface ModelConfigTestResponse {
+  embedding: ProviderTestResponse
+  llm: ProviderTestResponse
+}
+
 /* ---------------- Events ---------------- */
 
 export type ServerEventType =
