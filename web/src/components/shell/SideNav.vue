@@ -14,21 +14,21 @@ import { computed } from 'vue'
 const app = useAppStore()
 
 const items = [
-  { name: 'recall', label: 'Recall', to: '/recall', icon: Search, hint: 'Playground' },
-  { name: 'memories', label: 'Memories', to: '/memories', icon: Database },
-  { name: 'graph', label: 'Graph', to: '/graph', icon: Share2 },
-  { name: 'agent', label: 'Agent', to: '/agent', icon: UserRound },
-  { name: 'maintenance', label: 'Maintenance', to: '/maintenance', icon: Wrench },
-  { name: 'settings', label: 'Settings', to: '/settings', icon: SettingsIcon }
+  { name: 'recall', label: '召回实验台', to: '/recall', icon: Search, hint: '实验台' },
+  { name: 'memories', label: '记忆库', to: '/memories', icon: Database },
+  { name: 'graph', label: '记忆图谱', to: '/graph', icon: Share2 },
+  { name: 'agent', label: 'Agent 状态', to: '/agent', icon: UserRound },
+  { name: 'maintenance', label: '运维', to: '/maintenance', icon: Wrench },
+  { name: 'settings', label: '设置', to: '/settings', icon: SettingsIcon }
 ]
 
 const statusLabel = computed(() => {
   const s = app.eventsStatus
-  if (s === 'open') return 'Events · Live'
-  if (s === 'connecting') return 'Events · 连接中'
-  if (s === 'error') return 'Events · 错误'
-  if (s === 'lagged') return 'Events · Lagged'
-  return 'Events · 未连接'
+  if (s === 'open') return '事件流 · 实时'
+  if (s === 'connecting') return '事件流 · 连接中'
+  if (s === 'error') return '事件流 · 错误'
+  if (s === 'lagged') return '事件流 · 积压'
+  return '事件流 · 未连接'
 })
 
 const statusDot = computed(() => {
@@ -56,7 +56,7 @@ const statusDot = computed(() => {
             Shore Memory
           </div>
           <div class="text-[10px] uppercase tracking-[0.18em] text-ink-4 font-display">
-            Console
+            控制台
           </div>
         </div>
       </div>

@@ -15,6 +15,35 @@ const stateTone = computed<'active' | 'superseded' | 'invalidated' | 'archived'>
   return 'archived'
 })
 
+const stateLabel = computed(() => {
+  switch (stateTone.value) {
+    case 'active':
+      return '有效'
+    case 'superseded':
+      return '已取代'
+    case 'invalidated':
+      return '已失效'
+    case 'archived':
+    default:
+      return '已归档'
+  }
+})
+
+const scopeLabel = computed(() => {
+  switch (props.memory.scope) {
+    case 'private':
+      return '私有'
+    case 'group':
+      return '群组'
+    case 'shared':
+      return '共享'
+    case 'system':
+      return '系统'
+    default:
+      return props.memory.scope || '—'
+  }
+})
+
 const stateDotVar = computed(() => `var(--state-${stateTone.value})`)
 
 const scopeTone = computed<'accent' | 'blue' | 'amber' | 'ink'>(() => {
@@ -88,17 +117,17 @@ const entityCount = computed(() => {
       <div class="flex items-center gap-2 text-[11px] font-display">
         <span class="tabular text-ink-5 shrink-0">#{{ memory.id }}</span>
         <span class="text-ink-4 truncate max-w-[120px]">{{ memory.memory_type }}</span>
-        <PBadge :tone="stateTone" size="sm">{{ stateTone }}</PBadge>
-        <PBadge :tone="scopeTone" size="sm">{{ memory.scope }}</PBadge>
-        <span v-if="memory.archived_at" class="text-[10.5px] text-state-archived">archived</span>
+        <PBadge :tone="stateTone" size="sm">{{ stateLabel }}</PBadge>
+        <PBadge :tone="scopeTone" size="sm">{{ scopeLabel }}</PBadge>
+        <span v-if="memory.archived_at" class="text-[10.5px] text-state-archived">已归档</span>
         <span v-if="memory.supersedes_memory_id" class="text-[10.5px] text-state-superseded">
-          supersedes · #{{ memory.supersedes_memory_id }}
+          取代了 · #{{ memory.supersedes_memory_id }}
         </span>
         <span class="flex-1" />
         <span
           class="tabular text-[10.5px] font-display"
           :class="importanceTone"
-          title="importance"
+          title="重要度"
         >
           {{ importanceDisplay }}
         </span>
@@ -117,17 +146,17 @@ const entityCount = computed(() => {
       <div class="mt-1.5 flex items-center gap-3 text-[10.5px] text-ink-5 font-display">
         <span v-if="memory.tags?.length" class="flex items-center gap-1">
           <span class="h-1 w-1 rounded-full bg-accent/70" />
-          {{ entityCount.tags }} tag{{ entityCount.tags === 1 ? '' : 's' }}
+          {{ entityCount.tags }} 个标签
         </span>
         <span v-if="memory.linked_memory_ids?.length" class="flex items-center gap-1">
           <span class="h-1 w-1 rounded-full bg-sig-blue/80" />
-          {{ entityCount.linked }} link{{ entityCount.linked === 1 ? '' : 's' }}
+          {{ entityCount.linked }} 条关联
         </span>
         <span v-if="memory.source" class="truncate max-w-[160px]">
-          src · <span class="text-ink-3">{{ memory.source }}</span>
+          来源 · <span class="text-ink-3">{{ memory.source }}</span>
         </span>
         <span v-if="memory.session_uid" class="truncate max-w-[200px]">
-          session · <span class="text-ink-3">{{ memory.session_uid }}</span>
+          会话 · <span class="text-ink-3">{{ memory.session_uid }}</span>
         </span>
       </div>
     </div>

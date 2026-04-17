@@ -6,13 +6,13 @@ import PEmpty from '@/components/ui/PEmpty.vue'
 
 <template>
   <div class="min-h-full">
-    <PHero title="Agent" subtitle="mood · vibe · mind 三元组与最近记忆趋势" />
+    <PHero title="Agent 状态" subtitle="心情 · 氛围 · 心绪三元组与最近记忆趋势" />
     <div class="px-8 pb-10">
       <PCard edge>
         <PEmpty
-          title="Agent 状态待接入"
-          hint="下一个里程碑 M5 会接 /v1/agents/{agent_id}/state 做编辑与可视化。"
-          milestone="Next · M5"
+          title="Agent 状态即将接入"
+          hint="下一个里程碑会接入 /v1/agents/{agent_id}/state，提供编辑与可视化。"
+          milestone="即将上线 · M5"
         />
       </PCard>
     </div>

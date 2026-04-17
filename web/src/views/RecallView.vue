@@ -20,8 +20,8 @@ const { mode, variantA, variantB } = storeToRefs(recall)
 const queryBuilderRef = ref<InstanceType<typeof QueryBuilder> | null>(null)
 
 const modeOptions: Array<{ value: RecallMode; label: string; hint: string }> = [
-  { value: 'single', label: 'Single', hint: '单次召回 · 细节模式' },
-  { value: 'compare', label: 'A/B Compare', hint: '双变体并跑 · diff 视图' }
+  { value: 'single', label: '单次', hint: '单次召回 · 细节模式' },
+  { value: 'compare', label: 'A/B 对比', hint: '双变体并跑 · diff 视图' }
 ]
 
 function onKey(ev: KeyboardEvent) {
@@ -60,16 +60,16 @@ onBeforeUnmount(() => {
       <div class="relative flex items-end justify-between gap-6">
         <div class="min-w-0">
           <h1 class="font-display text-[24px] leading-tight tracking-tight text-ink-1">
-            Recall Playground
+            召回实验台
           </h1>
           <p class="mt-1 text-[12.5px] text-ink-3">
-            四信号融合 · 语义 / BM25 / 实体 / 连贯性。调参、看分数、在 graph 上定位命中
+            四信号融合 · 语义 / BM25 / 实体 / 连贯性。调参、看分数、在图谱上定位命中
           </p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <PBadge tone="accent" size="sm" dot>Agent · {{ app.agentId }}</PBadge>
           <PBadge v-if="mode === 'compare'" tone="blue" size="sm">
-            A/B mode
+            A/B 对比模式
           </PBadge>
         </div>
       </div>
@@ -84,10 +84,10 @@ onBeforeUnmount(() => {
         />
         <span class="text-[10.5px] text-ink-5 font-display">
           <template v-if="mode === 'single'">
-            调参 → 跑一次 → 看 score breakdown / 跳转 memory & graph
+            调参 → 跑一次 → 看分数拆解 / 跳转记忆与图谱
           </template>
           <template v-else>
-            同 query 双变体并跑 · 自动算 Jaccard / rank drift / A-only / B-only
+            同查询双变体并跑 · 自动算 Jaccard 与排名回调（A-only / B-only）
           </template>
         </span>
       </div>

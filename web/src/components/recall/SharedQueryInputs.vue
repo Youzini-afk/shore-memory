@@ -40,7 +40,7 @@ async function run() {
         @click="store.swapVariants()"
       >
         <ArrowLeftRight class="h-3.5 w-3.5" :stroke-width="1.75" />
-        swap
+        交换
       </button>
     </div>
 
@@ -53,26 +53,26 @@ async function run() {
     <PTextarea
       v-model="form.query"
       :rows="3"
-      placeholder="A/B 对比：同一查询跑两套 recipe / scope / filter"
+      placeholder="A/B 对比：同一查询跑两套配方 / 作用域 / 过滤"
       @submit="run"
     />
 
     <div class="mt-4 grid grid-cols-2 gap-3">
       <div>
         <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          User UID
+          用户 UID
         </div>
         <PInput v-model="form.user_uid" size="sm" placeholder="可选" mono />
       </div>
       <div>
         <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          Channel UID
+          频道 UID
         </div>
         <PInput v-model="form.channel_uid" size="sm" placeholder="可选" mono />
       </div>
       <div class="col-span-2">
         <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          Session UID
+          会话 UID
         </div>
         <PInput v-model="form.session_uid" size="sm" placeholder="可选" mono />
       </div>
@@ -80,7 +80,7 @@ async function run() {
 
     <div class="mt-4">
       <div class="mb-1 flex items-center justify-between text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-        <span>Limit · 每组返回条数</span>
+        <span>每组返回条数上限</span>
         <span class="normal-case tracking-normal text-ink-5">1 — 32</span>
       </div>
       <PSlider v-model="form.limit" :min="1" :max="32" :step="1" />
@@ -105,7 +105,7 @@ async function run() {
         class="hidden md:inline-flex items-center gap-1.5 text-[10px] text-ink-5 px-2 font-display"
       >
         <Search class="h-3 w-3" :stroke-width="1.75" />
-        同 query · 仅 variant 参数不同
+        同一查询 · 仅变体参数不同
       </span>
     </div>
   </PCard>

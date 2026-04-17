@@ -50,29 +50,29 @@ const agentState = computed(() => response.value?.agent_state ?? null)
     <!-- Metrics -->
     <div class="grid grid-cols-4 gap-3">
       <MetricTile
-        label="Latency"
+        label="延迟"
         :value="latencyDisplay"
         suffix="ms"
         :tone="latencyTone"
         hint="前端测量端到端耗时"
       />
       <MetricTile
-        label="Hits"
+        label="命中条数"
         :value="response ? hitCount : '—'"
         :tone="hitsTone"
         :hint="response ? `配方 ${form.recipe}` : '等待召回'"
       />
       <MetricTile
-        label="Recipe"
+        label="配方"
         :value="form.recipe"
         tone="accent"
-        :hint="`limit ${form.limit}`"
+        :hint="`上限 ${form.limit} 条`"
       />
       <MetricTile
-        label="Status"
-        :value="response ? (degraded ? 'degraded' : 'nominal') : '—'"
+        label="状态"
+        :value="response ? (degraded ? '已降级' : '正常') : '—'"
         :tone="response ? (degraded ? 'warn' : 'good') : 'muted'"
-        :hint="degraded ? 'embedding 不可用，已降级' : '向量通道正常'"
+        :hint="degraded ? 'Embedding 不可用，已降级使用 BM25 与实体信号' : '向量通道正常'"
       />
     </div>
 
@@ -84,10 +84,10 @@ const agentState = computed(() => response.value?.agent_state ?? null)
       <AlertTriangle class="h-4 w-4 text-sig-amber mt-0.5" :stroke-width="1.75" />
       <div class="flex-1 min-w-0">
         <div class="text-[12.5px] text-sig-amber font-display tracking-tight">
-          Degraded · 向量召回通道不可用
+          已降级 · 向量召回通道不可用
         </div>
         <div class="text-[11px] text-ink-3 mt-0.5">
-          Worker embedding 暂不可用，已自动降级到 BM25 + 实体信号。结果仍可用，但排序精度受影响。
+          Worker 的 Embedding 服务暂不可用，已自动降级到 BM25 与实体信号。结果仍可用，但排序精度受影响。
         </div>
       </div>
     </div>
@@ -106,17 +106,17 @@ const agentState = computed(() => response.value?.agent_state ?? null)
         <div class="flex items-center gap-3">
           <div v-if="agentState" class="text-[10.5px] text-ink-4 font-display tracking-tight">
             Agent <span class="text-ink-2">{{ agentState.agent_id }}</span>
-            · mood <span class="text-ink-2">{{ agentState.mood }}</span>
+            · 心情 <span class="text-ink-2">{{ agentState.mood }}</span>
           </div>
           <button
             v-if="memories.length"
             type="button"
             class="h-7 px-2.5 rounded-btn border border-shore-line bg-shore-card text-[11px] text-ink-2 hover:text-accent hover:border-accent/60 transition-colors flex items-center gap-1.5 font-display"
-            title="把这组命中在 Memory Graph 上做脉冲定位"
+            title="在记忆图谱中对这组命中做脉冲定位"
             @click="pingAllInGraph"
           >
             <Target class="h-3.5 w-3.5" :stroke-width="1.75" />
-            ping in graph
+            在图谱中高亮
           </button>
         </div>
       </div>
@@ -143,7 +143,7 @@ const agentState = computed(() => response.value?.agent_state ?? null)
           </div>
           <div class="font-display text-[14px] text-ink-1">准备就绪</div>
           <div class="text-[11px] text-ink-4 max-w-md text-center">
-            在左侧输入查询并按 ⌘↵ 开始召回；结果会按综合分数倒序排列，并拆解 semantic / bm25 / entity / contiguity 四路信号。
+            在左侧输入查询并按 ⌘↵ 开始召回；结果会按综合分数倒序排序，并拆解为语义 / BM25 / 实体 / 连贯性四路信号。
           </div>
         </div>
 
@@ -154,7 +154,7 @@ const agentState = computed(() => response.value?.agent_state ?? null)
         >
           <div class="font-display text-[13.5px] text-ink-1">没有命中结果</div>
           <div class="text-[11px] text-ink-4 text-center max-w-md">
-            尝试切换 Recipe、放宽作用域、或开启 include_invalid 做时光回溯。
+            尝试切换召回配方、放宽作用域、或打开“包含失效记忆”做时光回溯。
           </div>
         </div>
 

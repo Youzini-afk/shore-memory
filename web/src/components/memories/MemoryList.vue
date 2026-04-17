@@ -84,7 +84,7 @@ watch(selectedId, (id) => {
         </div>
         <div class="font-display text-[14px] text-ink-1">没有匹配的记忆</div>
         <div class="text-[11.5px] text-ink-4 max-w-sm">
-          清除筛选条件或切换 Agent 后再试。此列表会随 `memory.updated` 事件自动刷新详情。
+          清除筛选条件或切换 Agent 后再试。列表会根据 <span class="font-mono">memory.updated</span> 事件自动同步最新详情。
         </div>
       </div>
 
@@ -115,16 +115,16 @@ watch(selectedId, (id) => {
     >
       <span v-if="listLoading" class="flex items-center gap-1.5 text-ink-3">
         <Loader2 class="h-3 w-3 animate-spin" :stroke-width="1.75" />
-        loading…
+        正在加载…
       </span>
       <span v-else-if="hasMore" class="text-ink-4">
-        scroll to load more · <span class="tabular text-ink-2">{{ count }}</span>
+        继续下滑加载 · <span class="tabular text-ink-2">{{ count }}</span>
         / <span class="tabular">{{ total }}</span>
       </span>
       <span v-else>
-        end of list ·
+        已到列表末尾 · 
         <span class="tabular text-ink-2">{{ count }}</span>
-        loaded
+        条
       </span>
     </div>
   </div>

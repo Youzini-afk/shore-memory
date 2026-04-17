@@ -13,19 +13,19 @@ const store = useMemoriesStore()
 const { filter, listLoading, total, count } = storeToRefs(store)
 
 const stateOptions: { label: string; value: MemoryState | '' }[] = [
-  { value: '', label: 'All' },
-  { value: 'active', label: 'Active' },
-  { value: 'superseded', label: 'Superseded' },
-  { value: 'invalidated', label: 'Invalidated' },
-  { value: 'archived', label: 'Archived' }
+  { value: '', label: '全部' },
+  { value: 'active', label: '有效' },
+  { value: 'superseded', label: '已取代' },
+  { value: 'invalidated', label: '已失效' },
+  { value: 'archived', label: '已归档' }
 ]
 
 const scopeOptions: { label: string; value: MemoryScope | '' }[] = [
-  { value: '', label: 'All' },
-  { value: 'private', label: 'Private' },
-  { value: 'group', label: 'Group' },
-  { value: 'shared', label: 'Shared' },
-  { value: 'system', label: 'System' }
+  { value: '', label: '全部' },
+  { value: 'private', label: '私有' },
+  { value: 'group', label: '群组' },
+  { value: 'shared', label: '共享' },
+  { value: 'system', label: '系统' }
 ]
 
 const advanced = ref(false)
@@ -108,7 +108,7 @@ async function exportJson() {
 
       <label class="flex items-center gap-2 cursor-pointer select-none">
         <PSwitch v-model="filter.include_archived" />
-        <span class="text-[12px] text-ink-2 font-display">Archived</span>
+        <span class="text-[12px] text-ink-2 font-display">含已归档</span>
       </label>
 
       <div class="flex-1" />
@@ -120,13 +120,13 @@ async function exportJson() {
         @click="advanced = !advanced"
       >
         <Sliders class="h-3.5 w-3.5" :stroke-width="1.75" />
-        高级
+        高级筛选
       </button>
 
       <button
         type="button"
         class="h-8 w-8 rounded-btn text-ink-3 hover:text-ink-1 hover:bg-shore-hover transition-colors flex items-center justify-center"
-        title="刷新"
+        title="刷新列表"
         :disabled="listLoading"
         @click="reload"
       >
@@ -156,12 +156,12 @@ async function exportJson() {
     <!-- Row 2: segment chips -->
     <div class="flex items-center gap-3 px-6 pb-3">
       <div class="flex items-center gap-2">
-        <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">state</span>
+        <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">状态</span>
         <PSegment v-model="filter.state" :options="stateOptions" size="sm" />
       </div>
       <div class="h-5 w-px bg-shore-line/80 shrink-0" />
       <div class="flex items-center gap-2">
-        <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">scope</span>
+        <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">作用域</span>
         <PSegment v-model="filter.scope" :options="scopeOptions" size="sm" />
       </div>
       <div class="flex-1" />
@@ -169,7 +169,7 @@ async function exportJson() {
         <span class="text-ink-1">{{ count }}</span>
         <span class="mx-1 text-ink-5">/</span>
         <span>{{ total }}</span>
-        <span class="ml-1 text-ink-5">loaded</span>
+        <span class="ml-1 text-ink-5">条已加载</span>
       </div>
     </div>
 
@@ -180,25 +180,25 @@ async function exportJson() {
     >
       <div>
         <div class="mb-1 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-          memory_type
+          记忆类型
         </div>
         <PInput v-model="filter.memory_type" size="sm" placeholder="event / fact / promise ..." mono />
       </div>
       <div>
         <div class="mb-1 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-          user_uid
+          用户 UID
         </div>
         <PInput v-model="filter.user_uid" size="sm" placeholder="" mono />
       </div>
       <div>
         <div class="mb-1 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-          channel_uid
+          频道 UID
         </div>
         <PInput v-model="filter.channel_uid" size="sm" placeholder="" mono />
       </div>
       <div>
         <div class="mb-1 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-          session_uid
+          会话 UID
         </div>
         <PInput v-model="filter.session_uid" size="sm" placeholder="" mono />
       </div>

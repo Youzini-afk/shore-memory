@@ -77,19 +77,19 @@ function zoomOut() {
       <div class="relative flex items-end justify-between gap-6">
         <div class="min-w-0">
           <h1 class="font-display text-[24px] leading-tight tracking-tight text-ink-1">
-            Memory Graph
+            记忆图谱
           </h1>
           <p class="mt-1 text-[12.5px] text-ink-3">
-            在 Agent <span class="text-ink-2">{{ app.agentId }}</span> 的记忆 / 实体子图中观察集群、脉冲与替代链
+            在 Agent <span class="text-ink-2">{{ app.agentId }}</span> 的记忆与实体子图中观察簇团、脉冲与取代链
           </p>
         </div>
         <div class="flex items-center gap-2 shrink-0">
           <PBadge tone="accent" size="sm" dot>Agent · {{ app.agentId }}</PBadge>
           <PBadge v-if="stats.truncated" tone="amber" size="sm">
-            truncated · {{ stats.memoryCount }}/{{ stats.totalMemoriesForAgent }}
+            已截断 · {{ stats.memoryCount }}/{{ stats.totalMemoriesForAgent }}
           </PBadge>
           <PBadge v-else tone="active" size="sm">
-            full · {{ stats.memoryCount }} memories
+            完整 · {{ stats.memoryCount }} 条记忆
           </PBadge>
         </div>
       </div>
@@ -121,7 +121,7 @@ function zoomOut() {
         >
           <div class="flex items-center gap-2 text-[12px] font-display text-ink-2">
             <span class="h-2 w-2 rounded-full bg-accent animate-pulse" />
-            fetching graph…
+            正在拉取图谱…
           </div>
         </div>
 
@@ -135,7 +135,7 @@ function zoomOut() {
           >
             <AlertTriangle class="h-4 w-4 mt-0.5 shrink-0" :stroke-width="1.75" />
             <div>
-              <div class="font-display">加载失败</div>
+              <div class="font-display">图谱加载失败</div>
               <div class="mt-1 text-[11.5px] opacity-90">{{ error }}</div>
             </div>
           </div>
@@ -153,7 +153,7 @@ function zoomOut() {
               <Network class="h-5 w-5" :stroke-width="1.75" />
             </div>
             <div class="font-display text-ink-1 text-[14px] mb-1">图谱尚空</div>
-            该 Agent 还没有任何已索引记忆，先从 Memories 或者 Telegram bot 喂点数据吧。
+            该 Agent 还没有任何已索引的记忆，先从记忆库或接入的 Bot 喂点数据再回来看。
           </div>
         </div>
       </div>
@@ -171,8 +171,8 @@ function zoomOut() {
           <div class="px-6 pt-5 pb-4 border-b border-shore-line/80">
             <div class="flex items-center gap-2 text-[11px] font-display tracking-tight">
               <span class="tabular text-ink-4">#{{ selectedEntity.id }}</span>
-              <PBadge tone="blue" size="sm">entity</PBadge>
-              <PBadge tone="ink" size="sm">{{ selectedEntity.entity_type || 'unknown' }}</PBadge>
+              <PBadge tone="blue" size="sm">实体</PBadge>
+              <PBadge tone="ink" size="sm">{{ selectedEntity.entity_type || '未知类型' }}</PBadge>
               <span class="flex-1" />
             </div>
             <div class="mt-2 font-display text-[20px] leading-tight text-ink-1 break-words">
@@ -183,22 +183,22 @@ function zoomOut() {
           <div class="flex-1 min-h-0 overflow-y-auto p-6 flex flex-col gap-5">
             <PCard compact edge>
               <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2">
-                Reach
+                规模
               </div>
-              <MetaField label="local">
+              <MetaField label="视图内">
                 <span class="tabular text-ink-1">{{ selectedEntity.local_memory_count }}</span>
-                <span class="ml-1 text-ink-4 text-[11px]">memories in view</span>
+                <span class="ml-1 text-ink-4 text-[11px]">条可见记忆</span>
               </MetaField>
-              <MetaField label="global">
+              <MetaField label="全局">
                 <span class="tabular text-ink-1">{{ selectedEntity.linked_memory_count }}</span>
-                <span class="ml-1 text-ink-4 text-[11px]">total linked (all time)</span>
+                <span class="ml-1 text-ink-4 text-[11px]">条历史关联</span>
               </MetaField>
             </PCard>
 
             <PCard compact edge>
               <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2 flex items-center gap-1.5">
                 <Hash class="h-3 w-3" :stroke-width="1.75" />
-                Linked memories · {{ entityLinkedMemories.length }}
+                关联记忆 · {{ entityLinkedMemories.length }}
               </div>
               <div v-if="entityLinkedMemories.length" class="flex flex-col divide-y divide-shore-line/50">
                 <button
@@ -218,7 +218,7 @@ function zoomOut() {
                     <div class="flex items-center gap-2 text-[10.5px] font-display text-ink-4">
                       <span class="tabular">#{{ m.id }}</span>
                       <span class="truncate max-w-[100px]">{{ m.memory_type }}</span>
-                      <span class="tabular">imp {{ m.importance.toFixed(1) }}</span>
+                      <span class="tabular">重要度 {{ m.importance.toFixed(1) }}</span>
                     </div>
                     <div class="text-[12px] text-ink-1 line-clamp-2">
                       {{ m.content_preview }}
@@ -243,8 +243,8 @@ function zoomOut() {
           </div>
           <div class="font-display text-[14px] text-ink-1">探索这张图</div>
           <div class="text-[11.5px] text-ink-4 max-w-xs">
-            拖动 / 缩放画布；点击任意节点查看详情与脉冲邻域；搜索关键词会高亮命中的记忆 / 实体及其邻居；<kbd class="inline-block mx-0.5 px-1.5 h-5 leading-5 rounded-btn bg-shore-card border border-shore-line text-[10px] font-mono text-ink-2">▶</kbd>
-            启动 force-atlas2 布局。
+            拖动 / 缩放画布；点击任一节点查看详情与脉冲邻域；搜索关键词会高亮命中的记忆 / 实体与邻居；点击 <kbd class="inline-block mx-0.5 px-1.5 h-5 leading-5 rounded-btn bg-shore-card border border-shore-line text-[10px] font-mono text-ink-2">▶</kbd>
+            可启动 force-atlas2 自动布局。
           </div>
         </div>
       </div>

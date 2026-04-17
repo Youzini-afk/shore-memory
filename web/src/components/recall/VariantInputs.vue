@@ -26,18 +26,18 @@ const props = defineProps<Props>()
 const store = useRecallStore()
 
 const recipeOptions: { label: string; value: RecallRecipeId }[] = [
-  { value: 'fast', label: 'Fast' },
-  { value: 'hybrid', label: 'Hybrid' },
-  { value: 'entity_heavy', label: 'Entity' },
-  { value: 'contiguous', label: 'Contig' }
+  { value: 'fast', label: '极速' },
+  { value: 'hybrid', label: '混合' },
+  { value: 'entity_heavy', label: '实体' },
+  { value: 'contiguous', label: '连贯' }
 ]
 
 const scopeOptions: { label: string; value: MemoryScopeHint }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'private', label: 'Private' },
-  { value: 'group', label: 'Group' },
-  { value: 'shared', label: 'Shared' },
-  { value: 'system', label: 'System' }
+  { value: 'auto', label: '自动' },
+  { value: 'private', label: '私有' },
+  { value: 'group', label: '群组' },
+  { value: 'shared', label: '共享' },
+  { value: 'system', label: '系统' }
 ]
 
 const hits = computed<number>(() => props.variant.response?.memory_context?.length ?? 0)
@@ -69,12 +69,12 @@ async function runOnly() {
       <span class="ml-auto flex items-center gap-2 text-[10.5px] font-display text-ink-4">
         <span v-if="variant.loading" class="flex items-center gap-1 text-ink-2">
           <span class="h-1.5 w-1.5 rounded-full bg-accent animate-pulse" />
-          running
+          正在跑
         </span>
         <template v-else-if="variant.response">
-          <span class="tabular text-ink-2">{{ hits }} hit</span>
+          <span class="tabular text-ink-2">{{ hits }} 条</span>
           <span v-if="latency !== null" class="tabular text-ink-3">·{{ latency }}ms</span>
-          <span v-if="degraded" class="text-sig-amber">· degraded</span>
+          <span v-if="degraded" class="text-sig-amber">· 已降级</span>
         </template>
         <span v-else class="text-ink-5">—</span>
       </span>
@@ -83,7 +83,7 @@ async function runOnly() {
     <!-- Recipe -->
     <div class="mb-3">
       <div class="mb-1.5 text-[10px] font-display uppercase tracking-wider text-ink-4">
-        Recipe
+        召回配方
       </div>
       <PSegment v-model="variant.config.recipe" :options="recipeOptions" size="sm" block />
     </div>
@@ -91,7 +91,7 @@ async function runOnly() {
     <!-- Scope -->
     <div class="mb-3">
       <div class="mb-1.5 text-[10px] font-display uppercase tracking-wider text-ink-4">
-        Scope hint
+        作用域提示
       </div>
       <PSegment v-model="variant.config.scope_hint" :options="scopeOptions" size="sm" block />
     </div>
@@ -100,15 +100,15 @@ async function runOnly() {
     <div class="grid grid-cols-2 gap-2.5 mb-3">
       <label class="flex items-center gap-2 cursor-pointer">
         <PSwitch v-model="variant.config.include_invalid" />
-        <span class="text-[11px] text-ink-2 font-display">invalid</span>
+        <span class="text-[11px] text-ink-2 font-display">含失效</span>
       </label>
       <label class="flex items-center gap-2 cursor-pointer">
         <PSwitch v-model="variant.config.include_state" />
-        <span class="text-[11px] text-ink-2 font-display">state</span>
+        <span class="text-[11px] text-ink-2 font-display">含状态</span>
       </label>
       <label class="flex items-center gap-2 cursor-pointer">
         <PSwitch v-model="variant.config.debug" />
-        <span class="text-[11px] text-ink-2 font-display">debug</span>
+        <span class="text-[11px] text-ink-2 font-display">调试</span>
       </label>
     </div>
 
@@ -128,7 +128,7 @@ async function runOnly() {
       @click="runOnly"
     >
       <RefreshCw class="h-3.5 w-3.5" :stroke-width="1.75" :class="variant.loading ? 'animate-spin' : ''" />
-      only run {{ variant.config.label }}
+      仅跑 {{ variant.config.label }}
       <span class="inline-flex items-center text-accent ml-1">
         <Zap class="h-3 w-3" :stroke-width="1.75" />
       </span>

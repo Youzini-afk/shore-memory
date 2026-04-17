@@ -6,37 +6,37 @@ const routes: RouteRecordRaw[] = [
     path: '/recall',
     name: 'recall',
     component: () => import('@/views/RecallView.vue'),
-    meta: { title: 'Recall Playground' }
+    meta: { title: '召回实验台' }
   },
   {
     path: '/memories',
     name: 'memories',
     component: () => import('@/views/MemoriesView.vue'),
-    meta: { title: 'Memories' }
+    meta: { title: '记忆库' }
   },
   {
     path: '/graph',
     name: 'graph',
     component: () => import('@/views/GraphView.vue'),
-    meta: { title: 'Memory Graph' }
+    meta: { title: '记忆图谱' }
   },
   {
     path: '/agent',
     name: 'agent',
     component: () => import('@/views/AgentView.vue'),
-    meta: { title: 'Agent' }
+    meta: { title: 'Agent 状态' }
   },
   {
     path: '/maintenance',
     name: 'maintenance',
     component: () => import('@/views/MaintenanceView.vue'),
-    meta: { title: 'Maintenance' }
+    meta: { title: '运维' }
   },
   {
     path: '/settings',
     name: 'settings',
     component: () => import('@/views/SettingsView.vue'),
-    meta: { title: 'Settings' }
+    meta: { title: '设置' }
   },
   {
     path: '/:catchAll(.*)*',
@@ -54,7 +54,7 @@ const router = createRouter({
 
 router.afterEach((to) => {
   const title = (to.meta?.title as string | undefined) ?? 'Shore Memory'
-  document.title = `${title} · Shore Memory Console`
+  document.title = `${title} · Shore Memory 控制台`
 })
 
 export default router

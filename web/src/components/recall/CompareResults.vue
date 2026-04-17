@@ -66,10 +66,10 @@ function columnMeta(which: 'a' | 'b') {
         <span class="text-[10.5px] font-display text-ink-4 flex items-center gap-2">
           <template v-if="columnMeta(which).response">
             <span class="tabular text-ink-2">
-              {{ columnMeta(which).response?.memory_context.length ?? 0 }} hit
+              {{ columnMeta(which).response?.memory_context.length ?? 0 }} 条
             </span>
             <span v-if="columnMeta(which).response?.degraded" class="text-sig-amber">
-              · degraded
+              · 已降级
             </span>
           </template>
           <span v-else class="text-ink-5">—</span>
@@ -107,7 +107,7 @@ function columnMeta(which: 'a' | 'b') {
           </div>
           <div class="text-[11.5px] font-display text-ink-2">未运行</div>
           <div class="text-[10.5px] text-ink-5 text-center max-w-[240px]">
-            点顶部 "运行对比" 或此列的 "only run" 按钮
+            点击顶部“运行对比”或此列的“仅跑”按钮
           </div>
         </div>
 
@@ -116,7 +116,7 @@ function columnMeta(which: 'a' | 'b') {
           v-else-if="!columnMeta(which).response?.memory_context.length"
           class="text-center py-10 text-[11.5px] text-ink-4"
         >
-          没有命中
+          未命中记忆
         </div>
 
         <!-- Hits -->
@@ -135,15 +135,15 @@ function columnMeta(which: 'a' | 'b') {
                 tone="active"
                 size="sm"
               >
-                shared
+                共同
               </PBadge>
               <PBadge v-else tone="accent" size="sm">
-                {{ columnMeta(which).label }} only
+                仅 {{ columnMeta(which).label }}
               </PBadge>
               <span
                 v-if="sharedIdSet.has(mem.id) && (driftById.get(mem.id) ?? 0) > 0"
                 class="text-[10px] font-display tabular text-ink-4"
-                :title="'rank drift vs other variant'"
+                :title="'与另一变体的排名回调'"
               >
                 Δ {{ driftById.get(mem.id) }}
               </span>

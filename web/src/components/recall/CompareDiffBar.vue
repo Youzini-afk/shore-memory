@@ -65,7 +65,7 @@ function pingGroup(group: PingGroup): void {
       </div>
       <div class="min-w-0">
         <div class="text-[10px] uppercase tracking-[0.22em] font-display text-ink-5">
-          Jaccard
+          重合度 Jaccard
         </div>
         <div
           class="text-[16px] font-display tabular"
@@ -90,7 +90,7 @@ function pingGroup(group: PingGroup): void {
           style="background: #7C5CFF; box-shadow: 0 0 8px #7C5CFF88"
         />
         <div>
-          <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">A only</div>
+          <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">仅 A</div>
           <div class="text-[13px] font-display tabular text-ink-1">
             {{ hasData ? compareDiff.aOnly.length : '—' }}
           </div>
@@ -105,7 +105,7 @@ function pingGroup(group: PingGroup): void {
           style="background: #22C55E; box-shadow: 0 0 8px #22C55E88"
         />
         <div>
-          <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">shared</div>
+          <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">共同</div>
           <div class="text-[13px] font-display tabular text-ink-1">
             {{ hasData ? compareDiff.intersection.length : '—' }}
           </div>
@@ -120,7 +120,7 @@ function pingGroup(group: PingGroup): void {
           style="background: #38BDF8; box-shadow: 0 0 8px #38BDF888"
         />
         <div>
-          <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">B only</div>
+          <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">仅 B</div>
           <div class="text-[13px] font-display tabular text-ink-1">
             {{ hasData ? compareDiff.bOnly.length : '—' }}
           </div>
@@ -134,12 +134,12 @@ function pingGroup(group: PingGroup): void {
       <SigmaIcon class="h-3.5 w-3.5 text-ink-4" :stroke-width="1.75" />
       <div>
         <div class="text-[10px] uppercase tracking-[0.22em] font-display text-ink-5">
-          rank drift
+          排名回调
         </div>
         <div class="text-[12.5px] font-display tabular text-ink-1">
           <template v-if="hasData && compareDiff.rankPairs.length">
-            avg {{ compareDiff.avgRankDrift.toFixed(1) }} ·
-            max {{ compareDiff.maxRankDrift }}
+            均 {{ compareDiff.avgRankDrift.toFixed(1) }} ·
+            最大 {{ compareDiff.maxRankDrift }}
           </template>
           <template v-else>—</template>
         </div>
@@ -154,41 +154,41 @@ function pingGroup(group: PingGroup): void {
         class="h-7 px-2 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors"
         :class="canPing('aOnly') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
         :disabled="!canPing('aOnly')"
-        title="把 A-only 命中在 graph 上脉冲定位"
+        title="在图谱中高亮仅 A 独有的命中"
         @click="pingGroup('aOnly')"
       >
-        ping A-only
+        高亮仅 A
       </button>
       <button
         type="button"
         class="h-7 px-2 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors"
         :class="canPing('shared') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
         :disabled="!canPing('shared')"
-        title="把 shared 命中在 graph 上脉冲定位"
+        title="在图谱中高亮共同命中"
         @click="pingGroup('shared')"
       >
-        ping shared
+        高亮共同
       </button>
       <button
         type="button"
         class="h-7 px-2 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors"
         :class="canPing('bOnly') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
         :disabled="!canPing('bOnly')"
-        title="把 B-only 命中在 graph 上脉冲定位"
+        title="在图谱中高亮仅 B 独有的命中"
         @click="pingGroup('bOnly')"
       >
-        ping B-only
+        高亮仅 B
       </button>
       <button
         type="button"
         class="h-7 px-2.5 rounded-btn border border-shore-line bg-shore-card text-[10.5px] text-ink-2 font-display transition-colors inline-flex items-center gap-1"
         :class="canPing('union') ? 'hover:text-accent hover:border-accent/60' : 'opacity-45 cursor-not-allowed'"
         :disabled="!canPing('union')"
-        title="把全部命中在 graph 上脉冲定位"
+        title="在图谱中高亮全部命中"
         @click="pingGroup('union')"
       >
         <Target class="h-3.5 w-3.5" :stroke-width="1.75" />
-        ping all
+        高亮全部
       </button>
     </div>
 
@@ -196,7 +196,7 @@ function pingGroup(group: PingGroup): void {
 
     <div class="flex flex-col items-end text-right">
       <div class="text-[10px] uppercase tracking-[0.2em] font-display text-ink-5">
-        latency
+        延迟
       </div>
       <div class="text-[11.5px] font-display tabular text-ink-2 flex items-center gap-1.5">
         <span class="inline-flex items-center gap-1">

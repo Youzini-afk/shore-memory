@@ -40,9 +40,9 @@ const relTime = computed(() => {
   if (Number.isNaN(d.getTime())) return t
   const diff = (Date.now() - d.getTime()) / 1000
   if (diff < 60) return '刚刚'
-  if (diff < 3600) return `${Math.floor(diff / 60)} min ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)} h ago`
-  return `${Math.floor(diff / 86400)} d ago`
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  return `${Math.floor(diff / 86400)} 天前`
 })
 
 const scopeLabel = computed(() => props.memory.scope)
@@ -142,13 +142,13 @@ function fmt(v: number): string {
         </PBadge>
         <PBadge tone="ink" size="sm">{{ scopeLabel }}</PBadge>
         <span class="ml-auto flex items-baseline gap-1 font-display tabular">
-          <span class="text-[10px] uppercase tracking-wider text-ink-4">score</span>
+          <span class="text-[10px] uppercase tracking-wider text-ink-4">得分</span>
           <span class="text-[18px] text-ink-1">{{ scoreDisplay }}</span>
           <span
             v-if="rank === 1"
             class="text-[9.5px] text-accent uppercase tracking-wider font-display"
           >
-            top
+            首位
           </span>
           <ChevronRight
             class="ml-2 h-3.5 w-3.5 text-ink-4 transition-transform duration-200"
@@ -191,13 +191,13 @@ function fmt(v: number): string {
       <div class="mt-2 flex items-center gap-3 text-[10.5px] text-ink-5 font-display">
         <span>{{ relTime }}</span>
         <span v-if="memory.lifecycle?.supersedes_memory_id">
-          supersedes
+          取代了
           <span class="font-mono tabular text-ink-3">
             #{{ memory.lifecycle?.supersedes_memory_id }}
           </span>
         </span>
         <span v-if="memory.lifecycle?.invalid_at">
-          invalid_at
+          失效时间
           <span class="font-mono tabular text-ink-3">{{ memory.lifecycle?.invalid_at }}</span>
         </span>
       </div>
@@ -216,7 +216,7 @@ function fmt(v: number): string {
           @click="viewInGraph"
         >
           <Target class="h-3.5 w-3.5" :stroke-width="1.75" />
-          view in graph
+          在图谱中查看
         </button>
         <button
           type="button"
@@ -224,21 +224,21 @@ function fmt(v: number): string {
           @click="openInMemories"
         >
           <FileText class="h-3.5 w-3.5" :stroke-width="1.75" />
-          open in memories
+          在记忆库中打开
         </button>
         <span class="flex-1" />
         <span
           v-if="divisor !== null"
           class="text-[10.5px] font-display text-ink-4 tabular"
         >
-          divisor
+          分母
           <span class="text-ink-2 ml-0.5">{{ fmt(divisor) }}</span>
         </span>
         <span
           v-if="combined !== null"
           class="text-[10.5px] font-display text-ink-4 tabular"
         >
-          combined
+          综合
           <span class="text-ink-1 ml-0.5">{{ fmt(combined) }}</span>
         </span>
       </div>
@@ -275,15 +275,15 @@ function fmt(v: number): string {
         class="flex flex-wrap gap-x-5 gap-y-1.5 text-[10.5px] text-ink-4 font-display"
       >
         <span>
-          time
+          时间
           <span class="text-ink-2 ml-1 font-mono tabular">{{ memory.time }}</span>
         </span>
         <span v-if="memory.lifecycle?.valid_at">
-          valid_at
+          生效时间
           <span class="text-ink-2 ml-1 font-mono tabular">{{ memory.lifecycle?.valid_at }}</span>
         </span>
         <span v-if="memory.entities?.length">
-          entities
+          实体
           <span class="text-ink-2 ml-1 tabular">{{ memory.entities.length }}</span>
         </span>
       </div>
@@ -309,7 +309,7 @@ function fmt(v: number): string {
         class="text-[11px] text-ink-3 font-display flex items-center gap-1"
       >
         <ExternalLink class="h-3 w-3 text-state-superseded" :stroke-width="1.75" />
-        supersedes memory
+        取代了记忆
         <span class="font-mono tabular text-ink-1">
           #{{ memory.lifecycle?.supersedes_memory_id }}
         </span>

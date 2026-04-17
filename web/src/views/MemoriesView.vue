@@ -31,7 +31,7 @@ onMounted(() => {
       <div class="relative flex items-end justify-between gap-6">
         <div class="min-w-0">
           <h1 class="font-display text-[24px] leading-tight tracking-tight text-ink-1">
-            Memories
+            记忆库
           </h1>
           <p class="mt-1 text-[12.5px] text-ink-3">
             浏览、筛选与维护 Agent <span class="text-ink-2">{{ app.agentId }}</span> 的长期记忆

@@ -54,7 +54,7 @@ watch(queryLimit, () => {
     <PInput
       v-model="localSearch"
       size="sm"
-      placeholder="search · memory / entity label"
+      placeholder="搜索记忆内容或实体名"
       class="w-[240px]"
     >
       <template #prefix>
@@ -75,7 +75,7 @@ watch(queryLimit, () => {
 
     <div class="flex items-center gap-1">
       <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-        depth
+        邻域深度
       </span>
       <PSegment
         v-model="neighborhoodDepth"
@@ -91,7 +91,7 @@ watch(queryLimit, () => {
 
     <div class="flex items-center gap-1">
       <span class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-        limit
+        条数上限
       </span>
       <PSegment v-model="queryLimit" :options="limitOptions" size="sm" />
     </div>
@@ -101,7 +101,7 @@ watch(queryLimit, () => {
     <button
       type="button"
       class="h-8 w-8 rounded-btn border border-shore-line bg-shore-card text-ink-2 hover:text-ink-0 hover:border-accent/60 transition-colors flex items-center justify-center"
-      :title="layoutRunning ? 'Pause layout' : 'Run force-atlas2'"
+      :title="layoutRunning ? '暂停布局' : '运行 force-atlas2 布局'"
       @click="toggleLayout"
     >
       <component
@@ -113,7 +113,7 @@ watch(queryLimit, () => {
     <button
       type="button"
       class="h-8 w-8 rounded-btn border border-shore-line bg-shore-card text-ink-2 hover:text-ink-0 hover:border-accent/60 transition-colors flex items-center justify-center"
-      title="Zoom in"
+      title="放大"
       @click="props.onZoomIn?.()"
     >
       <ZoomIn class="h-3.5 w-3.5" :stroke-width="1.75" />
@@ -121,7 +121,7 @@ watch(queryLimit, () => {
     <button
       type="button"
       class="h-8 w-8 rounded-btn border border-shore-line bg-shore-card text-ink-2 hover:text-ink-0 hover:border-accent/60 transition-colors flex items-center justify-center"
-      title="Zoom out"
+      title="缩小"
       @click="props.onZoomOut?.()"
     >
       <ZoomOut class="h-3.5 w-3.5" :stroke-width="1.75" />
@@ -129,7 +129,7 @@ watch(queryLimit, () => {
     <button
       type="button"
       class="h-8 w-8 rounded-btn border border-shore-line bg-shore-card text-ink-2 hover:text-ink-0 hover:border-accent/60 transition-colors flex items-center justify-center"
-      title="Fit to screen"
+      title="适配视图"
       @click="props.onFit?.()"
     >
       <Expand class="h-3.5 w-3.5" :stroke-width="1.75" />
@@ -137,12 +137,12 @@ watch(queryLimit, () => {
     <button
       type="button"
       class="h-8 px-2.5 rounded-btn border border-shore-line bg-shore-card text-[11.5px] text-ink-2 hover:text-ink-0 hover:border-accent/60 transition-colors flex items-center gap-1.5 font-display"
-      title="Reload graph"
+      title="重新加载图谱"
       :disabled="loading"
       @click="reload"
     >
       <RefreshCw class="h-3.5 w-3.5" :class="loading ? 'animate-spin' : ''" :stroke-width="1.75" />
-      reload
+      重新加载
     </button>
     <button
       v-if="store.selectedNodeId"
@@ -151,7 +151,7 @@ watch(queryLimit, () => {
       @click="clearSelection"
     >
       <X class="h-3.5 w-3.5" :stroke-width="1.75" />
-      unselect
+      取消选择
     </button>
   </div>
 </template>

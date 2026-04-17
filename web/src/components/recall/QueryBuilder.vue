@@ -33,18 +33,18 @@ defineExpose({
 })
 
 const recipeOptions: { label: string; value: RecallRecipeId; hint: string }[] = [
-  { value: 'fast', label: 'Fast', hint: '仅向量，最低延迟' },
-  { value: 'hybrid', label: 'Hybrid', hint: '向量 + BM25（默认）' },
-  { value: 'entity_heavy', label: 'Entity', hint: '加强实体信号' },
-  { value: 'contiguous', label: 'Contig', hint: '启用连贯性加分' }
+  { value: 'fast', label: '极速', hint: '仅向量，最低延迟' },
+  { value: 'hybrid', label: '混合', hint: '向量 + BM25（默认）' },
+  { value: 'entity_heavy', label: '实体优先', hint: '加强实体信号' },
+  { value: 'contiguous', label: '连贯性', hint: '启用连贯性加分' }
 ]
 
 const scopeOptions: { label: string; value: MemoryScopeHint }[] = [
-  { value: 'auto', label: 'Auto' },
-  { value: 'private', label: 'Private' },
-  { value: 'group', label: 'Group' },
-  { value: 'shared', label: 'Shared' },
-  { value: 'system', label: 'System' }
+  { value: 'auto', label: '自动' },
+  { value: 'private', label: '私有' },
+  { value: 'group', label: '群组' },
+  { value: 'shared', label: '共享' },
+  { value: 'system', label: '系统' }
 ]
 
 async function submit() {
@@ -52,7 +52,7 @@ async function submit() {
 }
 
 function saveTemplate() {
-  const name = templateName.value.trim() || form.value.query.slice(0, 20) || 'Recall 模板'
+  const name = templateName.value.trim() || form.value.query.slice(0, 20) || '召回模板'
   store.saveTemplate(name)
   templateName.value = ''
   showTemplates.value = true
@@ -214,10 +214,10 @@ const hasQuery = computed(() => form.value.query.trim().length > 0)
       </div>
       <PSegment v-model="form.recipe" :options="recipeOptions" block />
       <div class="mt-1 text-[10.5px] text-ink-5">
-        <template v-if="form.recipe === 'fast'">仅向量，最低延迟，跳过 BM25/实体/连贯性</template>
-        <template v-else-if="form.recipe === 'hybrid'">向量 + BM25 additive 融合（默认）</template>
-        <template v-else-if="form.recipe === 'entity_heavy'">实体信号加权，适合事实/关系类查询</template>
-        <template v-else-if="form.recipe === 'contiguous'">启用连贯性加分，session 相邻记忆会被拉入</template>
+        <template v-if="form.recipe === 'fast'">仅向量，最低延迟，跳过 BM25 / 实体 / 连贯性</template>
+        <template v-else-if="form.recipe === 'hybrid'">向量 + BM25 添加式融合（默认）</template>
+        <template v-else-if="form.recipe === 'entity_heavy'">加大实体信号权重，适合事实与关系类查询</template>
+        <template v-else-if="form.recipe === 'contiguous'">启用连贯性加分，同会话的相邻记忆会被拉入</template>
       </div>
     </div>
 
@@ -231,19 +231,19 @@ const hasQuery = computed(() => form.value.query.trim().length > 0)
       </div>
       <div>
         <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          User UID
+          用户 UID
         </div>
         <PInput v-model="form.user_uid" size="sm" placeholder="可选" mono />
       </div>
       <div>
         <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          Channel UID
+          频道 UID
         </div>
         <PInput v-model="form.channel_uid" size="sm" placeholder="可选" mono />
       </div>
       <div class="col-span-2">
         <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          Session UID
+          会话 UID
         </div>
         <PInput v-model="form.session_uid" size="sm" placeholder="可选" mono />
       </div>
@@ -253,7 +253,7 @@ const hasQuery = computed(() => form.value.query.trim().length > 0)
     <div class="mt-5 space-y-3">
       <div>
         <div class="mb-1 flex items-center justify-between text-[10.5px] font-display uppercase tracking-wider text-ink-4">
-          <span>Limit · 返回条数</span>
+          <span>返回条数上限</span>
           <span class="normal-case tracking-normal text-ink-5">1 — 32</span>
         </div>
         <PSlider v-model="form.limit" :min="1" :max="32" :step="1" />
@@ -267,24 +267,24 @@ const hasQuery = computed(() => form.value.query.trim().length > 0)
       >
         <PSwitch v-model="form.include_invalid" />
         <div class="flex-1 min-w-0">
-          <div class="text-[12.5px] text-ink-1 font-display">include_invalid</div>
-          <div class="text-[10.5px] text-ink-4">时光回溯：也考虑已失效/被 supersede 的记忆</div>
+          <div class="text-[12.5px] text-ink-1 font-display">包含失效记忆</div>
+          <div class="text-[10.5px] text-ink-4">时光回溯：也考虑已失效或被取代的记忆</div>
         </div>
       </label>
 
       <label class="flex items-center gap-3 cursor-pointer">
         <PSwitch v-model="form.include_state" />
         <div class="flex-1 min-w-0">
-          <div class="text-[12.5px] text-ink-1 font-display">include_state</div>
-          <div class="text-[10.5px] text-ink-4">返回当前 Agent 的 mood / vibe / mind 快照</div>
+          <div class="text-[12.5px] text-ink-1 font-display">返回 Agent 状态</div>
+          <div class="text-[10.5px] text-ink-4">返回当前 Agent 的心情 / 氛围 / 心绪快照</div>
         </div>
       </label>
 
       <label class="flex items-center gap-3 cursor-pointer">
         <PSwitch v-model="form.debug" />
         <div class="flex-1 min-w-0">
-          <div class="text-[12.5px] text-ink-1 font-display">debug</div>
-          <div class="text-[10.5px] text-ink-4">附带 score_breakdown 与 lifecycle 元数据</div>
+          <div class="text-[12.5px] text-ink-1 font-display">调试模式</div>
+          <div class="text-[10.5px] text-ink-4">附带分数拆解与生命周期元数据</div>
         </div>
       </label>
     </div>

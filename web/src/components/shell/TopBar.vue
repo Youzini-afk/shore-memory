@@ -9,14 +9,15 @@ const app = useAppStore()
 
 const title = computed(() => (route.meta?.title as string | undefined) ?? 'Shore Memory')
 const queueDepth = computed(() => app.health?.pending_tasks ?? 0)
+const queueTooltip = '待处理任务数'
 const envLabel = computed(() => {
   if (app.apiBase) return app.apiBase
   if (typeof window !== 'undefined') return `${window.location.host}`
   return '127.0.0.1:7811'
 })
 const authLabel = computed(() => {
-  if (!app.authRequired) return 'Auth · Off'
-  return `Auth · ${app.authSourceLabel}`
+  if (!app.authRequired) return '鉴权 · 未启用'
+  return `鉴权 · ${app.authSourceLabel}`
 })
 </script>
 
@@ -27,7 +28,7 @@ const authLabel = computed(() => {
     <!-- Title -->
     <div class="flex items-center gap-3 min-w-0">
       <span class="text-[13px] font-display font-medium text-ink-1 truncate">{{ title }}</span>
-      <span class="text-[11px] text-ink-5 font-display uppercase tracking-wider">/ Console</span>
+      <span class="text-[11px] text-ink-5 font-display uppercase tracking-wider">/ 控制台</span>
     </div>
 
     <div class="flex-1" />
@@ -44,10 +45,10 @@ const authLabel = computed(() => {
 
       <div
         class="flex items-center gap-1.5 px-2.5 py-1 rounded-btn bg-shore-card/80 border border-shore-line/80 text-[11px] text-ink-4 tabular"
-        :title="'任务队列深度'"
+        :title="queueTooltip"
       >
         <Activity class="h-3.5 w-3.5 text-ink-4" :stroke-width="1.75" />
-        <span class="font-display">queue</span>
+        <span class="font-display">队列</span>
         <span class="text-ink-2">{{ queueDepth }}</span>
       </div>
 
@@ -72,7 +73,7 @@ const authLabel = computed(() => {
         @click="app.clearSavedApiKey"
       >
         <KeyRound class="h-4 w-4" :stroke-width="1.75" />
-        <span class="text-[11px] font-display">clear key</span>
+        <span class="text-[11px] font-display">清除 Key</span>
       </button>
 
       <button

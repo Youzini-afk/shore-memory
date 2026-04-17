@@ -228,10 +228,10 @@ async function copy(text: string, key: string) {
 /* ---------------- display helpers ---------------- */
 
 const stateOptions: { label: string; value: MemoryState }[] = [
-  { value: 'active', label: 'Active' },
-  { value: 'superseded', label: 'Superseded' },
-  { value: 'invalidated', label: 'Invalidated' },
-  { value: 'archived', label: 'Archived' }
+  { value: 'active', label: '有效' },
+  { value: 'superseded', label: '已取代' },
+  { value: 'invalidated', label: '已失效' },
+  { value: 'archived', label: '已归档' }
 ]
 
 function formatTime(s?: string | null): string {
@@ -247,22 +247,63 @@ function formatRel(s?: string | null): string {
   const ts = Date.parse(s)
   if (Number.isNaN(ts)) return ''
   const diff = (Date.now() - ts) / 1000
-  if (diff < 60) return `${Math.max(1, Math.floor(diff))}s ago`
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`
-  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)}d ago`
+  if (diff < 60) return `${Math.max(1, Math.floor(diff))} 秒前`
+  if (diff < 3600) return `${Math.floor(diff / 60)} 分钟前`
+  if (diff < 86400) return `${Math.floor(diff / 3600)} 小时前`
+  if (diff < 86400 * 7) return `${Math.floor(diff / 86400)} 天前`
   return ''
 }
 
 const archiveBtnLabel = computed(() =>
-  detail.value?.archived_at ? 'Restore' : 'Archive'
+  detail.value?.archived_at ? '恢复归档' : '归档'
 )
 
 const tabOptions = [
-  { value: 'overview' as const, label: 'Overview' },
-  { value: 'metadata' as const, label: 'Metadata' },
-  { value: 'history' as const, label: 'History' }
+  { value: 'overview' as const, label: '概览' },
+  { value: 'metadata' as const, label: '元数据' },
+  { value: 'history' as const, label: '历史' }
 ]
+
+const stateLabelMap: Record<MemoryState, string> = {
+  active: '有效',
+  superseded: '已取代',
+  invalidated: '已失效',
+  archived: '已归档'
+}
+
+function scopeLabel(scope: string | undefined | null): string {
+  switch (scope) {
+    case 'private':
+      return '私有'
+    case 'group':
+      return '群组'
+    case 'shared':
+      return '共享'
+    case 'system':
+      return '系统'
+    default:
+      return scope || '—'
+  }
+}
+
+function historyEventLabel(event: string | undefined | null): string {
+  switch (event) {
+    case 'archive':
+      return '归档'
+    case 'unarchive':
+      return '恢复归档'
+    case 'manual':
+      return '手动修改'
+    case 'supersede':
+      return '被取代'
+    case 'invalidate':
+      return '失效'
+    case 'update':
+      return '自动更新'
+    default:
+      return event || '—'
+  }
+}
 </script>
 
 <template>
@@ -277,9 +318,9 @@ const tabOptions = [
       >
         <FileText class="h-5 w-5" :stroke-width="1.75" />
       </div>
-      <div class="font-display text-[14px] text-ink-1">未选择记忆</div>
+      <div class="font-display text-[14px] text-ink-1">未选中记忆</div>
       <div class="text-[11.5px] text-ink-4 max-w-xs">
-        点击左侧列表查看详情，或使用筛选条件定位具体记忆。
+        点击左侧列表查看详情，或使用筛选条件定位到具体记忆。
       </div>
     </div>
 
@@ -310,9 +351,9 @@ const tabOptions = [
         <div class="flex items-center gap-2 text-[11px] font-display tracking-tight">
           <span class="tabular text-ink-4">#{{ detail.id }}</span>
           <PBadge :tone="detail.state as 'active' | 'superseded' | 'invalidated' | 'archived'" size="sm">
-            {{ detail.state }}
+            {{ stateLabelMap[detail.state as MemoryState] ?? detail.state }}
           </PBadge>
-          <PBadge tone="accent" size="sm">{{ detail.scope }}</PBadge>
+          <PBadge tone="accent" size="sm">{{ scopeLabel(detail.scope) }}</PBadge>
           <PBadge tone="ink" size="sm">{{ detail.memory_type }}</PBadge>
           <span class="flex-1" />
           <button
@@ -325,11 +366,11 @@ const tabOptions = [
               class="h-3 w-3"
               :stroke-width="1.75"
             />
-            copy id
+            复制 ID
           </button>
         </div>
         <div class="mt-2 text-[11.5px] text-ink-4 tabular">
-          updated · {{ formatTime(detail.updated_at) }}
+          更新时间 · {{ formatTime(detail.updated_at) }}
           <span v-if="formatRel(detail.updated_at)" class="text-ink-5"
             >· {{ formatRel(detail.updated_at) }}</span
           >
@@ -342,7 +383,7 @@ const tabOptions = [
         <span class="flex-1" />
         <span v-if="dirty" class="text-[10.5px] font-display text-sig-amber flex items-center gap-1">
           <span class="h-1.5 w-1.5 rounded-full bg-sig-amber animate-pulse" />
-          unsaved changes
+          有未保存更改
         </span>
       </div>
 
@@ -353,7 +394,7 @@ const tabOptions = [
           <!-- Content -->
           <div>
             <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-              Content
+              内容
             </div>
             <PTextarea v-model="draft.content" :rows="5" placeholder="记忆内容" />
           </div>
@@ -362,7 +403,7 @@ const tabOptions = [
           <div class="grid grid-cols-2 gap-4">
             <div>
               <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                State
+                状态
               </div>
               <PSegment v-model="draft.state" :options="stateOptions" size="sm" block />
             </div>
@@ -370,7 +411,7 @@ const tabOptions = [
               <div
                 class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5 flex justify-between"
               >
-                <span>Importance</span>
+                <span>重要度</span>
                 <span class="tabular text-ink-2 normal-case tracking-normal">{{
                   draft.importance.toFixed(1)
                 }}</span>
@@ -383,15 +424,15 @@ const tabOptions = [
           <div class="grid grid-cols-2 gap-4">
             <div>
               <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                Sentiment
+                情感向
               </div>
-              <PInput v-model="draft.sentiment" size="sm" placeholder="留空清除" />
+              <PInput v-model="draft.sentiment" size="sm" placeholder="留空表示清除" />
             </div>
             <div>
               <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                Tags · 逗号分隔
+                标签 · 逗号分隔
               </div>
-              <PInput v-model="draft.tags" size="sm" placeholder="tag1, tag2" />
+              <PInput v-model="draft.tags" size="sm" placeholder="例：tag1, tag2" />
             </div>
           </div>
 
@@ -399,36 +440,36 @@ const tabOptions = [
           <div class="grid grid-cols-3 gap-4">
             <div>
               <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                valid_at
+                生效时间
               </div>
-              <PInput v-model="draft.valid_at" size="sm" placeholder="RFC3339" mono />
+              <PInput v-model="draft.valid_at" size="sm" placeholder="RFC 3339" mono />
             </div>
             <div>
               <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                invalid_at
+                失效时间
               </div>
               <PInput v-model="draft.invalid_at" size="sm" placeholder="留空为 null" mono />
             </div>
             <div>
               <div class="mb-1.5 text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                supersedes
+                取代记忆
               </div>
-              <PInput v-model="draft.supersedes_memory_id" size="sm" placeholder="memory id" mono />
+              <PInput v-model="draft.supersedes_memory_id" size="sm" placeholder="记忆 ID" mono />
             </div>
           </div>
 
           <!-- Timeline info -->
           <PCard compact edge>
             <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2">
-              Timeline
+              时间轴
             </div>
-            <MetaField label="created">{{ formatTime(detail.created_at) }}</MetaField>
-            <MetaField label="updated">{{ formatTime(detail.updated_at) }}</MetaField>
-            <MetaField label="valid">{{ formatTime(detail.valid_at) }}</MetaField>
-            <MetaField label="invalid">{{ formatTime(detail.invalid_at) }}</MetaField>
-            <MetaField label="archived">{{ formatTime(detail.archived_at) }}</MetaField>
-            <MetaField label="last access">{{ formatTime(detail.last_accessed_at) }}</MetaField>
-            <MetaField label="access count">
+            <MetaField label="创建时间">{{ formatTime(detail.created_at) }}</MetaField>
+            <MetaField label="更新时间">{{ formatTime(detail.updated_at) }}</MetaField>
+            <MetaField label="生效时间">{{ formatTime(detail.valid_at) }}</MetaField>
+            <MetaField label="失效时间">{{ formatTime(detail.invalid_at) }}</MetaField>
+            <MetaField label="归档时间">{{ formatTime(detail.archived_at) }}</MetaField>
+            <MetaField label="最后访问">{{ formatTime(detail.last_accessed_at) }}</MetaField>
+            <MetaField label="访问次数">
               <span class="tabular">{{ detail.access_count }}</span>
             </MetaField>
           </PCard>
@@ -438,14 +479,14 @@ const tabOptions = [
         <div v-else-if="tab === 'metadata'" class="p-6 flex flex-col gap-5">
           <PCard compact edge>
             <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2">
-              Identity
+              身份标识
             </div>
-            <MetaField label="agent" mono>{{ detail.agent_id }}</MetaField>
-            <MetaField label="user" mono>{{ detail.user_uid || '—' }}</MetaField>
-            <MetaField label="channel" mono>{{ detail.channel_uid || '—' }}</MetaField>
-            <MetaField label="session" mono>{{ detail.session_uid || '—' }}</MetaField>
-            <MetaField label="source" mono>{{ detail.source }}</MetaField>
-            <MetaField label="hash" mono>
+            <MetaField label="Agent" mono>{{ detail.agent_id }}</MetaField>
+            <MetaField label="用户" mono>{{ detail.user_uid || '—' }}</MetaField>
+            <MetaField label="频道" mono>{{ detail.channel_uid || '—' }}</MetaField>
+            <MetaField label="会话" mono>{{ detail.session_uid || '—' }}</MetaField>
+            <MetaField label="来源" mono>{{ detail.source }}</MetaField>
+            <MetaField label="指纹" mono>
               <span v-if="detail.content_hash">{{ detail.content_hash }}</span>
               <span v-else class="text-ink-5">—</span>
             </MetaField>
@@ -455,7 +496,7 @@ const tabOptions = [
           <div>
             <div class="mb-1.5 flex items-center justify-between">
               <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-5">
-                metadata (JSON)
+                原始元数据（JSON）
               </div>
               <button
                 type="button"
@@ -467,7 +508,7 @@ const tabOptions = [
                   class="h-3 w-3"
                   :stroke-width="1.75"
                 />
-                copy
+                复制
               </button>
             </div>
             <textarea
@@ -487,7 +528,7 @@ const tabOptions = [
             <PCard compact edge>
               <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2 flex items-center gap-1.5">
                 <Hash class="h-3 w-3" :stroke-width="1.75" />
-                source_event_ids
+                来源事件 ID
               </div>
               <div v-if="detail.source_event_ids?.length" class="flex flex-wrap gap-1">
                 <span
@@ -503,7 +544,7 @@ const tabOptions = [
             <PCard compact edge>
               <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2 flex items-center gap-1.5">
                 <Link2 class="h-3 w-3" :stroke-width="1.75" />
-                linked_memory_ids
+                关联记忆 ID
               </div>
               <div v-if="detail.linked_memory_ids?.length" class="flex flex-wrap gap-1">
                 <button
@@ -523,7 +564,7 @@ const tabOptions = [
           <!-- Entities -->
           <PCard compact edge>
             <div class="text-[10.5px] uppercase tracking-[0.2em] font-display text-ink-4 mb-2">
-              Entities · {{ entities.length }}
+              实体 · {{ entities.length }}
             </div>
             <div v-if="entities.length" class="flex flex-wrap gap-1.5">
               <span
@@ -567,11 +608,11 @@ const tabOptions = [
                 "
               />
               <div class="flex items-center gap-2 text-[11px] font-display">
-                <span class="text-ink-2 tracking-tight">{{ entry.event }}</span>
+                <span class="text-ink-2 tracking-tight">{{ historyEventLabel(entry.event) }}</span>
                 <span class="text-ink-5">·</span>
                 <span class="tabular text-ink-4">{{ formatTime(entry.created_at) }}</span>
                 <span v-if="entry.source_task_id" class="text-ink-5 tabular">
-                  task #{{ entry.source_task_id }}
+                  任务 #{{ entry.source_task_id }}
                 </span>
               </div>
               <div
@@ -580,13 +621,13 @@ const tabOptions = [
               >
                 <div class="rounded-btn bg-state-invalidated/8 border border-state-invalidated/20 p-2 text-[11.5px] text-ink-2 leading-[1.55]">
                   <div class="text-[9.5px] uppercase tracking-widest text-state-invalidated/80 mb-1">
-                    before
+                    修改前
                   </div>
                   {{ entry.old_content }}
                 </div>
                 <div class="rounded-btn bg-state-active/8 border border-state-active/20 p-2 text-[11.5px] text-ink-2 leading-[1.55]">
                   <div class="text-[9.5px] uppercase tracking-widest text-state-active/80 mb-1">
-                    after
+                    修改后
                   </div>
                   {{ entry.new_content }}
                 </div>
@@ -620,7 +661,7 @@ const tabOptions = [
           :disabled="patchLoading"
           @click="discard"
         >
-          Discard
+          放弃修改
         </PButton>
         <PButton
           size="sm"
@@ -630,7 +671,7 @@ const tabOptions = [
           @click="save"
         >
           <Save class="h-3.5 w-3.5" :stroke-width="1.75" />
-          Save patch
+          保存修改
         </PButton>
       </div>
 
@@ -649,7 +690,7 @@ const tabOptions = [
         class="shrink-0 px-6 py-2 text-[11.5px] text-sig-amber bg-sig-amber/8 border-t border-sig-amber/25 flex items-center gap-2"
       >
         <HistoryIcon class="h-3.5 w-3.5" :stroke-width="1.75" />
-        已排队重建 Trivium · task
+        已排队重建 Trivium · 任务
         <span class="tabular">#{{ store.lastRebuildTaskId }}</span>
       </div>
     </template>
