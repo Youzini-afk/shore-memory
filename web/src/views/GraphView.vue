@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, ref, watch, computed } from 'vue'
 import { storeToRefs } from 'pinia'
-import { AlertTriangle, Hash, Network, Sparkles } from 'lucide-vue-next'
+import { AlertTriangle, Hash, Network } from 'lucide-vue-next'
 import PBadge from '@/components/ui/PBadge.vue'
 import PCard from '@/components/ui/PCard.vue'
 import GraphCanvas from '@/components/graph/GraphCanvas.vue'
@@ -55,6 +55,10 @@ const entityLinkedMemories = computed(() => {
   return response.value.memories.filter((m) => memIds.has(m.id))
 })
 
+const showDetailDrawer = computed(
+  () => selectedMemoryId.value != null || selectedEntity.value != null
+)
+
 function fit() {
   canvasRef.value?.fit()
 }
@@ -101,72 +105,72 @@ function zoomOut() {
     </div>
 
     <!-- Body -->
-    <div class="flex-1 min-h-0 grid grid-cols-12 relative">
-      <!-- Canvas col -->
-      <div class="col-span-12 xl:col-span-7 min-h-0 relative border-r border-shore-line/80">
-        <GraphCanvas ref="canvasRef" />
+    <div class="flex-1 min-h-0 relative overflow-hidden">
+      <GraphCanvas ref="canvasRef" />
 
-        <!-- Floating overlays -->
-        <div class="absolute top-4 left-4 z-10">
-          <GraphStats />
-        </div>
-        <div class="absolute top-4 right-4 z-10">
-          <GraphLegend />
-        </div>
+      <!-- Floating overlays -->
+      <div class="absolute top-4 left-4 z-10">
+        <GraphStats />
+      </div>
+      <div class="absolute top-4 right-4 z-10">
+        <GraphLegend />
+      </div>
 
-        <!-- Loading overlay -->
+      <!-- Loading overlay -->
+      <div
+        v-if="loading"
+        class="absolute inset-0 flex items-center justify-center bg-shore-bg/55 backdrop-blur-[2px] z-20"
+      >
+        <div class="flex items-center gap-2 text-[12px] font-display text-ink-2">
+          <span class="h-2 w-2 rounded-full bg-accent animate-pulse" />
+          正在拉取图谱…
+        </div>
+      </div>
+
+      <!-- Error overlay -->
+      <div
+        v-else-if="error"
+        class="absolute inset-0 flex items-center justify-center p-8 z-10"
+      >
         <div
-          v-if="loading"
-          class="absolute inset-0 flex items-center justify-center bg-shore-bg/55 backdrop-blur-[2px] z-20"
+          class="max-w-md rounded-panel border border-state-invalidated/40 bg-state-invalidated/10 px-4 py-3 text-[12.5px] text-state-invalidated flex items-start gap-2"
         >
-          <div class="flex items-center gap-2 text-[12px] font-display text-ink-2">
-            <span class="h-2 w-2 rounded-full bg-accent animate-pulse" />
-            正在拉取图谱…
-          </div>
-        </div>
-
-        <!-- Error overlay -->
-        <div
-          v-else-if="error"
-          class="absolute inset-0 flex items-center justify-center p-8 z-10"
-        >
-          <div
-            class="max-w-md rounded-panel border border-state-invalidated/40 bg-state-invalidated/10 px-4 py-3 text-[12.5px] text-state-invalidated flex items-start gap-2"
-          >
-            <AlertTriangle class="h-4 w-4 mt-0.5 shrink-0" :stroke-width="1.75" />
-            <div>
-              <div class="font-display">图谱加载失败</div>
-              <div class="mt-1 text-[11.5px] opacity-90">{{ error }}</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Empty -->
-        <div
-          v-else-if="response && stats.memoryCount === 0"
-          class="absolute inset-0 flex items-center justify-center z-10"
-        >
-          <div class="text-center text-[12.5px] text-ink-4 max-w-sm">
-            <div
-              class="mx-auto mb-3 h-12 w-12 rounded-card bg-accent/10 border border-accent/20 flex items-center justify-center text-accent"
-            >
-              <Network class="h-5 w-5" :stroke-width="1.75" />
-            </div>
-            <div class="font-display text-ink-1 text-[14px] mb-1">图谱尚空</div>
-            该 Agent 还没有任何已索引的记忆，先从记忆库或接入的 Bot 喂点数据再回来看。
+          <AlertTriangle class="h-4 w-4 mt-0.5 shrink-0" :stroke-width="1.75" />
+          <div>
+            <div class="font-display">图谱加载失败</div>
+            <div class="mt-1 text-[11.5px] opacity-90">{{ error }}</div>
           </div>
         </div>
       </div>
 
-      <!-- Detail col -->
-      <div class="col-span-12 xl:col-span-5 min-h-0 flex flex-col bg-shore-surface">
+      <!-- Empty -->
+      <div
+        v-else-if="response && stats.memoryCount === 0"
+        class="absolute inset-0 flex items-center justify-center z-10"
+      >
+        <div class="text-center text-[12.5px] text-ink-4 max-w-sm">
+          <div
+            class="mx-auto mb-3 h-12 w-12 rounded-card bg-accent/10 border border-accent/20 flex items-center justify-center text-accent"
+          >
+            <Network class="h-5 w-5" :stroke-width="1.75" />
+          </div>
+          <div class="font-display text-ink-1 text-[14px] mb-1">图谱尚空</div>
+          该 Agent 还没有任何已索引的记忆，先从记忆库或接入的 Bot 喂点数据再回来看。
+        </div>
+      </div>
+
+      <!-- Detail drawer -->
+      <div
+        v-if="showDetailDrawer"
+        class="absolute inset-y-0 right-0 z-30 w-full md:w-[460px] xl:w-[520px] min-h-0 bg-shore-surface/96 backdrop-blur-md shadow-[0_24px_64px_rgba(0,0,0,0.38)]"
+      >
         <!-- memory selected -->
         <DetailPane v-if="selectedMemoryId != null" />
 
         <!-- entity selected -->
         <div
           v-else-if="selectedEntity"
-          class="flex flex-col min-h-0 h-full"
+          class="flex flex-col min-h-0 h-full border-l border-shore-line/80"
         >
           <div class="px-6 pt-5 pb-4 border-b border-shore-line/80">
             <div class="flex items-center gap-2 text-[11px] font-display tracking-tight">
@@ -228,23 +232,6 @@ function zoomOut() {
               </div>
               <div v-else class="text-[11px] text-ink-5">—</div>
             </PCard>
-          </div>
-        </div>
-
-        <!-- nothing selected -->
-        <div
-          v-else
-          class="flex flex-1 flex-col items-center justify-center text-center gap-3 px-6"
-        >
-          <div
-            class="h-12 w-12 rounded-card bg-accent/10 border border-accent/20 flex items-center justify-center text-accent"
-          >
-            <Sparkles class="h-5 w-5" :stroke-width="1.75" />
-          </div>
-          <div class="font-display text-[14px] text-ink-1">探索这张图</div>
-          <div class="text-[11.5px] text-ink-4 max-w-xs">
-            拖动 / 缩放画布；点击任一节点查看详情与脉冲邻域；搜索关键词会高亮命中的记忆 / 实体与邻居；点击 <kbd class="inline-block mx-0.5 px-1.5 h-5 leading-5 rounded-btn bg-shore-card border border-shore-line text-[10px] font-mono text-ink-2">▶</kbd>
-            可启动 force-atlas2 自动布局。
           </div>
         </div>
       </div>
