@@ -84,7 +84,16 @@ const embeddingPresets = ref<PresetFormState[]>([])
 const llmPresets = ref<PresetFormState[]>([])
 const defaultEmbeddingId = ref<string>('')
 const defaultLlmId = ref<string>('')
+const activeEmbeddingId = ref<string>('')
+const activeLlmId = ref<string>('')
 const modelOptionsByPreset = reactive<Record<string, string[]>>({})
+
+const activeEmbeddingPreset = computed(
+  () => embeddingPresets.value.find((p) => p.id === activeEmbeddingId.value) ?? null
+)
+const activeLlmPreset = computed(
+  () => llmPresets.value.find((p) => p.id === activeLlmId.value) ?? null
+)
 
 const roleForms = reactive<Record<RoleKey, RoleFormState>>({
   scorer: { presetId: '', temperature: '' },
@@ -260,10 +269,20 @@ function hydrateRoles(config: ModelConfigResponse) {
 }
 
 function hydrateForm(config: ModelConfigResponse) {
+  const previousEmbeddingActive = activeEmbeddingId.value
+  const previousLlmActive = activeLlmId.value
   embeddingPresets.value = hydratePresetList(config.embedding_presets)
   llmPresets.value = hydratePresetList(config.llm_presets)
   defaultEmbeddingId.value = config.default_embedding_preset ?? (config.embedding_presets[0]?.id ?? '')
   defaultLlmId.value = config.default_llm_preset ?? (config.llm_presets[0]?.id ?? '')
+  activeEmbeddingId.value =
+    (previousEmbeddingActive && embeddingPresets.value.some((p) => p.id === previousEmbeddingActive)
+      ? previousEmbeddingActive
+      : defaultEmbeddingId.value) || (embeddingPresets.value[0]?.id ?? '')
+  activeLlmId.value =
+    (previousLlmActive && llmPresets.value.some((p) => p.id === previousLlmActive)
+      ? previousLlmActive
+      : defaultLlmId.value) || (llmPresets.value[0]?.id ?? '')
   hydrateRoles(config)
   for (const key of Object.keys(modelOptionsByPreset)) {
     delete modelOptionsByPreset[key]
@@ -415,16 +434,57 @@ function addPreset(kind: PresetKind) {
     const preset = emptyEmbeddingPreset()
     embeddingPresets.value.push(preset)
     if (!defaultEmbeddingId.value) defaultEmbeddingId.value = preset.id
+    activeEmbeddingId.value = preset.id
   } else {
     const preset = emptyLlmPreset()
     llmPresets.value.push(preset)
     if (!defaultLlmId.value) defaultLlmId.value = preset.id
+    activeLlmId.value = preset.id
   }
 }
 
-function removePreset(kind: PresetKind, id: string) {
+function saveAsPreset(kind: PresetKind) {
+  const current =
+    kind === 'embedding' ? activeEmbeddingPreset.value : activeLlmPreset.value
+  if (!current) {
+    addPreset(kind)
+    return
+  }
+  const suggested = `${current.name} 副本`
+  const raw = window.prompt('请输入新预设名称：', suggested)
+  if (raw === null) return
+  const trimmed = raw.trim()
+  if (!trimmed) {
+    modelConfigError.value = '预设名不能为空。'
+    return
+  }
+  const idPrefix = kind === 'embedding' ? 'embedding' : 'llm'
+  const clone: PresetFormState = {
+    ...current,
+    id: newPresetId(idPrefix),
+    name: trimmed,
+    apiKey: '',
+    apiKeyAction: 'keep',
+    apiKeyMasked: current.apiKeyMasked,
+    apiKeyConfigured: current.apiKeyConfigured,
+    isNew: true
+  }
+  if (kind === 'embedding') {
+    embeddingPresets.value.push(clone)
+    activeEmbeddingId.value = clone.id
+  } else {
+    llmPresets.value.push(clone)
+    activeLlmId.value = clone.id
+  }
+  modelConfigNotice.value = `已添加新预设「${trimmed}」，请点击「保存」写入服务端。`
+}
+
+function removeActivePreset(kind: PresetKind) {
   const label = kind === 'embedding' ? 'Embedding' : 'LLM'
   const list = kind === 'embedding' ? embeddingPresets : llmPresets
+  const activeRef = kind === 'embedding' ? activeEmbeddingId : activeLlmId
+  const id = activeRef.value
+  if (!id) return
   if (list.value.length <= 1) {
     modelConfigError.value = `至少需要保留一个 ${label} 预设。`
     return
@@ -445,11 +505,15 @@ function removePreset(kind: PresetKind, id: string) {
     }
   }
   delete modelOptionsByPreset[id]
+  activeRef.value = list.value[0]?.id ?? ''
 }
 
-function setDefault(kind: PresetKind, id: string) {
-  if (kind === 'embedding') defaultEmbeddingId.value = id
-  else defaultLlmId.value = id
+function setActiveAsDefault(kind: PresetKind) {
+  if (kind === 'embedding') {
+    if (activeEmbeddingId.value) defaultEmbeddingId.value = activeEmbeddingId.value
+  } else {
+    if (activeLlmId.value) defaultLlmId.value = activeLlmId.value
+  }
 }
 
 function presetById(kind: PresetKind, id: string | null | undefined): PresetFormState | undefined {
@@ -687,79 +751,104 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Embedding presets -->
-        <div class="mt-5">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <div class="text-[12px] uppercase font-display tracking-wider text-ink-4">
-              Embedding 预设
-            </div>
-            <PButton size="sm" variant="ghost" :disabled="modelConfigBusy" @click="addPreset('embedding')">
-              + 新建预设
-            </PButton>
-          </div>
-          <div class="space-y-4">
-            <div
-              v-for="preset in embeddingPresets"
-              :key="preset.id"
-              class="rounded-card border p-4 bg-shore-bg/30"
-              :class="
-                preset.id === defaultEmbeddingId
-                  ? 'border-accent/70 shadow-[0_0_0_2px_rgba(124,92,255,0.15)]'
-                  : 'border-shore-line/80'
-              "
-            >
-              <div class="flex items-start justify-between gap-3 mb-3 flex-wrap">
-                <div class="flex-1 min-w-[180px]">
-                  <div class="text-[12px] text-ink-4 mb-1">预设名</div>
-                  <PInput v-model="preset.name" placeholder="给这份配置起个名字" />
-                </div>
-                <div class="flex items-center gap-2 flex-wrap self-end">
-                  <label class="flex items-center gap-2 text-[12px] text-ink-3 select-none">
-                    <input
-                      type="radio"
-                      name="default-embedding"
-                      class="accent-accent"
-                      :value="preset.id"
-                      v-model="defaultEmbeddingId"
-                      @change="setDefault('embedding', preset.id)"
-                    />
-                    <span>默认</span>
-                  </label>
-                  <PButton
-                    size="sm"
-                    variant="ghost"
-                    :loading="fetchingModelsForId === preset.id"
-                    :disabled="modelConfigBusy"
-                    @click="fetchProviderModels(preset)"
-                  >
-                    获取模型
-                  </PButton>
-                  <PButton
-                    size="sm"
-                    variant="ghost"
-                    :disabled="modelConfigBusy || embeddingPresets.length <= 1"
-                    @click="removePreset('embedding', preset.id)"
-                  >
-                    删除
-                  </PButton>
-                </div>
+        <!-- Preset editors -->
+        <div class="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <!-- Embedding preset editor -->
+          <div
+            class="rounded-card border p-4 bg-shore-bg/30"
+            :class="
+              activeEmbeddingPreset && activeEmbeddingPreset.id === defaultEmbeddingId
+                ? 'border-accent/70 shadow-[0_0_0_2px_rgba(124,92,255,0.15)]'
+                : 'border-shore-line/80'
+            "
+          >
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div class="text-[13px] font-display text-ink-1">Embedding 预设</div>
+              <div
+                v-if="activeEmbeddingPreset && activeEmbeddingPreset.id === defaultEmbeddingId"
+                class="text-[11px] text-accent font-display"
+              >
+                当前默认
               </div>
+            </div>
 
+            <div class="mb-3">
+              <div class="text-[12px] text-ink-4 mb-1">预设模板</div>
+              <select
+                v-model="activeEmbeddingId"
+                :disabled="!embeddingPresets.length"
+                class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+              >
+                <option v-if="!embeddingPresets.length" value="">尚无预设，请点击「+ 新建」</option>
+                <option v-for="preset in embeddingPresets" :key="preset.id" :value="preset.id">
+                  {{ preset.name }}{{ preset.id === defaultEmbeddingId ? '（默认）' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+              <PButton size="sm" variant="secondary" :loading="savingModelConfig" :disabled="modelConfigBusy" @click="saveModelConfig">
+                保存
+              </PButton>
+              <PButton size="sm" variant="ghost" :disabled="modelConfigBusy || !activeEmbeddingPreset" @click="saveAsPreset('embedding')">
+                另存为
+              </PButton>
+              <PButton size="sm" variant="ghost" :disabled="modelConfigBusy" @click="addPreset('embedding')">
+                + 新建
+              </PButton>
+              <PButton
+                size="sm"
+                variant="ghost"
+                :disabled="modelConfigBusy || embeddingPresets.length <= 1 || !activeEmbeddingPreset"
+                @click="removeActivePreset('embedding')"
+              >
+                删除
+              </PButton>
+              <PButton
+                size="sm"
+                variant="ghost"
+                :disabled="
+                  modelConfigBusy ||
+                  !activeEmbeddingPreset ||
+                  activeEmbeddingPreset.id === defaultEmbeddingId
+                "
+                @click="setActiveAsDefault('embedding')"
+              >
+                设为默认
+              </PButton>
+            </div>
+
+            <template v-if="activeEmbeddingPreset">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="md:col-span-2">
+                  <div class="text-[12px] text-ink-4 mb-1">预设名</div>
+                  <PInput v-model="activeEmbeddingPreset.name" placeholder="给这份配置起个名字" />
+                </div>
                 <div>
                   <div class="text-[12px] text-ink-4 mb-1">API Base URL</div>
-                  <PInput v-model="preset.apiBase" placeholder="https://api.openai.com/v1" />
+                  <PInput v-model="activeEmbeddingPreset.apiBase" placeholder="https://api.openai.com/v1" />
                 </div>
                 <div>
-                  <div class="text-[12px] text-ink-4 mb-1">模型名</div>
-                  <PInput v-model="preset.model" placeholder="text-embedding-3-large" />
+                  <div class="flex items-center justify-between gap-3 mb-1">
+                    <div class="text-[12px] text-ink-4">模型名</div>
+                    <PButton
+                      size="sm"
+                      variant="ghost"
+                      :loading="fetchingModelsForId === activeEmbeddingPreset.id"
+                      :disabled="modelConfigBusy"
+                      @click="fetchProviderModels(activeEmbeddingPreset)"
+                    >
+                      获取模型
+                    </PButton>
+                  </div>
+                  <PInput v-model="activeEmbeddingPreset.model" placeholder="text-embedding-3-large" />
                   <select
-                    v-if="modelOptionsByPreset[preset.id]?.length"
-                    v-model="preset.model"
+                    v-if="modelOptionsByPreset[activeEmbeddingPreset.id]?.length"
+                    v-model="activeEmbeddingPreset.model"
                     class="mt-2 h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
                   >
                     <option value="">从已获取模型中选择</option>
-                    <option v-for="model in modelOptionsByPreset[preset.id]" :key="model" :value="model">
+                    <option v-for="model in modelOptionsByPreset[activeEmbeddingPreset.id]" :key="model" :value="model">
                       {{ model }}
                     </option>
                   </select>
@@ -770,19 +859,19 @@ onMounted(() => {
                     <PButton
                       size="sm"
                       variant="ghost"
-                      :loading="detectingDimensionId === preset.id"
+                      :loading="detectingDimensionId === activeEmbeddingPreset.id"
                       :disabled="modelConfigBusy"
-                      @click="detectEmbeddingDimension(preset)"
+                      @click="detectEmbeddingDimension(activeEmbeddingPreset)"
                     >
                       自动识别
                     </PButton>
                   </div>
-                  <PInput v-model="preset.dimension" type="number" placeholder="1536" mono />
+                  <PInput v-model="activeEmbeddingPreset.dimension" type="number" placeholder="1536" mono />
                 </div>
                 <div>
                   <div class="text-[12px] text-ink-4 mb-1">Key 模式</div>
                   <select
-                    v-model="preset.apiKeyAction"
+                    v-model="activeEmbeddingPreset.apiKeyAction"
                     class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
                   >
                     <option value="keep">保留已存 Key</option>
@@ -790,91 +879,114 @@ onMounted(() => {
                     <option value="clear">清空 Key</option>
                   </select>
                   <div class="text-[11px] text-ink-4 mt-1">
-                    当前：{{ preset.apiKeyMasked ?? (preset.apiKeyConfigured ? '********' : '未配置') }}
+                    当前：{{ activeEmbeddingPreset.apiKeyMasked ?? (activeEmbeddingPreset.apiKeyConfigured ? '********' : '未配置') }}
                   </div>
                 </div>
-                <div v-if="preset.apiKeyAction === 'set'" class="md:col-span-2">
+                <div v-if="activeEmbeddingPreset.apiKeyAction === 'set'" class="md:col-span-2">
                   <div class="text-[12px] text-ink-4 mb-1">新 API Key</div>
-                  <PInput v-model="preset.apiKey" type="password" placeholder="sk-..." mono />
+                  <PInput v-model="activeEmbeddingPreset.apiKey" type="password" placeholder="sk-..." mono />
                 </div>
               </div>
-            </div>
+            </template>
+            <div v-else class="text-[12px] text-ink-4">尚无预设，请点击上方「+ 新建」。</div>
           </div>
-        </div>
 
-        <!-- LLM presets -->
-        <div class="mt-6">
-          <div class="flex items-center justify-between gap-3 mb-3">
-            <div class="text-[12px] uppercase font-display tracking-wider text-ink-4">
-              LLM 预设
-            </div>
-            <PButton size="sm" variant="ghost" :disabled="modelConfigBusy" @click="addPreset('llm')">
-              + 新建预设
-            </PButton>
-          </div>
-          <div class="space-y-4">
-            <div
-              v-for="preset in llmPresets"
-              :key="preset.id"
-              class="rounded-card border p-4 bg-shore-bg/30"
-              :class="
-                preset.id === defaultLlmId
-                  ? 'border-accent/70 shadow-[0_0_0_2px_rgba(124,92,255,0.15)]'
-                  : 'border-shore-line/80'
-              "
-            >
-              <div class="flex items-start justify-between gap-3 mb-3 flex-wrap">
-                <div class="flex-1 min-w-[180px]">
-                  <div class="text-[12px] text-ink-4 mb-1">预设名</div>
-                  <PInput v-model="preset.name" placeholder="给这份配置起个名字" />
-                </div>
-                <div class="flex items-center gap-2 flex-wrap self-end">
-                  <label class="flex items-center gap-2 text-[12px] text-ink-3 select-none">
-                    <input
-                      type="radio"
-                      name="default-llm"
-                      class="accent-accent"
-                      :value="preset.id"
-                      v-model="defaultLlmId"
-                      @change="setDefault('llm', preset.id)"
-                    />
-                    <span>默认</span>
-                  </label>
-                  <PButton
-                    size="sm"
-                    variant="ghost"
-                    :loading="fetchingModelsForId === preset.id"
-                    :disabled="modelConfigBusy"
-                    @click="fetchProviderModels(preset)"
-                  >
-                    获取模型
-                  </PButton>
-                  <PButton
-                    size="sm"
-                    variant="ghost"
-                    :disabled="modelConfigBusy || llmPresets.length <= 1"
-                    @click="removePreset('llm', preset.id)"
-                  >
-                    删除
-                  </PButton>
-                </div>
+          <!-- LLM preset editor -->
+          <div
+            class="rounded-card border p-4 bg-shore-bg/30"
+            :class="
+              activeLlmPreset && activeLlmPreset.id === defaultLlmId
+                ? 'border-accent/70 shadow-[0_0_0_2px_rgba(124,92,255,0.15)]'
+                : 'border-shore-line/80'
+            "
+          >
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div class="text-[13px] font-display text-ink-1">LLM 预设</div>
+              <div
+                v-if="activeLlmPreset && activeLlmPreset.id === defaultLlmId"
+                class="text-[11px] text-accent font-display"
+              >
+                当前默认
               </div>
+            </div>
 
+            <div class="mb-3">
+              <div class="text-[12px] text-ink-4 mb-1">预设模板</div>
+              <select
+                v-model="activeLlmId"
+                :disabled="!llmPresets.length"
+                class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+              >
+                <option v-if="!llmPresets.length" value="">尚无预设，请点击「+ 新建」</option>
+                <option v-for="preset in llmPresets" :key="preset.id" :value="preset.id">
+                  {{ preset.name }}{{ preset.id === defaultLlmId ? '（默认）' : '' }}
+                </option>
+              </select>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-2 mb-4">
+              <PButton size="sm" variant="secondary" :loading="savingModelConfig" :disabled="modelConfigBusy" @click="saveModelConfig">
+                保存
+              </PButton>
+              <PButton size="sm" variant="ghost" :disabled="modelConfigBusy || !activeLlmPreset" @click="saveAsPreset('llm')">
+                另存为
+              </PButton>
+              <PButton size="sm" variant="ghost" :disabled="modelConfigBusy" @click="addPreset('llm')">
+                + 新建
+              </PButton>
+              <PButton
+                size="sm"
+                variant="ghost"
+                :disabled="modelConfigBusy || llmPresets.length <= 1 || !activeLlmPreset"
+                @click="removeActivePreset('llm')"
+              >
+                删除
+              </PButton>
+              <PButton
+                size="sm"
+                variant="ghost"
+                :disabled="
+                  modelConfigBusy ||
+                  !activeLlmPreset ||
+                  activeLlmPreset.id === defaultLlmId
+                "
+                @click="setActiveAsDefault('llm')"
+              >
+                设为默认
+              </PButton>
+            </div>
+
+            <template v-if="activeLlmPreset">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                <div class="md:col-span-2">
+                  <div class="text-[12px] text-ink-4 mb-1">预设名</div>
+                  <PInput v-model="activeLlmPreset.name" placeholder="给这份配置起个名字" />
+                </div>
                 <div>
                   <div class="text-[12px] text-ink-4 mb-1">API Base URL</div>
-                  <PInput v-model="preset.apiBase" placeholder="https://api.openai.com/v1" />
+                  <PInput v-model="activeLlmPreset.apiBase" placeholder="https://api.openai.com/v1" />
                 </div>
                 <div>
-                  <div class="text-[12px] text-ink-4 mb-1">模型名</div>
-                  <PInput v-model="preset.model" placeholder="gpt-4o-mini" />
+                  <div class="flex items-center justify-between gap-3 mb-1">
+                    <div class="text-[12px] text-ink-4">模型名</div>
+                    <PButton
+                      size="sm"
+                      variant="ghost"
+                      :loading="fetchingModelsForId === activeLlmPreset.id"
+                      :disabled="modelConfigBusy"
+                      @click="fetchProviderModels(activeLlmPreset)"
+                    >
+                      获取模型
+                    </PButton>
+                  </div>
+                  <PInput v-model="activeLlmPreset.model" placeholder="gpt-4o-mini" />
                   <select
-                    v-if="modelOptionsByPreset[preset.id]?.length"
-                    v-model="preset.model"
+                    v-if="modelOptionsByPreset[activeLlmPreset.id]?.length"
+                    v-model="activeLlmPreset.model"
                     class="mt-2 h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
                   >
                     <option value="">从已获取模型中选择</option>
-                    <option v-for="model in modelOptionsByPreset[preset.id]" :key="model" :value="model">
+                    <option v-for="model in modelOptionsByPreset[activeLlmPreset.id]" :key="model" :value="model">
                       {{ model }}
                     </option>
                   </select>
@@ -882,7 +994,7 @@ onMounted(() => {
                 <div>
                   <div class="text-[12px] text-ink-4 mb-1">默认 Temperature</div>
                   <PInput
-                    v-model="preset.temperature"
+                    v-model="activeLlmPreset.temperature"
                     type="number"
                     placeholder="留空使用角色内置默认"
                     mono
@@ -891,7 +1003,7 @@ onMounted(() => {
                 <div>
                   <div class="text-[12px] text-ink-4 mb-1">Key 模式</div>
                   <select
-                    v-model="preset.apiKeyAction"
+                    v-model="activeLlmPreset.apiKeyAction"
                     class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
                   >
                     <option value="keep">保留已存 Key</option>
@@ -899,15 +1011,16 @@ onMounted(() => {
                     <option value="clear">清空 Key</option>
                   </select>
                   <div class="text-[11px] text-ink-4 mt-1">
-                    当前：{{ preset.apiKeyMasked ?? (preset.apiKeyConfigured ? '********' : '未配置') }}
+                    当前：{{ activeLlmPreset.apiKeyMasked ?? (activeLlmPreset.apiKeyConfigured ? '********' : '未配置') }}
                   </div>
                 </div>
-                <div v-if="preset.apiKeyAction === 'set'" class="md:col-span-2">
+                <div v-if="activeLlmPreset.apiKeyAction === 'set'" class="md:col-span-2">
                   <div class="text-[12px] text-ink-4 mb-1">新 API Key</div>
-                  <PInput v-model="preset.apiKey" type="password" placeholder="sk-..." mono />
+                  <PInput v-model="activeLlmPreset.apiKey" type="password" placeholder="sk-..." mono />
                 </div>
               </div>
-            </div>
+            </template>
+            <div v-else class="text-[12px] text-ink-4">尚无预设，请点击上方「+ 新建」。</div>
           </div>
         </div>
 
