@@ -145,6 +145,10 @@ impl AppState {
                 post(detect_embedding_dimension),
             )
             .route("/v1/model-config/test", post(test_model_config))
+            .route(
+                "/v1/model-config/default-prompts",
+                get(get_default_prompts),
+            )
             .route("/v1/events", get(events_ws));
 
         if self.config.api_key.is_some() {
@@ -2626,6 +2630,24 @@ async fn get_model_config(
     histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config", "status" => "ok")
         .record(started.elapsed().as_secs_f64());
     Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn get_default_prompts(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let prompts = state.worker.fetch_default_prompts().await.map_err(|err| {
+        ServiceError::BadRequest(format!("failed to fetch default prompts: {err:#}"))
+    })?;
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config/default-prompts", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(serde_json::json!({ "prompts": prompts })))
 }
 
 #[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]

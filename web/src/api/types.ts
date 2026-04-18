@@ -350,6 +350,8 @@ export interface ModelConfigResponse {
   default_embedding_preset?: string | null
   default_llm_preset?: string | null
   role_bindings: Record<string, RoleBindingResponse>
+  /** Per-role system prompt overrides. Roles without an entry use the worker default. */
+  prompts: Record<string, string>
   storage: ModelConfigStorageResponse
 }
 
@@ -411,7 +413,16 @@ export interface UpdateModelConfigRequest {
   default_embedding_preset?: string
   default_llm_preset?: string
   role_bindings?: Record<string, UpdateRoleBindingRequest>
+  /**
+   * Per-role system prompt overrides. `null`, `undefined`, or empty/whitespace-only
+   * strings clear the override so the worker falls back to its built-in default.
+   */
+  prompts?: Record<string, string | null>
   auto_detect_embedding_dimension?: boolean
+}
+
+export interface DefaultPromptsResponse {
+  prompts: Record<string, string>
 }
 
 export interface UpdateModelConfigResponse {

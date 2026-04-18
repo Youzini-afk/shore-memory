@@ -191,7 +191,27 @@ def _load_runtime_model_config() -> dict[str, Any]:
         role: _resolve_role_config(role, override_roles, llm)
         for role in ROLE_NAMES
     }
-    return {"embedding": embedding, "llm": llm, "roles": roles}
+    override_prompts = _as_dict(override.get("prompts"))
+    prompts: dict[str, str] = {}
+    for role in ROLE_NAMES:
+        raw = override_prompts.get(role)
+        if isinstance(raw, str) and raw.strip():
+            prompts[role] = raw
+    return {"embedding": embedding, "llm": llm, "roles": roles, "prompts": prompts}
+
+
+def _resolve_system_prompt(role: str, fallback: str) -> str:
+    """Return the per-role system prompt override if set, else the fallback.
+
+    Prompts are surfaced through ``_load_runtime_model_config`` which already
+    filters out empty strings, so reaching a non-string / empty value here
+    means "no override" and the call site should use the built-in default.
+    """
+
+    override = _load_runtime_model_config().get("prompts", {}).get(role)
+    if isinstance(override, str) and override.strip():
+        return override
+    return fallback
 
 
 class EmbedRequest(BaseModel):
@@ -415,6 +435,23 @@ async def provider_embedding_dimension(req: ProviderProbeRequest) -> EmbeddingDi
     return EmbeddingDimensionResponse(model=model, dimension=dimension)
 
 
+@app.get("/v1/tasks/default-prompts")
+async def default_prompts() -> dict[str, dict[str, str]]:
+    """Return the worker's built-in default system prompts for each role.
+
+    Used by the server and the web UI to render "view defaults" dialogs and
+    to let the user restore a role to its built-in prompt.
+    """
+
+    return {
+        "prompts": {
+            "scorer": _SCORE_TURN_SYSTEM_PROMPT,
+            "reflector": _REFLECTION_SYSTEM_PROMPT,
+            "query_analyzer": _EXTRACT_ENTITIES_SYSTEM_PROMPT,
+        }
+    }
+
+
 @app.post("/v1/tasks/extract-entities", response_model=ExtractEntitiesResponse)
 async def extract_entities(req: ExtractEntitiesRequest) -> ExtractEntitiesResponse:
     """Extract named entities from a recall-time query string.
@@ -430,7 +467,8 @@ async def extract_entities(req: ExtractEntitiesRequest) -> ExtractEntitiesRespon
     if client is None:
         return ExtractEntitiesResponse()
 
-    data = await client.chat_json(_EXTRACT_ENTITIES_SYSTEM_PROMPT, query)
+    system_prompt = _resolve_system_prompt("query_analyzer", _EXTRACT_ENTITIES_SYSTEM_PROMPT)
+    data = await client.chat_json(system_prompt, query)
     if not isinstance(data, dict):
         return ExtractEntitiesResponse()
 
@@ -674,7 +712,7 @@ async def maybe_llm_score_turn(req: ScoreTurnRequest) -> Optional[ScoreTurnRespo
     if client is None:
         return None
 
-    system_prompt = _SCORE_TURN_SYSTEM_PROMPT
+    system_prompt = _resolve_system_prompt("scorer", _SCORE_TURN_SYSTEM_PROMPT)
     user_payload = _build_score_turn_user_payload(req)
     user_prompt = json.dumps(user_payload, ensure_ascii=False)
 
@@ -840,7 +878,8 @@ async def maybe_llm_reflect(req: ReflectRequest) -> Optional[ReflectResponse]:
         ensure_ascii=False,
     )
 
-    data = await client.chat_json(_REFLECTION_SYSTEM_PROMPT, user_prompt)
+    system_prompt = _resolve_system_prompt("reflector", _REFLECTION_SYSTEM_PROMPT)
+    data = await client.chat_json(system_prompt, user_prompt)
     if not isinstance(data, dict):
         return None
 

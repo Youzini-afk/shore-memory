@@ -7,6 +7,7 @@ import PInput from '@/components/ui/PInput.vue'
 import { useAppStore } from '@/stores/app'
 import { api, ShoreApiError } from '@/api/http'
 import type {
+  DefaultPromptsResponse,
   DetectEmbeddingDimensionResponse,
   ListProviderModelsResponse,
   ModelConfigResponse,
@@ -99,6 +100,30 @@ const roleForms = reactive<Record<RoleKey, RoleFormState>>({
   scorer: { presetId: '', temperature: '' },
   reflector: { presetId: '', temperature: '' },
   query_analyzer: { presetId: '', temperature: '' }
+})
+
+/**
+ * Per-role system prompt override form. Empty string means "use the worker's
+ * built-in default"; any non-empty string is sent as an override on save.
+ */
+const promptForms = reactive<Record<RoleKey, string>>({
+  scorer: '',
+  reflector: '',
+  query_analyzer: ''
+})
+
+/**
+ * Cached worker defaults, fetched lazily via `/v1/model-config/default-prompts`.
+ * Used to power the "view / restore default" actions without forcing the user
+ * to remember the exact prompt text.
+ */
+const defaultPrompts = ref<Record<RoleKey, string> | null>(null)
+const loadingDefaultPrompts = ref(false)
+const defaultPromptsError = ref<string | null>(null)
+const promptPreviewOpen = reactive<Record<RoleKey, boolean>>({
+  scorer: false,
+  reflector: false,
+  query_analyzer: false
 })
 
 const modelConfigBusy = computed(
@@ -268,6 +293,14 @@ function hydrateRoles(config: ModelConfigResponse) {
   }
 }
 
+function hydratePrompts(config: ModelConfigResponse) {
+  const overrides = config.prompts ?? {}
+  for (const role of roleKeys) {
+    const raw = overrides[role]
+    promptForms[role] = typeof raw === 'string' ? raw : ''
+  }
+}
+
 function hydrateForm(config: ModelConfigResponse) {
   const previousEmbeddingActive = activeEmbeddingId.value
   const previousLlmActive = activeLlmId.value
@@ -284,6 +317,7 @@ function hydrateForm(config: ModelConfigResponse) {
       ? previousLlmActive
       : defaultLlmId.value) || (llmPresets.value[0]?.id ?? '')
   hydrateRoles(config)
+  hydratePrompts(config)
   for (const key of Object.keys(modelOptionsByPreset)) {
     delete modelOptionsByPreset[key]
   }
@@ -358,12 +392,21 @@ function buildUpdatePayload(options?: { autoDetectEmbeddingDimension?: boolean }
       temperature: temperature === undefined ? null : temperature
     }
   }
+  const prompts: Record<string, string | null> = {}
+  for (const role of roleKeys) {
+    const trimmed = promptForms[role].trim()
+    // Empty form value → explicit `null` so server drops any existing override
+    // and the worker falls back to its built-in default for that role.
+    prompts[role] = trimmed ? promptForms[role] : null
+  }
+
   return {
     embedding_presets: embeddingPresets.value.map(presetFormToRequest),
     llm_presets: llmPresets.value.map(presetFormToRequest),
     default_embedding_preset: defaultEmbeddingId.value || undefined,
     default_llm_preset: defaultLlmId.value || undefined,
     role_bindings: roleBindings,
+    prompts,
     auto_detect_embedding_dimension: options?.autoDetectEmbeddingDimension ?? false
   }
 }
@@ -609,8 +652,59 @@ function getRoleBinding(role: RoleKey): RoleBindingResponse | undefined {
   return modelConfig.value?.role_bindings[role]
 }
 
+function promptIsOverridden(role: RoleKey): boolean {
+  return Boolean(promptForms[role].trim())
+}
+
+async function ensureDefaultPrompts(): Promise<Record<RoleKey, string> | null> {
+  if (defaultPrompts.value) {
+    return defaultPrompts.value
+  }
+  if (loadingDefaultPrompts.value) {
+    return null
+  }
+  loadingDefaultPrompts.value = true
+  defaultPromptsError.value = null
+  try {
+    const res = await api.get<DefaultPromptsResponse>('/v1/model-config/default-prompts')
+    const map = (res.prompts ?? {}) as Record<string, string>
+    defaultPrompts.value = {
+      scorer: map.scorer ?? '',
+      reflector: map.reflector ?? '',
+      query_analyzer: map.query_analyzer ?? ''
+    }
+    return defaultPrompts.value
+  } catch (err) {
+    defaultPromptsError.value = `读取默认提示词失败：${resolveError(err)}`
+    return null
+  } finally {
+    loadingDefaultPrompts.value = false
+  }
+}
+
+async function togglePromptPreview(role: RoleKey) {
+  if (!promptPreviewOpen[role]) {
+    const prompts = await ensureDefaultPrompts()
+    if (!prompts) return
+  }
+  promptPreviewOpen[role] = !promptPreviewOpen[role]
+}
+
+async function restorePromptDefault(role: RoleKey) {
+  const prompts = await ensureDefaultPrompts()
+  if (!prompts) return
+  promptForms[role] = prompts[role] ?? ''
+  modelConfigNotice.value = `已把「${ROLE_META[role].label}」提示词填充为内置默认，记得点「保存」使其生效。`
+}
+
+function clearPromptOverride(role: RoleKey) {
+  promptForms[role] = ''
+  modelConfigNotice.value = `已清空「${ROLE_META[role].label}」的提示词覆盖，保存后该角色会使用内置默认。`
+}
+
 onMounted(() => {
   void loadModelConfig()
+  void ensureDefaultPrompts()
 })
 </script>
 
@@ -1076,6 +1170,82 @@ onMounted(() => {
                   {{ formatKeySource(getRoleBinding(entry.key)?.resolved.api_key_source) }}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Prompts -->
+        <div class="mt-6">
+          <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
+            <div class="text-[12px] uppercase font-display tracking-wider text-ink-4">
+              系统提示词
+            </div>
+            <span v-if="loadingDefaultPrompts" class="text-[11px] text-ink-4">
+              加载默认中…
+            </span>
+          </div>
+          <div
+            v-if="defaultPromptsError"
+            class="rounded-btn border border-state-invalidated/40 bg-state-invalidated/10 px-3 py-2 text-[12px] text-state-invalidated mb-3"
+          >
+            {{ defaultPromptsError }}
+          </div>
+          <div class="space-y-3">
+            <div
+              v-for="entry in roleEntries"
+              :key="entry.key"
+              class="rounded-card border border-shore-line/80 p-4 bg-shore-bg/30"
+            >
+              <div class="flex items-start justify-between gap-3 mb-2 flex-wrap">
+                <div>
+                  <span class="text-[13px] font-display text-ink-1">{{ entry.label }}</span>
+                  <span class="text-[11px] text-ink-4 ml-2">{{ entry.description }}</span>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap">
+                  <span
+                    :class="promptIsOverridden(entry.key) ? 'text-accent' : 'text-ink-4'"
+                    class="text-[11px] font-display"
+                  >
+                    {{ promptIsOverridden(entry.key) ? '已覆盖' : '使用内置默认' }}
+                  </span>
+                  <PButton
+                    size="sm"
+                    variant="ghost"
+                    :loading="loadingDefaultPrompts"
+                    :disabled="modelConfigBusy"
+                    @click="togglePromptPreview(entry.key)"
+                  >
+                    {{ promptPreviewOpen[entry.key] ? '收起默认' : '查看默认' }}
+                  </PButton>
+                  <PButton
+                    size="sm"
+                    variant="ghost"
+                    :loading="loadingDefaultPrompts"
+                    :disabled="modelConfigBusy"
+                    @click="restorePromptDefault(entry.key)"
+                  >
+                    填充默认
+                  </PButton>
+                  <PButton
+                    size="sm"
+                    variant="ghost"
+                    :disabled="modelConfigBusy || !promptIsOverridden(entry.key)"
+                    @click="clearPromptOverride(entry.key)"
+                  >
+                    清空覆盖
+                  </PButton>
+                </div>
+              </div>
+              <textarea
+                v-model="promptForms[entry.key]"
+                rows="10"
+                placeholder="留空使用 worker 内置默认（点击「查看默认」可预览）"
+                class="w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3 py-2 text-[12px] text-ink-1 font-mono leading-5 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)] resize-y"
+              />
+              <div
+                v-if="promptPreviewOpen[entry.key]"
+                class="mt-2 rounded-btn border border-shore-line/60 bg-[#0A0B10] px-3 py-2 text-[11px] text-ink-3 font-mono whitespace-pre-wrap max-h-80 overflow-auto"
+              >{{ defaultPrompts?.[entry.key] ?? '' }}</div>
             </div>
           </div>
         </div>

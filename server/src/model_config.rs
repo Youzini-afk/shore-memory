@@ -130,6 +130,11 @@ pub struct ModelConfigFile {
     pub default_llm_preset: Option<String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub role_bindings: BTreeMap<String, RoleBindingFile>,
+    /// Per-role system prompt overrides. An absent or empty entry means the
+    /// role should use the worker's built-in default prompt. The worker reads
+    /// this map directly via the ``prompts`` key.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub prompts: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
 
@@ -179,6 +184,10 @@ pub struct UpdateModelConfigRequest {
     pub default_llm_preset: Option<String>,
     #[serde(default)]
     pub role_bindings: BTreeMap<String, UpdateRoleBindingRequest>,
+    /// Per-role system prompt overrides. ``Some("")`` / whitespace-only / ``None``
+    /// all clear the override so the worker falls back to its built-in default.
+    #[serde(default)]
+    pub prompts: BTreeMap<String, Option<String>>,
     #[serde(default)]
     pub auto_detect_embedding_dimension: bool,
 }
@@ -263,6 +272,9 @@ pub struct ModelConfigResponse {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub default_llm_preset: Option<String>,
     pub role_bindings: BTreeMap<String, RoleBindingResponse>,
+    /// Currently-active per-role prompt overrides. Only roles with a non-empty
+    /// override appear here; anything else falls back to the worker default.
+    pub prompts: BTreeMap<String, String>,
     pub storage: ModelConfigStorageResponse,
 }
 
@@ -390,6 +402,7 @@ pub struct RuntimeModelConfig {
     pub default_embedding_preset: Option<String>,
     pub default_llm_preset: Option<String>,
     pub role_bindings: BTreeMap<String, RuntimeRoleBinding>,
+    pub prompts: BTreeMap<String, String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -477,6 +490,7 @@ impl RuntimeModelConfig {
             default_embedding_preset: self.default_embedding_preset.clone(),
             default_llm_preset: self.default_llm_preset.clone(),
             role_bindings,
+            prompts: self.prompts.clone(),
             storage: ModelConfigStorageResponse {
                 path: path.display().to_string(),
                 override_active: file.is_some(),
@@ -753,6 +767,25 @@ pub fn resolve_runtime_model_config(file: Option<&ModelConfigFile>) -> RuntimeMo
         );
     }
 
+    let prompts = file_ref
+        .map(|f| {
+            f.prompts
+                .iter()
+                .filter_map(|(role, value)| {
+                    if !is_known_role(role) {
+                        return None;
+                    }
+                    let trimmed = value.trim();
+                    if trimmed.is_empty() {
+                        None
+                    } else {
+                        Some((role.clone(), value.clone()))
+                    }
+                })
+                .collect::<BTreeMap<_, _>>()
+        })
+        .unwrap_or_default();
+
     RuntimeModelConfig {
         embedding,
         llm,
@@ -762,6 +795,7 @@ pub fn resolve_runtime_model_config(file: Option<&ModelConfigFile>) -> RuntimeMo
         default_embedding_preset: default_embedding,
         default_llm_preset: default_llm,
         role_bindings: role_bindings_runtime,
+        prompts,
     }
 }
 
@@ -922,12 +956,27 @@ pub fn apply_update(
         );
     }
 
+    let mut prompts = BTreeMap::new();
+    for (role, raw) in request.prompts {
+        if !is_known_role(&role) {
+            bail!("unknown role in prompts: {role}");
+        }
+        if let Some(value) = raw {
+            let trimmed = value.trim();
+            if !trimmed.is_empty() {
+                prompts.insert(role, value);
+            }
+        }
+        // None or empty/whitespace-only → drop so worker falls back to default
+    }
+
     let mut next = ModelConfigFile {
         embedding_presets,
         llm_presets,
         default_embedding_preset: default_embedding,
         default_llm_preset: default_llm,
         role_bindings,
+        prompts,
         updated_at: Some(Utc::now().to_rfc3339()),
         embedding: None,
         llm: None,

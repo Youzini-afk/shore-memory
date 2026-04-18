@@ -2,6 +2,7 @@ use anyhow::{Context, Result, anyhow};
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
+use std::collections::BTreeMap;
 use std::time::Duration;
 use tokio::time::timeout;
 
@@ -52,6 +53,12 @@ struct WorkerProviderModelsResponse {
 struct WorkerEmbeddingDimensionResponse {
     model: String,
     dimension: usize,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorkerDefaultPromptsResponse {
+    #[serde(default)]
+    prompts: BTreeMap<String, String>,
 }
 
 #[derive(Clone)]
@@ -198,6 +205,25 @@ impl WorkerClient {
                 .await
                 .context("worker extract_entities response parse failed")?;
             Ok(response.entities)
+        })
+        .await
+    }
+
+    pub async fn fetch_default_prompts(&self) -> Result<BTreeMap<String, String>> {
+        let url = format!("{}/v1/tasks/default-prompts", self.base_url);
+        Self::run_with_timeout("default_prompts", self.timeout_default, async {
+            let response = self
+                .client
+                .get(url)
+                .send()
+                .await
+                .context("worker default_prompts request failed")?
+                .error_for_status()
+                .context("worker default_prompts returned error")?
+                .json::<WorkerDefaultPromptsResponse>()
+                .await
+                .context("worker default_prompts response parse failed")?;
+            Ok(response.prompts)
         })
         .await
     }
