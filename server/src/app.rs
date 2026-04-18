@@ -1621,7 +1621,178 @@ impl AppState {
             }
         };
 
-        ModelConfigTestResponse { embedding, llm }
+        let mut roles = std::collections::BTreeMap::new();
+        for (role, provider) in &runtime.roles {
+            let response = if !provider.configured() {
+                ProviderTestResponse {
+                    ok: false,
+                    configured: false,
+                    message: format!("{role} provider is not configured"),
+                    dimension: None,
+                    source: provider.source.clone(),
+                }
+            } else {
+                match role.as_str() {
+                    "query_analyzer" => {
+                        let started = std::time::Instant::now();
+                        let result = self
+                            .worker
+                            .extract_entities("shore memory config test for OpenAI", None)
+                            .await;
+                        histogram!(
+                            "shore_memory_worker_call_duration_seconds",
+                            "op" => "extract_entities"
+                        )
+                        .record(started.elapsed().as_secs_f64());
+                        match result {
+                            Ok(_) => ProviderTestResponse {
+                                ok: true,
+                                configured: true,
+                                message: "query analyzer call succeeded".to_string(),
+                                dimension: None,
+                                source: provider.source.clone(),
+                            },
+                            Err(err) => {
+                                counter!(
+                                    "shore_memory_worker_call_errors_total",
+                                    "op" => "extract_entities"
+                                )
+                                .increment(1);
+                                ProviderTestResponse {
+                                    ok: false,
+                                    configured: true,
+                                    message: format!("query analyzer call failed: {err:#}"),
+                                    dimension: None,
+                                    source: provider.source.clone(),
+                                }
+                            }
+                        }
+                    }
+                    "scorer" => {
+                        let started = std::time::Instant::now();
+                        let result = self
+                            .worker
+                            .score_turn(&WorkerScoreTurnRequest {
+                                agent_id: "model-config-test".to_string(),
+                                user_uid: None,
+                                channel_uid: None,
+                                session_uid: Some("model-config-test-session".to_string()),
+                                scope: MemoryScope::Shared,
+                                source: "model_config_test".to_string(),
+                                messages: vec![TurnMessage {
+                                    role: "user".to_string(),
+                                    content: "我最近更喜欢抹茶拿铁。".to_string(),
+                                }],
+                                metadata: json!({}),
+                                last_k_events: Vec::new(),
+                                recently_extracted: Vec::new(),
+                                existing_memories: Vec::new(),
+                                observation_date: Some("2026-04-18T00:00:00Z".to_string()),
+                            })
+                            .await;
+                        histogram!("shore_memory_worker_call_duration_seconds", "op" => "score_turn")
+                            .record(started.elapsed().as_secs_f64());
+                        match result {
+                            Ok(_) => ProviderTestResponse {
+                                ok: true,
+                                configured: true,
+                                message: "scorer call succeeded".to_string(),
+                                dimension: None,
+                                source: provider.source.clone(),
+                            },
+                            Err(err) => {
+                                counter!(
+                                    "shore_memory_worker_call_errors_total",
+                                    "op" => "score_turn"
+                                )
+                                .increment(1);
+                                ProviderTestResponse {
+                                    ok: false,
+                                    configured: true,
+                                    message: format!("scorer call failed: {err:#}"),
+                                    dimension: None,
+                                    source: provider.source.clone(),
+                                }
+                            }
+                        }
+                    }
+                    "reflector" => {
+                        let started = std::time::Instant::now();
+                        let result = self
+                            .worker
+                            .reflect(
+                                "model-config-test",
+                                vec![
+                                    crate::types::ReflectionMemoryInput {
+                                        id: 1,
+                                        content: "用户喜欢拿铁。".to_string(),
+                                        importance: 4.0,
+                                        scope: MemoryScope::Shared,
+                                        created_at: "2026-04-15T00:00:00Z".to_string(),
+                                    },
+                                    crate::types::ReflectionMemoryInput {
+                                        id: 2,
+                                        content: "用户更喜欢燕麦拿铁。".to_string(),
+                                        importance: 4.0,
+                                        scope: MemoryScope::Shared,
+                                        created_at: "2026-04-16T00:00:00Z".to_string(),
+                                    },
+                                    crate::types::ReflectionMemoryInput {
+                                        id: 3,
+                                        content: "用户最近常点抹茶拿铁。".to_string(),
+                                        importance: 4.0,
+                                        scope: MemoryScope::Shared,
+                                        created_at: "2026-04-17T00:00:00Z".to_string(),
+                                    },
+                                    crate::types::ReflectionMemoryInput {
+                                        id: 4,
+                                        content: "用户说自己不再喜欢普通美式。".to_string(),
+                                        importance: 4.0,
+                                        scope: MemoryScope::Shared,
+                                        created_at: "2026-04-18T00:00:00Z".to_string(),
+                                    },
+                                ],
+                            )
+                            .await;
+                        histogram!("shore_memory_worker_call_duration_seconds", "op" => "reflect")
+                            .record(started.elapsed().as_secs_f64());
+                        match result {
+                            Ok(_) => ProviderTestResponse {
+                                ok: true,
+                                configured: true,
+                                message: "reflector call succeeded".to_string(),
+                                dimension: None,
+                                source: provider.source.clone(),
+                            },
+                            Err(err) => {
+                                counter!(
+                                    "shore_memory_worker_call_errors_total",
+                                    "op" => "reflect"
+                                )
+                                .increment(1);
+                                ProviderTestResponse {
+                                    ok: false,
+                                    configured: true,
+                                    message: format!("reflector call failed: {err:#}"),
+                                    dimension: None,
+                                    source: provider.source.clone(),
+                                }
+                            }
+                        }
+                    }
+                    _ => ProviderTestResponse {
+                        ok: false,
+                        configured: provider.configured(),
+                        message: format!("unknown role: {role}"),
+                        dimension: None,
+                        source: provider.source.clone(),
+                    },
+                }
+            };
+            roles.insert(role.clone(), response);
+        }
+
+        ModelConfigTestResponse { embedding, llm, roles }
     }
 
     async fn rebuild_all_embeddings_with_dim(&self, dim: usize) -> Result<(usize, usize, usize)> {
@@ -2471,7 +2642,15 @@ async fn list_provider_models(
     let (runtime, _) = state.current_runtime_model_config()?;
     let current = match request.provider {
         ProviderKind::Embedding => &runtime.embedding,
-        ProviderKind::Llm => &runtime.llm,
+        ProviderKind::Llm => {
+            if let Some(role) = request.role.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
+                runtime.roles.get(role).ok_or_else(|| {
+                    ServiceError::BadRequest(format!("unknown role: {role}"))
+                })?
+            } else {
+                &runtime.llm
+            }
+        }
     };
     let probe = resolve_provider_probe(
         current,

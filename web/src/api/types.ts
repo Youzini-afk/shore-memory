@@ -299,12 +299,29 @@ export interface ProviderConfigResponse {
   api_base: string
   model: string
   dimension?: number
+  temperature?: number
   configured: boolean
   api_key_configured: boolean
   api_key_masked?: string | null
   source: string
   api_key_source: string
   override_active: boolean
+}
+
+export interface ProviderOverrideResponse {
+  api_base?: string | null
+  model?: string | null
+  dimension?: number | null
+  temperature?: number | null
+  api_key_mode: 'inherit' | 'clear' | 'set'
+  api_key_configured: boolean
+  api_key_masked?: string | null
+}
+
+export interface ModelConfigOverridesResponse {
+  embedding: ProviderOverrideResponse
+  llm: ProviderOverrideResponse
+  roles: Record<string, ProviderOverrideResponse>
 }
 
 export interface ModelConfigStorageResponse {
@@ -316,6 +333,8 @@ export interface ModelConfigStorageResponse {
 export interface ModelConfigResponse {
   embedding: ProviderConfigResponse
   llm: ProviderConfigResponse
+  roles: Record<string, ProviderConfigResponse>
+  overrides: ModelConfigOverridesResponse
   storage: ModelConfigStorageResponse
 }
 
@@ -324,6 +343,7 @@ export type ProviderKind = 'embedding' | 'llm'
 export interface ListProviderModelsRequest {
   provider: ProviderKind
   api_base: string
+  role?: string
   api_key?: string
   clear_api_key: boolean
 }
@@ -354,14 +374,26 @@ export interface UpdateProviderConfigRequest {
   api_base: string
   model: string
   dimension?: number
+  temperature?: number
   api_key?: string
   clear_api_key: boolean
   auto_detect_dimension?: boolean
 }
 
+export interface UpdateRoleConfigRequest {
+  enabled: boolean
+  api_base?: string
+  model?: string
+  temperature?: number
+  api_key_mode?: 'inherit' | 'clear' | 'set'
+  api_key?: string
+  clear_api_key: boolean
+}
+
 export interface UpdateModelConfigRequest {
   embedding: UpdateProviderConfigRequest
   llm: UpdateProviderConfigRequest
+  roles?: Record<string, UpdateRoleConfigRequest>
 }
 
 export interface UpdateModelConfigResponse {
@@ -385,6 +417,7 @@ export interface ProviderTestResponse {
 export interface ModelConfigTestResponse {
   embedding: ProviderTestResponse
   llm: ProviderTestResponse
+  roles: Record<string, ProviderTestResponse>
 }
 
 /* ---------------- Events ---------------- */

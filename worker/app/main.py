@@ -52,11 +52,40 @@ def _env_positive_int(keys: list[str], default: int) -> int:
     return default
 
 
+# Role-based LLM responsibility split.
+#
+# Each role is a distinct LLM use case with its own default temperature. The
+# generic ``llm`` section acts as a fallback: a role only has to override the
+# fields it wants to customise (typically just ``model`` and ``temperature``)
+# and inherits the rest. See ``_resolve_role_config`` for the cascade.
+_ROLE_DEFAULT_TEMPERATURES: dict[str, float] = {
+    "scorer": 0.3,
+    "reflector": 0.4,
+    "query_analyzer": 0.1,
+}
+
+ROLE_NAMES: tuple[str, ...] = tuple(_ROLE_DEFAULT_TEMPERATURES.keys())
+
+
+def _parse_temperature(value: Any) -> Optional[float]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
 def _resolve_provider_config(
     prefix: str,
     section: dict[str, Any],
     *,
     include_dimension: bool,
+    include_temperature: bool = False,
 ) -> dict[str, Any]:
     api_key = os.getenv(f"{prefix}_API_KEY", "").strip()
     api_base = os.getenv(f"{prefix}_API_BASE", "https://api.openai.com/v1").strip()
@@ -96,10 +125,55 @@ def _resolve_provider_config(
             except ValueError:
                 pass
         out["dimension"] = dimension
+    if include_temperature:
+        temperature = _parse_temperature(section.get("temperature"))
+        if temperature is not None:
+            out["temperature"] = temperature
     return out
 
 
-def _load_runtime_model_config() -> dict[str, dict[str, Any]]:
+def _resolve_role_config(
+    role: str,
+    override_roles: dict[str, Any],
+    llm_cfg: dict[str, Any],
+) -> dict[str, Any]:
+    """Resolve a role-specific LLM config with cascade: role → llm → defaults.
+
+    ``llm_cfg`` is the already-resolved generic LLM config (env + file merged),
+    so a missing role override simply re-uses it. Temperature falls back to the
+    role's hard-coded default when neither the role nor ``llm`` sets one.
+    """
+
+    role_override = _as_dict(override_roles.get(role))
+
+    api_base = as_optional_str(role_override.get("api_base")) or str(
+        llm_cfg.get("api_base", "https://api.openai.com/v1")
+    )
+    model = as_optional_str(role_override.get("model")) or str(llm_cfg.get("model", ""))
+
+    role_key_mode = str(role_override.get("api_key_mode", "inherit")).strip().lower()
+    if role_key_mode == "clear":
+        api_key = ""
+    elif role_key_mode == "set":
+        api_key = as_optional_str(role_override.get("api_key")) or ""
+    else:
+        api_key = str(llm_cfg.get("api_key", ""))
+
+    temperature = _parse_temperature(role_override.get("temperature"))
+    if temperature is None:
+        temperature = _parse_temperature(llm_cfg.get("temperature"))
+    if temperature is None:
+        temperature = _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3)
+
+    return {
+        "api_key": api_key,
+        "api_base": api_base,
+        "model": model,
+        "temperature": temperature,
+    }
+
+
+def _load_runtime_model_config() -> dict[str, Any]:
     override = _read_model_config_override()
     embedding = _resolve_provider_config(
         "PMW_EMBEDDING",
@@ -110,8 +184,14 @@ def _load_runtime_model_config() -> dict[str, dict[str, Any]]:
         "PMW_LLM",
         _as_dict(override.get("llm")),
         include_dimension=False,
+        include_temperature=True,
     )
-    return {"embedding": embedding, "llm": llm}
+    override_roles = _as_dict(override.get("roles"))
+    roles = {
+        role: _resolve_role_config(role, override_roles, llm)
+        for role in ROLE_NAMES
+    }
+    return {"embedding": embedding, "llm": llm, "roles": roles}
 
 
 class EmbedRequest(BaseModel):
@@ -346,7 +426,7 @@ async def extract_entities(req: ExtractEntitiesRequest) -> ExtractEntitiesRespon
     if not query:
         return ExtractEntitiesResponse()
 
-    client = OpenAICompatClient.from_env(prefix="PMW_LLM")
+    client = OpenAICompatClient.from_role("query_analyzer")
     if client is None:
         return ExtractEntitiesResponse()
 
@@ -590,7 +670,7 @@ _SCORE_TURN_SYSTEM_PROMPT = """你是 shore-memory 的记忆抽取器。任务�
 
 
 async def maybe_llm_score_turn(req: ScoreTurnRequest) -> Optional[ScoreTurnResponse]:
-    client = OpenAICompatClient.from_env(prefix="PMW_LLM")
+    client = OpenAICompatClient.from_role("scorer")
     if client is None:
         return None
 
@@ -748,7 +828,7 @@ JSON 对象，包含：
 
 
 async def maybe_llm_reflect(req: ReflectRequest) -> Optional[ReflectResponse]:
-    client = OpenAICompatClient.from_env(prefix="PMW_LLM")
+    client = OpenAICompatClient.from_role("reflector")
     if client is None:
         return None
 
@@ -1004,25 +1084,80 @@ def as_optional_str(value: Any) -> Optional[str]:
 
 
 class OpenAICompatClient:
-    def __init__(self, api_key: str, api_base: str, model: str) -> None:
+    def __init__(
+        self,
+        api_key: str,
+        api_base: str,
+        model: str,
+        temperature: float = 0.3,
+    ) -> None:
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
         self.model = model
+        self.temperature = temperature
 
     @classmethod
     def from_env(cls, prefix: str) -> Optional["OpenAICompatClient"]:
+        """Resolve a client from the generic LLM section (legacy entry point).
+
+        Prefer :meth:`from_role` for any code path that maps to a known LLM
+        responsibility; this constructor is kept for generic/unclassified
+        callers and for backwards compatibility with older tests that still
+        drive the worker via raw ``PMW_LLM_*`` env vars.
+        """
+
         if prefix == "PMW_LLM":
             runtime = _load_runtime_model_config().get("llm", {})
             api_key = str(runtime.get("api_key", "")).strip()
             api_base = str(runtime.get("api_base", "https://api.openai.com/v1")).strip()
             model = str(runtime.get("model", "")).strip()
+            temperature = _parse_temperature(runtime.get("temperature"))
         else:
             api_key = os.getenv(f"{prefix}_API_KEY", "").strip()
             api_base = os.getenv(f"{prefix}_API_BASE", "https://api.openai.com/v1").strip()
             model = os.getenv(f"{prefix}_MODEL", "").strip()
+            temperature = None
         if not api_key or not model:
             return None
-        return cls(api_key=api_key, api_base=api_base, model=model)
+        return cls(
+            api_key=api_key,
+            api_base=api_base,
+            model=model,
+            temperature=temperature if temperature is not None else 0.3,
+        )
+
+    @classmethod
+    def from_role(cls, role: str) -> Optional["OpenAICompatClient"]:
+        """Resolve a client for a named LLM role (scorer / reflector / query_analyzer).
+
+        Unknown roles fall back to the generic LLM section so callers can
+        introduce new roles without an immediate breaking change, but they
+        will not benefit from a per-role temperature default.
+        """
+
+        runtime = _load_runtime_model_config()
+        role_cfg = _as_dict(runtime.get("roles", {}).get(role))
+        if not role_cfg:
+            role_cfg = _as_dict(runtime.get("llm", {}))
+            temperature = _parse_temperature(role_cfg.get("temperature"))
+            if temperature is None:
+                temperature = _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3)
+        else:
+            temperature = float(
+                role_cfg.get("temperature", _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3))
+            )
+
+        api_key = str(role_cfg.get("api_key", "")).strip()
+        api_base = str(role_cfg.get("api_base", "https://api.openai.com/v1")).strip()
+        model = str(role_cfg.get("model", "")).strip()
+        if not api_key or not model:
+            return None
+        return cls(
+            api_key=api_key,
+            api_base=api_base,
+            model=model,
+            temperature=temperature,
+        )
 
     async def chat_json(self, system_prompt: str, user_prompt: str) -> Optional[dict[str, Any]]:
         url = (
@@ -1036,7 +1171,7 @@ class OpenAICompatClient:
         }
         payload = {
             "model": self.model,
-            "temperature": 0.3,
+            "temperature": self.temperature,
             "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system_prompt},

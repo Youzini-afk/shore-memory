@@ -16,11 +16,47 @@ import type {
   UpdateModelConfigResponse
 } from '@/api/types'
 
+type RoleKey = 'scorer' | 'reflector' | 'query_analyzer'
+
+type RoleFormState = {
+  enabled: boolean
+  apiBase: string
+  model: string
+  temperature: string
+  apiKeyMode: 'inherit' | 'clear' | 'set'
+  apiKey: string
+}
+
+const ROLE_META: Record<RoleKey, { label: string; description: string; defaultTemperature: number }> = {
+  scorer: {
+    label: 'Scorer',
+    description: '对话轮次记忆抽取',
+    defaultTemperature: 0.3
+  },
+  reflector: {
+    label: 'Reflector',
+    description: '重复 / 矛盾 / 总结整理',
+    defaultTemperature: 0.4
+  },
+  query_analyzer: {
+    label: 'Query Analyzer',
+    description: '召回时 query 命名实体分析',
+    defaultTemperature: 0.1
+  }
+}
+
+const roleKeys = Object.keys(ROLE_META) as RoleKey[]
+const roleEntries = roleKeys.map((key) => ({ key, ...ROLE_META[key] }))
 const app = useAppStore()
 
 const loadingModelConfig = ref(false)
 const loadingEmbeddingModels = ref(false)
 const loadingLlmModels = ref(false)
+const loadingRoleModels = reactive<Record<RoleKey, boolean>>({
+  scorer: false,
+  reflector: false,
+  query_analyzer: false
+})
 const savingModelConfig = ref(false)
 const restoringModelConfig = ref(false)
 const testingModelConfig = ref(false)
@@ -31,6 +67,30 @@ const modelConfigNotice = ref<string | null>(null)
 const modelConfigTest = ref<ModelConfigTestResponse | null>(null)
 const embeddingModelOptions = ref<string[]>([])
 const llmModelOptions = ref<string[]>([])
+const roleModelOptions = reactive<Record<RoleKey, string[]>>({
+  scorer: [],
+  reflector: [],
+  query_analyzer: []
+})
+
+function emptyRoleForm(): RoleFormState {
+  return {
+    enabled: false,
+    apiBase: '',
+    model: '',
+    temperature: '',
+    apiKeyMode: 'inherit',
+    apiKey: ''
+  }
+}
+
+function createRoleForms(): Record<RoleKey, RoleFormState> {
+  return {
+    scorer: emptyRoleForm(),
+    reflector: emptyRoleForm(),
+    query_analyzer: emptyRoleForm()
+  }
+}
 
 const form = reactive({
   embeddingApiBase: '',
@@ -40,8 +100,10 @@ const form = reactive({
   embeddingClearKey: false,
   llmApiBase: '',
   llmModel: '',
+  llmTemperature: '',
   llmApiKey: '',
-  llmClearKey: false
+  llmClearKey: false,
+  roles: createRoleForms()
 })
 
 const eventsStatusLabel = computed(() => {
@@ -86,6 +148,7 @@ const modelConfigBusy = computed(
     loadingModelConfig.value ||
     loadingEmbeddingModels.value ||
     loadingLlmModels.value ||
+    roleKeys.some((role) => loadingRoleModels[role]) ||
     savingModelConfig.value ||
     restoringModelConfig.value ||
     testingModelConfig.value ||
@@ -94,6 +157,8 @@ const modelConfigBusy = computed(
 
 function formatProviderSource(source: string): string {
   switch (source) {
+    case 'inherit':
+      return '继承通用 LLM'
     case 'file':
       return '覆盖文件'
     case 'mixed':
@@ -104,7 +169,8 @@ function formatProviderSource(source: string): string {
   }
 }
 
-function providerLabel(kind: ProviderKind): string {
+function providerLabel(kind: ProviderKind, role?: RoleKey): string {
+  if (role) return ROLE_META[role].label
   return kind === 'embedding' ? 'Embedding' : 'LLM'
 }
 
@@ -114,7 +180,20 @@ function sortedModels(models: string[]): string[] {
   )
 }
 
-function buildModelsRequest(provider: ProviderKind) {
+function parseOptionalNumber(raw: string): number | undefined {
+  const value = raw.trim()
+  if (!value) return undefined
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : undefined
+}
+
+function rolePlaceholder(role: RoleKey, field: 'apiBase' | 'model' | 'temperature'): string {
+  if (field === 'apiBase') return form.llmApiBase.trim() || 'https://api.openai.com/v1'
+  if (field === 'model') return form.llmModel.trim() || '继承通用 LLM 模型'
+  return form.llmTemperature.trim() || String(ROLE_META[role].defaultTemperature)
+}
+
+function buildModelsRequest(provider: ProviderKind, role?: RoleKey) {
   if (provider === 'embedding') {
     const apiKey = form.embeddingApiKey.trim()
     return {
@@ -124,42 +203,68 @@ function buildModelsRequest(provider: ProviderKind) {
       clear_api_key: form.embeddingClearKey
     }
   }
-  const apiKey = form.llmApiKey.trim()
+
+  const roleState = role ? form.roles[role] : null
+  const apiKey = roleState
+    ? roleState.enabled
+      ? roleState.apiKeyMode === 'set'
+        ? roleState.apiKey.trim()
+        : ''
+      : form.llmApiKey.trim()
+    : form.llmApiKey.trim()
+  const apiBase = roleState
+    ? roleState.enabled
+      ? roleState.apiBase.trim() || form.llmApiBase.trim()
+      : form.llmApiBase.trim()
+    : form.llmApiBase.trim()
+
   return {
     provider,
-    api_base: form.llmApiBase.trim(),
+    api_base: apiBase,
+    role: role || undefined,
     api_key: apiKey || undefined,
-    clear_api_key: form.llmClearKey
+    clear_api_key: roleState
+      ? roleState.enabled
+        ? roleState.apiKeyMode === 'clear'
+        : form.llmClearKey
+      : form.llmClearKey
   }
 }
 
-async function fetchProviderModels(provider: ProviderKind) {
+async function fetchProviderModels(provider: ProviderKind, role?: RoleKey) {
   if (provider === 'embedding') {
     loadingEmbeddingModels.value = true
+  } else if (role) {
+    loadingRoleModels[role] = true
   } else {
     loadingLlmModels.value = true
   }
+
   modelConfigError.value = null
   modelConfigNotice.value = null
   try {
     const res = await api.post<ListProviderModelsResponse>(
       '/v1/model-config/models',
-      buildModelsRequest(provider)
+      buildModelsRequest(provider, role)
     )
     const models = sortedModels(res.models)
     if (provider === 'embedding') {
       embeddingModelOptions.value = models
+    } else if (role) {
+      roleModelOptions[role] = models
     } else {
       llmModelOptions.value = models
     }
     modelConfigNotice.value = models.length
-      ? `已获取 ${models.length} 个 ${providerLabel(provider)} 模型。`
-      : `${providerLabel(provider)} 提供方没有返回可用模型。`
+      ? `已获取 ${models.length} 个 ${providerLabel(provider, role)} 模型。`
+      : `${providerLabel(provider, role)} 提供方没有返回可用模型。`
   } catch (err) {
-    modelConfigError.value = `获取 ${providerLabel(provider)} 模型失败：${resolveError(err)}`
+    modelConfigError.value = `获取 ${providerLabel(provider, role)} 模型失败：${resolveError(err)}`
   } finally {
     if (provider === 'embedding') {
       loadingEmbeddingModels.value = false
+    } else if (role) {
+      loadingRoleModels[role] = false
     } else {
       loadingLlmModels.value = false
     }
@@ -210,6 +315,8 @@ async function onEmbeddingModelSelect() {
 
 function formatKeySource(source: string): string {
   switch (source) {
+    case 'inherit':
+      return '继承通用 LLM'
     case 'file':
       return '覆盖文件'
     case 'cleared':
@@ -238,9 +345,27 @@ function hydrateForm(config: ModelConfigResponse) {
 
   form.llmApiBase = config.llm.api_base ?? ''
   form.llmModel = config.llm.model ?? ''
+  form.llmTemperature =
+    config.overrides.llm.temperature !== null && config.overrides.llm.temperature !== undefined
+      ? String(config.overrides.llm.temperature)
+      : ''
   form.llmApiKey = ''
   form.llmClearKey = false
   llmModelOptions.value = []
+
+  for (const role of roleKeys) {
+    const override = config.overrides.roles[role]
+    form.roles[role].enabled = Boolean(config.roles[role]?.override_active)
+    form.roles[role].apiBase = override?.api_base ?? ''
+    form.roles[role].model = override?.model ?? ''
+    form.roles[role].temperature =
+      override?.temperature !== null && override?.temperature !== undefined
+        ? String(override.temperature)
+        : ''
+    form.roles[role].apiKeyMode = override?.api_key_mode ?? 'inherit'
+    form.roles[role].apiKey = ''
+    roleModelOptions[role] = []
+  }
 }
 
 async function loadModelConfig() {
@@ -260,7 +385,6 @@ async function loadModelConfig() {
 function buildUpdatePayload(): UpdateModelConfigRequest {
   const parsedDim = Number.parseInt(form.embeddingDimension.trim(), 10)
   const dimension = Number.isFinite(parsedDim) && parsedDim > 0 ? parsedDim : 1536
-
   const embeddingApiKey = form.embeddingApiKey.trim()
   const llmApiKey = form.llmApiKey.trim()
 
@@ -276,9 +400,26 @@ function buildUpdatePayload(): UpdateModelConfigRequest {
     llm: {
       api_base: form.llmApiBase.trim(),
       model: form.llmModel.trim(),
+      temperature: parseOptionalNumber(form.llmTemperature),
       api_key: llmApiKey || undefined,
       clear_api_key: form.llmClearKey
-    }
+    },
+    roles: roleKeys.reduce<NonNullable<UpdateModelConfigRequest['roles']>>((acc, role) => {
+      const roleState = form.roles[role]
+      acc[role] = {
+        enabled: roleState.enabled,
+        api_base: roleState.enabled ? roleState.apiBase.trim() || undefined : undefined,
+        model: roleState.enabled ? roleState.model.trim() || undefined : undefined,
+        temperature: roleState.enabled ? parseOptionalNumber(roleState.temperature) : undefined,
+        api_key_mode: roleState.enabled ? roleState.apiKeyMode : undefined,
+        api_key:
+          roleState.enabled && roleState.apiKeyMode === 'set'
+            ? roleState.apiKey.trim() || undefined
+            : undefined,
+        clear_api_key: roleState.enabled ? roleState.apiKeyMode === 'clear' : false
+      }
+      return acc
+    }, {})
   }
 }
 
@@ -338,7 +479,8 @@ async function testModelConfig() {
     if (res.embedding.dimension && res.embedding.dimension > 0) {
       form.embeddingDimension = String(res.embedding.dimension)
     }
-    if (res.embedding.ok && res.llm.ok) {
+    const roleFailures = roleKeys.some((role) => Boolean(res.roles?.[role]) && !res.roles[role].ok)
+    if (res.embedding.ok && res.llm.ok && !roleFailures) {
       modelConfigNotice.value = '模型连通性测试通过。'
     } else {
       modelConfigNotice.value = '模型连通性测试完成，存在失败项，请查看下方结果。'
@@ -557,6 +699,15 @@ onMounted(() => {
                 </select>
               </div>
               <div>
+                <div class="text-[12px] text-ink-4 mb-1">默认 Temperature</div>
+                <PInput
+                  v-model="form.llmTemperature"
+                  type="number"
+                  placeholder="留空则由角色默认值决定"
+                  mono
+                />
+              </div>
+              <div>
                 <div class="text-[12px] text-ink-4 mb-1">API Key（留空表示不改）</div>
                 <PInput v-model="form.llmApiKey" type="password" placeholder="输入新 Key 进行覆盖" mono />
               </div>
@@ -564,6 +715,123 @@ onMounted(() => {
                 <input v-model="form.llmClearKey" type="checkbox" class="accent-accent" />
                 清空 LLM Key（强制移除覆盖 key）
               </label>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-5">
+          <div class="text-[12px] uppercase font-display tracking-wider text-ink-4 mb-3">LLM 角色</div>
+          <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+            <div
+              v-for="entry in roleEntries"
+              :key="entry.key"
+              class="rounded-card border border-shore-line/80 p-4 bg-shore-bg/30"
+            >
+              <div class="flex items-start justify-between gap-3 mb-3">
+                <div>
+                  <div class="text-[13px] font-display text-ink-1">{{ entry.label }}</div>
+                  <div class="text-[12px] text-ink-4 mt-1">{{ entry.description }}</div>
+                </div>
+                <PButton
+                  size="sm"
+                  variant="ghost"
+                  :loading="loadingRoleModels[entry.key]"
+                  :disabled="modelConfigBusy"
+                  @click="fetchProviderModels('llm', entry.key)"
+                >
+                  获取模型
+                </PButton>
+              </div>
+
+              <div class="grid grid-cols-3 gap-y-2 text-[12px] mb-4">
+                <div class="text-ink-4">配置来源</div>
+                <div class="col-span-2 text-ink-2">
+                  {{ modelConfig ? formatProviderSource(modelConfig.roles[entry.key]?.source ?? 'inherit') : '–' }}
+                </div>
+                <div class="text-ink-4">Key 来源</div>
+                <div class="col-span-2 text-ink-2">
+                  {{ modelConfig ? formatKeySource(modelConfig.roles[entry.key]?.api_key_source ?? 'inherit') : '–' }}
+                </div>
+                <div class="text-ink-4">当前 Key</div>
+                <div class="col-span-2 font-mono text-ink-2">
+                  {{ modelConfig?.roles[entry.key]?.api_key_masked ?? '继承通用 LLM' }}
+                </div>
+                <div class="text-ink-4">生效 Temperature</div>
+                <div class="col-span-2 text-ink-2">
+                  {{ modelConfig?.roles[entry.key]?.temperature ?? entry.defaultTemperature }}
+                </div>
+              </div>
+
+              <label class="flex items-center gap-2 text-[12px] text-ink-3 select-none">
+                <input v-model="form.roles[entry.key].enabled" type="checkbox" class="accent-accent" />
+                启用独立配置（关闭则完全继承通用 LLM）
+              </label>
+
+              <div class="space-y-3 mt-3" :class="form.roles[entry.key].enabled ? '' : 'opacity-60'">
+                <div>
+                  <div class="text-[12px] text-ink-4 mb-1">API Base URL</div>
+                  <PInput
+                    v-model="form.roles[entry.key].apiBase"
+                    :disabled="!form.roles[entry.key].enabled"
+                    :placeholder="rolePlaceholder(entry.key, 'apiBase')"
+                  />
+                </div>
+                <div>
+                  <div class="text-[12px] text-ink-4 mb-1">模型名</div>
+                  <PInput
+                    v-model="form.roles[entry.key].model"
+                    :disabled="!form.roles[entry.key].enabled"
+                    :placeholder="rolePlaceholder(entry.key, 'model')"
+                  />
+                  <select
+                    v-if="roleModelOptions[entry.key].length"
+                    v-model="form.roles[entry.key].model"
+                    :disabled="!form.roles[entry.key].enabled"
+                    class="mt-2 h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+                  >
+                    <option value="">从已获取模型中选择</option>
+                    <option v-for="model in roleModelOptions[entry.key]" :key="model" :value="model">
+                      {{ model }}
+                    </option>
+                  </select>
+                </div>
+                <div>
+                  <div class="text-[12px] text-ink-4 mb-1">Temperature</div>
+                  <PInput
+                    v-model="form.roles[entry.key].temperature"
+                    type="number"
+                    :disabled="!form.roles[entry.key].enabled"
+                    :placeholder="rolePlaceholder(entry.key, 'temperature')"
+                    mono
+                  />
+                </div>
+                <div>
+                  <div class="text-[12px] text-ink-4 mb-1">API Key（留空表示不改）</div>
+                  <PInput
+                    v-model="form.roles[entry.key].apiKey"
+                    type="password"
+                    :disabled="!form.roles[entry.key].enabled || form.roles[entry.key].apiKeyMode !== 'set'"
+                    placeholder="输入新 Key 进行覆盖"
+                    mono
+                  />
+                </div>
+                <div>
+                  <div class="text-[12px] text-ink-4 mb-1">Key 模式</div>
+                  <select
+                    v-model="form.roles[entry.key].apiKeyMode"
+                    :disabled="!form.roles[entry.key].enabled"
+                    class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+                  >
+                    <option value="inherit">继承通用 LLM Key</option>
+                    <option value="clear">显式清空 Key</option>
+                    <option value="set">使用独立 Key</option>
+                  </select>
+                </div>
+              </div>
+
+              <div class="mt-3 text-[11px] text-ink-4">
+                默认 Temperature 为 {{ entry.defaultTemperature }}；启用后留空字段会继承通用 LLM。
+              </div>
             </div>
           </div>
         </div>
@@ -603,6 +871,26 @@ onMounted(() => {
             </div>
             <div class="text-ink-2 mt-1">{{ modelConfigTest.llm.message }}</div>
             <div class="text-ink-4 mt-1">来源：{{ formatProviderSource(modelConfigTest.llm.source) }}</div>
+          </div>
+        </div>
+        <div v-if="modelConfigTest" class="mt-3 grid grid-cols-1 md:grid-cols-3 gap-3 text-[12px]">
+          <div
+            v-for="entry in roleEntries"
+            :key="entry.key"
+            class="rounded-btn border border-shore-line/80 bg-shore-bg/30 px-3 py-2"
+          >
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-ink-4">{{ entry.label }} 测试</span>
+              <span
+                :class="modelConfigTest.roles?.[entry.key]?.ok ? 'text-state-active' : 'text-state-invalidated'"
+              >
+                {{ modelConfigTest.roles?.[entry.key]?.ok ? '通过' : '失败' }}
+              </span>
+            </div>
+            <div class="text-ink-2 mt-1">{{ modelConfigTest.roles?.[entry.key]?.message ?? '未执行' }}</div>
+            <div class="text-ink-4 mt-1">
+              来源：{{ formatProviderSource(modelConfigTest.roles?.[entry.key]?.source ?? 'inherit') }}
+            </div>
           </div>
         </div>
 

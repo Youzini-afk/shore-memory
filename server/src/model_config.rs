@@ -1,3 +1,4 @@
+use std::collections::BTreeMap;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -5,6 +6,31 @@ use std::path::{Path, PathBuf};
 use anyhow::{Context, Result, bail};
 use chrono::Utc;
 use serde::{Deserialize, Serialize};
+
+// Role-based LLM responsibility split.
+//
+// Each role is a distinct LLM use case (see ``worker/app/main.py``). The
+// server only needs to know which roles exist so it can validate incoming
+// payloads and surface them in the model-config response; the actual prompts
+// and upstream calls live in the worker.
+pub const ROLE_SCORER: &str = "scorer";
+pub const ROLE_REFLECTOR: &str = "reflector";
+pub const ROLE_QUERY_ANALYZER: &str = "query_analyzer";
+
+pub const KNOWN_ROLES: &[&str] = &[ROLE_SCORER, ROLE_REFLECTOR, ROLE_QUERY_ANALYZER];
+
+pub fn default_role_temperature(role: &str) -> f32 {
+    match role {
+        ROLE_SCORER => 0.3,
+        ROLE_REFLECTOR => 0.4,
+        ROLE_QUERY_ANALYZER => 0.1,
+        _ => 0.3,
+    }
+}
+
+fn is_known_role(role: &str) -> bool {
+    KNOWN_ROLES.iter().any(|candidate| *candidate == role)
+}
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -28,6 +54,8 @@ pub struct ProviderOverrideFile {
     pub model: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dimension: Option<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
     #[serde(default)]
     pub api_key_mode: SecretMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -40,6 +68,8 @@ pub struct ModelConfigFile {
     pub embedding: ProviderOverrideFile,
     #[serde(default)]
     pub llm: ProviderOverrideFile,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub roles: BTreeMap<String, ProviderOverrideFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<String>,
 }
@@ -48,6 +78,8 @@ pub struct ModelConfigFile {
 pub struct ModelConfigResponse {
     pub embedding: ProviderConfigResponse,
     pub llm: ProviderConfigResponse,
+    pub roles: BTreeMap<String, ProviderConfigResponse>,
+    pub overrides: ModelConfigOverridesResponse,
     pub storage: ModelConfigStorageResponse,
 }
 
@@ -55,6 +87,30 @@ pub struct ModelConfigResponse {
 pub struct ModelConfigTestResponse {
     pub embedding: ProviderTestResponse,
     pub llm: ProviderTestResponse,
+    pub roles: BTreeMap<String, ProviderTestResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelConfigOverridesResponse {
+    pub embedding: ProviderOverrideResponse,
+    pub llm: ProviderOverrideResponse,
+    pub roles: BTreeMap<String, ProviderOverrideResponse>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ProviderOverrideResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_base: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dimension: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    pub api_key_mode: SecretMode,
+    pub api_key_configured: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key_masked: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -91,6 +147,8 @@ pub struct ProviderConfigResponse {
     pub model: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dimension: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
     pub configured: bool,
     pub api_key_configured: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -111,6 +169,8 @@ pub enum ProviderKind {
 pub struct ListProviderModelsRequest {
     pub provider: ProviderKind,
     pub api_base: String,
+    #[serde(default)]
+    pub role: Option<String>,
     #[serde(default)]
     pub api_key: Option<String>,
     #[serde(default)]
@@ -148,6 +208,8 @@ pub struct DetectEmbeddingDimensionResponse {
 pub struct UpdateModelConfigRequest {
     pub embedding: UpdateProviderConfigRequest,
     pub llm: UpdateProviderConfigRequest,
+    #[serde(default)]
+    pub roles: Option<BTreeMap<String, UpdateRoleConfigRequest>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -157,11 +219,31 @@ pub struct UpdateProviderConfigRequest {
     #[serde(default)]
     pub dimension: Option<usize>,
     #[serde(default)]
+    pub temperature: Option<f32>,
+    #[serde(default)]
     pub api_key: Option<String>,
     #[serde(default)]
     pub clear_api_key: bool,
     #[serde(default)]
     pub auto_detect_dimension: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UpdateRoleConfigRequest {
+    #[serde(default = "default_true")]
+    pub enabled: bool,
+    #[serde(default)]
+    pub api_base: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    #[serde(default)]
+    pub api_key_mode: Option<SecretMode>,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub clear_api_key: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -173,17 +255,19 @@ pub struct ResolvedProviderProbe {
     pub api_key_source: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeModelConfig {
     pub embedding: RuntimeProviderConfig,
     pub llm: RuntimeProviderConfig,
+    pub roles: BTreeMap<String, RuntimeProviderConfig>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeProviderConfig {
     pub api_base: String,
     pub model: String,
     pub dimension: Option<usize>,
+    pub temperature: Option<f32>,
     pub api_key: Option<String>,
     pub source: String,
     pub api_key_source: String,
@@ -201,18 +285,38 @@ impl RuntimeProviderConfig {
 }
 
 impl ProviderOverrideFile {
-    fn has_nonsecret_override(&self, include_dimension: bool) -> bool {
+    fn has_nonsecret_override(&self, include_dimension: bool, include_temperature: bool) -> bool {
         self.api_base.is_some()
             || self.model.is_some()
             || (include_dimension && self.dimension.is_some())
+            || (include_temperature && self.temperature.is_some())
     }
 }
 
 impl RuntimeModelConfig {
     pub fn to_response(&self, path: &Path, file: Option<&ModelConfigFile>) -> ModelConfigResponse {
+        let overrides = ModelConfigOverridesResponse {
+            embedding: provider_override_to_response(file.map(|value| &value.embedding)),
+            llm: provider_override_to_response(file.map(|value| &value.llm)),
+            roles: KNOWN_ROLES
+                .iter()
+                .map(|role| {
+                    (
+                        (*role).to_string(),
+                        provider_override_to_response(file.and_then(|value| value.roles.get(*role))),
+                    )
+                })
+                .collect(),
+        };
         ModelConfigResponse {
             embedding: provider_to_response(&self.embedding),
             llm: provider_to_response(&self.llm),
+            roles: self
+                .roles
+                .iter()
+                .map(|(role, provider)| (role.clone(), provider_to_response(provider)))
+                .collect(),
+            overrides,
             storage: ModelConfigStorageResponse {
                 path: path.display().to_string(),
                 override_active: file.is_some(),
@@ -265,12 +369,22 @@ pub fn load_runtime_model_config(
 }
 
 pub fn resolve_runtime_model_config(file: Option<&ModelConfigFile>) -> RuntimeModelConfig {
+    let llm = resolve_provider(EnvProviderConfig::llm(), file.map(|value| &value.llm));
     RuntimeModelConfig {
         embedding: resolve_provider(
             EnvProviderConfig::embedding(),
             file.map(|value| &value.embedding),
         ),
-        llm: resolve_provider(EnvProviderConfig::llm(), file.map(|value| &value.llm)),
+        llm: llm.clone(),
+        roles: KNOWN_ROLES
+            .iter()
+            .map(|role| {
+                (
+                    (*role).to_string(),
+                    resolve_role_provider(*role, &llm, file.and_then(|value| value.roles.get(*role))),
+                )
+            })
+            .collect(),
     }
 }
 
@@ -286,6 +400,17 @@ pub fn apply_update(
     let mut next = existing.unwrap_or_default();
     next.embedding = apply_provider_update(next.embedding, request.embedding, true)?;
     next.llm = apply_provider_update(next.llm, request.llm, false)?;
+    if let Some(role_updates) = request.roles {
+        for (role, role_request) in role_updates {
+            if !is_known_role(&role) {
+                bail!("unknown role: {role}");
+            }
+            let current = next.roles.remove(&role);
+            if let Some(updated) = apply_role_update(current, role_request)? {
+                next.roles.insert(role, updated);
+            }
+        }
+    }
     next.updated_at = Some(Utc::now().to_rfc3339());
     Ok(next)
 }
@@ -353,6 +478,10 @@ fn apply_provider_update(
             bail!("embedding dimension must be greater than 0");
         }
         existing.dimension = Some(dim);
+        existing.temperature = None;
+    } else {
+        existing.dimension = None;
+        existing.temperature = normalize_temperature(request.temperature)?;
     }
 
     if request.clear_api_key {
@@ -371,11 +500,59 @@ fn apply_provider_update(
     Ok(existing)
 }
 
+fn apply_role_update(
+    existing: Option<ProviderOverrideFile>,
+    request: UpdateRoleConfigRequest,
+) -> Result<Option<ProviderOverrideFile>> {
+    if !request.enabled {
+        return Ok(None);
+    }
+
+    let mut next = existing.unwrap_or_default();
+    next.api_base = normalize_optional_string(request.api_base.as_deref());
+    next.model = normalize_optional_string(request.model.as_deref());
+    next.dimension = None;
+    next.temperature = normalize_temperature(request.temperature)?;
+
+    let requested_api_key = normalize_optional_string(request.api_key.as_deref());
+    if let Some(api_key_mode) = request.api_key_mode {
+        match api_key_mode {
+            SecretMode::Inherit => {
+                next.api_key_mode = SecretMode::Inherit;
+                next.api_key = None;
+            }
+            SecretMode::Clear => {
+                next.api_key_mode = SecretMode::Clear;
+                next.api_key = None;
+            }
+            SecretMode::Set => {
+                next.api_key_mode = SecretMode::Set;
+                if let Some(api_key) = requested_api_key {
+                    next.api_key = Some(api_key);
+                }
+            }
+        }
+    } else if request.clear_api_key {
+        next.api_key_mode = SecretMode::Clear;
+        next.api_key = None;
+    } else if let Some(api_key) = requested_api_key {
+        next.api_key_mode = SecretMode::Set;
+        next.api_key = Some(api_key);
+    }
+
+    if next.has_nonsecret_override(false, true) || next.api_key_mode != SecretMode::Inherit {
+        Ok(Some(next))
+    } else {
+        Ok(None)
+    }
+}
+
 #[derive(Debug, Clone)]
 struct EnvProviderConfig {
     api_base: String,
     model: String,
     dimension: Option<usize>,
+    temperature: Option<f32>,
     api_key: Option<String>,
 }
 
@@ -388,6 +565,7 @@ impl EnvProviderConfig {
                 &["PMS_EMBEDDING_DIM", "PMW_EMBEDDING_DIM"],
                 1536,
             )),
+            temperature: None,
             api_key: env_optional_string("PMW_EMBEDDING_API_KEY"),
         }
     }
@@ -397,6 +575,7 @@ impl EnvProviderConfig {
             api_base: env_string("PMW_LLM_API_BASE", "https://api.openai.com/v1"),
             model: env_string("PMW_LLM_MODEL", ""),
             dimension: None,
+            temperature: None,
             api_key: env_optional_string("PMW_LLM_API_KEY"),
         }
     }
@@ -410,9 +589,11 @@ fn resolve_provider(
         api_base: env_api_base,
         model: env_model,
         dimension: env_dimension,
+        temperature: env_temperature,
         api_key: env_api_key,
     } = env_value;
     let include_dimension = env_dimension.is_some();
+    let include_temperature = env_dimension.is_none();
     let api_base = file
         .and_then(|value| value.api_base.as_ref())
         .map(|value| value.trim())
@@ -429,6 +610,11 @@ fn resolve_provider(
         .and_then(|value| value.dimension)
         .or(env_dimension)
         .map(|value| value.max(1));
+    let temperature = if include_temperature {
+        file.and_then(|value| value.temperature).or(env_temperature)
+    } else {
+        None
+    };
 
     let (api_key, api_key_source) = match file
         .map(|value| value.api_key_mode)
@@ -452,14 +638,15 @@ fn resolve_provider(
 
     let override_active = file
         .map(|value| {
-            value.has_nonsecret_override(include_dimension)
+            value.has_nonsecret_override(include_dimension, include_temperature)
                 || value.api_key_mode != SecretMode::Inherit
         })
         .unwrap_or(false);
     let file_fields = usize::from(file.and_then(|value| value.api_base.as_ref()).is_some())
         + usize::from(file.and_then(|value| value.model.as_ref()).is_some())
-        + usize::from(include_dimension && file.and_then(|value| value.dimension).is_some());
-    let total_fields = if include_dimension { 3 } else { 2 };
+        + usize::from(include_dimension && file.and_then(|value| value.dimension).is_some())
+        + usize::from(include_temperature && file.and_then(|value| value.temperature).is_some());
+    let total_fields = 2 + usize::from(include_dimension) + usize::from(include_temperature);
     let source = if !override_active || file_fields == 0 {
         "env".to_string()
     } else if file_fields >= total_fields {
@@ -472,6 +659,72 @@ fn resolve_provider(
         api_base,
         model,
         dimension,
+        temperature,
+        api_key,
+        source,
+        api_key_source,
+        override_active,
+    }
+}
+
+fn resolve_role_provider(
+    role: &str,
+    llm: &RuntimeProviderConfig,
+    file: Option<&ProviderOverrideFile>,
+) -> RuntimeProviderConfig {
+    let api_base = file
+        .and_then(|value| value.api_base.as_ref())
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| llm.api_base.clone());
+    let model = file
+        .and_then(|value| value.model.as_ref())
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| llm.model.clone());
+    let temperature = file
+        .and_then(|value| value.temperature)
+        .or(llm.temperature)
+        .or(Some(default_role_temperature(role)));
+
+    let (api_key, api_key_source) = match file
+        .map(|value| value.api_key_mode)
+        .unwrap_or(SecretMode::Inherit)
+    {
+        SecretMode::Inherit => (llm.api_key.clone(), "inherit".to_string()),
+        SecretMode::Clear => (None, "cleared".to_string()),
+        SecretMode::Set => {
+            let key = file
+                .and_then(|value| value.api_key.as_ref())
+                .map(|value| value.trim())
+                .filter(|value| !value.is_empty())
+                .map(ToOwned::to_owned);
+            let source = if key.is_some() { "file" } else { "unset" };
+            (key, source.to_string())
+        }
+    };
+
+    let override_active = file
+        .map(|value| value.has_nonsecret_override(false, true) || value.api_key_mode != SecretMode::Inherit)
+        .unwrap_or(false);
+    let file_fields = usize::from(file.and_then(|value| value.api_base.as_ref()).is_some())
+        + usize::from(file.and_then(|value| value.model.as_ref()).is_some())
+        + usize::from(file.and_then(|value| value.temperature).is_some());
+    let source = if file_fields == 0 {
+        "inherit".to_string()
+    } else if file_fields >= 3 {
+        "file".to_string()
+    } else {
+        "mixed".to_string()
+    };
+
+    RuntimeProviderConfig {
+        api_base,
+        model,
+        dimension: None,
+        temperature,
         api_key,
         source,
         api_key_source,
@@ -484,6 +737,7 @@ fn provider_to_response(provider: &RuntimeProviderConfig) -> ProviderConfigRespo
         api_base: provider.api_base.clone(),
         model: provider.model.clone(),
         dimension: provider.dimension,
+        temperature: provider.temperature,
         configured: provider.configured(),
         api_key_configured: provider
             .api_key
@@ -493,6 +747,24 @@ fn provider_to_response(provider: &RuntimeProviderConfig) -> ProviderConfigRespo
         source: provider.source.clone(),
         api_key_source: provider.api_key_source.clone(),
         override_active: provider.override_active,
+    }
+}
+
+fn provider_override_to_response(provider: Option<&ProviderOverrideFile>) -> ProviderOverrideResponse {
+    let api_key = provider
+        .and_then(|value| value.api_key.as_ref())
+        .map(|value| value.trim())
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned);
+    ProviderOverrideResponse {
+        api_base: provider
+            .and_then(|value| normalize_optional_string(value.api_base.as_deref())),
+        model: provider.and_then(|value| normalize_optional_string(value.model.as_deref())),
+        dimension: provider.and_then(|value| value.dimension),
+        temperature: provider.and_then(|value| value.temperature),
+        api_key_mode: provider.map(|value| value.api_key_mode).unwrap_or_default(),
+        api_key_configured: api_key.is_some(),
+        api_key_masked: api_key.as_deref().map(mask_secret),
     }
 }
 
@@ -511,6 +783,22 @@ fn mask_secret(value: &str) -> String {
         .rev()
         .collect();
     format!("{prefix}****{suffix}")
+}
+
+fn normalize_optional_string(value: Option<&str>) -> Option<String> {
+    value.map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned)
+}
+
+fn normalize_temperature(value: Option<f32>) -> Result<Option<f32>> {
+    match value {
+        Some(raw) if !raw.is_finite() => bail!("temperature must be finite"),
+        Some(raw) => Ok(Some(raw)),
+        None => Ok(None),
+    }
+}
+
+fn default_true() -> bool {
+    true
 }
 
 fn env_string(key: &str, default: &str) -> String {
