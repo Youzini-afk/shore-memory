@@ -81,6 +81,64 @@ def _parse_temperature(value: Any) -> Optional[float]:
     return None
 
 
+def _parse_optional_float(value: Any) -> Optional[float]:
+    return _parse_temperature(value)
+
+
+def _parse_optional_int(value: Any) -> Optional[int]:
+    if isinstance(value, bool):
+        return None
+    if isinstance(value, int):
+        return int(value)
+    if isinstance(value, float):
+        if value != value or value == float("inf") or value == float("-inf"):
+            return None
+        return int(value)
+    if isinstance(value, str):
+        try:
+            return int(value.strip())
+        except ValueError:
+            return None
+    return None
+
+
+# Per-role generation parameter keys the server may persist. These map 1:1 to
+# the OpenAI Chat Completions fields (values are forwarded verbatim when set).
+_ROLE_GENERATION_PARAM_KEYS: tuple[str, ...] = (
+    "top_p",
+    "max_tokens",
+    "frequency_penalty",
+    "presence_penalty",
+    "seed",
+)
+
+
+def _extract_generation_params(section: dict[str, Any]) -> dict[str, Any]:
+    """Pull per-role generation parameter overrides out of a config section.
+
+    Missing / empty / invalid values are skipped so they are never forwarded
+    to the upstream LLM and the provider default applies.
+    """
+
+    out: dict[str, Any] = {}
+    top_p = _parse_optional_float(section.get("top_p"))
+    if top_p is not None:
+        out["top_p"] = top_p
+    max_tokens = _parse_optional_int(section.get("max_tokens"))
+    if max_tokens is not None and max_tokens > 0:
+        out["max_tokens"] = max_tokens
+    frequency_penalty = _parse_optional_float(section.get("frequency_penalty"))
+    if frequency_penalty is not None:
+        out["frequency_penalty"] = frequency_penalty
+    presence_penalty = _parse_optional_float(section.get("presence_penalty"))
+    if presence_penalty is not None:
+        out["presence_penalty"] = presence_penalty
+    seed = _parse_optional_int(section.get("seed"))
+    if seed is not None:
+        out["seed"] = seed
+    return out
+
+
 def _resolve_provider_config(
     prefix: str,
     section: dict[str, Any],
@@ -166,11 +224,14 @@ def _resolve_role_config(
     if temperature is None:
         temperature = _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3)
 
+    generation_params = _extract_generation_params(role_override)
+
     return {
         "api_key": api_key,
         "api_base": api_base,
         "model": model,
         "temperature": temperature,
+        "generation_params": generation_params,
     }
 
 
@@ -1192,15 +1253,27 @@ class OpenAICompatClient:
         api_base: str,
         model: str,
         temperature: float = 0.3,
+        generation_params: Optional[dict[str, Any]] = None,
     ) -> None:
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
         self.model = model
         self.temperature = temperature
+        # Only keys whitelisted in `_ROLE_GENERATION_PARAM_KEYS` are ever
+        # forwarded; callers are expected to have already normalized through
+        # `_extract_generation_params` but we filter defensively here too.
+        self.generation_params: dict[str, Any] = {
+            key: value
+            for key, value in (generation_params or {}).items()
+            if key in _ROLE_GENERATION_PARAM_KEYS and value is not None
+        }
 
     @classmethod
     def from_env(cls, prefix: str) -> Optional["OpenAICompatClient"]:
         """Resolve a client from the generic LLM section (legacy entry point).
+
+        The generic section does not support per-role generation parameter
+        overrides; :meth:`from_role` is preferred.
 
         Prefer :meth:`from_role` for any code path that maps to a known LLM
         responsibility; this constructor is kept for generic/unclassified
@@ -1229,7 +1302,7 @@ class OpenAICompatClient:
         )
 
     @classmethod
-    def from_role(cls, role: str) -> Optional["OpenAICompatClient"]:
+    def from_role(cls, role: str) -> Optional["OpenAICompatClient"]:  # noqa: D401 - kept for callers
         """Resolve a client for a named LLM role (scorer / reflector / query_analyzer).
 
         Unknown roles fall back to the generic LLM section so callers can
@@ -1244,10 +1317,23 @@ class OpenAICompatClient:
             temperature = _parse_temperature(role_cfg.get("temperature"))
             if temperature is None:
                 temperature = _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3)
+            generation_params: dict[str, Any] = {}
         else:
             temperature = float(
                 role_cfg.get("temperature", _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3))
             )
+            # `_resolve_role_config` has already normalized these; fall back
+            # to a fresh extraction if the cached value is missing (e.g. the
+            # worker was upgraded in front of an old server snapshot).
+            raw_params = role_cfg.get("generation_params")
+            if isinstance(raw_params, dict):
+                generation_params = {
+                    key: value
+                    for key, value in raw_params.items()
+                    if key in _ROLE_GENERATION_PARAM_KEYS and value is not None
+                }
+            else:
+                generation_params = _extract_generation_params(role_cfg)
 
         api_key = str(role_cfg.get("api_key", "")).strip()
         api_base = str(role_cfg.get("api_base", "https://api.openai.com/v1")).strip()
@@ -1259,6 +1345,7 @@ class OpenAICompatClient:
             api_base=api_base,
             model=model,
             temperature=temperature,
+            generation_params=generation_params,
         )
 
     async def chat_json(self, system_prompt: str, user_prompt: str) -> Optional[dict[str, Any]]:
@@ -1271,7 +1358,7 @@ class OpenAICompatClient:
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        payload = {
+        payload: dict[str, Any] = {
             "model": self.model,
             "temperature": self.temperature,
             "response_format": {"type": "json_object"},
@@ -1280,6 +1367,10 @@ class OpenAICompatClient:
                 {"role": "user", "content": user_prompt},
             ],
         }
+        # Only forward generation parameters the operator explicitly set;
+        # unset fields stay off the wire so the provider default applies.
+        for key, value in self.generation_params.items():
+            payload[key] = value
 
         async with httpx.AsyncClient(timeout=12.0) as client:
             response = await client.post(url, headers=headers, json=payload)

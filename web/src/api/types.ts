@@ -345,12 +345,27 @@ export interface ModelPresetResponse {
   is_default: boolean
 }
 
+/**
+ * Per-role optional generation parameter overrides (mirrors
+ * `server/src/model_config.rs::RoleGenerationParamsFile`). Any field left
+ * as `null` / `undefined` is omitted on the wire so the upstream provider's
+ * default applies.
+ */
+export interface RoleGenerationParams {
+  top_p?: number | null
+  max_tokens?: number | null
+  frequency_penalty?: number | null
+  presence_penalty?: number | null
+  seed?: number | null
+}
+
 export interface RoleBindingResponse {
   preset_id?: string | null
   temperature?: number | null
   effective_preset_id?: string | null
   follows_default: boolean
   resolved: ProviderConfigResponse
+  generation_params?: RoleGenerationParams
 }
 
 export interface ModelConfigStorageResponse {
@@ -423,6 +438,11 @@ export interface UpdateRoleBindingRequest {
   /** null or undefined means "follow the currently-active default LLM preset". */
   preset_id?: string | null
   temperature?: number | null
+  /**
+   * Per-role optional generation parameter overrides. Missing / null fields
+   * are not forwarded to the upstream LLM (provider default applies).
+   */
+  generation_params?: RoleGenerationParams
 }
 
 export interface UpdateModelConfigRequest {

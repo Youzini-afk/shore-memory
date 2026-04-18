@@ -114,6 +114,37 @@ pub struct RoleBindingFile {
     pub preset_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub temperature: Option<f32>,
+    /// Optional per-role generation parameter overrides (top_p, max_tokens,
+    /// penalties, seed). Fields left as ``None`` fall back to the provider /
+    /// worker default (i.e. nothing is sent on the wire).
+    #[serde(default, skip_serializing_if = "RoleGenerationParamsFile::is_empty")]
+    pub generation_params: RoleGenerationParamsFile,
+}
+
+/// Per-role optional generation parameters. Any field set to ``Some`` is sent
+/// on the wire to the upstream LLM; ``None`` means "do not override".
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq)]
+pub struct RoleGenerationParamsFile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<i64>,
+}
+
+impl RoleGenerationParamsFile {
+    pub fn is_empty(&self) -> bool {
+        self.top_p.is_none()
+            && self.max_tokens.is_none()
+            && self.frequency_penalty.is_none()
+            && self.presence_penalty.is_none()
+            && self.seed.is_none()
+    }
 }
 
 /// On-disk representation of ``model-config.json``.
@@ -173,6 +204,17 @@ pub struct ProviderOverrideFile {
     pub api_key_mode: SecretMode,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub api_key: Option<String>,
+    // --- Role-only generation params (skipped for embedding/llm) ---------
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_tokens: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub frequency_penalty: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub presence_penalty: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seed: Option<i64>,
 }
 
 // ============================================================================
@@ -232,6 +274,9 @@ pub struct UpdateRoleBindingRequest {
     /// (or the role's built-in default) is used.
     #[serde(default)]
     pub temperature: Option<f32>,
+    /// Per-role optional generation parameter overrides.
+    #[serde(default)]
+    pub generation_params: RoleGenerationParamsFile,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -315,6 +360,10 @@ pub struct RoleBindingResponse {
     pub effective_preset_id: Option<String>,
     pub follows_default: bool,
     pub resolved: ProviderConfigResponse,
+    /// Per-role generation parameter overrides exactly as persisted on disk.
+    /// Missing fields fall back to the upstream LLM provider's defaults.
+    #[serde(default)]
+    pub generation_params: RoleGenerationParamsFile,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -425,6 +474,7 @@ pub struct RuntimeRoleBinding {
     pub preset_id: Option<String>,
     pub temperature: Option<f32>,
     pub effective_preset_id: Option<String>,
+    pub generation_params: RoleGenerationParamsFile,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -479,6 +529,7 @@ impl RuntimeModelConfig {
                         effective_preset_id: binding.effective_preset_id.clone(),
                         follows_default: binding.preset_id.is_none(),
                         resolved: provider_to_response(&resolved),
+                        generation_params: binding.generation_params.clone(),
                     },
                 )
             })
@@ -621,6 +672,7 @@ pub fn migrate_legacy_in_memory(mut file: ModelConfigFile) -> ModelConfigFile {
                 RoleBindingFile {
                     preset_id: Some(preset_id),
                     temperature: legacy_role.temperature,
+                    generation_params: RoleGenerationParamsFile::default(),
                 },
             );
         } else if legacy_role.temperature.is_some() {
@@ -629,6 +681,7 @@ pub fn migrate_legacy_in_memory(mut file: ModelConfigFile) -> ModelConfigFile {
                 RoleBindingFile {
                     preset_id: None,
                     temperature: legacy_role.temperature,
+                    generation_params: RoleGenerationParamsFile::default(),
                 },
             );
         }
@@ -770,6 +823,7 @@ pub fn resolve_runtime_model_config(file: Option<&ModelConfigFile>) -> RuntimeMo
                 preset_id: binding_file.preset_id.clone(),
                 temperature: binding_file.temperature,
                 effective_preset_id: target_preset_id,
+                generation_params: binding_file.generation_params.clone(),
             },
         );
     }
@@ -947,11 +1001,13 @@ pub fn apply_update(
             }
             _ => None,
         };
+        let generation_params = normalize_generation_params(binding.generation_params)?;
         role_bindings.insert(
             role,
             RoleBindingFile {
                 preset_id,
                 temperature: normalize_temperature(binding.temperature)?,
+                generation_params,
             },
         );
     }
@@ -1048,7 +1104,13 @@ fn populate_worker_snapshot(file: &mut ModelConfigFile) {
     file.roles = runtime
         .roles
         .iter()
-        .map(|(role, provider)| (role.clone(), runtime_to_legacy_file(provider, false)))
+        .map(|(role, provider)| {
+            let binding = runtime.role_bindings.get(role);
+            (
+                role.clone(),
+                runtime_role_to_legacy_file(provider, binding),
+            )
+        })
         .collect();
 }
 
@@ -1075,7 +1137,30 @@ fn runtime_to_legacy_file(
             SecretMode::Clear
         },
         api_key: provider.api_key.clone(),
+        top_p: None,
+        max_tokens: None,
+        frequency_penalty: None,
+        presence_penalty: None,
+        seed: None,
     }
+}
+
+/// Role-aware version of :func:`runtime_to_legacy_file` that additionally
+/// persists the per-role generation parameter overrides so the worker can
+/// read them directly from the resolved snapshot.
+fn runtime_role_to_legacy_file(
+    provider: &RuntimeProviderConfig,
+    binding: Option<&RuntimeRoleBinding>,
+) -> ProviderOverrideFile {
+    let mut out = runtime_to_legacy_file(provider, false);
+    if let Some(binding) = binding {
+        out.top_p = binding.generation_params.top_p;
+        out.max_tokens = binding.generation_params.max_tokens;
+        out.frequency_penalty = binding.generation_params.frequency_penalty;
+        out.presence_penalty = binding.generation_params.presence_penalty;
+        out.seed = binding.generation_params.seed;
+    }
+    out
 }
 
 // ============================================================================
@@ -1248,6 +1333,27 @@ fn normalize_temperature(value: Option<f32>) -> Result<Option<f32>> {
         Some(raw) => Ok(Some(raw)),
         None => Ok(None),
     }
+}
+
+fn normalize_generation_params(
+    mut params: RoleGenerationParamsFile,
+) -> Result<RoleGenerationParamsFile> {
+    fn check_finite(name: &str, value: Option<f32>) -> Result<Option<f32>> {
+        match value {
+            Some(raw) if !raw.is_finite() => bail!("{name} must be finite"),
+            Some(raw) => Ok(Some(raw)),
+            None => Ok(None),
+        }
+    }
+    params.top_p = check_finite("top_p", params.top_p)?;
+    params.frequency_penalty = check_finite("frequency_penalty", params.frequency_penalty)?;
+    params.presence_penalty = check_finite("presence_penalty", params.presence_penalty)?;
+    if let Some(tokens) = params.max_tokens
+        && tokens == 0
+    {
+        params.max_tokens = None;
+    }
+    Ok(params)
 }
 
 fn env_string(key: &str, default: &str) -> String {

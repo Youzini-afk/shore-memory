@@ -16,6 +16,7 @@ import type {
   PresetKind,
   ProviderKind,
   RoleBindingResponse,
+  RoleGenerationParams,
   UpdateModelConfigRequest,
   UpdateModelConfigResponse,
   UpdatePresetRequest,
@@ -23,6 +24,17 @@ import type {
 } from '@/api/types'
 
 type RoleKey = 'scorer' | 'reflector' | 'query_analyzer' | 'query_planner'
+
+type RoleSubTabId = 'generation' | 'prompt' | 'debug'
+
+type GenerationFieldKey =
+  | 'top_p'
+  | 'max_tokens'
+  | 'frequency_penalty'
+  | 'presence_penalty'
+  | 'seed'
+
+type RoleGenerationForm = Record<GenerationFieldKey, string>
 
 type ApiKeyAction = 'keep' | 'clear' | 'set'
 
@@ -72,6 +84,22 @@ const ROLE_META: Record<RoleKey, { label: string; description: string; defaultTe
 const roleKeys = Object.keys(ROLE_META) as RoleKey[]
 const roleEntries = roleKeys.map((key) => ({ key, ...ROLE_META[key] }))
 
+const ROLE_SUB_TABS: { id: RoleSubTabId; label: string; description: string }[] = [
+  { id: 'generation', label: '生成参数', description: '预设绑定、采样温度和可选的生成参数覆盖' },
+  { id: 'prompt', label: 'Prompt 编排', description: '查看 / 覆盖 worker 内置的 system prompt' },
+  { id: 'debug', label: '调试预览', description: '查看角色当前的生效配置与最近一次连通性测试' }
+]
+
+function emptyGenerationForm(): RoleGenerationForm {
+  return {
+    top_p: '',
+    max_tokens: '',
+    frequency_penalty: '',
+    presence_penalty: '',
+    seed: ''
+  }
+}
+
 const app = useAppStore()
 
 const loadingModelConfig = ref(false)
@@ -107,6 +135,21 @@ const roleForms = reactive<Record<RoleKey, RoleFormState>>({
   query_analyzer: { presetId: '', temperature: '' },
   query_planner: { presetId: '', temperature: '' }
 })
+
+/**
+ * Per-role optional generation parameter overrides. Empty string means
+ * "do not send this field"; any numeric value is forwarded to the worker
+ * which then passes it straight through to the upstream LLM.
+ */
+const generationForms = reactive<Record<RoleKey, RoleGenerationForm>>({
+  scorer: emptyGenerationForm(),
+  reflector: emptyGenerationForm(),
+  query_analyzer: emptyGenerationForm(),
+  query_planner: emptyGenerationForm()
+})
+
+const activeRole = ref<RoleKey>('scorer')
+const activeRoleTab = ref<RoleSubTabId>('generation')
 
 /**
  * Per-role system prompt override form. Empty string means "use the worker's
@@ -301,6 +344,22 @@ function hydrateRoles(config: ModelConfigResponse) {
   }
 }
 
+function hydrateGeneration(config: ModelConfigResponse) {
+  for (const role of roleKeys) {
+    const binding = config.role_bindings[role]
+    const params = (binding?.generation_params ?? {}) as RoleGenerationParams
+    const stringify = (value: number | null | undefined): string =>
+      value !== null && value !== undefined ? String(value) : ''
+    generationForms[role] = {
+      top_p: stringify(params.top_p ?? null),
+      max_tokens: stringify(params.max_tokens ?? null),
+      frequency_penalty: stringify(params.frequency_penalty ?? null),
+      presence_penalty: stringify(params.presence_penalty ?? null),
+      seed: stringify(params.seed ?? null)
+    }
+  }
+}
+
 function hydratePrompts(config: ModelConfigResponse) {
   const overrides = config.prompts ?? {}
   for (const role of roleKeys) {
@@ -325,6 +384,7 @@ function hydrateForm(config: ModelConfigResponse) {
       ? previousLlmActive
       : defaultLlmId.value) || (llmPresets.value[0]?.id ?? '')
   hydrateRoles(config)
+  hydrateGeneration(config)
   hydratePrompts(config)
   for (const key of Object.keys(modelOptionsByPreset)) {
     delete modelOptionsByPreset[key]
@@ -395,9 +455,29 @@ function buildUpdatePayload(options?: { autoDetectEmbeddingDimension?: boolean }
     const form = roleForms[role]
     const presetId = form.presetId.trim()
     const temperature = parseOptionalNumber(form.temperature)
+    const gen = generationForms[role]
+    const maxTokensNum = parseOptionalNumber(gen.max_tokens)
+    const seedNum = parseOptionalNumber(gen.seed)
+    const top_p = parseOptionalNumber(gen.top_p)
+    const frequency_penalty = parseOptionalNumber(gen.frequency_penalty)
+    const presence_penalty = parseOptionalNumber(gen.presence_penalty)
+    const max_tokens =
+      maxTokensNum !== undefined && maxTokensNum > 0
+        ? Math.round(maxTokensNum)
+        : undefined
+    const seed = seedNum !== undefined ? Math.round(seedNum) : undefined
     roleBindings[role] = {
       preset_id: presetId ? presetId : null,
-      temperature: temperature === undefined ? null : temperature
+      temperature: temperature === undefined ? null : temperature,
+      // The server only persists `Some(x)` fields; `null` clears an existing
+      // override so the provider default applies on the next request.
+      generation_params: {
+        top_p: top_p === undefined ? null : top_p,
+        max_tokens: max_tokens === undefined ? null : max_tokens,
+        frequency_penalty: frequency_penalty === undefined ? null : frequency_penalty,
+        presence_penalty: presence_penalty === undefined ? null : presence_penalty,
+        seed: seed === undefined ? null : seed
+      }
     }
   }
   const prompts: Record<string, string | null> = {}
@@ -709,6 +789,33 @@ async function restorePromptDefault(role: RoleKey) {
 function clearPromptOverride(role: RoleKey) {
   promptForms[role] = ''
   modelConfigNotice.value = `已清空「${ROLE_META[role].label}」的提示词覆盖，保存后该角色会使用内置默认。`
+}
+
+function effectiveGenerationLabel(role: RoleKey, key: GenerationFieldKey): string {
+  const raw = generationForms[role][key]
+  if (!raw.trim()) return '跟随默认'
+  const parsed = parseOptionalNumber(raw)
+  if (parsed === undefined) return '跟随默认'
+  if (key === 'max_tokens' || key === 'seed') {
+    return String(Math.round(parsed))
+  }
+  return parsed.toFixed(2)
+}
+
+function anyGenerationOverridden(role: RoleKey): boolean {
+  const gen = generationForms[role]
+  return Object.values(gen).some((value) => value.trim().length > 0)
+}
+
+function clearGenerationOverrides(role: RoleKey) {
+  generationForms[role] = emptyGenerationForm()
+  modelConfigNotice.value = `已清空「${ROLE_META[role].label}」的生成参数覆盖，保存后该角色会使用 provider 默认值。`
+}
+
+function effectivePromptPreview(role: RoleKey): string {
+  const override = promptForms[role].trim()
+  if (override) return promptForms[role]
+  return defaultPrompts.value?.[role] ?? '（默认 prompt 尚未加载，点击「查看默认」或保存后将自动加载）'
 }
 
 onMounted(() => {
@@ -1127,135 +1234,292 @@ onMounted(() => {
           </div>
         </div>
 
-        <!-- Roles -->
-        <div class="mt-6">
-          <div class="text-[12px] uppercase font-display tracking-wider text-ink-4 mb-3">
-            LLM 角色
-          </div>
-          <div class="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div
-              v-for="entry in roleEntries"
-              :key="entry.key"
-              class="rounded-card border border-shore-line/80 p-4 bg-shore-bg/30"
-            >
-              <div class="text-[13px] font-display text-ink-1">{{ entry.label }}</div>
-              <div class="text-[12px] text-ink-4 mt-1 mb-3">{{ entry.description }}</div>
-
-              <div class="space-y-3">
-                <div>
-                  <div class="text-[12px] text-ink-4 mb-1">使用预设</div>
-                  <select
-                    v-model="roleForms[entry.key].presetId"
-                    class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
-                  >
-                    <option value="">跟随默认</option>
-                    <option v-for="preset in llmPresets" :key="preset.id" :value="preset.id">
-                      {{ preset.name }}{{ preset.id === defaultLlmId ? '（默认）' : '' }}
-                    </option>
-                  </select>
+        <!-- Unified LLM role workspace (ST-BME style) -->
+        <div class="mt-6 rounded-card border border-shore-line/80 bg-shore-bg/30 overflow-hidden">
+          <div class="px-5 pt-4 pb-3 border-b border-shore-line/60">
+            <div class="flex items-center justify-between gap-3 flex-wrap">
+              <div>
+                <div class="text-[12px] uppercase font-display tracking-wider text-ink-4">LLM 角色工作区</div>
+                <div class="text-[12px] text-ink-4 mt-1">
+                  为每个记忆任务角色单独配置预设绑定、生成参数和 system prompt，保存后立即生效。
                 </div>
-                <div>
-                  <div class="text-[12px] text-ink-4 mb-1">
-                    Temperature（留空继承预设）
+              </div>
+              <span v-if="loadingDefaultPrompts" class="text-[11px] text-ink-4">加载默认提示词中…</span>
+            </div>
+            <div class="mt-4 flex items-center gap-2 flex-wrap">
+              <button
+                v-for="entry in roleEntries"
+                :key="entry.key"
+                type="button"
+                class="h-9 px-3 rounded-btn border text-[12.5px] font-display transition-colors duration-240 ease-shore"
+                :class="
+                  activeRole === entry.key
+                    ? 'bg-accent/20 border-accent text-ink-1 shadow-[0_0_0_2px_rgba(124,92,255,0.15)]'
+                    : 'border-shore-line/70 text-ink-3 hover:border-shore-border'
+                "
+                @click="activeRole = entry.key"
+              >
+                {{ entry.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="px-5 pt-3 pb-2 border-b border-shore-line/60 flex items-center justify-between gap-3 flex-wrap">
+            <div class="text-[11.5px] text-ink-4">{{ ROLE_META[activeRole].description }}</div>
+            <div class="flex items-center gap-1.5 flex-wrap">
+              <button
+                v-for="tab in ROLE_SUB_TABS"
+                :key="tab.id"
+                type="button"
+                class="h-8 px-3 rounded-pill border text-[12px] font-display transition-colors duration-240 ease-shore"
+                :class="
+                  activeRoleTab === tab.id
+                    ? 'bg-accent/20 border-accent text-ink-1'
+                    : 'border-shore-line/70 text-ink-3 hover:border-shore-border'
+                "
+                @click="activeRoleTab = tab.id"
+              >
+                {{ tab.label }}
+              </button>
+            </div>
+          </div>
+
+          <div class="p-5">
+            <!-- 生成参数 -->
+            <template v-if="activeRoleTab === 'generation'">
+              <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 p-4">
+                  <div class="text-[12.5px] font-display text-ink-1">API 配置</div>
+                  <div class="text-[11px] text-ink-4 mt-1 mb-3">
+                    留空不强制下发，由当前 LLM 预设决定。
                   </div>
-                  <PInput
-                    v-model="roleForms[entry.key].temperature"
-                    type="number"
-                    :placeholder="`留空使用 ${entry.defaultTemperature}`"
-                    mono
-                  />
+                  <div class="space-y-3">
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">使用预设</div>
+                      <select
+                        v-model="roleForms[activeRole].presetId"
+                        class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+                      >
+                        <option value="">跟随默认</option>
+                        <option v-for="preset in llmPresets" :key="preset.id" :value="preset.id">
+                          {{ preset.name }}{{ preset.id === defaultLlmId ? '（默认）' : '' }}
+                        </option>
+                      </select>
+                    </div>
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">Temperature</div>
+                      <PInput
+                        v-model="roleForms[activeRole].temperature"
+                        type="number"
+                        :placeholder="`留空使用 ${ROLE_META[activeRole].defaultTemperature}`"
+                        mono
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 p-4">
+                  <div class="flex items-center justify-between gap-3">
+                    <div class="text-[12.5px] font-display text-ink-1">基础生成参数</div>
+                    <span
+                      :class="anyGenerationOverridden(activeRole) ? 'text-accent' : 'text-ink-4'"
+                      class="text-[11px] font-display"
+                    >
+                      {{ anyGenerationOverridden(activeRole) ? '已覆盖' : '跟随默认' }}
+                    </span>
+                  </div>
+                  <div class="text-[11px] text-ink-4 mt-1 mb-3">
+                    留空不强制下发，由模型或 provider 默认值决定。
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">Top P</div>
+                      <PInput
+                        v-model="generationForms[activeRole].top_p"
+                        type="number"
+                        placeholder="留空 = 跟随默认"
+                        mono
+                      />
+                    </div>
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">最大补全 Tokens</div>
+                      <PInput
+                        v-model="generationForms[activeRole].max_tokens"
+                        type="number"
+                        placeholder="留空 = 跟随默认"
+                        mono
+                      />
+                    </div>
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">随机种子 (Seed)</div>
+                      <PInput
+                        v-model="generationForms[activeRole].seed"
+                        type="number"
+                        placeholder="留空 = 跟随默认"
+                        mono
+                      />
+                    </div>
+                  </div>
+                  <div class="mt-4">
+                    <PButton
+                      size="sm"
+                      variant="ghost"
+                      :disabled="modelConfigBusy || !anyGenerationOverridden(activeRole)"
+                      @click="clearGenerationOverrides(activeRole)"
+                    >
+                      清空所有生成参数覆盖
+                    </PButton>
+                  </div>
+                </div>
+
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 p-4 lg:col-span-2">
+                  <div class="text-[12.5px] font-display text-ink-1">惩罚参数</div>
+                  <div class="text-[11px] text-ink-4 mt-1 mb-3">
+                    留空不强制下发，建议在 [-2, 2] 范围内调整。
+                  </div>
+                  <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">频率惩罚 (frequency_penalty)</div>
+                      <PInput
+                        v-model="generationForms[activeRole].frequency_penalty"
+                        type="number"
+                        placeholder="-2 ~ 2，留空 = 跟随默认"
+                        mono
+                      />
+                    </div>
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">存在惩罚 (presence_penalty)</div>
+                      <PInput
+                        v-model="generationForms[activeRole].presence_penalty"
+                        type="number"
+                        placeholder="-2 ~ 2，留空 = 跟随默认"
+                        mono
+                      />
+                    </div>
+                  </div>
                 </div>
               </div>
+            </template>
 
-              <div class="mt-4 grid grid-cols-3 gap-y-2 text-[12px]">
-                <div class="text-ink-4">生效模型</div>
-                <div class="col-span-2 font-mono text-ink-2 truncate">
-                  {{ getRoleBinding(entry.key)?.resolved.model || effectiveLlmForRole(entry.key)?.model || '未配置' }}
-                </div>
-                <div class="text-ink-4">生效 Temperature</div>
-                <div class="col-span-2 text-ink-2">{{ effectiveRoleTemperatureLabel(entry.key) }}</div>
-                <div class="text-ink-4">Key 来源</div>
-                <div class="col-span-2 text-ink-2">
-                  {{ formatKeySource(getRoleBinding(entry.key)?.resolved.api_key_source) }}
-                </div>
+            <!-- Prompt 编排 -->
+            <template v-else-if="activeRoleTab === 'prompt'">
+              <div
+                v-if="defaultPromptsError"
+                class="rounded-btn border border-state-invalidated/40 bg-state-invalidated/10 px-3 py-2 text-[12px] text-state-invalidated mb-3"
+              >
+                {{ defaultPromptsError }}
               </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Prompts -->
-        <div class="mt-6">
-          <div class="flex items-center justify-between gap-3 mb-3 flex-wrap">
-            <div class="text-[12px] uppercase font-display tracking-wider text-ink-4">
-              系统提示词
-            </div>
-            <span v-if="loadingDefaultPrompts" class="text-[11px] text-ink-4">
-              加载默认中…
-            </span>
-          </div>
-          <div
-            v-if="defaultPromptsError"
-            class="rounded-btn border border-state-invalidated/40 bg-state-invalidated/10 px-3 py-2 text-[12px] text-state-invalidated mb-3"
-          >
-            {{ defaultPromptsError }}
-          </div>
-          <div class="space-y-3">
-            <div
-              v-for="entry in roleEntries"
-              :key="entry.key"
-              class="rounded-card border border-shore-line/80 p-4 bg-shore-bg/30"
-            >
-              <div class="flex items-start justify-between gap-3 mb-2 flex-wrap">
-                <div>
-                  <span class="text-[13px] font-display text-ink-1">{{ entry.label }}</span>
-                  <span class="text-[11px] text-ink-4 ml-2">{{ entry.description }}</span>
-                </div>
+              <div class="flex items-center justify-between gap-2 flex-wrap mb-3">
+                <span
+                  :class="promptIsOverridden(activeRole) ? 'text-accent' : 'text-ink-4'"
+                  class="text-[11px] font-display"
+                >
+                  {{ promptIsOverridden(activeRole) ? '已覆盖' : '使用内置默认' }}
+                </span>
                 <div class="flex items-center gap-2 flex-wrap">
-                  <span
-                    :class="promptIsOverridden(entry.key) ? 'text-accent' : 'text-ink-4'"
-                    class="text-[11px] font-display"
-                  >
-                    {{ promptIsOverridden(entry.key) ? '已覆盖' : '使用内置默认' }}
-                  </span>
                   <PButton
                     size="sm"
                     variant="ghost"
                     :loading="loadingDefaultPrompts"
                     :disabled="modelConfigBusy"
-                    @click="togglePromptPreview(entry.key)"
+                    @click="togglePromptPreview(activeRole)"
                   >
-                    {{ promptPreviewOpen[entry.key] ? '收起默认' : '查看默认' }}
+                    {{ promptPreviewOpen[activeRole] ? '收起默认' : '查看默认' }}
                   </PButton>
                   <PButton
                     size="sm"
                     variant="ghost"
                     :loading="loadingDefaultPrompts"
                     :disabled="modelConfigBusy"
-                    @click="restorePromptDefault(entry.key)"
+                    @click="restorePromptDefault(activeRole)"
                   >
                     填充默认
                   </PButton>
                   <PButton
                     size="sm"
                     variant="ghost"
-                    :disabled="modelConfigBusy || !promptIsOverridden(entry.key)"
-                    @click="clearPromptOverride(entry.key)"
+                    :disabled="modelConfigBusy || !promptIsOverridden(activeRole)"
+                    @click="clearPromptOverride(activeRole)"
                   >
                     清空覆盖
                   </PButton>
                 </div>
               </div>
               <textarea
-                v-model="promptForms[entry.key]"
-                rows="10"
+                v-model="promptForms[activeRole]"
+                rows="14"
                 placeholder="留空使用 worker 内置默认（点击「查看默认」可预览）"
                 class="w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3 py-2 text-[12px] text-ink-1 font-mono leading-5 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)] resize-y"
               />
               <div
-                v-if="promptPreviewOpen[entry.key]"
+                v-if="promptPreviewOpen[activeRole]"
                 class="mt-2 rounded-btn border border-shore-line/60 bg-[#0A0B10] px-3 py-2 text-[11px] text-ink-3 font-mono whitespace-pre-wrap max-h-80 overflow-auto"
-              >{{ defaultPrompts?.[entry.key] ?? '' }}</div>
-            </div>
+              >{{ defaultPrompts?.[activeRole] ?? '' }}</div>
+            </template>
+
+            <!-- 调试预览 -->
+            <template v-else>
+              <div class="grid grid-cols-1 md:grid-cols-2 gap-3 text-[12px]">
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 px-3 py-2">
+                  <div class="text-ink-4 mb-1">生效模型</div>
+                  <div class="font-mono text-ink-1 truncate">
+                    {{ getRoleBinding(activeRole)?.resolved.model || effectiveLlmForRole(activeRole)?.model || '未配置' }}
+                  </div>
+                </div>
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 px-3 py-2">
+                  <div class="text-ink-4 mb-1">生效 Temperature</div>
+                  <div class="text-ink-1">{{ effectiveRoleTemperatureLabel(activeRole) }}</div>
+                </div>
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 px-3 py-2">
+                  <div class="text-ink-4 mb-1">Key 来源</div>
+                  <div class="text-ink-1">{{ formatKeySource(getRoleBinding(activeRole)?.resolved.api_key_source) }}</div>
+                </div>
+                <div class="rounded-btn border border-shore-line/70 bg-[#0F1018]/40 px-3 py-2">
+                  <div class="text-ink-4 mb-1">连通性测试</div>
+                  <div v-if="modelConfigTest" class="text-ink-1">
+                    <span
+                      :class="modelConfigTest.roles?.[activeRole]?.ok ? 'text-state-active' : 'text-state-invalidated'"
+                    >
+                      {{ modelConfigTest.roles?.[activeRole]?.ok ? '通过' : '失败' }}
+                    </span>
+                    <span class="text-ink-3 ml-2">{{ modelConfigTest.roles?.[activeRole]?.message ?? '未执行' }}</span>
+                  </div>
+                  <div v-else class="text-ink-4">尚未测试，点击顶部「测试连接」。</div>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-btn border border-shore-line/70 bg-[#0F1018]/40 p-4">
+                <div class="text-[12.5px] font-display text-ink-1 mb-1">将发送到 provider 的生成参数</div>
+                <div class="text-[11px] text-ink-4 mb-3">未设置（即「跟随默认」）的字段不会出现在请求里。</div>
+                <div class="grid grid-cols-2 md:grid-cols-3 gap-y-2 text-[12px]">
+                  <div class="text-ink-4">Temperature</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveRoleTemperatureLabel(activeRole) }}</div>
+                  <div class="text-ink-4">Top P</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'top_p') }}</div>
+                  <div class="text-ink-4">Max Tokens</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'max_tokens') }}</div>
+                  <div class="text-ink-4">Frequency Penalty</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'frequency_penalty') }}</div>
+                  <div class="text-ink-4">Presence Penalty</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'presence_penalty') }}</div>
+                  <div class="text-ink-4">Seed</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'seed') }}</div>
+                </div>
+              </div>
+
+              <div class="mt-4 rounded-btn border border-shore-line/70 bg-[#0F1018]/40 p-4">
+                <div class="flex items-center justify-between gap-3 mb-2">
+                  <div class="text-[12.5px] font-display text-ink-1">System Prompt 预览</div>
+                  <span
+                    :class="promptIsOverridden(activeRole) ? 'text-accent' : 'text-ink-4'"
+                    class="text-[11px] font-display"
+                  >
+                    {{ promptIsOverridden(activeRole) ? '使用覆盖内容' : '使用内置默认' }}
+                  </span>
+                </div>
+                <div class="rounded-btn border border-shore-line/60 bg-[#0A0B10] px-3 py-2 text-[11px] text-ink-3 font-mono whitespace-pre-wrap max-h-96 overflow-auto">{{ effectivePromptPreview(activeRole) }}</div>
+              </div>
+            </template>
           </div>
         </div>
 
