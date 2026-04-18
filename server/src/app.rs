@@ -40,11 +40,11 @@ use crate::types::{
     EventMessageRequest, ExistingMemoryHint, ExportMemoriesRequest, ExportMemoriesResponse,
     GraphEntityNode, GraphMemoryEntityEdge, GraphMemoryNode, GraphRequest, GraphResponse,
     GraphStats, GraphSupersedeEdge, ListMemoriesRequest, ListMemoriesResponse,
-    MemoryDetailResponse, MemoryRecord, MemoryScope, MemorySnippet, RecallRecipe, RecallRequest,
-    RecallResponse, ScoreBreakdown, ServerEvent, SyncSummaryResponse, TaskActionResponse, TaskKind,
-    TaskRecord, TurnEventRequest, TurnMessage, UpdateMemoryRequest, UpdateMemoryResponse,
-    WorkerMemoryDraft, WorkerScoreTurnRequest, infer_scope, scope_visible_for_selected_request,
-    selected_recall_scopes,
+    MemoryDetailResponse, MemoryQueryDebug, MemoryRecord, MemoryScope, MemorySnippet,
+    RecallQueryPlan, RecallRecipe, RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent,
+    SyncSummaryResponse, TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage,
+    UpdateMemoryRequest, UpdateMemoryResponse, WorkerMemoryDraft, WorkerScoreTurnRequest,
+    infer_scope, scope_visible_for_selected_request, selected_recall_scopes,
 };
 use crate::worker::{
     WorkerClient, memory_draft_metadata_with_task, reflection_inputs_from_memories,
@@ -58,7 +58,34 @@ const SCORER_RECENTLY_EXTRACTED: usize = 10;
 /// deduplication & linking. Opaque indices ("0", "1", ...) are used so the LLM
 /// never sees real UUIDs.
 const SCORER_EXISTING_POOL_SIZE: usize = 10;
-const RECALL_CACHE_KEY_VERSION: &str = "v2";
+const RECALL_CACHE_KEY_VERSION: &str = "v3";
+
+#[derive(Clone)]
+struct RecallScoredCandidate {
+    memory: MemoryRecord,
+    signals: FusionInputs,
+    scope_weight: f32,
+    combined: f32,
+    divisor: f32,
+    entities: Vec<EntityDraft>,
+}
+
+#[derive(Default)]
+struct RecallQueryExecution {
+    scored_candidates: Vec<RecallScoredCandidate>,
+    degraded: bool,
+}
+
+struct AggregatedRecallCandidate {
+    memory: MemoryRecord,
+    signals: FusionInputs,
+    scope_weight: f32,
+    combined: f32,
+    divisor: f32,
+    entities: Vec<EntityDraft>,
+    matched_subquery_indices: Vec<usize>,
+    best_subquery_index: Option<usize>,
+}
 
 #[derive(Clone)]
 pub struct AppState {
@@ -145,10 +172,7 @@ impl AppState {
                 post(detect_embedding_dimension),
             )
             .route("/v1/model-config/test", post(test_model_config))
-            .route(
-                "/v1/model-config/default-prompts",
-                get(get_default_prompts),
-            )
+            .route("/v1/model-config/default-prompts", get(get_default_prompts))
             .route("/v1/events", get(events_ws));
 
         if self.config.api_key.is_some() {
@@ -996,59 +1020,107 @@ impl AppState {
         Ok(())
     }
 
-    /// Stage 2 recall pipeline: recipe-driven multi-signal additive fusion.
-    ///
-    /// Pipeline:
-    ///   1. Semantic signal via `search_semantic_only` (vector only).
-    ///   2. BM25 signal via `search_text_only` when the recipe enables it,
-    ///      normalized through `normalize_bm25`.
-    ///   3. Entity boost: extract entities from the query, embed them in a
-    ///      batch, search the entity Trivium, and propagate spread-attenuated
-    ///      scores onto each linked memory.
-    ///   4. Contiguity: for the top-N semantic hits, pull session-adjacent
-    ///      memories and give them a fixed boost.
-    ///   5. Fuse via `additive_fuse` with weights derived from the recipe.
-    #[tracing::instrument(skip(self, request), fields(agent_id = %request.agent_id))]
-    pub async fn handle_recall(&self, request: RecallRequest) -> Result<RecallResponse> {
-        let _reindex_guard = self.reindex_lock.read().await;
-        use std::collections::{HashMap, HashSet};
+    async fn resolve_recall_query_plan(&self, request: &RecallRequest) -> RecallQueryPlan {
+        let requested_auto_plan = request.auto_plan.unwrap_or(false);
+        let explicit = request
+            .subqueries
+            .as_deref()
+            .map(normalize_subqueries)
+            .unwrap_or_default();
+        if !explicit.is_empty() {
+            return RecallQueryPlan {
+                source: "request".to_string(),
+                subqueries: explicit,
+                requested_auto_plan,
+                planner_used: false,
+                planner_degraded: false,
+                planner_error: None,
+            };
+        }
+
+        let fallback_query = request.query.trim().to_string();
+        if !requested_auto_plan {
+            return RecallQueryPlan {
+                source: "single".to_string(),
+                subqueries: if fallback_query.is_empty() {
+                    Vec::new()
+                } else {
+                    vec![fallback_query]
+                },
+                requested_auto_plan: false,
+                planner_used: false,
+                planner_degraded: false,
+                planner_error: None,
+            };
+        }
+
         let started = std::time::Instant::now();
-        let recipe = RecallRecipe::parse(request.recipe.as_deref());
-        let recipe_label = recipe.as_str();
-        let request_scope = infer_scope(request.scope_hint, request.channel_uid.as_deref());
-        let selected_scopes =
-            selected_recall_scopes(request_scope, request.selected_scopes.as_deref());
-        let allowed_scopes = self.allowed_recall_scopes(request_scope, &selected_scopes);
-
-        let recall_epoch = self.recall_epoch.get(&request.agent_id).await.unwrap_or(0);
-        let cache_key = cache_key_for_recall(&request, recall_epoch);
-        if let Some(cached) = self.recall_cache.get(&cache_key).await {
-            counter!("shore_memory_cache_hit_total", "cache" => "recall").increment(1);
-            histogram!("shore_memory_recall_duration_seconds", "recipe" => recipe_label, "degraded" => "false")
-                .record(started.elapsed().as_secs_f64());
-            return Ok(cached);
+        let planned = self.worker.plan_query(request.query.trim()).await;
+        histogram!("shore_memory_worker_call_duration_seconds", "op" => "plan_query")
+            .record(started.elapsed().as_secs_f64());
+        match planned {
+            Ok(subqueries) => {
+                let subqueries = normalize_subqueries(&subqueries);
+                if subqueries.is_empty() {
+                    RecallQueryPlan {
+                        source: "planner_fallback".to_string(),
+                        subqueries: if fallback_query.is_empty() {
+                            Vec::new()
+                        } else {
+                            vec![fallback_query]
+                        },
+                        requested_auto_plan: true,
+                        planner_used: true,
+                        planner_degraded: true,
+                        planner_error: Some("planner returned no subqueries".to_string()),
+                    }
+                } else {
+                    RecallQueryPlan {
+                        source: "planner".to_string(),
+                        subqueries,
+                        requested_auto_plan: true,
+                        planner_used: true,
+                        planner_degraded: false,
+                        planner_error: None,
+                    }
+                }
+            }
+            Err(err) => {
+                counter!("shore_memory_worker_call_errors_total", "op" => "plan_query")
+                    .increment(1);
+                RecallQueryPlan {
+                    source: "planner_fallback".to_string(),
+                    subqueries: if fallback_query.is_empty() {
+                        Vec::new()
+                    } else {
+                        vec![fallback_query]
+                    },
+                    requested_auto_plan: true,
+                    planner_used: true,
+                    planner_degraded: true,
+                    planner_error: Some(format!("{err:#}")),
+                }
+            }
         }
-        counter!("shore_memory_cache_miss_total", "cache" => "recall").increment(1);
-        let limit = request
-            .limit
-            .unwrap_or(self.config.search_top_k)
-            .clamp(1, 32);
-        let want_debug = request.debug.unwrap_or(false);
-        let include_invalid_flag = request.include_invalid.unwrap_or(false);
-        // Snapshot "now" once at the top so every `is_currently_valid` check
-        // in this call sees the same cutoff.
-        let now = chrono::Utc::now().to_rfc3339();
-        let fetch_size = limit.saturating_mul(8).max(32);
+    }
 
-        // Semantic is always required — lack of embedding flags `degraded`.
-        let query_embedding = self.get_or_fetch_embedding(&request.query).await.ok();
+    async fn execute_recall_query(
+        &self,
+        request: &RecallRequest,
+        query: &str,
+        recipe: RecallRecipe,
+        request_scope: MemoryScope,
+        allowed_scopes: &[MemoryScope],
+        limit: usize,
+        fetch_size: usize,
+        include_invalid_flag: bool,
+        now: &str,
+    ) -> Result<RecallQueryExecution> {
+        use std::collections::{HashMap, HashSet};
+
+        let query_embedding = self.get_or_fetch_embedding(query).await.ok();
         let degraded = query_embedding.is_none();
-        if degraded {
-            counter!("shore_memory_recall_degraded_total", "reason" => "embedding_unavailable")
-                .increment(1);
-        }
 
-        // Signal A: semantic vector similarity.
         let mut semantic_map: HashMap<i64, f32> = HashMap::new();
         if let Some(vec) = query_embedding.clone() {
             let semantic_started = std::time::Instant::now();
@@ -1058,7 +1130,7 @@ impl AppState {
                     request.agent_id.clone(),
                     request.user_uid.clone(),
                     request.channel_uid.clone(),
-                    allowed_scopes.clone(),
+                    allowed_scopes.to_vec(),
                     vec,
                     fetch_size,
                     self.config.search_expand_depth,
@@ -1074,9 +1146,8 @@ impl AppState {
             }
         }
 
-        // Signal B: BM25.
         let mut bm25_map: HashMap<i64, f32> = HashMap::new();
-        if recipe.use_bm25() && !request.query.trim().is_empty() {
+        if recipe.use_bm25() && !query.trim().is_empty() {
             let bm25_started = std::time::Instant::now();
             let bm25_hits = self
                 .trivium
@@ -1084,8 +1155,8 @@ impl AppState {
                     request.agent_id.clone(),
                     request.user_uid.clone(),
                     request.channel_uid.clone(),
-                    allowed_scopes.clone(),
-                    request.query.clone(),
+                    allowed_scopes.to_vec(),
+                    query.to_string(),
                     fetch_size,
                     self.config.search_min_score,
                     include_invalid_flag,
@@ -1094,18 +1165,17 @@ impl AppState {
                 .unwrap_or_default();
             histogram!("shore_memory_trivium_search_duration_seconds", "kind" => "bm25")
                 .record(bm25_started.elapsed().as_secs_f64());
-            let (mid, steep) = bm25_params_for_query(&request.query);
+            let (mid, steep) = bm25_params_for_query(query);
             for hit in bm25_hits {
                 bm25_map.insert(hit.id as i64, normalize_bm25(hit.score, mid, steep));
             }
         }
 
-        // Signal C: entity boost with spread attenuation.
         let mut entity_map: HashMap<i64, f32> = HashMap::new();
         let mut entities_by_memory: HashMap<i64, Vec<EntityDraft>> = HashMap::new();
-        if recipe.use_entity() && !request.query.trim().is_empty() {
+        if recipe.use_entity() && !query.trim().is_empty() {
             let extract_started = std::time::Instant::now();
-            let extracted = match self.worker.extract_entities(&request.query, None).await {
+            let extracted = match self.worker.extract_entities(query, None).await {
                 Ok(v) => v,
                 Err(_) => {
                     counter!("shore_memory_worker_call_errors_total", "op" => "extract_entities")
@@ -1193,7 +1263,6 @@ impl AppState {
             }
         }
 
-        // Union of all candidate ids (semantic ∪ bm25 ∪ entity).
         let mut candidate_set: HashSet<i64> = HashSet::new();
         let mut candidate_order: Vec<i64> = Vec::new();
         let push_candidate = |set: &mut HashSet<i64>, order: &mut Vec<i64>, id: i64| {
@@ -1211,25 +1280,25 @@ impl AppState {
             push_candidate(&mut candidate_set, &mut candidate_order, *id);
         }
 
-        // Load records for the union.
-        let mut record_by_id: HashMap<i64, MemoryRecord> = if candidate_order.is_empty() {
-            HashMap::new()
-        } else {
-            self.store
-                .list_memories_by_ids(&candidate_order)?
-                .into_iter()
-                .map(|m| (m.id, m))
-                .collect()
-        };
+        if candidate_order.is_empty() {
+            return Ok(RecallQueryExecution {
+                scored_candidates: Vec::new(),
+                degraded,
+            });
+        }
 
-        // Signal D: contiguity — pull session-adjacent neighbors for the top
-        // semantic picks when the recipe enables it.
+        let mut record_by_id: HashMap<i64, MemoryRecord> = self
+            .store
+            .list_memories_by_ids(&candidate_order)?
+            .into_iter()
+            .map(|m| (m.id, m))
+            .collect();
+
         let mut contiguity_map: HashMap<i64, f32> = HashMap::new();
         if recipe.use_contiguity() && !semantic_map.is_empty() {
             let mut sorted: Vec<(i64, f32)> = semantic_map.iter().map(|(k, v)| (*k, *v)).collect();
             sorted.sort_by(|a, b| b.1.partial_cmp(&a.1).unwrap_or(std::cmp::Ordering::Equal));
             let seed_count = limit.min(sorted.len());
-            let mut extra_ids: Vec<i64> = Vec::new();
             for (mem_id, _) in sorted.iter().take(seed_count) {
                 let Some(mem) = record_by_id.get(mem_id) else {
                     continue;
@@ -1247,7 +1316,6 @@ impl AppState {
                 for neighbor in neighbors {
                     if candidate_set.insert(neighbor.id) {
                         candidate_order.push(neighbor.id);
-                        extra_ids.push(neighbor.id);
                     }
                     contiguity_map
                         .entry(neighbor.id)
@@ -1255,41 +1323,14 @@ impl AppState {
                     record_by_id.entry(neighbor.id).or_insert(neighbor);
                 }
             }
-            // Any ids that sneaked in and aren't yet loaded would be loaded above;
-            // `extra_ids` is kept for observability / future logging.
-            let _ = extra_ids;
         }
 
-        // If we still have nothing, fall back to recent memories (so the Bot
-        // is never completely blind during a cold start or degraded worker).
-        if candidate_order.is_empty() {
-            let recent = self
-                .store
-                .list_recent_memories(&request.agent_id, limit.saturating_mul(2).max(16))?;
-            for memory in recent {
-                if candidate_set.insert(memory.id) {
-                    candidate_order.push(memory.id);
-                    record_by_id.entry(memory.id).or_insert(memory);
-                }
-            }
-        }
-
-        // Apply the additive fusion.
         let weights = FusionWeights::for_recipe(
             recipe,
             self.config.entity_boost_weight,
             self.config.contiguity_boost_weight,
         );
-
-        struct Scored {
-            memory: MemoryRecord,
-            signals: FusionInputs,
-            scope_weight: f32,
-            combined: f32,
-            divisor: f32,
-        }
-
-        let mut scored_candidates: Vec<Scored> = Vec::new();
+        let mut scored_candidates: Vec<RecallScoredCandidate> = Vec::new();
         for id in &candidate_order {
             let Some(memory) = record_by_id.get(id) else {
                 continue;
@@ -1301,7 +1342,7 @@ impl AppState {
                 memory,
                 request.user_uid.as_deref(),
                 request.channel_uid.as_deref(),
-                &allowed_scopes,
+                allowed_scopes,
             ) {
                 continue;
             }
@@ -1309,9 +1350,7 @@ impl AppState {
             else {
                 continue;
             };
-            // Stage 3: drop superseded / invalidated / future-dated memories
-            // unless the caller explicitly opted into time-travel.
-            if !include_invalid_flag && !memory.is_currently_valid(&now) {
+            if !include_invalid_flag && !memory.is_currently_valid(now) {
                 continue;
             }
             let signals = FusionInputs {
@@ -1321,15 +1360,159 @@ impl AppState {
                 contiguity: contiguity_map.get(id).copied().unwrap_or(0.0),
             };
             let (combined, divisor) = additive_fuse(signals, weights);
-            scored_candidates.push(Scored {
+            scored_candidates.push(RecallScoredCandidate {
                 memory: memory.clone(),
                 signals,
                 scope_weight,
                 combined: combined * scope_weight,
                 divisor,
+                entities: entities_by_memory.remove(id).unwrap_or_default(),
             });
         }
 
+        Ok(RecallQueryExecution {
+            scored_candidates,
+            degraded,
+        })
+    }
+
+    #[tracing::instrument(skip(self, request), fields(agent_id = %request.agent_id))]
+    pub async fn handle_recall(&self, request: RecallRequest) -> Result<RecallResponse> {
+        use std::collections::HashMap;
+
+        let _reindex_guard = self.reindex_lock.read().await;
+        let started = std::time::Instant::now();
+        let recipe = RecallRecipe::parse(request.recipe.as_deref());
+        let recipe_label = recipe.as_str();
+        let request_scope = infer_scope(request.scope_hint, request.channel_uid.as_deref());
+        let selected_scopes =
+            selected_recall_scopes(request_scope, request.selected_scopes.as_deref());
+        let allowed_scopes = self.allowed_recall_scopes(request_scope, &selected_scopes);
+
+        let recall_epoch = self.recall_epoch.get(&request.agent_id).await.unwrap_or(0);
+        let cache_key = cache_key_for_recall(&request, recall_epoch);
+        if let Some(cached) = self.recall_cache.get(&cache_key).await {
+            counter!("shore_memory_cache_hit_total", "cache" => "recall").increment(1);
+            histogram!("shore_memory_recall_duration_seconds", "recipe" => recipe_label, "degraded" => if cached.degraded { "true" } else { "false" })
+                .record(started.elapsed().as_secs_f64());
+            return Ok(cached);
+        }
+        counter!("shore_memory_cache_miss_total", "cache" => "recall").increment(1);
+
+        let limit = request
+            .limit
+            .unwrap_or(self.config.search_top_k)
+            .clamp(1, 32);
+        let want_debug = request.debug.unwrap_or(false);
+        let include_invalid_flag = request.include_invalid.unwrap_or(false);
+        let now = chrono::Utc::now().to_rfc3339();
+        let fetch_size = limit.saturating_mul(8).max(32);
+        let weights = FusionWeights::for_recipe(
+            recipe,
+            self.config.entity_boost_weight,
+            self.config.contiguity_boost_weight,
+        );
+        let (_, zero_divisor) = additive_fuse(FusionInputs::default(), weights);
+
+        let query_plan = self.resolve_recall_query_plan(&request).await;
+        let mut degraded = false;
+        let mut aggregated: HashMap<i64, AggregatedRecallCandidate> = HashMap::new();
+        for (query_index, query) in query_plan.subqueries.iter().enumerate() {
+            let execution = self
+                .execute_recall_query(
+                    &request,
+                    query,
+                    recipe,
+                    request_scope,
+                    &allowed_scopes,
+                    limit,
+                    fetch_size,
+                    include_invalid_flag,
+                    &now,
+                )
+                .await?;
+            degraded |= execution.degraded;
+            for candidate in execution.scored_candidates {
+                let entry = aggregated.entry(candidate.memory.id).or_insert_with(|| {
+                    AggregatedRecallCandidate {
+                        memory: candidate.memory.clone(),
+                        signals: candidate.signals,
+                        scope_weight: candidate.scope_weight,
+                        combined: candidate.combined,
+                        divisor: candidate.divisor,
+                        entities: candidate.entities.clone(),
+                        matched_subquery_indices: vec![query_index],
+                        best_subquery_index: Some(query_index),
+                    }
+                });
+                if !entry.matched_subquery_indices.contains(&query_index) {
+                    entry.matched_subquery_indices.push(query_index);
+                }
+                if !candidate.entities.is_empty() {
+                    entry.entities.extend(candidate.entities.clone());
+                }
+                if candidate.combined > entry.combined {
+                    entry.memory = candidate.memory;
+                    entry.signals = candidate.signals;
+                    entry.scope_weight = candidate.scope_weight;
+                    entry.combined = candidate.combined;
+                    entry.divisor = candidate.divisor;
+                    entry.best_subquery_index = Some(query_index);
+                }
+            }
+        }
+
+        if degraded {
+            counter!("shore_memory_recall_degraded_total", "reason" => "embedding_unavailable")
+                .increment(1);
+        }
+
+        if aggregated.is_empty() {
+            let recent = self
+                .store
+                .list_recent_memories(&request.agent_id, limit.saturating_mul(2).max(16))?;
+            for memory in recent {
+                if memory.archived_at.is_some() {
+                    continue;
+                }
+                if !scope_visible_for_selected_request(
+                    &memory,
+                    request.user_uid.as_deref(),
+                    request.channel_uid.as_deref(),
+                    &allowed_scopes,
+                ) {
+                    continue;
+                }
+                let Some(scope_weight) =
+                    self.config.scope_recall.weight(request_scope, memory.scope)
+                else {
+                    continue;
+                };
+                if !include_invalid_flag && !memory.is_currently_valid(&now) {
+                    continue;
+                }
+                aggregated
+                    .entry(memory.id)
+                    .or_insert(AggregatedRecallCandidate {
+                        memory,
+                        signals: FusionInputs::default(),
+                        scope_weight,
+                        combined: 0.0,
+                        divisor: zero_divisor,
+                        entities: Vec::new(),
+                        matched_subquery_indices: Vec::new(),
+                        best_subquery_index: None,
+                    });
+            }
+        }
+
+        let mut scored_candidates: Vec<AggregatedRecallCandidate> =
+            aggregated.into_values().collect();
+        for candidate in &mut scored_candidates {
+            candidate.matched_subquery_indices.sort_unstable();
+            candidate.matched_subquery_indices.dedup();
+            candidate.entities = dedupe_entity_drafts(std::mem::take(&mut candidate.entities));
+        }
         scored_candidates.sort_by(|a, b| {
             b.combined
                 .partial_cmp(&a.combined)
@@ -1356,13 +1539,16 @@ impl AppState {
                 } else {
                     None
                 };
-                let entities = entities_by_memory.remove(&s.memory.id).unwrap_or_default();
-                // Expose the memory lifecycle when the caller is actively
-                // poking at state (debug or time-travel). Keeping it `None`
-                // by default avoids leaking superseded data to callers that
-                // don't know about it.
                 let lifecycle = if want_debug || include_invalid_flag {
                     Some(s.memory.lifecycle())
+                } else {
+                    None
+                };
+                let query_debug = if want_debug {
+                    Some(MemoryQueryDebug {
+                        matched_subquery_indices: s.matched_subquery_indices,
+                        best_subquery_index: s.best_subquery_index,
+                    })
                 } else {
                     None
                 };
@@ -1373,8 +1559,9 @@ impl AppState {
                     scope: s.memory.scope,
                     score: Some(s.combined),
                     score_breakdown,
-                    entities,
+                    entities: s.entities,
                     lifecycle,
+                    query_debug,
                 }
             })
             .collect::<Vec<_>>();
@@ -1389,6 +1576,7 @@ impl AppState {
             memory_context,
             agent_state,
             degraded,
+            query_plan: Some(query_plan),
         };
         self.recall_cache.insert(cache_key, response.clone()).await;
         histogram!("shore_memory_recall_duration_seconds", "recipe" => recipe_label, "degraded" => if degraded { "true" } else { "false" })
@@ -1672,6 +1860,38 @@ impl AppState {
                             }
                         }
                     }
+                    "query_planner" => {
+                        let started = std::time::Instant::now();
+                        let result = self
+                            .worker
+                            .plan_query("帮我回忆用户的口味偏好和近期计划")
+                            .await;
+                        histogram!("shore_memory_worker_call_duration_seconds", "op" => "plan_query")
+                            .record(started.elapsed().as_secs_f64());
+                        match result {
+                            Ok(_) => ProviderTestResponse {
+                                ok: true,
+                                configured: true,
+                                message: "query planner call succeeded".to_string(),
+                                dimension: None,
+                                source: provider.source.clone(),
+                            },
+                            Err(err) => {
+                                counter!(
+                                    "shore_memory_worker_call_errors_total",
+                                    "op" => "plan_query"
+                                )
+                                .increment(1);
+                                ProviderTestResponse {
+                                    ok: false,
+                                    configured: true,
+                                    message: format!("query planner call failed: {err:#}"),
+                                    dimension: None,
+                                    source: provider.source.clone(),
+                                }
+                            }
+                        }
+                    }
                     "scorer" => {
                         let started = std::time::Instant::now();
                         let result = self
@@ -1796,7 +2016,11 @@ impl AppState {
             roles.insert(role.clone(), response);
         }
 
-        ModelConfigTestResponse { embedding, llm, roles }
+        ModelConfigTestResponse {
+            embedding,
+            llm,
+            roles,
+        }
     }
 
     async fn rebuild_all_embeddings_with_dim(&self, dim: usize) -> Result<(usize, usize, usize)> {
@@ -2668,18 +2892,22 @@ async fn list_provider_models(
         .map(str::trim)
         .filter(|value| !value.is_empty());
     let current: &RuntimeProviderConfig = match (preset_id, request.provider) {
-        (Some(id), ProviderKind::Embedding) => &runtime
-            .embedding_presets
-            .iter()
-            .find(|p| p.id == id)
-            .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
-            .provider,
-        (Some(id), ProviderKind::Llm) => &runtime
-            .llm_presets
-            .iter()
-            .find(|p| p.id == id)
-            .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
-            .provider,
+        (Some(id), ProviderKind::Embedding) => {
+            &runtime
+                .embedding_presets
+                .iter()
+                .find(|p| p.id == id)
+                .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
+                .provider
+        }
+        (Some(id), ProviderKind::Llm) => {
+            &runtime
+                .llm_presets
+                .iter()
+                .find(|p| p.id == id)
+                .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
+                .provider
+        }
         (None, ProviderKind::Embedding) => &runtime.embedding,
         (None, ProviderKind::Llm) => {
             if let Some(role) = request
@@ -3264,6 +3492,54 @@ fn decode_query_component(raw: &str) -> Option<String> {
         }
     }
     String::from_utf8(out).ok()
+}
+
+fn normalize_subqueries(raw: &[String]) -> Vec<String> {
+    use std::collections::HashSet;
+
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut out: Vec<String> = Vec::new();
+    for item in raw {
+        let trimmed = item.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+        let key = trimmed.to_lowercase();
+        if seen.insert(key) {
+            out.push(trimmed.to_string());
+        }
+        if out.len() >= 4 {
+            break;
+        }
+    }
+    out
+}
+
+fn dedupe_entity_drafts(raw: Vec<EntityDraft>) -> Vec<EntityDraft> {
+    use std::collections::HashSet;
+
+    let mut seen: HashSet<(String, String)> = HashSet::new();
+    let mut out: Vec<EntityDraft> = Vec::new();
+    for entity in raw {
+        let name = entity.name.trim();
+        if name.is_empty() {
+            continue;
+        }
+        let entity_type = entity.entity_type.trim();
+        let normalized_type = if entity_type.is_empty() {
+            "OTHER"
+        } else {
+            entity_type
+        };
+        let key = (name.to_lowercase(), normalized_type.to_lowercase());
+        if seen.insert(key) {
+            out.push(EntityDraft {
+                name: name.to_string(),
+                entity_type: normalized_type.to_string(),
+            });
+        }
+    }
+    out
 }
 
 fn cache_key_for_recall(request: &RecallRequest, recall_epoch: u64) -> String {

@@ -15,14 +15,21 @@ use serde::{Deserialize, Serialize};
 pub const ROLE_SCORER: &str = "scorer";
 pub const ROLE_REFLECTOR: &str = "reflector";
 pub const ROLE_QUERY_ANALYZER: &str = "query_analyzer";
+pub const ROLE_QUERY_PLANNER: &str = "query_planner";
 
-pub const KNOWN_ROLES: &[&str] = &[ROLE_SCORER, ROLE_REFLECTOR, ROLE_QUERY_ANALYZER];
+pub const KNOWN_ROLES: &[&str] = &[
+    ROLE_SCORER,
+    ROLE_REFLECTOR,
+    ROLE_QUERY_ANALYZER,
+    ROLE_QUERY_PLANNER,
+];
 
 pub fn default_role_temperature(role: &str) -> f32 {
     match role {
         ROLE_SCORER => 0.3,
         ROLE_REFLECTOR => 0.4,
         ROLE_QUERY_ANALYZER => 0.1,
+        ROLE_QUERY_PLANNER => 0.1,
         _ => 0.3,
     }
 }
@@ -850,10 +857,7 @@ fn resolve_preset_as_provider(
                 + usize::from(p.api_key.is_some())
         })
         .unwrap_or(0);
-    let total_fields = 2
-        + usize::from(include_dimension)
-        + usize::from(include_temperature)
-        + 1; // api_key
+    let total_fields = 2 + usize::from(include_dimension) + usize::from(include_temperature) + 1; // api_key
     let override_active = file_fields > 0;
     let source = if file_fields == 0 {
         "env".to_string()
@@ -890,11 +894,7 @@ pub fn apply_update(
         request.embedding_presets,
         &previous.embedding_presets,
     )?;
-    let llm_presets = merge_presets(
-        PresetKind::Llm,
-        request.llm_presets,
-        &previous.llm_presets,
-    )?;
+    let llm_presets = merge_presets(PresetKind::Llm, request.llm_presets, &previous.llm_presets)?;
 
     if embedding_presets.is_empty() {
         bail!("at least one embedding preset is required");
@@ -1059,8 +1059,16 @@ fn runtime_to_legacy_file(
     ProviderOverrideFile {
         api_base: Some(provider.api_base.clone()),
         model: Some(provider.model.clone()),
-        dimension: if is_embedding { provider.dimension } else { None },
-        temperature: if is_embedding { None } else { provider.temperature },
+        dimension: if is_embedding {
+            provider.dimension
+        } else {
+            None
+        },
+        temperature: if is_embedding {
+            None
+        } else {
+            provider.temperature
+        },
         api_key_mode: if provider.api_key.is_some() {
             SecretMode::Set
         } else {

@@ -17,6 +17,8 @@ const MAX_HISTORY = 20
 
 export interface RecallForm {
   query: string
+  subqueries_text: string
+  auto_plan: boolean
   recipe: RecallRecipeId
   user_uid: string
   channel_uid: string
@@ -112,6 +114,8 @@ function defaultVariant(
 function defaultForm(): RecallForm {
   return {
     query: '',
+    subqueries_text: '',
+    auto_plan: false,
     recipe: 'hybrid',
     user_uid: '',
     channel_uid: '',
@@ -140,6 +144,23 @@ function writeJson(key: string, value: unknown): void {
   } catch {
     /* ignore quota */
   }
+}
+
+function parseSubqueriesInput(raw: string): string[] {
+  const seen = new Set<string>()
+  const out: string[] = []
+  const segments = raw
+    .split(/\r?\n|[,;；，]/g)
+    .map((s) => s.trim())
+    .filter(Boolean)
+  for (const item of segments) {
+    const key = item.toLocaleLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    out.push(item)
+    if (out.length >= 4) break
+  }
+  return out
 }
 
 export const useRecallStore = defineStore('recall', () => {
@@ -228,9 +249,11 @@ export const useRecallStore = defineStore('recall', () => {
       const s = String(v).trim()
       return (s.length === 0 ? undefined : s) as T
     }
+    const subqueries = parseSubqueriesInput(form.subqueries_text)
     return {
       agent_id: app.agentId,
       query: form.query,
+      subqueries: subqueries.length ? subqueries : undefined,
       recipe: variant.config.recipe,
       user_uid: trimmed(form.user_uid) ?? undefined,
       channel_uid: trimmed(form.channel_uid) ?? undefined,
@@ -239,7 +262,8 @@ export const useRecallStore = defineStore('recall', () => {
       limit: form.limit,
       include_invalid: variant.config.include_invalid,
       include_state: variant.config.include_state,
-      debug: variant.config.debug
+      debug: variant.config.debug,
+      auto_plan: form.auto_plan
     }
   }
 
@@ -378,9 +402,11 @@ export const useRecallStore = defineStore('recall', () => {
       const s = String(v).trim()
       return (s.length === 0 ? undefined : s) as T
     }
+    const subqueries = parseSubqueriesInput(form.subqueries_text)
     return {
       agent_id: app.agentId,
       query: form.query,
+      subqueries: subqueries.length ? subqueries : undefined,
       recipe: form.recipe,
       user_uid: trimmed(form.user_uid) ?? undefined,
       channel_uid: trimmed(form.channel_uid) ?? undefined,
@@ -389,7 +415,8 @@ export const useRecallStore = defineStore('recall', () => {
       limit: form.limit,
       include_invalid: form.include_invalid,
       include_state: form.include_state,
-      debug: form.debug
+      debug: form.debug,
+      auto_plan: form.auto_plan
     }
   }
 

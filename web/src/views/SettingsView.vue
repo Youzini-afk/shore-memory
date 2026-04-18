@@ -22,7 +22,7 @@ import type {
   UpdateRoleBindingRequest
 } from '@/api/types'
 
-type RoleKey = 'scorer' | 'reflector' | 'query_analyzer'
+type RoleKey = 'scorer' | 'reflector' | 'query_analyzer' | 'query_planner'
 
 type ApiKeyAction = 'keep' | 'clear' | 'set'
 
@@ -60,6 +60,11 @@ const ROLE_META: Record<RoleKey, { label: string; description: string; defaultTe
   query_analyzer: {
     label: '查询分析器',
     description: '召回时 query 命名实体分析',
+    defaultTemperature: 0.1
+  },
+  query_planner: {
+    label: '查询规划器',
+    description: '多意图拆分 / 子查询规划',
     defaultTemperature: 0.1
   }
 }
@@ -99,7 +104,8 @@ const activeLlmPreset = computed(
 const roleForms = reactive<Record<RoleKey, RoleFormState>>({
   scorer: { presetId: '', temperature: '' },
   reflector: { presetId: '', temperature: '' },
-  query_analyzer: { presetId: '', temperature: '' }
+  query_analyzer: { presetId: '', temperature: '' },
+  query_planner: { presetId: '', temperature: '' }
 })
 
 /**
@@ -109,7 +115,8 @@ const roleForms = reactive<Record<RoleKey, RoleFormState>>({
 const promptForms = reactive<Record<RoleKey, string>>({
   scorer: '',
   reflector: '',
-  query_analyzer: ''
+  query_analyzer: '',
+  query_planner: ''
 })
 
 /**
@@ -123,7 +130,8 @@ const defaultPromptsError = ref<string | null>(null)
 const promptPreviewOpen = reactive<Record<RoleKey, boolean>>({
   scorer: false,
   reflector: false,
-  query_analyzer: false
+  query_analyzer: false,
+  query_planner: false
 })
 
 const modelConfigBusy = computed(
@@ -671,7 +679,8 @@ async function ensureDefaultPrompts(): Promise<Record<RoleKey, string> | null> {
     defaultPrompts.value = {
       scorer: map.scorer ?? '',
       reflector: map.reflector ?? '',
-      query_analyzer: map.query_analyzer ?? ''
+      query_analyzer: map.query_analyzer ?? '',
+      query_planner: map.query_planner ?? ''
     }
     return defaultPrompts.value
   } catch (err) {

@@ -201,6 +201,7 @@ export interface GraphResponse {
 export interface RecallRequest {
   agent_id: string
   query: string
+  subqueries?: string[]
   user_uid?: string | null
   channel_uid?: string | null
   session_uid?: string | null
@@ -210,6 +211,7 @@ export interface RecallRequest {
   scope_hint?: MemoryScopeHint
   selected_scopes?: MemoryScope[]
   debug?: boolean
+  auto_plan?: boolean
   /** fast / hybrid / entity_heavy / contiguous */
   recipe?: RecallRecipeId
   include_invalid?: boolean
@@ -243,6 +245,20 @@ export interface MemoryLifecycle {
   supersedes_memory_id?: number | null
 }
 
+export interface MemoryQueryDebug {
+  matched_subquery_indices: number[]
+  best_subquery_index?: number | null
+}
+
+export interface RecallQueryPlan {
+  source: string
+  subqueries: string[]
+  requested_auto_plan: boolean
+  planner_used: boolean
+  planner_degraded: boolean
+  planner_error?: string | null
+}
+
 export interface MemorySnippet {
   id: number
   time: string
@@ -252,12 +268,14 @@ export interface MemorySnippet {
   score_breakdown?: ScoreBreakdown | null
   entities?: EntityDraft[]
   lifecycle?: MemoryLifecycle | null
+  query_debug?: MemoryQueryDebug | null
 }
 
 export interface RecallResponse {
   memory_context: MemorySnippet[]
   agent_state?: AgentStateResponse | null
   degraded: boolean
+  query_plan?: RecallQueryPlan | null
 }
 
 /* ---------------- Agent state ---------------- */

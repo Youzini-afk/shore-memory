@@ -207,6 +207,30 @@ const hasQuery = computed(() => form.value.query.trim().length > 0)
       />
     </div>
 
+    <div class="mt-4">
+      <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
+        子查询（可选）
+      </div>
+      <PTextarea
+        v-model="form.subqueries_text"
+        :rows="3"
+        placeholder="显式多意图拆分，每行或用逗号分隔。留空则按 query / auto plan 决定。"
+      />
+      <div class="mt-1 text-[10.5px] text-ink-5">
+        最多 4 条；填写后优先使用你提供的子查询。
+      </div>
+    </div>
+
+    <label class="mt-4 flex items-center gap-3 cursor-pointer">
+      <PSwitch v-model="form.auto_plan" />
+      <div class="flex-1 min-w-0">
+        <div class="text-[12.5px] text-ink-1 font-display">自动规划子查询</div>
+        <div class="text-[10.5px] text-ink-4">
+          使用 `query_planner` 角色自动拆分 query；显式子查询不为空时将忽略自动规划结果。
+        </div>
+      </div>
+    </label>
+
     <!-- Recipe -->
     <div class="mt-4">
       <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">

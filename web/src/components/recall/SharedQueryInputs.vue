@@ -13,6 +13,7 @@ import PTextarea from '@/components/ui/PTextarea.vue'
 import PSlider from '@/components/ui/PSlider.vue'
 import PButton from '@/components/ui/PButton.vue'
 import PKbd from '@/components/ui/PKbd.vue'
+import PSwitch from '@/components/ui/PSwitch.vue'
 import { useRecallStore } from '@/stores/recall'
 
 const store = useRecallStore()
@@ -56,6 +57,30 @@ async function run() {
       placeholder="A/B 对比：同一查询跑两套配方 / 作用域 / 过滤"
       @submit="run"
     />
+
+    <div class="mt-4">
+      <div class="mb-1.5 text-[10.5px] font-display uppercase tracking-wider text-ink-4">
+        子查询（可选）
+      </div>
+      <PTextarea
+        v-model="form.subqueries_text"
+        :rows="3"
+        placeholder="显式多意图拆分，每行或用逗号分隔。对比模式下 A/B 共用这组子查询。"
+      />
+      <div class="mt-1 text-[10.5px] text-ink-5">
+        最多 4 条；留空可由自动规划生成。
+      </div>
+    </div>
+
+    <label class="mt-4 flex items-center gap-3 cursor-pointer">
+      <PSwitch v-model="form.auto_plan" />
+      <div class="flex-1 min-w-0">
+        <div class="text-[12.5px] text-ink-1 font-display">自动规划子查询</div>
+        <div class="text-[10.5px] text-ink-4">
+          对比模式下 A/B 共享同一自动规划结果，便于只比较召回配方差异。
+        </div>
+      </div>
+    </label>
 
     <div class="mt-4 grid grid-cols-2 gap-3">
       <div>

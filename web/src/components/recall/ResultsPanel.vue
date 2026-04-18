@@ -43,6 +43,8 @@ const hitsTone = computed<'default' | 'good' | 'muted'>(() => {
 })
 
 const agentState = computed(() => response.value?.agent_state ?? null)
+const queryPlan = computed(() => response.value?.query_plan ?? null)
+const plannedSubqueries = computed(() => queryPlan.value?.subqueries ?? [])
 </script>
 
 <template>
@@ -89,6 +91,35 @@ const agentState = computed(() => response.value?.agent_state ?? null)
         <div class="text-[11px] text-ink-3 mt-0.5">
           Worker 的 Embedding 服务暂不可用，已自动降级到 BM25 与实体信号。结果仍可用，但排序精度受影响。
         </div>
+      </div>
+    </div>
+
+    <div
+      v-if="queryPlan"
+      class="rounded-panel border border-shore-line/80 bg-shore-elev/30 px-4 py-3"
+    >
+      <div class="flex items-center justify-between gap-3 text-[11px] font-display">
+        <span class="uppercase tracking-[0.2em] text-ink-4">Query Plan</span>
+        <span class="text-ink-3">
+          {{ queryPlan.source }}
+          <span v-if="queryPlan.planner_degraded" class="text-sig-amber">· degraded</span>
+        </span>
+      </div>
+      <div class="mt-2 text-[11px] text-ink-4">
+        子查询 {{ queryPlan.subqueries.length }} 条
+        <span v-if="queryPlan.requested_auto_plan"> · 请求了自动规划</span>
+      </div>
+      <ul v-if="queryPlan.subqueries.length" class="mt-2 space-y-1.5">
+        <li
+          v-for="(item, index) in queryPlan.subqueries"
+          :key="`${index}:${item}`"
+          class="text-[11.5px] text-ink-2"
+        >
+          <span class="font-mono text-ink-4 mr-1">#{{ index + 1 }}</span>{{ item }}
+        </li>
+      </ul>
+      <div v-if="queryPlan.planner_error" class="mt-2 text-[11px] text-sig-amber">
+        planner error: {{ queryPlan.planner_error }}
       </div>
     </div>
 
@@ -165,6 +196,7 @@ const agentState = computed(() => response.value?.agent_state ?? null)
             :key="mem.id"
             :memory="mem"
             :rank="idx + 1"
+            :subqueries="plannedSubqueries"
           />
         </div>
       </div>

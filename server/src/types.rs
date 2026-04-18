@@ -44,7 +44,11 @@ impl std::str::FromStr for MemoryScope {
 
 pub fn default_recall_scopes(request_scope: MemoryScope) -> Vec<MemoryScope> {
     match request_scope {
-        MemoryScope::Private => vec![MemoryScope::Private, MemoryScope::Shared, MemoryScope::System],
+        MemoryScope::Private => vec![
+            MemoryScope::Private,
+            MemoryScope::Shared,
+            MemoryScope::System,
+        ],
         MemoryScope::Group => vec![MemoryScope::Group, MemoryScope::Shared, MemoryScope::System],
         MemoryScope::Shared => vec![MemoryScope::Shared, MemoryScope::System],
         MemoryScope::System => vec![MemoryScope::System, MemoryScope::Shared],
@@ -167,6 +171,8 @@ pub struct RecallRequest {
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
     pub query: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subqueries: Option<Vec<String>>,
     pub source: Option<String>,
     pub limit: Option<usize>,
     pub include_state: Option<bool>,
@@ -175,6 +181,8 @@ pub struct RecallRequest {
     pub selected_scopes: Option<Vec<MemoryScope>>,
     #[serde(default)]
     pub debug: Option<bool>,
+    #[serde(default)]
+    pub auto_plan: Option<bool>,
     /// Stage 2 recall recipes (fast / hybrid / entity_heavy / contiguous).
     #[serde(default)]
     pub recipe: Option<String>,
@@ -190,6 +198,8 @@ pub struct RecallResponse {
     pub memory_context: Vec<MemorySnippet>,
     pub agent_state: Option<AgentStateResponse>,
     pub degraded: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_plan: Option<RecallQueryPlan>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -208,6 +218,42 @@ pub struct MemorySnippet {
     /// active memories with no interesting state look the same as before.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub lifecycle: Option<MemoryLifecycle>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub query_debug: Option<MemoryQueryDebug>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScoreBreakdown {
+    pub semantic: f32,
+    pub bm25: f32,
+    pub entity: f32,
+    pub contiguity: f32,
+    pub scope_weight: f32,
+    pub combined: f32,
+    pub divisor: f32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RecallQueryPlan {
+    pub source: String,
+    #[serde(default)]
+    pub subqueries: Vec<String>,
+    #[serde(default)]
+    pub requested_auto_plan: bool,
+    #[serde(default)]
+    pub planner_used: bool,
+    #[serde(default)]
+    pub planner_degraded: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub planner_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MemoryQueryDebug {
+    #[serde(default)]
+    pub matched_subquery_indices: Vec<usize>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub best_subquery_index: Option<usize>,
 }
 
 /// Snapshot of a memory's temporal-fact lifecycle. Mirrors
@@ -221,28 +267,6 @@ pub struct MemoryLifecycle {
     pub invalid_at: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub supersedes_memory_id: Option<i64>,
-}
-
-/// Score breakdown exposed when `RecallRequest::debug == true`.
-///
-/// Stage 1 only populates `semantic`; the other signals stay at 0 until
-/// Stage 2 wires in BM25 / entity / contiguity boosts.
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ScoreBreakdown {
-    #[serde(default)]
-    pub semantic: f32,
-    #[serde(default)]
-    pub bm25: f32,
-    #[serde(default)]
-    pub entity: f32,
-    #[serde(default)]
-    pub contiguity: f32,
-    #[serde(default)]
-    pub scope_weight: f32,
-    #[serde(default)]
-    pub combined: f32,
-    #[serde(default)]
-    pub divisor: f32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -642,6 +666,17 @@ pub struct WorkerEmbedRequest {
 #[derive(Debug, Clone, Deserialize)]
 pub struct WorkerEmbedResponse {
     pub embedding: Vec<f32>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct WorkerPlanQueryRequest {
+    pub query: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct WorkerPlanQueryResponse {
+    #[serde(default)]
+    pub subqueries: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

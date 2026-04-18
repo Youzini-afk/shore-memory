@@ -11,6 +11,7 @@ import { useMemoriesStore } from '@/stores/memories'
 interface Props {
   memory: MemorySnippet
   rank: number
+  subqueries?: string[]
 }
 const props = defineProps<Props>()
 const router = useRouter()
@@ -46,6 +47,24 @@ const relTime = computed(() => {
 })
 
 const scopeLabel = computed(() => props.memory.scope)
+
+const matchedSubqueries = computed(() => {
+  const indices = props.memory.query_debug?.matched_subquery_indices ?? []
+  const source = props.subqueries ?? []
+  return indices
+    .map((index) => ({
+      index,
+      text: source[index] ?? `子查询 ${index + 1}`
+    }))
+    .filter((item) => Number.isFinite(item.index))
+})
+
+const bestSubqueryLabel = computed(() => {
+  const index = props.memory.query_debug?.best_subquery_index
+  if (index === null || index === undefined || index < 0) return null
+  const source = props.subqueries ?? []
+  return source[index] ?? `子查询 ${index + 1}`
+})
 
 interface BreakdownRow {
   key: keyof Pick<ScoreBreakdown, 'semantic' | 'bm25' | 'entity' | 'contiguity'>
@@ -201,6 +220,21 @@ function fmt(v: number): string {
           <span class="font-mono tabular text-ink-3">{{ memory.lifecycle?.invalid_at }}</span>
         </span>
       </div>
+
+      <div
+        v-if="matchedSubqueries.length"
+        class="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] text-ink-4"
+      >
+        <span class="font-display">命中子查询：</span>
+        <span
+          v-for="item in matchedSubqueries"
+          :key="item.index"
+          class="inline-flex items-center px-2 h-5 rounded-pill border border-shore-line/70 bg-shore-elev/60 text-ink-3"
+          :title="item.text"
+        >
+          #{{ item.index + 1 }}
+        </span>
+      </div>
     </button>
 
     <!-- Expanded pane -->
@@ -285,6 +319,10 @@ function fmt(v: number): string {
         <span v-if="memory.entities?.length">
           实体
           <span class="text-ink-2 ml-1 tabular">{{ memory.entities.length }}</span>
+        </span>
+        <span v-if="bestSubqueryLabel">
+          最佳子查询
+          <span class="text-ink-2 ml-1">{{ bestSubqueryLabel }}</span>
         </span>
       </div>
 

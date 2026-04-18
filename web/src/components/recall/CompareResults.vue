@@ -71,9 +71,30 @@ function columnMeta(which: 'a' | 'b') {
             <span v-if="columnMeta(which).response?.degraded" class="text-sig-amber">
               · 已降级
             </span>
+            <span v-if="columnMeta(which).response?.query_plan" class="text-ink-5"> · </span>
+            <span v-if="columnMeta(which).response?.query_plan" class="text-[10.5px] font-display text-ink-4">
+              {{ columnMeta(which).response?.query_plan?.source }} ({{ columnMeta(which).response?.query_plan?.subqueries.length ?? 0 }} 条子查询)
+            </span>
           </template>
           <span v-else class="text-ink-5">—</span>
         </span>
+      </div>
+
+      <div
+        v-if="columnMeta(which).response?.query_plan"
+        class="px-5 py-2 border-b border-shore-line/60 bg-shore-elev/25"
+      >
+        <div class="text-[10.5px] font-display text-ink-4 flex items-center gap-2">
+          <span>plan: {{ columnMeta(which).response?.query_plan?.source }}</span>
+          <span class="text-ink-5">·</span>
+          <span>{{ columnMeta(which).response?.query_plan?.subqueries.length ?? 0 }} 条子查询</span>
+          <span
+            v-if="columnMeta(which).response?.query_plan?.planner_degraded"
+            class="text-sig-amber"
+          >
+            · degraded
+          </span>
+        </div>
       </div>
 
       <div class="p-4">
@@ -148,7 +169,11 @@ function columnMeta(which: 'a' | 'b') {
                 Δ {{ driftById.get(mem.id) }}
               </span>
             </div>
-            <HitCard :memory="mem" :rank="idx + 1" />
+            <HitCard
+              :memory="mem"
+              :rank="idx + 1"
+              :subqueries="columnMeta(which).response?.query_plan?.subqueries ?? []"
+            />
           </div>
         </div>
       </div>

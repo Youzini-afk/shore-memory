@@ -9,8 +9,8 @@ use tokio::time::timeout;
 use crate::config::ServiceConfig;
 use crate::types::{
     EntityDraft, ReflectionMemoryInput, WorkerEmbedRequest, WorkerEmbedResponse, WorkerMemoryDraft,
-    WorkerReflectionRequest, WorkerReflectionResponse, WorkerScoreTurnRequest,
-    WorkerScoreTurnResponse,
+    WorkerPlanQueryRequest, WorkerPlanQueryResponse, WorkerReflectionRequest,
+    WorkerReflectionResponse, WorkerScoreTurnRequest, WorkerScoreTurnResponse,
 };
 
 #[derive(Debug, Clone, Serialize)]
@@ -205,6 +205,28 @@ impl WorkerClient {
                 .await
                 .context("worker extract_entities response parse failed")?;
             Ok(response.entities)
+        })
+        .await
+    }
+
+    pub async fn plan_query(&self, query: &str) -> Result<Vec<String>> {
+        let url = format!("{}/v1/tasks/plan-query", self.base_url);
+        Self::run_with_timeout("plan_query", self.timeout_default, async {
+            let response = self
+                .client
+                .post(url)
+                .json(&WorkerPlanQueryRequest {
+                    query: query.to_string(),
+                })
+                .send()
+                .await
+                .context("worker plan_query request failed")?
+                .error_for_status()
+                .context("worker plan_query returned error")?
+                .json::<WorkerPlanQueryResponse>()
+                .await
+                .context("worker plan_query response parse failed")?;
+            Ok(response.subqueries)
         })
         .await
     }
