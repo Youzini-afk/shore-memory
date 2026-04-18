@@ -34,7 +34,12 @@ type GenerationFieldKey =
   | 'presence_penalty'
   | 'seed'
 
-type RoleGenerationForm = Record<GenerationFieldKey, string>
+/** Tri-state value for the json_mode toggle. Empty = follow worker default. */
+type JsonModeChoice = '' | 'true' | 'false'
+
+type RoleGenerationForm = Record<GenerationFieldKey, string> & {
+  json_mode: JsonModeChoice
+}
 
 type ApiKeyAction = 'keep' | 'clear' | 'set'
 
@@ -96,7 +101,8 @@ function emptyGenerationForm(): RoleGenerationForm {
     max_tokens: '',
     frequency_penalty: '',
     presence_penalty: '',
-    seed: ''
+    seed: '',
+    json_mode: ''
   }
 }
 
@@ -350,12 +356,20 @@ function hydrateGeneration(config: ModelConfigResponse) {
     const params = (binding?.generation_params ?? {}) as RoleGenerationParams
     const stringify = (value: number | null | undefined): string =>
       value !== null && value !== undefined ? String(value) : ''
+    // tri-state: undefined/null => '' (follow default), true/false => explicit
+    const jsonModeChoice: JsonModeChoice =
+      params.json_mode === true
+        ? 'true'
+        : params.json_mode === false
+          ? 'false'
+          : ''
     generationForms[role] = {
       top_p: stringify(params.top_p ?? null),
       max_tokens: stringify(params.max_tokens ?? null),
       frequency_penalty: stringify(params.frequency_penalty ?? null),
       presence_penalty: stringify(params.presence_penalty ?? null),
-      seed: stringify(params.seed ?? null)
+      seed: stringify(params.seed ?? null),
+      json_mode: jsonModeChoice
     }
   }
 }
@@ -466,6 +480,10 @@ function buildUpdatePayload(options?: { autoDetectEmbeddingDimension?: boolean }
         ? Math.round(maxTokensNum)
         : undefined
     const seed = seedNum !== undefined ? Math.round(seedNum) : undefined
+    // Empty string = "follow default"; map to null so the server clears any
+    // previously-persisted override and the worker default takes over.
+    const json_mode: boolean | null =
+      gen.json_mode === 'true' ? true : gen.json_mode === 'false' ? false : null
     roleBindings[role] = {
       preset_id: presetId ? presetId : null,
       temperature: temperature === undefined ? null : temperature,
@@ -476,7 +494,8 @@ function buildUpdatePayload(options?: { autoDetectEmbeddingDimension?: boolean }
         max_tokens: max_tokens === undefined ? null : max_tokens,
         frequency_penalty: frequency_penalty === undefined ? null : frequency_penalty,
         presence_penalty: presence_penalty === undefined ? null : presence_penalty,
-        seed: seed === undefined ? null : seed
+        seed: seed === undefined ? null : seed,
+        json_mode
       }
     }
   }
@@ -800,6 +819,17 @@ function effectiveGenerationLabel(role: RoleKey, key: GenerationFieldKey): strin
     return String(Math.round(parsed))
   }
   return parsed.toFixed(2)
+}
+
+function effectiveJsonModeLabel(role: RoleKey): string {
+  switch (generationForms[role].json_mode) {
+    case 'true':
+      return '强制启用 (response_format=json_object)'
+    case 'false':
+      return '禁用 (不下发 response_format)'
+    default:
+      return '跟随默认 (启用)'
+  }
 }
 
 function anyGenerationOverridden(role: RoleKey): boolean {
@@ -1315,6 +1345,20 @@ onMounted(() => {
                         mono
                       />
                     </div>
+                    <div>
+                      <div class="text-[12px] text-ink-4 mb-1">JSON 输出模式 (response_format)</div>
+                      <select
+                        v-model="generationForms[activeRole].json_mode"
+                        class="h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+                      >
+                        <option value="">跟随默认（启用）</option>
+                        <option value="true">强制启用 json_object</option>
+                        <option value="false">禁用（不下发 response_format）</option>
+                      </select>
+                      <div class="text-[11px] text-ink-4 mt-1 leading-5">
+                        部分 provider（如某些 Anthropic 代理 / 本地模型）不支持 <span class="font-mono">response_format=json_object</span>，选择「禁用」后 worker 仅依靠 prompt 引导模型返回 JSON。若选择默认/启用但 provider 返回 400，worker 会自动降级重试一次。
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -1504,6 +1548,8 @@ onMounted(() => {
                   <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'presence_penalty') }}</div>
                   <div class="text-ink-4">Seed</div>
                   <div class="md:col-span-2 text-ink-1">{{ effectiveGenerationLabel(activeRole, 'seed') }}</div>
+                  <div class="text-ink-4">JSON 输出模式</div>
+                  <div class="md:col-span-2 text-ink-1">{{ effectiveJsonModeLabel(activeRole) }}</div>
                 </div>
               </div>
 

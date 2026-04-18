@@ -357,6 +357,13 @@ export interface RoleGenerationParams {
   frequency_penalty?: number | null
   presence_penalty?: number | null
   seed?: number | null
+  /**
+   * Per-role override for the `response_format={"type":"json_object"}` flag.
+   * - `undefined` / `null`: follow the worker default (currently enabled).
+   * - `true`: force the flag on.
+   * - `false`: suppress it (for providers that reject the parameter).
+   */
+  json_mode?: boolean | null
 }
 
 export interface RoleBindingResponse {

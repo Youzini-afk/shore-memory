@@ -135,6 +135,12 @@ pub struct RoleGenerationParamsFile {
     pub presence_penalty: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
+    /// Controls the per-role ``response_format={"type":"json_object"}`` flag
+    /// on the upstream Chat Completions request. ``None`` means "follow the
+    /// worker's built-in default" (currently *enabled*). ``Some(false)`` is
+    /// the escape hatch for providers that reject the parameter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_mode: Option<bool>,
 }
 
 impl RoleGenerationParamsFile {
@@ -144,6 +150,7 @@ impl RoleGenerationParamsFile {
             && self.frequency_penalty.is_none()
             && self.presence_penalty.is_none()
             && self.seed.is_none()
+            && self.json_mode.is_none()
     }
 }
 
@@ -215,6 +222,10 @@ pub struct ProviderOverrideFile {
     pub presence_penalty: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub seed: Option<i64>,
+    /// Role-only `response_format={"type":"json_object"}` toggle. ``None`` =
+    /// worker default (enabled); ``Some(false)`` = suppress.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub json_mode: Option<bool>,
 }
 
 // ============================================================================
@@ -1142,6 +1153,7 @@ fn runtime_to_legacy_file(
         frequency_penalty: None,
         presence_penalty: None,
         seed: None,
+        json_mode: None,
     }
 }
 
@@ -1159,6 +1171,7 @@ fn runtime_role_to_legacy_file(
         out.frequency_penalty = binding.generation_params.frequency_penalty;
         out.presence_penalty = binding.generation_params.presence_penalty;
         out.seed = binding.generation_params.seed;
+        out.json_mode = binding.generation_params.json_mode;
     }
     out
 }

@@ -112,6 +112,14 @@ _ROLE_GENERATION_PARAM_KEYS: tuple[str, ...] = (
     "seed",
 )
 
+# Regex inspired by ST-BME's `looksLikeJsonModeUnsupportedMessage`; matched
+# case-insensitively against an HTTP 400 body when `response_format` was set
+# so we can retry without it instead of bubbling the error up.
+_JSON_MODE_UNSUPPORTED_PATTERN = re.compile(
+    r"(response[_\- ]?format|json[_\- ]?mode|json[_\- ]?object|json[_\- ]?schema|structured output)",
+    re.IGNORECASE,
+)
+
 
 def _extract_generation_params(section: dict[str, Any]) -> dict[str, Any]:
     """Pull per-role generation parameter overrides out of a config section.
@@ -137,6 +145,20 @@ def _extract_generation_params(section: dict[str, Any]) -> dict[str, Any]:
     if seed is not None:
         out["seed"] = seed
     return out
+
+
+def _extract_json_mode(section: dict[str, Any]) -> Optional[bool]:
+    """Read the optional per-role ``json_mode`` toggle.
+
+    ``None`` means "follow the worker default" (currently True). Anything that
+    is not explicitly a boolean is treated as absent so a stray string cannot
+    accidentally disable the feature.
+    """
+
+    value = section.get("json_mode")
+    if isinstance(value, bool):
+        return value
+    return None
 
 
 def _resolve_provider_config(
@@ -225,6 +247,7 @@ def _resolve_role_config(
         temperature = _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3)
 
     generation_params = _extract_generation_params(role_override)
+    json_mode = _extract_json_mode(role_override)
 
     return {
         "api_key": api_key,
@@ -232,6 +255,7 @@ def _resolve_role_config(
         "model": model,
         "temperature": temperature,
         "generation_params": generation_params,
+        "json_mode": json_mode,
     }
 
 
@@ -1254,6 +1278,7 @@ class OpenAICompatClient:
         model: str,
         temperature: float = 0.3,
         generation_params: Optional[dict[str, Any]] = None,
+        json_mode: bool = True,
     ) -> None:
         self.api_key = api_key
         self.api_base = api_base.rstrip("/")
@@ -1267,6 +1292,11 @@ class OpenAICompatClient:
             for key, value in (generation_params or {}).items()
             if key in _ROLE_GENERATION_PARAM_KEYS and value is not None
         }
+        # When False, the per-request payload skips
+        # `response_format={"type":"json_object"}`. The worker still parses
+        # the string as JSON, so the provider is expected to honour the
+        # "strict JSON" instruction that lives in the system prompt.
+        self.json_mode: bool = bool(json_mode)
 
     @classmethod
     def from_env(cls, prefix: str) -> Optional["OpenAICompatClient"]:
@@ -1299,6 +1329,7 @@ class OpenAICompatClient:
             api_base=api_base,
             model=model,
             temperature=temperature if temperature is not None else 0.3,
+            json_mode=True,
         )
 
     @classmethod
@@ -1318,6 +1349,7 @@ class OpenAICompatClient:
             if temperature is None:
                 temperature = _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3)
             generation_params: dict[str, Any] = {}
+            json_mode_value: Optional[bool] = None
         else:
             temperature = float(
                 role_cfg.get("temperature", _ROLE_DEFAULT_TEMPERATURES.get(role, 0.3))
@@ -1334,6 +1366,12 @@ class OpenAICompatClient:
                 }
             else:
                 generation_params = _extract_generation_params(role_cfg)
+            # The operator opt-out travels on either the normalized role
+            # config (preferred) or the flat legacy snapshot.
+            json_mode_raw = role_cfg.get("json_mode")
+            if not isinstance(json_mode_raw, bool):
+                json_mode_raw = _extract_json_mode(role_cfg)
+            json_mode_value = json_mode_raw if isinstance(json_mode_raw, bool) else None
 
         api_key = str(role_cfg.get("api_key", "")).strip()
         api_base = str(role_cfg.get("api_base", "https://api.openai.com/v1")).strip()
@@ -1346,6 +1384,9 @@ class OpenAICompatClient:
             model=model,
             temperature=temperature,
             generation_params=generation_params,
+            # None => keep the worker default (True). Explicit False disables
+            # response_format for providers that do not support it.
+            json_mode=True if json_mode_value is None else json_mode_value,
         )
 
     async def chat_json(self, system_prompt: str, user_prompt: str) -> Optional[dict[str, Any]]:
@@ -1361,12 +1402,13 @@ class OpenAICompatClient:
         payload: dict[str, Any] = {
             "model": self.model,
             "temperature": self.temperature,
-            "response_format": {"type": "json_object"},
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         }
+        if self.json_mode:
+            payload["response_format"] = {"type": "json_object"}
         # Only forward generation parameters the operator explicitly set;
         # unset fields stay off the wire so the provider default applies.
         for key, value in self.generation_params.items():
@@ -1374,6 +1416,20 @@ class OpenAICompatClient:
 
         async with httpx.AsyncClient(timeout=12.0) as client:
             response = await client.post(url, headers=headers, json=payload)
+            # ST-BME-style auto-fallback: some OpenAI-compatible providers
+            # (e.g. certain Anthropic reverse proxies or local deployments)
+            # reject `response_format=json_object` with HTTP 400. Detect that
+            # once, strip the field, and retry; the surrounding prompt still
+            # instructs the model to return strict JSON.
+            if (
+                response.status_code == 400
+                and "response_format" in payload
+                and _JSON_MODE_UNSUPPORTED_PATTERN.search(response.text or "")
+            ):
+                retry_payload = {
+                    key: value for key, value in payload.items() if key != "response_format"
+                }
+                response = await client.post(url, headers=headers, json=retry_payload)
             response.raise_for_status()
             data = response.json()
 
