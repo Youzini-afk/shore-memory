@@ -295,6 +295,9 @@ export interface TaskActionResponse {
 
 /* ---------------- Model config ---------------- */
 
+export type ProviderKind = 'embedding' | 'llm'
+export type PresetKind = 'embedding' | 'llm'
+
 export interface ProviderConfigResponse {
   api_base: string
   model: string
@@ -308,20 +311,28 @@ export interface ProviderConfigResponse {
   override_active: boolean
 }
 
-export interface ProviderOverrideResponse {
-  api_base?: string | null
-  model?: string | null
-  dimension?: number | null
-  temperature?: number | null
-  api_key_mode: 'inherit' | 'clear' | 'set'
+export interface ModelPresetResponse {
+  id: string
+  name: string
+  kind: PresetKind
+  api_base: string
+  model: string
+  dimension?: number
+  temperature?: number
+  configured: boolean
   api_key_configured: boolean
   api_key_masked?: string | null
+  source: string
+  api_key_source: string
+  is_default: boolean
 }
 
-export interface ModelConfigOverridesResponse {
-  embedding: ProviderOverrideResponse
-  llm: ProviderOverrideResponse
-  roles: Record<string, ProviderOverrideResponse>
+export interface RoleBindingResponse {
+  preset_id?: string | null
+  temperature?: number | null
+  effective_preset_id?: string | null
+  follows_default: boolean
+  resolved: ProviderConfigResponse
 }
 
 export interface ModelConfigStorageResponse {
@@ -334,15 +345,18 @@ export interface ModelConfigResponse {
   embedding: ProviderConfigResponse
   llm: ProviderConfigResponse
   roles: Record<string, ProviderConfigResponse>
-  overrides: ModelConfigOverridesResponse
+  embedding_presets: ModelPresetResponse[]
+  llm_presets: ModelPresetResponse[]
+  default_embedding_preset?: string | null
+  default_llm_preset?: string | null
+  role_bindings: Record<string, RoleBindingResponse>
   storage: ModelConfigStorageResponse
 }
-
-export type ProviderKind = 'embedding' | 'llm'
 
 export interface ListProviderModelsRequest {
   provider: ProviderKind
   api_base: string
+  preset_id?: string
   role?: string
   api_key?: string
   clear_api_key: boolean
@@ -359,6 +373,7 @@ export interface ListProviderModelsResponse {
 export interface DetectEmbeddingDimensionRequest {
   api_base: string
   model: string
+  preset_id?: string
   api_key?: string
   clear_api_key: boolean
 }
@@ -370,30 +385,33 @@ export interface DetectEmbeddingDimensionResponse {
   api_key_source: string
 }
 
-export interface UpdateProviderConfigRequest {
-  api_base: string
-  model: string
-  dimension?: number
-  temperature?: number
-  api_key?: string
-  clear_api_key: boolean
-  auto_detect_dimension?: boolean
-}
-
-export interface UpdateRoleConfigRequest {
-  enabled: boolean
+export interface UpdatePresetRequest {
+  id: string
+  name: string
   api_base?: string
   model?: string
+  dimension?: number
   temperature?: number
-  api_key_mode?: 'inherit' | 'clear' | 'set'
+  /** New api key to persist. Ignored when clear_api_key / api_key_unchanged is set. */
   api_key?: string
-  clear_api_key: boolean
+  clear_api_key?: boolean
+  /** Ask the server to preserve the previously stored api key unchanged. */
+  api_key_unchanged?: boolean
+}
+
+export interface UpdateRoleBindingRequest {
+  /** null or undefined means "follow the currently-active default LLM preset". */
+  preset_id?: string | null
+  temperature?: number | null
 }
 
 export interface UpdateModelConfigRequest {
-  embedding: UpdateProviderConfigRequest
-  llm: UpdateProviderConfigRequest
-  roles?: Record<string, UpdateRoleConfigRequest>
+  embedding_presets: UpdatePresetRequest[]
+  llm_presets: UpdatePresetRequest[]
+  default_embedding_preset?: string
+  default_llm_preset?: string
+  role_bindings?: Record<string, UpdateRoleBindingRequest>
+  auto_detect_embedding_dimension?: boolean
 }
 
 export interface UpdateModelConfigResponse {

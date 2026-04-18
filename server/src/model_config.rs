@@ -1,4 +1,4 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashSet};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -9,10 +9,9 @@ use serde::{Deserialize, Serialize};
 
 // Role-based LLM responsibility split.
 //
-// Each role is a distinct LLM use case (see ``worker/app/main.py``). The
-// server only needs to know which roles exist so it can validate incoming
-// payloads and surface them in the model-config response; the actual prompts
-// and upstream calls live in the worker.
+// Each role is a distinct LLM use case (see ``worker/app/main.py``). Roles bind
+// to named LLM presets; a role may either reference a specific preset id or
+// leave the binding empty to inherit the currently-active default preset.
 pub const ROLE_SCORER: &str = "scorer";
 pub const ROLE_REFLECTOR: &str = "reflector";
 pub const ROLE_QUERY_ANALYZER: &str = "query_analyzer";
@@ -32,6 +31,33 @@ fn is_known_role(role: &str) -> bool {
     KNOWN_ROLES.iter().any(|candidate| *candidate == role)
 }
 
+// ============================================================================
+// Provider / preset kinds
+// ============================================================================
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderKind {
+    Embedding,
+    Llm,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum PresetKind {
+    Embedding,
+    Llm,
+}
+
+impl From<PresetKind> for ProviderKind {
+    fn from(kind: PresetKind) -> Self {
+        match kind {
+            PresetKind::Embedding => ProviderKind::Embedding,
+            PresetKind::Llm => ProviderKind::Llm,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum SecretMode {
@@ -46,6 +72,81 @@ impl Default for SecretMode {
     }
 }
 
+// ============================================================================
+// Persistent storage shape
+// ============================================================================
+
+/// A named, self-contained provider configuration. Multiple presets can coexist
+/// in a pool (embedding / LLM). For LLM, roles bind to a preset (or follow the
+/// pool default); the embedding pool always uses its default preset to serve
+/// the active embedding config for the rest of the system.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ModelPresetFile {
+    pub id: String,
+    pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_base: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Embedding-only: vector dimension for this provider/model.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dimension: Option<usize>,
+    /// LLM-only: suggested default temperature for this preset.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub api_key: Option<String>,
+}
+
+/// Per-role binding to an LLM preset. ``preset_id = None`` means "follow the
+/// currently-active default LLM preset"; ``temperature = None`` falls back to
+/// the preset's temperature, and then to the role's built-in default.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct RoleBindingFile {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preset_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+}
+
+/// On-disk representation of ``model-config.json``.
+///
+/// The authoritative data lives in the preset pools and role bindings. The
+/// server *also* writes a fully-resolved snapshot under the legacy
+/// ``embedding`` / ``llm`` / ``roles`` keys on every save so the Python worker
+/// (which still reads those keys directly) keeps working without a schema
+/// migration on its side. Older files that pre-date the preset redesign only
+/// populate the legacy fields; those are migrated in-memory on first read and
+/// rewritten in the new shape on first save.
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ModelConfigFile {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub embedding_presets: Vec<ModelPresetFile>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub llm_presets: Vec<ModelPresetFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_embedding_preset: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub default_llm_preset: Option<String>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub role_bindings: BTreeMap<String, RoleBindingFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub updated_at: Option<String>,
+
+    // --- Legacy / worker snapshot --------------------------------------------
+    // Written by the server on every save as the fully-resolved snapshot the
+    // worker already knows how to read. Also consumed on first read as the
+    // input of the legacy-to-preset migration.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub embedding: Option<ProviderOverrideFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub llm: Option<ProviderOverrideFile>,
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub roles: BTreeMap<String, ProviderOverrideFile>,
+}
+
+/// Legacy per-provider override / snapshot shape. Kept for backwards
+/// compatibility with older config files and as the worker-facing snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ProviderOverrideFile {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -62,25 +163,139 @@ pub struct ProviderOverrideFile {
     pub api_key: Option<String>,
 }
 
+// ============================================================================
+// Request shapes
+// ============================================================================
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct ModelConfigFile {
+pub struct UpdateModelConfigRequest {
     #[serde(default)]
-    pub embedding: ProviderOverrideFile,
+    pub embedding_presets: Vec<UpdatePresetRequest>,
     #[serde(default)]
-    pub llm: ProviderOverrideFile,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub roles: BTreeMap<String, ProviderOverrideFile>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub updated_at: Option<String>,
+    pub llm_presets: Vec<UpdatePresetRequest>,
+    #[serde(default)]
+    pub default_embedding_preset: Option<String>,
+    #[serde(default)]
+    pub default_llm_preset: Option<String>,
+    #[serde(default)]
+    pub role_bindings: BTreeMap<String, UpdateRoleBindingRequest>,
+    #[serde(default)]
+    pub auto_detect_embedding_dimension: bool,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdatePresetRequest {
+    pub id: String,
+    pub name: String,
+    #[serde(default)]
+    pub api_base: Option<String>,
+    #[serde(default)]
+    pub model: Option<String>,
+    #[serde(default)]
+    pub dimension: Option<usize>,
+    #[serde(default)]
+    pub temperature: Option<f32>,
+    /// New api key to persist. Ignored when ``clear_api_key`` or
+    /// ``api_key_unchanged`` is set.
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// Explicitly drop the stored api key.
+    #[serde(default)]
+    pub clear_api_key: bool,
+    /// Tell the server to preserve the previously stored api key.
+    #[serde(default)]
+    pub api_key_unchanged: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct UpdateRoleBindingRequest {
+    /// When ``None``, the role follows the currently-active default LLM preset.
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    /// Per-role temperature override. When ``None`` the preset's temperature
+    /// (or the role's built-in default) is used.
+    #[serde(default)]
+    pub temperature: Option<f32>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListProviderModelsRequest {
+    pub provider: ProviderKind,
+    pub api_base: String,
+    /// Pick up stored credentials from the referenced preset.
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    /// Legacy: when no ``preset_id`` is provided and ``provider`` is LLM,
+    /// a role identifier selects the preset that role currently resolves to.
+    #[serde(default)]
+    pub role: Option<String>,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub clear_api_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectEmbeddingDimensionRequest {
+    pub api_base: String,
+    pub model: String,
+    #[serde(default)]
+    pub preset_id: Option<String>,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub clear_api_key: bool,
+}
+
+// ============================================================================
+// Response shapes
+// ============================================================================
 
 #[derive(Debug, Clone, Serialize)]
 pub struct ModelConfigResponse {
     pub embedding: ProviderConfigResponse,
     pub llm: ProviderConfigResponse,
     pub roles: BTreeMap<String, ProviderConfigResponse>,
-    pub overrides: ModelConfigOverridesResponse,
+    pub embedding_presets: Vec<ModelPresetResponse>,
+    pub llm_presets: Vec<ModelPresetResponse>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_embedding_preset: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub default_llm_preset: Option<String>,
+    pub role_bindings: BTreeMap<String, RoleBindingResponse>,
     pub storage: ModelConfigStorageResponse,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ModelPresetResponse {
+    pub id: String,
+    pub name: String,
+    pub kind: PresetKind,
+    pub api_base: String,
+    pub model: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dimension: Option<usize>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    pub configured: bool,
+    pub api_key_configured: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub api_key_masked: Option<String>,
+    pub source: String,
+    pub api_key_source: String,
+    pub is_default: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RoleBindingResponse {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub preset_id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub effective_preset_id: Option<String>,
+    pub follows_default: bool,
+    pub resolved: ProviderConfigResponse,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -88,29 +303,6 @@ pub struct ModelConfigTestResponse {
     pub embedding: ProviderTestResponse,
     pub llm: ProviderTestResponse,
     pub roles: BTreeMap<String, ProviderTestResponse>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ModelConfigOverridesResponse {
-    pub embedding: ProviderOverrideResponse,
-    pub llm: ProviderOverrideResponse,
-    pub roles: BTreeMap<String, ProviderOverrideResponse>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-pub struct ProviderOverrideResponse {
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_base: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub model: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub dimension: Option<usize>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub temperature: Option<f32>,
-    pub api_key_mode: SecretMode,
-    pub api_key_configured: bool,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub api_key_masked: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -158,25 +350,6 @@ pub struct ProviderConfigResponse {
     pub override_active: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub enum ProviderKind {
-    Embedding,
-    Llm,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct ListProviderModelsRequest {
-    pub provider: ProviderKind,
-    pub api_base: String,
-    #[serde(default)]
-    pub role: Option<String>,
-    #[serde(default)]
-    pub api_key: Option<String>,
-    #[serde(default)]
-    pub clear_api_key: bool,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct ListProviderModelsResponse {
     pub provider: ProviderKind,
@@ -186,64 +359,12 @@ pub struct ListProviderModelsResponse {
     pub api_key_source: String,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct DetectEmbeddingDimensionRequest {
-    pub api_base: String,
-    pub model: String,
-    #[serde(default)]
-    pub api_key: Option<String>,
-    #[serde(default)]
-    pub clear_api_key: bool,
-}
-
 #[derive(Debug, Clone, Serialize)]
 pub struct DetectEmbeddingDimensionResponse {
     pub model: String,
     pub dimension: usize,
     pub source: String,
     pub api_key_source: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateModelConfigRequest {
-    pub embedding: UpdateProviderConfigRequest,
-    pub llm: UpdateProviderConfigRequest,
-    #[serde(default)]
-    pub roles: Option<BTreeMap<String, UpdateRoleConfigRequest>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct UpdateProviderConfigRequest {
-    pub api_base: String,
-    pub model: String,
-    #[serde(default)]
-    pub dimension: Option<usize>,
-    #[serde(default)]
-    pub temperature: Option<f32>,
-    #[serde(default)]
-    pub api_key: Option<String>,
-    #[serde(default)]
-    pub clear_api_key: bool,
-    #[serde(default)]
-    pub auto_detect_dimension: bool,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
-pub struct UpdateRoleConfigRequest {
-    #[serde(default = "default_true")]
-    pub enabled: bool,
-    #[serde(default)]
-    pub api_base: Option<String>,
-    #[serde(default)]
-    pub model: Option<String>,
-    #[serde(default)]
-    pub temperature: Option<f32>,
-    #[serde(default)]
-    pub api_key_mode: Option<SecretMode>,
-    #[serde(default)]
-    pub api_key: Option<String>,
-    #[serde(default)]
-    pub clear_api_key: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -255,11 +376,35 @@ pub struct ResolvedProviderProbe {
     pub api_key_source: String,
 }
 
+// ============================================================================
+// Runtime shape
+// ============================================================================
+
 #[derive(Debug, Clone, PartialEq)]
 pub struct RuntimeModelConfig {
     pub embedding: RuntimeProviderConfig,
     pub llm: RuntimeProviderConfig,
     pub roles: BTreeMap<String, RuntimeProviderConfig>,
+    pub embedding_presets: Vec<RuntimePreset>,
+    pub llm_presets: Vec<RuntimePreset>,
+    pub default_embedding_preset: Option<String>,
+    pub default_llm_preset: Option<String>,
+    pub role_bindings: BTreeMap<String, RuntimeRoleBinding>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimePreset {
+    pub id: String,
+    pub name: String,
+    pub kind: PresetKind,
+    pub provider: RuntimeProviderConfig,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct RuntimeRoleBinding {
+    pub preset_id: Option<String>,
+    pub temperature: Option<f32>,
+    pub effective_preset_id: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -284,30 +429,41 @@ impl RuntimeProviderConfig {
     }
 }
 
-impl ProviderOverrideFile {
-    fn has_nonsecret_override(&self, include_dimension: bool, include_temperature: bool) -> bool {
-        self.api_base.is_some()
-            || self.model.is_some()
-            || (include_dimension && self.dimension.is_some())
-            || (include_temperature && self.temperature.is_some())
-    }
-}
-
 impl RuntimeModelConfig {
     pub fn to_response(&self, path: &Path, file: Option<&ModelConfigFile>) -> ModelConfigResponse {
-        let overrides = ModelConfigOverridesResponse {
-            embedding: provider_override_to_response(file.map(|value| &value.embedding)),
-            llm: provider_override_to_response(file.map(|value| &value.llm)),
-            roles: KNOWN_ROLES
-                .iter()
-                .map(|role| {
-                    (
-                        (*role).to_string(),
-                        provider_override_to_response(file.and_then(|value| value.roles.get(*role))),
-                    )
-                })
-                .collect(),
-        };
+        let embedding_presets = self
+            .embedding_presets
+            .iter()
+            .map(|preset| preset_to_response(preset, self.default_embedding_preset.as_deref()))
+            .collect();
+        let llm_presets = self
+            .llm_presets
+            .iter()
+            .map(|preset| preset_to_response(preset, self.default_llm_preset.as_deref()))
+            .collect();
+
+        let role_bindings = self
+            .role_bindings
+            .iter()
+            .map(|(role, binding)| {
+                let resolved = self
+                    .roles
+                    .get(role)
+                    .cloned()
+                    .unwrap_or_else(|| self.llm.clone());
+                (
+                    role.clone(),
+                    RoleBindingResponse {
+                        preset_id: binding.preset_id.clone(),
+                        temperature: binding.temperature,
+                        effective_preset_id: binding.effective_preset_id.clone(),
+                        follows_default: binding.preset_id.is_none(),
+                        resolved: provider_to_response(&resolved),
+                    },
+                )
+            })
+            .collect();
+
         ModelConfigResponse {
             embedding: provider_to_response(&self.embedding),
             llm: provider_to_response(&self.llm),
@@ -316,7 +472,11 @@ impl RuntimeModelConfig {
                 .iter()
                 .map(|(role, provider)| (role.clone(), provider_to_response(provider)))
                 .collect(),
-            overrides,
+            embedding_presets,
+            llm_presets,
+            default_embedding_preset: self.default_embedding_preset.clone(),
+            default_llm_preset: self.default_llm_preset.clone(),
+            role_bindings,
             storage: ModelConfigStorageResponse {
                 path: path.display().to_string(),
                 override_active: file.is_some(),
@@ -325,6 +485,10 @@ impl RuntimeModelConfig {
         }
     }
 }
+
+// ============================================================================
+// File IO
+// ============================================================================
 
 pub fn model_config_path(data_dir: &Path) -> PathBuf {
     data_dir.join("model-config.json")
@@ -338,7 +502,7 @@ pub fn read_model_config_file(path: &Path) -> Result<Option<ModelConfigFile>> {
         .with_context(|| format!("failed to read model config file: {}", path.display()))?;
     let parsed = serde_json::from_str::<ModelConfigFile>(&raw)
         .with_context(|| format!("failed to parse model config file: {}", path.display()))?;
-    Ok(Some(parsed))
+    Ok(Some(migrate_legacy_in_memory(parsed)))
 }
 
 pub fn write_model_config_file(path: &Path, config: &ModelConfigFile) -> Result<()> {
@@ -368,52 +532,498 @@ pub fn load_runtime_model_config(
     Ok((runtime, file))
 }
 
-pub fn resolve_runtime_model_config(file: Option<&ModelConfigFile>) -> RuntimeModelConfig {
-    let llm = resolve_provider(EnvProviderConfig::llm(), file.map(|value| &value.llm));
-    RuntimeModelConfig {
-        embedding: resolve_provider(
-            EnvProviderConfig::embedding(),
-            file.map(|value| &value.embedding),
-        ),
-        llm: llm.clone(),
-        roles: KNOWN_ROLES
-            .iter()
-            .map(|role| {
-                (
-                    (*role).to_string(),
-                    resolve_role_provider(*role, &llm, file.and_then(|value| value.roles.get(*role))),
-                )
-            })
-            .collect(),
-    }
-}
-
 pub fn embedding_dim_from_env_or_file(path: &Path) -> Result<usize> {
     let (runtime, _) = load_runtime_model_config(path)?;
     Ok(runtime.embedding.dimension.unwrap_or(1536).max(1))
 }
 
+// ============================================================================
+// Legacy migration
+// ============================================================================
+
+/// Migrate a parsed ``ModelConfigFile`` whose only populated fields are the
+/// legacy flat shape (``embedding`` / ``llm`` / ``roles``) into the preset
+/// pool shape. Files that already expose presets are returned as-is.
+pub fn migrate_legacy_in_memory(mut file: ModelConfigFile) -> ModelConfigFile {
+    if !file.embedding_presets.is_empty() || !file.llm_presets.is_empty() {
+        return file;
+    }
+
+    let legacy_embedding = file.embedding.take().unwrap_or_default();
+    let legacy_llm = file.llm.take().unwrap_or_default();
+    let legacy_roles = std::mem::take(&mut file.roles);
+
+    let embedding_preset = ModelPresetFile {
+        id: "embedding-default".to_string(),
+        name: "默认".to_string(),
+        api_base: legacy_embedding.api_base,
+        model: legacy_embedding.model,
+        dimension: legacy_embedding.dimension,
+        temperature: None,
+        api_key: legacy_embedding.api_key,
+    };
+
+    let llm_default = ModelPresetFile {
+        id: "llm-default".to_string(),
+        name: "默认".to_string(),
+        api_base: legacy_llm.api_base,
+        model: legacy_llm.model,
+        dimension: None,
+        temperature: legacy_llm.temperature,
+        api_key: legacy_llm.api_key,
+    };
+
+    let mut llm_presets = vec![llm_default];
+    let mut role_bindings: BTreeMap<String, RoleBindingFile> = BTreeMap::new();
+
+    for (role, legacy_role) in legacy_roles {
+        if !is_known_role(&role) {
+            continue;
+        }
+        let has_provider_override = legacy_role.api_base.is_some()
+            || legacy_role.model.is_some()
+            || legacy_role.api_key.is_some();
+
+        if has_provider_override {
+            let preset_id = format!("llm-role-{role}");
+            llm_presets.push(ModelPresetFile {
+                id: preset_id.clone(),
+                name: format!("{role} 旧定制"),
+                api_base: legacy_role.api_base,
+                model: legacy_role.model,
+                dimension: None,
+                temperature: None,
+                api_key: legacy_role.api_key,
+            });
+            role_bindings.insert(
+                role,
+                RoleBindingFile {
+                    preset_id: Some(preset_id),
+                    temperature: legacy_role.temperature,
+                },
+            );
+        } else if legacy_role.temperature.is_some() {
+            role_bindings.insert(
+                role,
+                RoleBindingFile {
+                    preset_id: None,
+                    temperature: legacy_role.temperature,
+                },
+            );
+        }
+    }
+
+    file.embedding_presets = vec![embedding_preset];
+    file.llm_presets = llm_presets;
+    file.default_embedding_preset = Some("embedding-default".to_string());
+    file.default_llm_preset = Some("llm-default".to_string());
+    file.role_bindings = role_bindings;
+    file
+}
+
+// ============================================================================
+// Runtime resolution
+// ============================================================================
+
+pub fn resolve_runtime_model_config(file: Option<&ModelConfigFile>) -> RuntimeModelConfig {
+    let migrated_owned;
+    let file_ref: Option<&ModelConfigFile> = match file {
+        Some(f) if f.embedding_presets.is_empty() && f.llm_presets.is_empty() => {
+            migrated_owned = Some(migrate_legacy_in_memory(f.clone()));
+            migrated_owned.as_ref()
+        }
+        Some(f) => {
+            migrated_owned = None;
+            let _ = &migrated_owned;
+            Some(f)
+        }
+        None => {
+            migrated_owned = None;
+            let _ = &migrated_owned;
+            None
+        }
+    };
+
+    let embedding_env = EnvProviderConfig::embedding();
+    let llm_env = EnvProviderConfig::llm();
+
+    let embedding_presets: Vec<RuntimePreset> = match file_ref {
+        Some(f) => f
+            .embedding_presets
+            .iter()
+            .map(|preset| RuntimePreset {
+                id: preset.id.clone(),
+                name: preset.name.clone(),
+                kind: PresetKind::Embedding,
+                provider: resolve_preset_as_provider(
+                    PresetKind::Embedding,
+                    Some(preset),
+                    &embedding_env,
+                ),
+            })
+            .collect(),
+        None => vec![RuntimePreset {
+            id: "embedding-default".to_string(),
+            name: "默认".to_string(),
+            kind: PresetKind::Embedding,
+            provider: resolve_preset_as_provider(PresetKind::Embedding, None, &embedding_env),
+        }],
+    };
+
+    let llm_presets: Vec<RuntimePreset> = match file_ref {
+        Some(f) => f
+            .llm_presets
+            .iter()
+            .map(|preset| RuntimePreset {
+                id: preset.id.clone(),
+                name: preset.name.clone(),
+                kind: PresetKind::Llm,
+                provider: resolve_preset_as_provider(PresetKind::Llm, Some(preset), &llm_env),
+            })
+            .collect(),
+        None => vec![RuntimePreset {
+            id: "llm-default".to_string(),
+            name: "默认".to_string(),
+            kind: PresetKind::Llm,
+            provider: resolve_preset_as_provider(PresetKind::Llm, None, &llm_env),
+        }],
+    };
+
+    let default_embedding = file_ref
+        .and_then(|f| f.default_embedding_preset.clone())
+        .filter(|id| embedding_presets.iter().any(|p| &p.id == id))
+        .or_else(|| embedding_presets.first().map(|p| p.id.clone()));
+    let default_llm = file_ref
+        .and_then(|f| f.default_llm_preset.clone())
+        .filter(|id| llm_presets.iter().any(|p| &p.id == id))
+        .or_else(|| llm_presets.first().map(|p| p.id.clone()));
+
+    let embedding = default_embedding
+        .as_ref()
+        .and_then(|id| embedding_presets.iter().find(|p| &p.id == id))
+        .or_else(|| embedding_presets.first())
+        .map(|p| p.provider.clone())
+        .unwrap_or_else(|| resolve_preset_as_provider(PresetKind::Embedding, None, &embedding_env));
+
+    let llm = default_llm
+        .as_ref()
+        .and_then(|id| llm_presets.iter().find(|p| &p.id == id))
+        .or_else(|| llm_presets.first())
+        .map(|p| p.provider.clone())
+        .unwrap_or_else(|| resolve_preset_as_provider(PresetKind::Llm, None, &llm_env));
+
+    let mut roles = BTreeMap::new();
+    let mut role_bindings_runtime: BTreeMap<String, RuntimeRoleBinding> = BTreeMap::new();
+
+    for role in KNOWN_ROLES {
+        let binding_file = file_ref
+            .and_then(|f| f.role_bindings.get(*role))
+            .cloned()
+            .unwrap_or_default();
+
+        let target_preset_id = binding_file
+            .preset_id
+            .clone()
+            .filter(|id| llm_presets.iter().any(|p| &p.id == id))
+            .or_else(|| default_llm.clone());
+
+        let base_provider = target_preset_id
+            .as_ref()
+            .and_then(|id| llm_presets.iter().find(|p| &p.id == id))
+            .map(|p| p.provider.clone())
+            .unwrap_or_else(|| llm.clone());
+
+        let temperature = binding_file
+            .temperature
+            .or(base_provider.temperature)
+            .or(Some(default_role_temperature(role)));
+
+        let mut role_provider = base_provider;
+        role_provider.temperature = temperature;
+        role_provider.dimension = None;
+
+        roles.insert((*role).to_string(), role_provider);
+        role_bindings_runtime.insert(
+            (*role).to_string(),
+            RuntimeRoleBinding {
+                preset_id: binding_file.preset_id.clone(),
+                temperature: binding_file.temperature,
+                effective_preset_id: target_preset_id,
+            },
+        );
+    }
+
+    RuntimeModelConfig {
+        embedding,
+        llm,
+        roles,
+        embedding_presets,
+        llm_presets,
+        default_embedding_preset: default_embedding,
+        default_llm_preset: default_llm,
+        role_bindings: role_bindings_runtime,
+    }
+}
+
+fn resolve_preset_as_provider(
+    kind: PresetKind,
+    preset: Option<&ModelPresetFile>,
+    env: &EnvProviderConfig,
+) -> RuntimeProviderConfig {
+    let include_dimension = matches!(kind, PresetKind::Embedding);
+    let include_temperature = matches!(kind, PresetKind::Llm);
+
+    let api_base = preset
+        .and_then(|p| normalize_optional_string(p.api_base.as_deref()))
+        .unwrap_or_else(|| env.api_base.clone());
+    let model = preset
+        .and_then(|p| normalize_optional_string(p.model.as_deref()))
+        .unwrap_or_else(|| env.model.clone());
+    let dimension = if include_dimension {
+        preset
+            .and_then(|p| p.dimension)
+            .or(env.dimension)
+            .map(|v| v.max(1))
+    } else {
+        None
+    };
+    let temperature = if include_temperature {
+        preset.and_then(|p| p.temperature).or(env.temperature)
+    } else {
+        None
+    };
+
+    let api_key_from_preset = preset
+        .and_then(|p| p.api_key.as_ref())
+        .map(|value| value.trim())
+        .filter(|v| !v.is_empty())
+        .map(ToOwned::to_owned);
+
+    let (api_key, api_key_source) = match api_key_from_preset {
+        Some(key) => (Some(key), "file".to_string()),
+        None => match env.api_key.clone() {
+            Some(key) => (Some(key), "env".to_string()),
+            None => (None, "unset".to_string()),
+        },
+    };
+
+    let file_fields = preset
+        .map(|p| {
+            usize::from(p.api_base.is_some())
+                + usize::from(p.model.is_some())
+                + usize::from(include_dimension && p.dimension.is_some())
+                + usize::from(include_temperature && p.temperature.is_some())
+                + usize::from(p.api_key.is_some())
+        })
+        .unwrap_or(0);
+    let total_fields = 2
+        + usize::from(include_dimension)
+        + usize::from(include_temperature)
+        + 1; // api_key
+    let override_active = file_fields > 0;
+    let source = if file_fields == 0 {
+        "env".to_string()
+    } else if file_fields >= total_fields {
+        "file".to_string()
+    } else {
+        "mixed".to_string()
+    };
+
+    RuntimeProviderConfig {
+        api_base,
+        model,
+        dimension,
+        temperature,
+        api_key,
+        source,
+        api_key_source,
+        override_active,
+    }
+}
+
+// ============================================================================
+// Update pipeline
+// ============================================================================
+
 pub fn apply_update(
     existing: Option<ModelConfigFile>,
     request: UpdateModelConfigRequest,
 ) -> Result<ModelConfigFile> {
-    let mut next = existing.unwrap_or_default();
-    next.embedding = apply_provider_update(next.embedding, request.embedding, true)?;
-    next.llm = apply_provider_update(next.llm, request.llm, false)?;
-    if let Some(role_updates) = request.roles {
-        for (role, role_request) in role_updates {
-            if !is_known_role(&role) {
-                bail!("unknown role: {role}");
-            }
-            let current = next.roles.remove(&role);
-            if let Some(updated) = apply_role_update(current, role_request)? {
-                next.roles.insert(role, updated);
-            }
-        }
+    let previous = existing.map(migrate_legacy_in_memory).unwrap_or_default();
+
+    let embedding_presets = merge_presets(
+        PresetKind::Embedding,
+        request.embedding_presets,
+        &previous.embedding_presets,
+    )?;
+    let llm_presets = merge_presets(
+        PresetKind::Llm,
+        request.llm_presets,
+        &previous.llm_presets,
+    )?;
+
+    if embedding_presets.is_empty() {
+        bail!("at least one embedding preset is required");
     }
-    next.updated_at = Some(Utc::now().to_rfc3339());
+    if llm_presets.is_empty() {
+        bail!("at least one llm preset is required");
+    }
+
+    let default_embedding = match request
+        .default_embedding_preset
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        Some(id) => {
+            if !embedding_presets.iter().any(|p| p.id == id) {
+                bail!("default_embedding_preset refers to unknown preset: {id}");
+            }
+            Some(id.to_string())
+        }
+        None => Some(embedding_presets[0].id.clone()),
+    };
+
+    let default_llm = match request
+        .default_llm_preset
+        .as_deref()
+        .map(str::trim)
+        .filter(|v| !v.is_empty())
+    {
+        Some(id) => {
+            if !llm_presets.iter().any(|p| p.id == id) {
+                bail!("default_llm_preset refers to unknown preset: {id}");
+            }
+            Some(id.to_string())
+        }
+        None => Some(llm_presets[0].id.clone()),
+    };
+
+    let mut role_bindings = BTreeMap::new();
+    for (role, binding) in request.role_bindings {
+        if !is_known_role(&role) {
+            bail!("unknown role: {role}");
+        }
+        let preset_id = match binding.preset_id.as_deref().map(str::trim) {
+            Some(id) if !id.is_empty() => {
+                if !llm_presets.iter().any(|p| p.id == id) {
+                    bail!("role {role} binds to unknown preset: {id}");
+                }
+                Some(id.to_string())
+            }
+            _ => None,
+        };
+        role_bindings.insert(
+            role,
+            RoleBindingFile {
+                preset_id,
+                temperature: normalize_temperature(binding.temperature)?,
+            },
+        );
+    }
+
+    let mut next = ModelConfigFile {
+        embedding_presets,
+        llm_presets,
+        default_embedding_preset: default_embedding,
+        default_llm_preset: default_llm,
+        role_bindings,
+        updated_at: Some(Utc::now().to_rfc3339()),
+        embedding: None,
+        llm: None,
+        roles: BTreeMap::new(),
+    };
+
+    populate_worker_snapshot(&mut next);
     Ok(next)
 }
+
+fn merge_presets(
+    kind: PresetKind,
+    updates: Vec<UpdatePresetRequest>,
+    previous: &[ModelPresetFile],
+) -> Result<Vec<ModelPresetFile>> {
+    let mut seen_ids: HashSet<String> = HashSet::new();
+    let mut out = Vec::with_capacity(updates.len());
+    for update in updates {
+        let id = update.id.trim();
+        if id.is_empty() {
+            bail!("preset id is required");
+        }
+        if !seen_ids.insert(id.to_string()) {
+            bail!("duplicate preset id: {id}");
+        }
+        let name = update.name.trim();
+        if name.is_empty() {
+            bail!("preset name is required");
+        }
+        let previous_entry = previous.iter().find(|p| p.id == id);
+        let api_key = if update.clear_api_key {
+            None
+        } else if update.api_key_unchanged {
+            previous_entry.and_then(|p| p.api_key.clone())
+        } else {
+            normalize_optional_string(update.api_key.as_deref())
+                .or_else(|| previous_entry.and_then(|p| p.api_key.clone()))
+        };
+
+        let (dimension, temperature) = match kind {
+            PresetKind::Embedding => (update.dimension.filter(|&d| d > 0), None),
+            PresetKind::Llm => (None, normalize_temperature(update.temperature)?),
+        };
+
+        out.push(ModelPresetFile {
+            id: id.to_string(),
+            name: name.to_string(),
+            api_base: normalize_optional_string(update.api_base.as_deref()),
+            model: normalize_optional_string(update.model.as_deref()),
+            dimension,
+            temperature,
+            api_key,
+        });
+    }
+    Ok(out)
+}
+
+/// Rebuild the worker-facing snapshot inside ``file``. Call this after any
+/// mutation of the preset pools or role bindings so the legacy keys the worker
+/// reads stay in sync with the authoritative preset data.
+pub fn refresh_worker_snapshot(file: &mut ModelConfigFile) {
+    populate_worker_snapshot(file);
+}
+
+fn populate_worker_snapshot(file: &mut ModelConfigFile) {
+    let runtime = resolve_runtime_model_config(Some(file));
+    file.embedding = Some(runtime_to_legacy_file(&runtime.embedding, true));
+    file.llm = Some(runtime_to_legacy_file(&runtime.llm, false));
+    file.roles = runtime
+        .roles
+        .iter()
+        .map(|(role, provider)| (role.clone(), runtime_to_legacy_file(provider, false)))
+        .collect();
+}
+
+fn runtime_to_legacy_file(
+    provider: &RuntimeProviderConfig,
+    is_embedding: bool,
+) -> ProviderOverrideFile {
+    ProviderOverrideFile {
+        api_base: Some(provider.api_base.clone()),
+        model: Some(provider.model.clone()),
+        dimension: if is_embedding { provider.dimension } else { None },
+        temperature: if is_embedding { None } else { provider.temperature },
+        api_key_mode: if provider.api_key.is_some() {
+            SecretMode::Set
+        } else {
+            SecretMode::Clear
+        },
+        api_key: provider.api_key.clone(),
+    }
+}
+
+// ============================================================================
+// Probe helpers (used by /v1/model-config/models + /embedding/dimension)
+// ============================================================================
 
 pub fn resolve_provider_probe(
     current: &RuntimeProviderConfig,
@@ -456,108 +1066,21 @@ pub fn resolve_provider_probe(
     }
 }
 
-fn apply_provider_update(
-    mut existing: ProviderOverrideFile,
-    request: UpdateProviderConfigRequest,
-    is_embedding: bool,
-) -> Result<ProviderOverrideFile> {
-    let api_base = request.api_base.trim();
-    if api_base.is_empty() {
-        bail!("api_base is required");
-    }
-    let model = request.model.trim();
-    if model.is_empty() {
-        bail!("model is required");
-    }
-    existing.api_base = Some(api_base.to_string());
-    existing.model = Some(model.to_string());
-
-    if is_embedding {
-        let dim = request.dimension.unwrap_or(1536);
-        if dim == 0 {
-            bail!("embedding dimension must be greater than 0");
-        }
-        existing.dimension = Some(dim);
-        existing.temperature = None;
-    } else {
-        existing.dimension = None;
-        existing.temperature = normalize_temperature(request.temperature)?;
-    }
-
-    if request.clear_api_key {
-        existing.api_key_mode = SecretMode::Clear;
-        existing.api_key = None;
-    } else if let Some(api_key) = request
-        .api_key
-        .as_ref()
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-    {
-        existing.api_key_mode = SecretMode::Set;
-        existing.api_key = Some(api_key.to_string());
-    }
-
-    Ok(existing)
-}
-
-fn apply_role_update(
-    existing: Option<ProviderOverrideFile>,
-    request: UpdateRoleConfigRequest,
-) -> Result<Option<ProviderOverrideFile>> {
-    if !request.enabled {
-        return Ok(None);
-    }
-
-    let mut next = existing.unwrap_or_default();
-    next.api_base = normalize_optional_string(request.api_base.as_deref());
-    next.model = normalize_optional_string(request.model.as_deref());
-    next.dimension = None;
-    next.temperature = normalize_temperature(request.temperature)?;
-
-    let requested_api_key = normalize_optional_string(request.api_key.as_deref());
-    if let Some(api_key_mode) = request.api_key_mode {
-        match api_key_mode {
-            SecretMode::Inherit => {
-                next.api_key_mode = SecretMode::Inherit;
-                next.api_key = None;
-            }
-            SecretMode::Clear => {
-                next.api_key_mode = SecretMode::Clear;
-                next.api_key = None;
-            }
-            SecretMode::Set => {
-                next.api_key_mode = SecretMode::Set;
-                if let Some(api_key) = requested_api_key {
-                    next.api_key = Some(api_key);
-                }
-            }
-        }
-    } else if request.clear_api_key {
-        next.api_key_mode = SecretMode::Clear;
-        next.api_key = None;
-    } else if let Some(api_key) = requested_api_key {
-        next.api_key_mode = SecretMode::Set;
-        next.api_key = Some(api_key);
-    }
-
-    if next.has_nonsecret_override(false, true) || next.api_key_mode != SecretMode::Inherit {
-        Ok(Some(next))
-    } else {
-        Ok(None)
-    }
-}
+// ============================================================================
+// Env defaults
+// ============================================================================
 
 #[derive(Debug, Clone)]
-struct EnvProviderConfig {
-    api_base: String,
-    model: String,
-    dimension: Option<usize>,
-    temperature: Option<f32>,
-    api_key: Option<String>,
+pub(crate) struct EnvProviderConfig {
+    pub api_base: String,
+    pub model: String,
+    pub dimension: Option<usize>,
+    pub temperature: Option<f32>,
+    pub api_key: Option<String>,
 }
 
 impl EnvProviderConfig {
-    fn embedding() -> Self {
+    pub(crate) fn embedding() -> Self {
         Self {
             api_base: env_string("PMW_EMBEDDING_API_BASE", "https://api.openai.com/v1"),
             model: env_string("PMW_EMBEDDING_MODEL", ""),
@@ -570,7 +1093,7 @@ impl EnvProviderConfig {
         }
     }
 
-    fn llm() -> Self {
+    pub(crate) fn llm() -> Self {
         Self {
             api_base: env_string("PMW_LLM_API_BASE", "https://api.openai.com/v1"),
             model: env_string("PMW_LLM_MODEL", ""),
@@ -581,156 +1104,9 @@ impl EnvProviderConfig {
     }
 }
 
-fn resolve_provider(
-    env_value: EnvProviderConfig,
-    file: Option<&ProviderOverrideFile>,
-) -> RuntimeProviderConfig {
-    let EnvProviderConfig {
-        api_base: env_api_base,
-        model: env_model,
-        dimension: env_dimension,
-        temperature: env_temperature,
-        api_key: env_api_key,
-    } = env_value;
-    let include_dimension = env_dimension.is_some();
-    let include_temperature = env_dimension.is_none();
-    let api_base = file
-        .and_then(|value| value.api_base.as_ref())
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or(env_api_base);
-    let model = file
-        .and_then(|value| value.model.as_ref())
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or(env_model);
-    let dimension = file
-        .and_then(|value| value.dimension)
-        .or(env_dimension)
-        .map(|value| value.max(1));
-    let temperature = if include_temperature {
-        file.and_then(|value| value.temperature).or(env_temperature)
-    } else {
-        None
-    };
-
-    let (api_key, api_key_source) = match file
-        .map(|value| value.api_key_mode)
-        .unwrap_or(SecretMode::Inherit)
-    {
-        SecretMode::Inherit => match env_api_key {
-            Some(value) => (Some(value), "env".to_string()),
-            None => (None, "unset".to_string()),
-        },
-        SecretMode::Clear => (None, "cleared".to_string()),
-        SecretMode::Set => {
-            let key = file
-                .and_then(|value| value.api_key.as_ref())
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned);
-            let source = if key.is_some() { "file" } else { "unset" };
-            (key, source.to_string())
-        }
-    };
-
-    let override_active = file
-        .map(|value| {
-            value.has_nonsecret_override(include_dimension, include_temperature)
-                || value.api_key_mode != SecretMode::Inherit
-        })
-        .unwrap_or(false);
-    let file_fields = usize::from(file.and_then(|value| value.api_base.as_ref()).is_some())
-        + usize::from(file.and_then(|value| value.model.as_ref()).is_some())
-        + usize::from(include_dimension && file.and_then(|value| value.dimension).is_some())
-        + usize::from(include_temperature && file.and_then(|value| value.temperature).is_some());
-    let total_fields = 2 + usize::from(include_dimension) + usize::from(include_temperature);
-    let source = if !override_active || file_fields == 0 {
-        "env".to_string()
-    } else if file_fields >= total_fields {
-        "file".to_string()
-    } else {
-        "mixed".to_string()
-    };
-
-    RuntimeProviderConfig {
-        api_base,
-        model,
-        dimension,
-        temperature,
-        api_key,
-        source,
-        api_key_source,
-        override_active,
-    }
-}
-
-fn resolve_role_provider(
-    role: &str,
-    llm: &RuntimeProviderConfig,
-    file: Option<&ProviderOverrideFile>,
-) -> RuntimeProviderConfig {
-    let api_base = file
-        .and_then(|value| value.api_base.as_ref())
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| llm.api_base.clone());
-    let model = file
-        .and_then(|value| value.model.as_ref())
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned)
-        .unwrap_or_else(|| llm.model.clone());
-    let temperature = file
-        .and_then(|value| value.temperature)
-        .or(llm.temperature)
-        .or(Some(default_role_temperature(role)));
-
-    let (api_key, api_key_source) = match file
-        .map(|value| value.api_key_mode)
-        .unwrap_or(SecretMode::Inherit)
-    {
-        SecretMode::Inherit => (llm.api_key.clone(), "inherit".to_string()),
-        SecretMode::Clear => (None, "cleared".to_string()),
-        SecretMode::Set => {
-            let key = file
-                .and_then(|value| value.api_key.as_ref())
-                .map(|value| value.trim())
-                .filter(|value| !value.is_empty())
-                .map(ToOwned::to_owned);
-            let source = if key.is_some() { "file" } else { "unset" };
-            (key, source.to_string())
-        }
-    };
-
-    let override_active = file
-        .map(|value| value.has_nonsecret_override(false, true) || value.api_key_mode != SecretMode::Inherit)
-        .unwrap_or(false);
-    let file_fields = usize::from(file.and_then(|value| value.api_base.as_ref()).is_some())
-        + usize::from(file.and_then(|value| value.model.as_ref()).is_some())
-        + usize::from(file.and_then(|value| value.temperature).is_some());
-    let source = if file_fields == 0 {
-        "inherit".to_string()
-    } else if file_fields >= 3 {
-        "file".to_string()
-    } else {
-        "mixed".to_string()
-    };
-
-    RuntimeProviderConfig {
-        api_base,
-        model,
-        dimension: None,
-        temperature,
-        api_key,
-        source,
-        api_key_source,
-        override_active,
-    }
-}
+// ============================================================================
+// Response builders
+// ============================================================================
 
 fn provider_to_response(provider: &RuntimeProviderConfig) -> ProviderConfigResponse {
     ProviderConfigResponse {
@@ -750,23 +1126,40 @@ fn provider_to_response(provider: &RuntimeProviderConfig) -> ProviderConfigRespo
     }
 }
 
-fn provider_override_to_response(provider: Option<&ProviderOverrideFile>) -> ProviderOverrideResponse {
-    let api_key = provider
-        .and_then(|value| value.api_key.as_ref())
-        .map(|value| value.trim())
-        .filter(|value| !value.is_empty())
-        .map(ToOwned::to_owned);
-    ProviderOverrideResponse {
-        api_base: provider
-            .and_then(|value| normalize_optional_string(value.api_base.as_deref())),
-        model: provider.and_then(|value| normalize_optional_string(value.model.as_deref())),
-        dimension: provider.and_then(|value| value.dimension),
-        temperature: provider.and_then(|value| value.temperature),
-        api_key_mode: provider.map(|value| value.api_key_mode).unwrap_or_default(),
-        api_key_configured: api_key.is_some(),
+fn preset_to_response(preset: &RuntimePreset, default_id: Option<&str>) -> ModelPresetResponse {
+    let RuntimeProviderConfig {
+        api_base,
+        model,
+        dimension,
+        temperature,
+        api_key,
+        source,
+        api_key_source,
+        ..
+    } = &preset.provider;
+
+    ModelPresetResponse {
+        id: preset.id.clone(),
+        name: preset.name.clone(),
+        kind: preset.kind,
+        api_base: api_base.clone(),
+        model: model.clone(),
+        dimension: *dimension,
+        temperature: *temperature,
+        configured: preset.provider.configured(),
+        api_key_configured: api_key
+            .as_ref()
+            .is_some_and(|value| !value.trim().is_empty()),
         api_key_masked: api_key.as_deref().map(mask_secret),
+        source: source.clone(),
+        api_key_source: api_key_source.clone(),
+        is_default: default_id == Some(preset.id.as_str()),
     }
 }
+
+// ============================================================================
+// Helpers
+// ============================================================================
 
 fn mask_secret(value: &str) -> String {
     let chars: Vec<char> = value.chars().collect();
@@ -786,7 +1179,10 @@ fn mask_secret(value: &str) -> String {
 }
 
 fn normalize_optional_string(value: Option<&str>) -> Option<String> {
-    value.map(str::trim).filter(|value| !value.is_empty()).map(ToOwned::to_owned)
+    value
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
 }
 
 fn normalize_temperature(value: Option<f32>) -> Result<Option<f32>> {
@@ -795,10 +1191,6 @@ fn normalize_temperature(value: Option<f32>) -> Result<Option<f32>> {
         Some(raw) => Ok(Some(raw)),
         None => Ok(None),
     }
-}
-
-fn default_true() -> bool {
-    true
 }
 
 fn env_string(key: &str, default: &str) -> String {

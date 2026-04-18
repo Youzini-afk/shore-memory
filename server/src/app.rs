@@ -26,9 +26,9 @@ use crate::model_config::{
     DetectEmbeddingDimensionRequest, DetectEmbeddingDimensionResponse, ListProviderModelsRequest,
     ListProviderModelsResponse, ModelConfigFile, ModelConfigResponse, ModelConfigTestResponse,
     ProviderKind, ProviderTestResponse, ResolvedProviderProbe, RuntimeModelConfig,
-    UpdateModelConfigRequest, UpdateModelConfigResponse, apply_update, delete_model_config_file,
-    load_runtime_model_config, resolve_provider_probe, resolve_runtime_model_config,
-    write_model_config_file,
+    RuntimeProviderConfig, UpdateModelConfigRequest, UpdateModelConfigResponse, apply_update,
+    delete_model_config_file, load_runtime_model_config, refresh_worker_snapshot,
+    resolve_provider_probe, resolve_runtime_model_config, write_model_config_file,
 };
 use crate::recall_recipe::{
     FusionInputs, FusionWeights, additive_fuse, bm25_params_for_query, entity_spread_attenuation,
@@ -2640,13 +2640,36 @@ async fn list_provider_models(
 
     let _reindex_guard = state.reindex_lock.read().await;
     let (runtime, _) = state.current_runtime_model_config()?;
-    let current = match request.provider {
-        ProviderKind::Embedding => &runtime.embedding,
-        ProviderKind::Llm => {
-            if let Some(role) = request.role.as_deref().map(str::trim).filter(|value| !value.is_empty()) {
-                runtime.roles.get(role).ok_or_else(|| {
-                    ServiceError::BadRequest(format!("unknown role: {role}"))
-                })?
+    let preset_id = request
+        .preset_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let current: &RuntimeProviderConfig = match (preset_id, request.provider) {
+        (Some(id), ProviderKind::Embedding) => &runtime
+            .embedding_presets
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
+            .provider,
+        (Some(id), ProviderKind::Llm) => &runtime
+            .llm_presets
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
+            .provider,
+        (None, ProviderKind::Embedding) => &runtime.embedding,
+        (None, ProviderKind::Llm) => {
+            if let Some(role) = request
+                .role
+                .as_deref()
+                .map(str::trim)
+                .filter(|value| !value.is_empty())
+            {
+                runtime
+                    .roles
+                    .get(role)
+                    .ok_or_else(|| ServiceError::BadRequest(format!("unknown role: {role}")))?
             } else {
                 &runtime.llm
             }
@@ -2691,8 +2714,23 @@ async fn detect_embedding_dimension(
 
     let _reindex_guard = state.reindex_lock.read().await;
     let (runtime, _) = state.current_runtime_model_config()?;
+    let preset_id = request
+        .preset_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let current: &RuntimeProviderConfig = if let Some(id) = preset_id {
+        &runtime
+            .embedding_presets
+            .iter()
+            .find(|p| p.id == id)
+            .ok_or_else(|| ServiceError::BadRequest(format!("unknown preset: {id}")))?
+            .provider
+    } else {
+        &runtime.embedding
+    };
     let probe = resolve_provider_probe(
-        &runtime.embedding,
+        current,
         &request.api_base,
         Some(&request.model),
         request.api_key.as_deref(),
@@ -2731,7 +2769,7 @@ async fn update_model_config(
 
     let (previous_runtime, previous_file) = state.current_runtime_model_config()?;
     let previous_file_for_rollback = previous_file.clone();
-    let auto_detect_dimension = request.embedding.auto_detect_dimension;
+    let auto_detect_dimension = request.auto_detect_embedding_dimension;
     let mut next_file = apply_update(previous_file, request)
         .map_err(|err| ServiceError::BadRequest(err.to_string()))?;
 
@@ -2758,7 +2796,18 @@ async fn update_model_config(
                         "failed to auto-detect embedding dimension: {err:#}"
                     ))
                 })?;
-            next_file.embedding.dimension = Some(detected_dimension);
+            if let Some(default_id) = next_file.default_embedding_preset.clone() {
+                if let Some(preset) = next_file
+                    .embedding_presets
+                    .iter_mut()
+                    .find(|p| p.id == default_id)
+                {
+                    preset.dimension = Some(detected_dimension);
+                }
+            } else if let Some(preset) = next_file.embedding_presets.first_mut() {
+                preset.dimension = Some(detected_dimension);
+            }
+            refresh_worker_snapshot(&mut next_file);
         }
     }
 
