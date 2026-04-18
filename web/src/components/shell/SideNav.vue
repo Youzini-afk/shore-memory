@@ -14,9 +14,9 @@ import { computed } from 'vue'
 const app = useAppStore()
 
 const items = [
+  { name: 'graph', label: '记忆图谱', to: '/graph', icon: Share2 },
   { name: 'recall', label: '召回实验台', to: '/recall', icon: Search, hint: '实验台' },
   { name: 'memories', label: '记忆库', to: '/memories', icon: Database },
-  { name: 'graph', label: '记忆图谱', to: '/graph', icon: Share2 },
   { name: 'agent', label: 'Agent 状态', to: '/agent', icon: UserRound },
   { name: 'maintenance', label: '运维', to: '/maintenance', icon: Wrench },
   { name: 'settings', label: '设置', to: '/settings', icon: SettingsIcon }
