@@ -23,9 +23,11 @@ use tracing::{error, info, warn};
 use crate::config::ServiceConfig;
 use crate::db::{LoadedMemoryGraph, MetadataStore, NewMemoryRecord};
 use crate::model_config::{
-    ModelConfigFile, ModelConfigResponse, ModelConfigTestResponse, ProviderTestResponse,
-    RuntimeModelConfig, UpdateModelConfigRequest, UpdateModelConfigResponse, apply_update,
-    delete_model_config_file, load_runtime_model_config, resolve_runtime_model_config,
+    DetectEmbeddingDimensionRequest, DetectEmbeddingDimensionResponse, ListProviderModelsRequest,
+    ListProviderModelsResponse, ModelConfigFile, ModelConfigResponse, ModelConfigTestResponse,
+    ProviderKind, ProviderTestResponse, ResolvedProviderProbe, RuntimeModelConfig,
+    UpdateModelConfigRequest, UpdateModelConfigResponse, apply_update, delete_model_config_file,
+    load_runtime_model_config, resolve_provider_probe, resolve_runtime_model_config,
     write_model_config_file,
 };
 use crate::recall_recipe::{
@@ -136,6 +138,11 @@ impl AppState {
                 get(get_model_config)
                     .put(update_model_config)
                     .delete(restore_model_config_defaults),
+            )
+            .route("/v1/model-config/models", post(list_provider_models))
+            .route(
+                "/v1/model-config/embedding/dimension",
+                post(detect_embedding_dimension),
             )
             .route("/v1/model-config/test", post(test_model_config))
             .route("/v1/events", get(events_ws));
@@ -1487,6 +1494,50 @@ impl AppState {
         load_runtime_model_config(&self.config.model_config_path)
     }
 
+    async fn list_models_for_provider_probe(
+        &self,
+        probe: &ResolvedProviderProbe,
+    ) -> Result<Vec<String>> {
+        let api_key = probe
+            .api_key
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow!("provider api key is not configured"))?;
+        let started = std::time::Instant::now();
+        let models = self
+            .worker
+            .list_provider_models(&probe.api_base, api_key)
+            .await?;
+        histogram!("shore_memory_worker_call_duration_seconds", "op" => "provider_models")
+            .record(started.elapsed().as_secs_f64());
+        Ok(models)
+    }
+
+    async fn detect_embedding_dimension_for_probe(
+        &self,
+        probe: &ResolvedProviderProbe,
+    ) -> Result<usize> {
+        let api_key = probe
+            .api_key
+            .as_deref()
+            .filter(|value| !value.trim().is_empty())
+            .ok_or_else(|| anyhow!("embedding provider api key is not configured"))?;
+        if probe.model.trim().is_empty() {
+            bail!("embedding model is required");
+        }
+        let started = std::time::Instant::now();
+        let dimension = self
+            .worker
+            .detect_embedding_dimension(&probe.api_base, api_key, &probe.model)
+            .await?;
+        histogram!("shore_memory_worker_call_duration_seconds", "op" => "embedding_dimension")
+            .record(started.elapsed().as_secs_f64());
+        if dimension == 0 {
+            bail!("embedding provider returned invalid dimension 0");
+        }
+        Ok(dimension)
+    }
+
     async fn test_runtime_model_config(
         &self,
         runtime: &RuntimeModelConfig,
@@ -2407,6 +2458,87 @@ async fn get_model_config(
 }
 
 #[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn list_provider_models(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(request): Json<ListProviderModelsRequest>,
+) -> Result<Json<ListProviderModelsResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let _reindex_guard = state.reindex_lock.read().await;
+    let (runtime, _) = state.current_runtime_model_config()?;
+    let current = match request.provider {
+        ProviderKind::Embedding => &runtime.embedding,
+        ProviderKind::Llm => &runtime.llm,
+    };
+    let probe = resolve_provider_probe(
+        current,
+        &request.api_base,
+        None,
+        request.api_key.as_deref(),
+        request.clear_api_key,
+    );
+    let models = state
+        .list_models_for_provider_probe(&probe)
+        .await
+        .map_err(|err| {
+            ServiceError::BadRequest(format!("failed to list provider models: {err:#}"))
+        })?;
+
+    let response = ListProviderModelsResponse {
+        provider: request.provider,
+        count: models.len(),
+        models,
+        source: probe.source,
+        api_key_source: probe.api_key_source,
+    };
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config/models", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
+async fn detect_embedding_dimension(
+    headers: HeaderMap,
+    State(state): State<AppState>,
+    Json(request): Json<DetectEmbeddingDimensionRequest>,
+) -> Result<Json<DetectEmbeddingDimensionResponse>, ServiceError> {
+    let started = std::time::Instant::now();
+    let rid = request_id_from_headers(&headers);
+    tracing::Span::current().record("request_id", tracing::field::display(rid));
+
+    let _reindex_guard = state.reindex_lock.read().await;
+    let (runtime, _) = state.current_runtime_model_config()?;
+    let probe = resolve_provider_probe(
+        &runtime.embedding,
+        &request.api_base,
+        Some(&request.model),
+        request.api_key.as_deref(),
+        request.clear_api_key,
+    );
+    let dimension = state
+        .detect_embedding_dimension_for_probe(&probe)
+        .await
+        .map_err(|err| {
+            ServiceError::BadRequest(format!("failed to detect embedding dimension: {err:#}"))
+        })?;
+
+    let response = DetectEmbeddingDimensionResponse {
+        model: probe.model,
+        dimension,
+        source: probe.source,
+        api_key_source: probe.api_key_source,
+    };
+
+    histogram!("shore_memory_http_duration_seconds", "route" => "/v1/model-config/embedding/dimension", "status" => "ok")
+        .record(started.elapsed().as_secs_f64());
+    Ok(Json(response))
+}
+
+#[tracing::instrument(skip_all, fields(request_id = tracing::field::Empty))]
 async fn update_model_config(
     headers: HeaderMap,
     State(state): State<AppState>,
@@ -2420,8 +2552,37 @@ async fn update_model_config(
 
     let (previous_runtime, previous_file) = state.current_runtime_model_config()?;
     let previous_file_for_rollback = previous_file.clone();
-    let next_file = apply_update(previous_file, request)
+    let auto_detect_dimension = request.embedding.auto_detect_dimension;
+    let mut next_file = apply_update(previous_file, request)
         .map_err(|err| ServiceError::BadRequest(err.to_string()))?;
+
+    if auto_detect_dimension {
+        let preview_runtime = resolve_runtime_model_config(Some(&next_file));
+        if preview_runtime
+            .embedding
+            .api_key
+            .as_ref()
+            .is_some_and(|value| !value.trim().is_empty())
+        {
+            let probe = ResolvedProviderProbe {
+                api_base: preview_runtime.embedding.api_base.clone(),
+                model: preview_runtime.embedding.model.clone(),
+                api_key: preview_runtime.embedding.api_key.clone(),
+                source: preview_runtime.embedding.source.clone(),
+                api_key_source: preview_runtime.embedding.api_key_source.clone(),
+            };
+            let detected_dimension = state
+                .detect_embedding_dimension_for_probe(&probe)
+                .await
+                .map_err(|err| {
+                    ServiceError::BadRequest(format!(
+                        "failed to auto-detect embedding dimension: {err:#}"
+                    ))
+                })?;
+            next_file.embedding.dimension = Some(detected_dimension);
+        }
+    }
+
     let next_runtime = resolve_runtime_model_config(Some(&next_file));
 
     let embedding_changed = embedding_effective_changed(&previous_runtime, &next_runtime);

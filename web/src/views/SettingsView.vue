@@ -7,8 +7,11 @@ import PInput from '@/components/ui/PInput.vue'
 import { useAppStore } from '@/stores/app'
 import { api, ShoreApiError } from '@/api/http'
 import type {
+  DetectEmbeddingDimensionResponse,
+  ListProviderModelsResponse,
   ModelConfigResponse,
   ModelConfigTestResponse,
+  ProviderKind,
   UpdateModelConfigRequest,
   UpdateModelConfigResponse
 } from '@/api/types'
@@ -16,13 +19,18 @@ import type {
 const app = useAppStore()
 
 const loadingModelConfig = ref(false)
+const loadingEmbeddingModels = ref(false)
+const loadingLlmModels = ref(false)
 const savingModelConfig = ref(false)
 const restoringModelConfig = ref(false)
 const testingModelConfig = ref(false)
+const detectingEmbeddingDimension = ref(false)
 const modelConfig = ref<ModelConfigResponse | null>(null)
 const modelConfigError = ref<string | null>(null)
 const modelConfigNotice = ref<string | null>(null)
 const modelConfigTest = ref<ModelConfigTestResponse | null>(null)
+const embeddingModelOptions = ref<string[]>([])
+const llmModelOptions = ref<string[]>([])
 
 const form = reactive({
   embeddingApiBase: '',
@@ -76,9 +84,12 @@ const authStatusLabel = computed(() => {
 const modelConfigBusy = computed(
   () =>
     loadingModelConfig.value ||
+    loadingEmbeddingModels.value ||
+    loadingLlmModels.value ||
     savingModelConfig.value ||
     restoringModelConfig.value ||
-    testingModelConfig.value
+    testingModelConfig.value ||
+    detectingEmbeddingDimension.value
 )
 
 function formatProviderSource(source: string): string {
@@ -91,6 +102,110 @@ function formatProviderSource(source: string): string {
     default:
       return '环境变量'
   }
+}
+
+function providerLabel(kind: ProviderKind): string {
+  return kind === 'embedding' ? 'Embedding' : 'LLM'
+}
+
+function sortedModels(models: string[]): string[] {
+  return Array.from(new Set(models.filter((value) => value.trim()))).sort((a, b) =>
+    a.localeCompare(b)
+  )
+}
+
+function buildModelsRequest(provider: ProviderKind) {
+  if (provider === 'embedding') {
+    const apiKey = form.embeddingApiKey.trim()
+    return {
+      provider,
+      api_base: form.embeddingApiBase.trim(),
+      api_key: apiKey || undefined,
+      clear_api_key: form.embeddingClearKey
+    }
+  }
+  const apiKey = form.llmApiKey.trim()
+  return {
+    provider,
+    api_base: form.llmApiBase.trim(),
+    api_key: apiKey || undefined,
+    clear_api_key: form.llmClearKey
+  }
+}
+
+async function fetchProviderModels(provider: ProviderKind) {
+  if (provider === 'embedding') {
+    loadingEmbeddingModels.value = true
+  } else {
+    loadingLlmModels.value = true
+  }
+  modelConfigError.value = null
+  modelConfigNotice.value = null
+  try {
+    const res = await api.post<ListProviderModelsResponse>(
+      '/v1/model-config/models',
+      buildModelsRequest(provider)
+    )
+    const models = sortedModels(res.models)
+    if (provider === 'embedding') {
+      embeddingModelOptions.value = models
+    } else {
+      llmModelOptions.value = models
+    }
+    modelConfigNotice.value = models.length
+      ? `已获取 ${models.length} 个 ${providerLabel(provider)} 模型。`
+      : `${providerLabel(provider)} 提供方没有返回可用模型。`
+  } catch (err) {
+    modelConfigError.value = `获取 ${providerLabel(provider)} 模型失败：${resolveError(err)}`
+  } finally {
+    if (provider === 'embedding') {
+      loadingEmbeddingModels.value = false
+    } else {
+      loadingLlmModels.value = false
+    }
+  }
+}
+
+async function detectEmbeddingDimension(options?: { silent?: boolean }) {
+  const model = form.embeddingModel.trim()
+  if (!model) {
+    modelConfigError.value = '请先填写 Embedding 模型名。'
+    return null
+  }
+  detectingEmbeddingDimension.value = true
+  if (!options?.silent) {
+    modelConfigError.value = null
+    modelConfigNotice.value = null
+  }
+  try {
+    const apiKey = form.embeddingApiKey.trim()
+    const res = await api.post<DetectEmbeddingDimensionResponse>(
+      '/v1/model-config/embedding/dimension',
+      {
+        api_base: form.embeddingApiBase.trim(),
+        model,
+        api_key: apiKey || undefined,
+        clear_api_key: form.embeddingClearKey
+      }
+    )
+    form.embeddingDimension = String(res.dimension)
+    if (!options?.silent) {
+      modelConfigNotice.value = `已自动识别 ${res.model} 的向量维度：${res.dimension}`
+    }
+    return res.dimension
+  } catch (err) {
+    if (!options?.silent) {
+      modelConfigError.value = `识别 Embedding 维度失败：${resolveError(err)}`
+    }
+    return null
+  } finally {
+    detectingEmbeddingDimension.value = false
+  }
+}
+
+async function onEmbeddingModelSelect() {
+  if (!form.embeddingModel.trim()) return
+  await detectEmbeddingDimension()
 }
 
 function formatKeySource(source: string): string {
@@ -119,11 +234,13 @@ function hydrateForm(config: ModelConfigResponse) {
   form.embeddingDimension = String(config.embedding.dimension ?? 1536)
   form.embeddingApiKey = ''
   form.embeddingClearKey = false
+  embeddingModelOptions.value = []
 
   form.llmApiBase = config.llm.api_base ?? ''
   form.llmModel = config.llm.model ?? ''
   form.llmApiKey = ''
   form.llmClearKey = false
+  llmModelOptions.value = []
 }
 
 async function loadModelConfig() {
@@ -153,7 +270,8 @@ function buildUpdatePayload(): UpdateModelConfigRequest {
       model: form.embeddingModel.trim(),
       dimension,
       api_key: embeddingApiKey || undefined,
-      clear_api_key: form.embeddingClearKey
+      clear_api_key: form.embeddingClearKey,
+      auto_detect_dimension: true
     },
     llm: {
       api_base: form.llmApiBase.trim(),
@@ -178,6 +296,9 @@ async function saveModelConfig() {
   modelConfigError.value = null
   modelConfigNotice.value = null
   try {
+    if (form.embeddingModel.trim()) {
+      await detectEmbeddingDimension({ silent: true })
+    }
     const payload = buildUpdatePayload()
     const res = await api.put<UpdateModelConfigResponse>('/v1/model-config', payload)
     modelConfig.value = res.config
@@ -214,6 +335,9 @@ async function testModelConfig() {
   try {
     const res = await api.post<ModelConfigTestResponse>('/v1/model-config/test')
     modelConfigTest.value = res
+    if (res.embedding.dimension && res.embedding.dimension > 0) {
+      form.embeddingDimension = String(res.embedding.dimension)
+    }
     if (res.embedding.ok && res.llm.ok) {
       modelConfigNotice.value = '模型连通性测试通过。'
     } else {
@@ -324,7 +448,18 @@ onMounted(() => {
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
           <div class="rounded-card border border-shore-line/80 p-4 bg-shore-bg/30">
-            <div class="text-[13px] font-display text-ink-1 mb-3">Embedding 提供方</div>
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div class="text-[13px] font-display text-ink-1">Embedding 提供方</div>
+              <PButton
+                size="sm"
+                variant="ghost"
+                :loading="loadingEmbeddingModels"
+                :disabled="modelConfigBusy"
+                @click="fetchProviderModels('embedding')"
+              >
+                获取模型
+              </PButton>
+            </div>
             <div class="grid grid-cols-3 gap-y-2 text-[12px] mb-4">
               <div class="text-ink-4">配置来源</div>
               <div class="col-span-2 text-ink-2">{{ modelConfig ? formatProviderSource(modelConfig.embedding.source) : '–' }}</div>
@@ -342,9 +477,31 @@ onMounted(() => {
               <div>
                 <div class="text-[12px] text-ink-4 mb-1">模型名</div>
                 <PInput v-model="form.embeddingModel" placeholder="text-embedding-3-large" />
+                <select
+                  v-if="embeddingModelOptions.length"
+                  v-model="form.embeddingModel"
+                  class="mt-2 h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+                  @change="onEmbeddingModelSelect"
+                >
+                  <option value="">从已获取模型中选择</option>
+                  <option v-for="model in embeddingModelOptions" :key="model" :value="model">
+                    {{ model }}
+                  </option>
+                </select>
               </div>
               <div>
-                <div class="text-[12px] text-ink-4 mb-1">向量维度</div>
+                <div class="flex items-center justify-between gap-3 mb-1">
+                  <div class="text-[12px] text-ink-4">向量维度</div>
+                  <PButton
+                    size="sm"
+                    variant="ghost"
+                    :loading="detectingEmbeddingDimension"
+                    :disabled="modelConfigBusy"
+                    @click="detectEmbeddingDimension()"
+                  >
+                    自动识别
+                  </PButton>
+                </div>
                 <PInput v-model="form.embeddingDimension" type="number" placeholder="1536" mono />
               </div>
               <div>
@@ -359,7 +516,18 @@ onMounted(() => {
           </div>
 
           <div class="rounded-card border border-shore-line/80 p-4 bg-shore-bg/30">
-            <div class="text-[13px] font-display text-ink-1 mb-3">LLM 提供方</div>
+            <div class="flex items-center justify-between gap-3 mb-3">
+              <div class="text-[13px] font-display text-ink-1">LLM 提供方</div>
+              <PButton
+                size="sm"
+                variant="ghost"
+                :loading="loadingLlmModels"
+                :disabled="modelConfigBusy"
+                @click="fetchProviderModels('llm')"
+              >
+                获取模型
+              </PButton>
+            </div>
             <div class="grid grid-cols-3 gap-y-2 text-[12px] mb-4">
               <div class="text-ink-4">配置来源</div>
               <div class="col-span-2 text-ink-2">{{ modelConfig ? formatProviderSource(modelConfig.llm.source) : '–' }}</div>
@@ -377,6 +545,16 @@ onMounted(() => {
               <div>
                 <div class="text-[12px] text-ink-4 mb-1">模型名</div>
                 <PInput v-model="form.llmModel" placeholder="gpt-4o-mini" />
+                <select
+                  v-if="llmModelOptions.length"
+                  v-model="form.llmModel"
+                  class="mt-2 h-10 w-full rounded-btn bg-[#0F1018] border border-shore-line/80 px-3.5 text-[13px] text-ink-1 outline-none transition-colors duration-240 ease-shore hover:border-shore-border focus:border-accent focus:shadow-[0_0_0_3px_rgba(124,92,255,0.18)]"
+                >
+                  <option value="">从已获取模型中选择</option>
+                  <option v-for="model in llmModelOptions" :key="model" :value="model">
+                    {{ model }}
+                  </option>
+                </select>
               </div>
               <div>
                 <div class="text-[12px] text-ink-4 mb-1">API Key（留空表示不改）</div>

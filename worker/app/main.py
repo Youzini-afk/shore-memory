@@ -130,6 +130,21 @@ class EmbedBatchResponse(BaseModel):
     embeddings: list[list[float]]
 
 
+class ProviderProbeRequest(BaseModel):
+    api_base: str
+    api_key: str
+    model: Optional[str] = None
+
+
+class ProviderModelsResponse(BaseModel):
+    models: list[str] = Field(default_factory=list)
+
+
+class EmbeddingDimensionResponse(BaseModel):
+    model: str
+    dimension: int
+
+
 class ExtractEntitiesRequest(BaseModel):
     query: str
     observation_date: Optional[str] = None
@@ -305,6 +320,21 @@ async def embed_batch(req: EmbedBatchRequest) -> EmbedBatchResponse:
     return EmbedBatchResponse(embeddings=out)
 
 
+@app.post("/v1/provider/models", response_model=ProviderModelsResponse)
+async def provider_models(req: ProviderProbeRequest) -> ProviderModelsResponse:
+    models = await _list_upstream_models(req.api_base, req.api_key)
+    return ProviderModelsResponse(models=models)
+
+
+@app.post("/v1/provider/embedding/dimension", response_model=EmbeddingDimensionResponse)
+async def provider_embedding_dimension(req: ProviderProbeRequest) -> EmbeddingDimensionResponse:
+    model = (req.model or "").strip()
+    if not model:
+        raise HTTPException(status_code=400, detail="model is required")
+    dimension = await _detect_embedding_dimension(req.api_base, req.api_key, model)
+    return EmbeddingDimensionResponse(model=model, dimension=dimension)
+
+
 @app.post("/v1/tasks/extract-entities", response_model=ExtractEntitiesResponse)
 async def extract_entities(req: ExtractEntitiesRequest) -> ExtractEntitiesResponse:
     """Extract named entities from a recall-time query string.
@@ -367,6 +397,16 @@ async def _call_embedding_api(texts: list[str]) -> list[list[float]]:
 
     runtime = _load_runtime_model_config()
     embedding_cfg = runtime["embedding"]
+    return await _call_embedding_api_with_config(texts, embedding_cfg)
+
+
+async def _call_embedding_api_with_config(
+    texts: list[str],
+    embedding_cfg: dict[str, Any],
+) -> list[list[float]]:
+    if not texts:
+        return []
+
     api_key = str(embedding_cfg.get("api_key", "")).strip()
     api_base = str(embedding_cfg.get("api_base", "https://api.openai.com/v1")).strip().rstrip("/")
     model = str(embedding_cfg.get("model", "")).strip()
@@ -409,6 +449,60 @@ async def _call_embedding_api(texts: list[str]) -> list[list[float]]:
             raise HTTPException(status_code=502, detail="embedding upstream returned empty vector")
         embeddings.append([float(x) for x in vec])
     return embeddings
+
+
+def _normalize_openai_compatible_url(api_base: str, suffix: str) -> str:
+    base = api_base.strip().rstrip("/") or "https://api.openai.com/v1"
+    return base if base.endswith(suffix) else f"{base}{suffix}"
+
+
+def _provider_headers(api_key: str) -> dict[str, str]:
+    return {
+        "Authorization": f"Bearer {api_key.strip()}",
+        "Content-Type": "application/json",
+    }
+
+
+async def _list_upstream_models(api_base: str, api_key: str) -> list[str]:
+    if not api_key.strip():
+        raise HTTPException(status_code=503, detail="provider api_key is required")
+
+    url = _normalize_openai_compatible_url(api_base, "/models")
+    async with httpx.AsyncClient(timeout=12.0) as client:
+        response = await client.get(url, headers=_provider_headers(api_key))
+        try:
+            response.raise_for_status()
+        except httpx.HTTPStatusError as exc:
+            raise HTTPException(
+                status_code=502,
+                detail=f"provider models upstream error: {exc.response.text}",
+            ) from exc
+        data = response.json()
+
+    raw_items = data.get("data") or []
+    if not isinstance(raw_items, list):
+        raise HTTPException(status_code=502, detail="provider models upstream returned invalid payload")
+
+    models: list[str] = []
+    for item in raw_items:
+        if not isinstance(item, dict):
+            continue
+        model_id = as_optional_str(item.get("id"))
+        if model_id:
+            models.append(model_id)
+    return dedupe(models)
+
+
+async def _detect_embedding_dimension(api_base: str, api_key: str, model: str) -> int:
+    probe_cfg = {
+        "api_key": api_key.strip(),
+        "api_base": api_base.strip() or "https://api.openai.com/v1",
+        "model": model.strip(),
+    }
+    embeddings = await _call_embedding_api_with_config(["shore-memory embedding dimension probe"], probe_cfg)
+    if not embeddings or not embeddings[0]:
+        raise HTTPException(status_code=502, detail="embedding upstream returned empty vector")
+    return len(embeddings[0])
 
 
 @app.post("/v1/tasks/score-turn", response_model=ScoreTurnResponse)

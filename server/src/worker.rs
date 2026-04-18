@@ -28,10 +28,30 @@ struct WorkerExtractEntitiesRequest {
     observation_date: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize)]
+struct WorkerProviderProbeRequest {
+    api_base: String,
+    api_key: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model: Option<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct WorkerExtractEntitiesResponse {
     #[serde(default)]
     entities: Vec<EntityDraft>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorkerProviderModelsResponse {
+    #[serde(default)]
+    models: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct WorkerEmbeddingDimensionResponse {
+    model: String,
+    dimension: usize,
 }
 
 #[derive(Clone)]
@@ -178,6 +198,64 @@ impl WorkerClient {
                 .await
                 .context("worker extract_entities response parse failed")?;
             Ok(response.entities)
+        })
+        .await
+    }
+
+    pub async fn list_provider_models(&self, api_base: &str, api_key: &str) -> Result<Vec<String>> {
+        let url = format!("{}/v1/provider/models", self.base_url);
+        Self::run_with_timeout("provider_models", self.timeout_default, async {
+            let response = self
+                .client
+                .post(url)
+                .json(&WorkerProviderProbeRequest {
+                    api_base: api_base.to_string(),
+                    api_key: api_key.to_string(),
+                    model: None,
+                })
+                .send()
+                .await
+                .context("worker provider models request failed")?
+                .error_for_status()
+                .context("worker provider models returned error")?
+                .json::<WorkerProviderModelsResponse>()
+                .await
+                .context("worker provider models response parse failed")?;
+            Ok(response.models)
+        })
+        .await
+    }
+
+    pub async fn detect_embedding_dimension(
+        &self,
+        api_base: &str,
+        api_key: &str,
+        model: &str,
+    ) -> Result<usize> {
+        let url = format!("{}/v1/provider/embedding/dimension", self.base_url);
+        Self::run_with_timeout("embedding_dimension", self.timeout_embed, async {
+            let response = self
+                .client
+                .post(url)
+                .json(&WorkerProviderProbeRequest {
+                    api_base: api_base.to_string(),
+                    api_key: api_key.to_string(),
+                    model: Some(model.to_string()),
+                })
+                .send()
+                .await
+                .context("worker embedding dimension request failed")?
+                .error_for_status()
+                .context("worker embedding dimension returned error")?
+                .json::<WorkerEmbeddingDimensionResponse>()
+                .await
+                .context("worker embedding dimension response parse failed")?;
+            if response.model.trim().is_empty() || response.dimension == 0 {
+                return Err(anyhow!(
+                    "worker returned invalid embedding dimension payload"
+                ));
+            }
+            Ok(response.dimension)
         })
         .await
     }

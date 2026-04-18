@@ -100,6 +100,50 @@ pub struct ProviderConfigResponse {
     pub override_active: bool,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum ProviderKind {
+    Embedding,
+    Llm,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ListProviderModelsRequest {
+    pub provider: ProviderKind,
+    pub api_base: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub clear_api_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct ListProviderModelsResponse {
+    pub provider: ProviderKind,
+    pub models: Vec<String>,
+    pub count: usize,
+    pub source: String,
+    pub api_key_source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DetectEmbeddingDimensionRequest {
+    pub api_base: String,
+    pub model: String,
+    #[serde(default)]
+    pub api_key: Option<String>,
+    #[serde(default)]
+    pub clear_api_key: bool,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DetectEmbeddingDimensionResponse {
+    pub model: String,
+    pub dimension: usize,
+    pub source: String,
+    pub api_key_source: String,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UpdateModelConfigRequest {
     pub embedding: UpdateProviderConfigRequest,
@@ -116,6 +160,17 @@ pub struct UpdateProviderConfigRequest {
     pub api_key: Option<String>,
     #[serde(default)]
     pub clear_api_key: bool,
+    #[serde(default)]
+    pub auto_detect_dimension: bool,
+}
+
+#[derive(Debug, Clone)]
+pub struct ResolvedProviderProbe {
+    pub api_base: String,
+    pub model: String,
+    pub api_key: Option<String>,
+    pub source: String,
+    pub api_key_source: String,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,6 +288,47 @@ pub fn apply_update(
     next.llm = apply_provider_update(next.llm, request.llm, false)?;
     next.updated_at = Some(Utc::now().to_rfc3339());
     Ok(next)
+}
+
+pub fn resolve_provider_probe(
+    current: &RuntimeProviderConfig,
+    api_base: &str,
+    model: Option<&str>,
+    api_key: Option<&str>,
+    clear_api_key: bool,
+) -> ResolvedProviderProbe {
+    let api_base_override = api_base.trim();
+    let model_override = model.map(str::trim).filter(|value| !value.is_empty());
+    let api_key_override = api_key.map(str::trim).filter(|value| !value.is_empty());
+
+    let resolved_api_base = if api_base_override.is_empty() {
+        current.api_base.clone()
+    } else {
+        api_base_override.to_string()
+    };
+    let resolved_model = model_override
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| current.model.clone());
+    let (resolved_api_key, api_key_source) = if clear_api_key {
+        (None, "cleared".to_string())
+    } else if let Some(api_key) = api_key_override {
+        (Some(api_key.to_string()), "request".to_string())
+    } else {
+        (current.api_key.clone(), current.api_key_source.clone())
+    };
+    let source = if !api_base_override.is_empty() || model_override.is_some() {
+        "request".to_string()
+    } else {
+        current.source.clone()
+    };
+
+    ResolvedProviderProbe {
+        api_base: resolved_api_base,
+        model: resolved_model,
+        api_key: resolved_api_key,
+        source,
+        api_key_source,
+    }
 }
 
 fn apply_provider_update(

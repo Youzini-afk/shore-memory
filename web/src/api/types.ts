@@ -319,12 +319,44 @@ export interface ModelConfigResponse {
   storage: ModelConfigStorageResponse
 }
 
+export type ProviderKind = 'embedding' | 'llm'
+
+export interface ListProviderModelsRequest {
+  provider: ProviderKind
+  api_base: string
+  api_key?: string
+  clear_api_key: boolean
+}
+
+export interface ListProviderModelsResponse {
+  provider: ProviderKind
+  models: string[]
+  count: number
+  source: string
+  api_key_source: string
+}
+
+export interface DetectEmbeddingDimensionRequest {
+  api_base: string
+  model: string
+  api_key?: string
+  clear_api_key: boolean
+}
+
+export interface DetectEmbeddingDimensionResponse {
+  model: string
+  dimension: number
+  source: string
+  api_key_source: string
+}
+
 export interface UpdateProviderConfigRequest {
   api_base: string
   model: string
   dimension?: number
   api_key?: string
   clear_api_key: boolean
+  auto_detect_dimension?: boolean
 }
 
 export interface UpdateModelConfigRequest {
