@@ -6,6 +6,28 @@ export type MemoryState = 'active' | 'superseded' | 'invalidated' | 'archived'
 /** 对齐 server MemoryScope 枚举：private / group / shared / system */
 export type MemoryScope = 'private' | 'group' | 'shared' | 'system'
 export type MemoryScopeHint = 'auto' | 'private' | 'group' | 'shared' | 'system'
+export type MemoryDomainKind =
+  | 'global_person'
+  | 'platform_person'
+  | 'channel_shared'
+  | 'channel_person'
+  | 'session_thread'
+
+export interface MemoryDomain {
+  kind: MemoryDomainKind
+  key: string
+  platform?: string | null
+  channel_uid?: string | null
+  session_uid?: string | null
+  person_uid?: string | null
+}
+
+export interface IdentityAliasHint {
+  account_uid: string
+  person_uid: string
+  confidence?: number | null
+}
+
 export type MemoryType =
   | 'event'
   | 'fact'
@@ -23,6 +45,13 @@ export interface MemoryRecord {
   user_uid?: string | null
   channel_uid?: string | null
   session_uid?: string | null
+  actor_account_uid?: string | null
+  actor_person_uid?: string | null
+  subject_person_uid?: string | null
+  source_platform?: string | null
+  domain_kind: MemoryDomainKind
+  domain_key: string
+  observation_at?: string | null
   scope: MemoryScope | string
   memory_type: MemoryType
   content: string
@@ -73,6 +102,11 @@ export interface ListMemoriesRequest {
   user_uid?: string | null
   channel_uid?: string | null
   session_uid?: string | null
+  actor_person_uid?: string | null
+  subject_person_uid?: string | null
+  source_platform?: string | null
+  domain_kind?: MemoryDomainKind
+  domain_key?: string | null
   scope?: MemoryScope
   state?: MemoryState
   memory_type?: string
@@ -137,6 +171,10 @@ export interface GraphRequest {
   state?: MemoryState
   user_uid?: string | null
   channel_uid?: string | null
+  actor_person_uid?: string | null
+  subject_person_uid?: string | null
+  source_platform?: string | null
+  domain_kind?: MemoryDomainKind
 }
 
 export interface GraphMemoryNode {
@@ -147,6 +185,12 @@ export interface GraphMemoryNode {
   state: MemoryState | string
   importance: number
   session_uid?: string | null
+  actor_person_uid?: string | null
+  subject_person_uid?: string | null
+  source_platform?: string | null
+  domain_kind: MemoryDomainKind
+  domain_key: string
+  observation_at?: string | null
   supersedes_memory_id?: number | null
   archived_at?: string | null
   created_at: string
@@ -205,6 +249,12 @@ export interface RecallRequest {
   user_uid?: string | null
   channel_uid?: string | null
   session_uid?: string | null
+  actor_account_uid?: string | null
+  actor_person_uid?: string | null
+  focal_person_uids?: string[]
+  source_platform?: string | null
+  domain?: MemoryDomain | null
+  observation_at?: string | null
   source?: string | null
   limit?: number
   include_state?: boolean
@@ -232,6 +282,9 @@ export interface ScoreBreakdown {
   entity: number
   contiguity: number
   scope_weight: number
+  domain_weight: number
+  person_weight: number
+  time_weight: number
   /** 融合后的最终分数 */
   combined: number
   /** 融合自适应分母 */
@@ -264,6 +317,9 @@ export interface MemorySnippet {
   time: string
   content: string
   scope: MemoryScope
+  actor_person_uid?: string | null
+  subject_person_uid?: string | null
+  domain?: MemoryDomain | null
   score?: number | null
   score_breakdown?: ScoreBreakdown | null
   entities?: EntityDraft[]

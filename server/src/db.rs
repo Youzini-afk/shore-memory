@@ -11,9 +11,19 @@ use serde_json::Value;
 
 use crate::types::{
     AgentStatePatch, AgentStateResponse, EntityRecord, ListMemoriesRequest, MemoryHistoryRecord,
-    MemoryRecord, MemoryScope, RawEventRecord, SyncSummaryResponse, TaskKind, TaskRecord,
+    MemoryDomainKind, MemoryRecord, MemoryScope, RawEventRecord, SyncSummaryResponse, TaskKind, TaskRecord,
     TaskStatus, UpdateMemoryRequest,
 };
+
+const MEMORY_SELECT_COLUMNS: &str = r#"
+                id, agent_id, user_uid, channel_uid, session_uid,
+                actor_account_uid, actor_person_uid, subject_person_uid, source_platform,
+                domain_kind, domain_key, observation_at,
+                scope, memory_type, content, content_hash, source_event_ids, linked_memory_ids,
+                tags_json, metadata_json, importance, sentiment, source, embedding_json,
+                state, valid_at, invalid_at, supersedes_memory_id,
+                created_at, updated_at, archived_at, access_count, last_accessed_at
+"#;
 
 #[derive(Debug, Clone)]
 pub struct MetadataStore {
@@ -58,6 +68,13 @@ pub struct NewMemoryRecord {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    pub actor_account_uid: Option<String>,
+    pub actor_person_uid: Option<String>,
+    pub subject_person_uid: Option<String>,
+    pub source_platform: Option<String>,
+    pub domain_kind: MemoryDomainKind,
+    pub domain_key: String,
+    pub observation_at: Option<String>,
     pub scope: MemoryScope,
     pub memory_type: String,
     pub content: String,
@@ -169,6 +186,13 @@ impl MetadataStore {
                 user_uid TEXT,
                 channel_uid TEXT,
                 session_uid TEXT,
+                actor_account_uid TEXT,
+                actor_person_uid TEXT,
+                subject_person_uid TEXT,
+                source_platform TEXT,
+                domain_kind TEXT,
+                domain_key TEXT,
+                observation_at TEXT,
                 scope TEXT NOT NULL,
                 role TEXT NOT NULL,
                 content TEXT NOT NULL,
@@ -183,6 +207,13 @@ impl MetadataStore {
                 user_uid TEXT,
                 channel_uid TEXT,
                 session_uid TEXT,
+                actor_account_uid TEXT,
+                actor_person_uid TEXT,
+                subject_person_uid TEXT,
+                source_platform TEXT,
+                domain_kind TEXT NOT NULL DEFAULT 'session_thread',
+                domain_key TEXT NOT NULL DEFAULT '',
+                observation_at TEXT,
                 scope TEXT NOT NULL,
                 memory_type TEXT NOT NULL DEFAULT 'event',
                 content TEXT NOT NULL,
@@ -267,8 +298,20 @@ impl MetadataStore {
             CREATE INDEX IF NOT EXISTS idx_raw_events_session_created
             ON raw_events(agent_id, session_uid, created_at DESC);
 
+            CREATE INDEX IF NOT EXISTS idx_raw_events_agent_person_created
+            ON raw_events(agent_id, actor_person_uid, created_at DESC);
+
             CREATE INDEX IF NOT EXISTS idx_memories_agent_scope_created
             ON memories(agent_id, scope, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_memories_agent_person_created
+            ON memories(agent_id, actor_person_uid, subject_person_uid, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_memories_agent_domain_created
+            ON memories(agent_id, domain_kind, domain_key, created_at DESC);
+
+            CREATE INDEX IF NOT EXISTS idx_memories_agent_platform_created
+            ON memories(agent_id, source_platform, created_at DESC);
 
             CREATE INDEX IF NOT EXISTS idx_memories_agent_archived
             ON memories(agent_id, archived_at, created_at DESC);
@@ -334,6 +377,13 @@ impl MetadataStore {
         user_uid: Option<&str>,
         channel_uid: Option<&str>,
         session_uid: Option<&str>,
+        actor_account_uid: Option<&str>,
+        actor_person_uid: Option<&str>,
+        subject_person_uid: Option<&str>,
+        source_platform: Option<&str>,
+        domain_kind: Option<MemoryDomainKind>,
+        domain_key: Option<&str>,
+        observation_at: Option<&str>,
         scope: &MemoryScope,
         source: &str,
         messages: &[(String, String)],
@@ -344,12 +394,15 @@ impl MetadataStore {
         let tx = conn.unchecked_transaction()?;
         let mut ids = Vec::with_capacity(messages.len());
         for (role, content) in messages {
+            let domain_kind_raw = domain_kind.map(|kind| kind.as_str().to_string());
             tx.execute(
                 r#"
                 INSERT INTO raw_events (
                     event_kind, agent_id, user_uid, channel_uid, session_uid,
+                    actor_account_uid, actor_person_uid, subject_person_uid,
+                    source_platform, domain_kind, domain_key, observation_at,
                     scope, role, content, source, metadata_json, created_at
-                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+                ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
                 "#,
                 params![
                     "turn",
@@ -357,6 +410,13 @@ impl MetadataStore {
                     user_uid,
                     channel_uid,
                     session_uid,
+                    actor_account_uid,
+                    actor_person_uid,
+                    subject_person_uid,
+                    source_platform,
+                    domain_kind_raw,
+                    domain_key,
+                    observation_at,
                     scope.as_str(),
                     role,
                     content,
@@ -378,6 +438,13 @@ impl MetadataStore {
         user_uid: Option<&str>,
         channel_uid: Option<&str>,
         session_uid: Option<&str>,
+        actor_account_uid: Option<&str>,
+        actor_person_uid: Option<&str>,
+        subject_person_uid: Option<&str>,
+        source_platform: Option<&str>,
+        domain_kind: Option<MemoryDomainKind>,
+        domain_key: Option<&str>,
+        observation_at: Option<&str>,
         scope: &MemoryScope,
         role: &str,
         content: &str,
@@ -385,12 +452,15 @@ impl MetadataStore {
         metadata: &Value,
     ) -> Result<i64> {
         let conn = self.open_conn()?;
+        let domain_kind_raw = domain_kind.map(|kind| kind.as_str().to_string());
         conn.execute(
             r#"
             INSERT INTO raw_events (
                 event_kind, agent_id, user_uid, channel_uid, session_uid,
+                actor_account_uid, actor_person_uid, subject_person_uid,
+                source_platform, domain_kind, domain_key, observation_at,
                 scope, role, content, source, metadata_json, created_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18)
             "#,
             params![
                 event_kind,
@@ -398,6 +468,13 @@ impl MetadataStore {
                 user_uid,
                 channel_uid,
                 session_uid,
+                actor_account_uid,
+                actor_person_uid,
+                subject_person_uid,
+                source_platform,
+                domain_kind_raw,
+                domain_key,
+                observation_at,
                 scope.as_str(),
                 role,
                 content,
@@ -522,19 +599,16 @@ impl MetadataStore {
         content_hash: &str,
     ) -> Result<Option<MemoryRecord>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
+        let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE agent_id = ?1 AND content_hash = ?2
             LIMIT 1
-            "#,
-        )?;
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
         stmt.query_row(params![agent_id, content_hash], row_to_memory_record)
             .optional()
             .map_err(Into::into)
@@ -796,22 +870,19 @@ impl MetadataStore {
         // Memories strictly before the reference (most recent of those first).
         if before > 0 {
             let (sql, rows): (&str, Vec<MemoryRecord>) = if let Some(sid) = session_uid {
-                let mut stmt = conn.prepare(
+                let sql = format!(
                     r#"
                     SELECT
-                        id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                        content_hash, source_event_ids, linked_memory_ids,
-                        tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                        state, valid_at, invalid_at, supersedes_memory_id,
-                        created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
                     FROM memories
                     WHERE agent_id = ?1 AND session_uid = ?2 AND archived_at IS NULL
                       AND id <> ?3
                       AND (created_at < ?4 OR (created_at = ?4 AND id < ?3))
                     ORDER BY created_at DESC, id DESC
                     LIMIT ?5
-                    "#,
-                )?;
+                    "#
+                );
+                let mut stmt = conn.prepare(&sql)?;
                 let rows = stmt
                     .query_map(
                         params![
@@ -826,22 +897,19 @@ impl MetadataStore {
                     .collect::<rusqlite::Result<Vec<_>>>()?;
                 ("with_session", rows)
             } else {
-                let mut stmt = conn.prepare(
+                let sql = format!(
                     r#"
                     SELECT
-                        id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                        content_hash, source_event_ids, linked_memory_ids,
-                        tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                        state, valid_at, invalid_at, supersedes_memory_id,
-                        created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
                     FROM memories
                     WHERE agent_id = ?1 AND session_uid IS NULL AND archived_at IS NULL
                       AND id <> ?2
                       AND (created_at < ?3 OR (created_at = ?3 AND id < ?2))
                     ORDER BY created_at DESC, id DESC
                     LIMIT ?4
-                    "#,
-                )?;
+                    "#
+                );
+                let mut stmt = conn.prepare(&sql)?;
                 let rows = stmt
                     .query_map(
                         params![agent_id, reference_memory_id, ref_created, before as i64],
@@ -856,22 +924,19 @@ impl MetadataStore {
 
         if after > 0 {
             let (sql, rows): (&str, Vec<MemoryRecord>) = if let Some(sid) = session_uid {
-                let mut stmt = conn.prepare(
+                let sql = format!(
                     r#"
                     SELECT
-                        id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                        content_hash, source_event_ids, linked_memory_ids,
-                        tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                        state, valid_at, invalid_at, supersedes_memory_id,
-                        created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
                     FROM memories
                     WHERE agent_id = ?1 AND session_uid = ?2 AND archived_at IS NULL
                       AND id <> ?3
                       AND (created_at > ?4 OR (created_at = ?4 AND id > ?3))
                     ORDER BY created_at ASC, id ASC
                     LIMIT ?5
-                    "#,
-                )?;
+                    "#
+                );
+                let mut stmt = conn.prepare(&sql)?;
                 let rows = stmt
                     .query_map(
                         params![
@@ -886,22 +951,19 @@ impl MetadataStore {
                     .collect::<rusqlite::Result<Vec<_>>>()?;
                 ("with_session", rows)
             } else {
-                let mut stmt = conn.prepare(
+                let sql = format!(
                     r#"
                     SELECT
-                        id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                        content_hash, source_event_ids, linked_memory_ids,
-                        tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                        state, valid_at, invalid_at, supersedes_memory_id,
-                        created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
                     FROM memories
                     WHERE agent_id = ?1 AND session_uid IS NULL AND archived_at IS NULL
                       AND id <> ?2
                       AND (created_at > ?3 OR (created_at = ?3 AND id > ?2))
                     ORDER BY created_at ASC, id ASC
                     LIMIT ?4
-                    "#,
-                )?;
+                    "#
+                );
+                let mut stmt = conn.prepare(&sql)?;
                 let rows = stmt
                     .query_map(
                         params![agent_id, reference_memory_id, ref_created, after as i64],
@@ -973,29 +1035,42 @@ impl MetadataStore {
                 .map(|id| Value::Number((*id).into()))
                 .collect(),
         ));
-        // Stage 3 defaults. `valid_at` falls back to `created_at` so
-        // contradiction math always has a lower bound.
         let state = if new_memory.state.trim().is_empty() {
             "active".to_string()
         } else {
             new_memory.state.clone()
         };
         let valid_at = new_memory.valid_at.clone().unwrap_or_else(|| now.clone());
+        let domain_key = if new_memory.domain_key.trim().is_empty() {
+            "default".to_string()
+        } else {
+            new_memory.domain_key.trim().to_string()
+        };
         conn.execute(
             r#"
             INSERT INTO memories (
-                agent_id, user_uid, channel_uid, session_uid, scope,
+                agent_id, user_uid, channel_uid, session_uid,
+                actor_account_uid, actor_person_uid, subject_person_uid, source_platform,
+                domain_kind, domain_key, observation_at,
+                scope,
                 memory_type, content, content_hash, source_event_ids, linked_memory_ids,
                 tags_json, metadata_json, importance, sentiment, source,
                 embedding_json, state, valid_at, invalid_at, supersedes_memory_id,
                 created_at, updated_at
-            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, NULL, ?19, ?20, ?21)
+            ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23, ?24, ?25, NULL, ?26, ?27, ?28)
             "#,
             params![
                 new_memory.agent_id,
                 new_memory.user_uid,
                 new_memory.channel_uid,
                 new_memory.session_uid,
+                new_memory.actor_account_uid,
+                new_memory.actor_person_uid,
+                new_memory.subject_person_uid,
+                new_memory.source_platform,
+                new_memory.domain_kind.as_str(),
+                domain_key,
+                new_memory.observation_at,
                 new_memory.scope.as_str(),
                 new_memory.memory_type,
                 new_memory.content,
@@ -1088,18 +1163,15 @@ impl MetadataStore {
 
     pub fn get_memory_by_id(&self, memory_id: i64) -> Result<Option<MemoryRecord>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
+        let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE id = ?1
-            "#,
-        )?;
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
         stmt.query_row(params![memory_id], row_to_memory_record)
             .optional()
             .map_err(Into::into)
@@ -1127,6 +1199,29 @@ impl MetadataStore {
         if let Some(session_uid) = request.session_uid.as_deref() {
             where_clauses.push("session_uid = ?".to_string());
             params.push(SqlValue::Text(session_uid.to_string()));
+        }
+        if let Some(actor_person_uid) = request.actor_person_uid.as_deref() {
+            where_clauses.push("actor_person_uid = ?".to_string());
+            params.push(SqlValue::Text(actor_person_uid.to_string()));
+        }
+        if let Some(subject_person_uid) = request.subject_person_uid.as_deref() {
+            where_clauses.push("subject_person_uid = ?".to_string());
+            params.push(SqlValue::Text(subject_person_uid.to_string()));
+        }
+        if let Some(source_platform) = request.source_platform.as_deref() {
+            where_clauses.push("source_platform = ?".to_string());
+            params.push(SqlValue::Text(source_platform.to_string()));
+        }
+        if let Some(domain_kind) = request.domain_kind {
+            where_clauses.push("domain_kind = ?".to_string());
+            params.push(SqlValue::Text(domain_kind.as_str().to_string()));
+        }
+        if let Some(domain_key) = request.domain_key.as_deref() {
+            let trimmed = domain_key.trim();
+            if !trimmed.is_empty() {
+                where_clauses.push("domain_key = ?".to_string());
+                params.push(SqlValue::Text(trimmed.to_string()));
+            }
         }
         if let Some(scope) = request.scope.as_ref() {
             where_clauses.push("scope = ?".to_string());
@@ -1166,11 +1261,7 @@ impl MetadataStore {
         let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE {where_sql}
             ORDER BY created_at DESC, id DESC
@@ -1220,11 +1311,7 @@ impl MetadataStore {
         let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE id IN ({})
             "#,
@@ -1244,20 +1331,17 @@ impl MetadataStore {
 
     pub fn list_recent_memories(&self, agent_id: &str, limit: usize) -> Result<Vec<MemoryRecord>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
+        let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE agent_id = ?1 AND archived_at IS NULL
             ORDER BY created_at DESC
             LIMIT ?2
-            "#,
-        )?;
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
 
         let rows = stmt.query_map(params![agent_id, limit as i64], row_to_memory_record)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -1270,20 +1354,17 @@ impl MetadataStore {
         limit: usize,
     ) -> Result<Vec<MemoryRecord>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
+        let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE agent_id = ?1 AND archived_at IS NULL
             ORDER BY importance ASC, created_at ASC
             LIMIT ?2
-            "#,
-        )?;
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
 
         let rows = stmt.query_map(params![agent_id, limit as i64], row_to_memory_record)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -1307,19 +1388,16 @@ impl MetadataStore {
 
     pub fn all_unarchived_memories(&self) -> Result<Vec<MemoryRecord>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
+        let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE archived_at IS NULL
             ORDER BY agent_id ASC, created_at ASC, id ASC
-            "#,
-        )?;
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map([], row_to_memory_record)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(Into::into)
@@ -1368,6 +1446,10 @@ impl MetadataStore {
         limit: usize,
         user_uid: Option<&str>,
         channel_uid: Option<&str>,
+        actor_person_uid: Option<&str>,
+        subject_person_uid: Option<&str>,
+        source_platform: Option<&str>,
+        domain_kind: Option<MemoryDomainKind>,
     ) -> Result<LoadedMemoryGraph> {
         if agent_id.trim().is_empty() {
             return Err(anyhow!("agent_id must not be empty"));
@@ -1394,6 +1476,22 @@ impl MetadataStore {
             filter_params.push(SqlValue::Text(user_uid.unwrap_or_default().to_string()));
             filter_params.push(SqlValue::Text(channel_uid.unwrap_or_default().to_string()));
         }
+        if let Some(actor_person_uid) = actor_person_uid {
+            filters.push("actor_person_uid = ?".to_string());
+            filter_params.push(SqlValue::Text(actor_person_uid.to_string()));
+        }
+        if let Some(subject_person_uid) = subject_person_uid {
+            filters.push("subject_person_uid = ?".to_string());
+            filter_params.push(SqlValue::Text(subject_person_uid.to_string()));
+        }
+        if let Some(source_platform) = source_platform {
+            filters.push("source_platform = ?".to_string());
+            filter_params.push(SqlValue::Text(source_platform.to_string()));
+        }
+        if let Some(domain_kind) = domain_kind {
+            filters.push("domain_kind = ?".to_string());
+            filter_params.push(SqlValue::Text(domain_kind.as_str().to_string()));
+        }
         let where_sql = filters.join(" AND ");
 
         // Total count (for "truncated" stat).
@@ -1410,11 +1508,7 @@ impl MetadataStore {
         let page_sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE {where_sql}
             ORDER BY updated_at DESC, id DESC
@@ -1524,31 +1618,27 @@ impl MetadataStore {
     ) -> Result<Vec<MemoryRecord>> {
         let conn = self.open_conn()?;
         let sql = if include_archived {
-            r#"
-            SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
-            FROM memories
-            WHERE agent_id = ?1
-            ORDER BY created_at ASC, id ASC
-            "#
+            format!(
+                r#"
+                SELECT
+{MEMORY_SELECT_COLUMNS}
+                FROM memories
+                WHERE agent_id = ?1
+                ORDER BY created_at ASC, id ASC
+                "#
+            )
         } else {
-            r#"
-            SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
-            FROM memories
-            WHERE agent_id = ?1 AND archived_at IS NULL
-            ORDER BY created_at ASC, id ASC
-            "#
+            format!(
+                r#"
+                SELECT
+{MEMORY_SELECT_COLUMNS}
+                FROM memories
+                WHERE agent_id = ?1 AND archived_at IS NULL
+                ORDER BY created_at ASC, id ASC
+                "#
+            )
         };
-        let mut stmt = conn.prepare(sql)?;
+        let mut stmt = conn.prepare(&sql)?;
         let rows = stmt.query_map(params![agent_id], row_to_memory_record)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
             .map_err(Into::into)
@@ -1684,19 +1774,16 @@ impl MetadataStore {
 
     pub fn all_active_memories(&self, agent_id: &str) -> Result<Vec<MemoryRecord>> {
         let conn = self.open_conn()?;
-        let mut stmt = conn.prepare(
+        let sql = format!(
             r#"
             SELECT
-                id, agent_id, user_uid, channel_uid, session_uid, scope, memory_type, content,
-                content_hash, source_event_ids, linked_memory_ids,
-                tags_json, metadata_json, importance, sentiment, source, embedding_json,
-                state, valid_at, invalid_at, supersedes_memory_id,
-                created_at, updated_at, archived_at, access_count, last_accessed_at
+{MEMORY_SELECT_COLUMNS}
             FROM memories
             WHERE agent_id = ?1 AND archived_at IS NULL
             ORDER BY created_at ASC, id ASC
-            "#,
-        )?;
+            "#
+        );
+        let mut stmt = conn.prepare(&sql)?;
 
         let rows = stmt.query_map(params![agent_id], row_to_memory_record)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()
@@ -1992,42 +2079,124 @@ impl MetadataStore {
 }
 
 fn row_to_memory_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryRecord> {
-    // Column order must match the 26-column SELECT list used throughout this
+    // Column order must match MEMORY_SELECT_COLUMNS used throughout this
     // file. Any reshuffle must be mirrored here.
-    let scope: String = row.get(5)?;
-    let content_hash: Option<String> = row.get(8)?;
-    let source_event_ids_json: String = row.get(9)?;
-    let linked_memory_ids_json: String = row.get(10)?;
-    let tags_json: String = row.get(11)?;
-    let metadata_json: String = row.get(12)?;
+    let scope_raw: String = row.get(12)?;
+    let scope = scope_raw.parse().map_err(to_from_sql_error)?;
+    let actor_account_uid: Option<String> = row.get(5)?;
+    let actor_person_uid: Option<String> = row.get(6)?;
+    let subject_person_uid: Option<String> = row.get(7)?;
+    let source_platform: Option<String> = row.get(8)?;
+    let domain_kind_raw: Option<String> = row.get(9)?;
+    let domain_key_raw: Option<String> = row.get(10)?;
+    let content_hash: Option<String> = row.get(15)?;
+    let source_event_ids_json: String = row.get(16)?;
+    let linked_memory_ids_json: String = row.get(17)?;
+    let tags_json: String = row.get(18)?;
+    let metadata_json: String = row.get(19)?;
+
+    let domain_kind = domain_kind_raw
+        .as_deref()
+        .and_then(|raw| raw.parse::<MemoryDomainKind>().ok())
+        .unwrap_or_else(|| default_domain_kind_for_scope(scope));
+    let domain_key = normalized_domain_key(
+        domain_kind,
+        domain_key_raw.as_deref(),
+        actor_person_uid.as_deref(),
+        subject_person_uid.as_deref(),
+        source_platform.as_deref(),
+        row.get::<_, Option<String>>(3)?.as_deref(),
+        row.get::<_, Option<String>>(4)?.as_deref(),
+        row.get::<_, Option<String>>(2)?.as_deref(),
+    );
+
     Ok(MemoryRecord {
         id: row.get(0)?,
         agent_id: row.get(1)?,
         user_uid: row.get(2)?,
         channel_uid: row.get(3)?,
         session_uid: row.get(4)?,
-        scope: scope.parse().map_err(to_from_sql_error)?,
-        memory_type: row.get(6)?,
-        content: row.get(7)?,
+        actor_account_uid,
+        actor_person_uid,
+        subject_person_uid,
+        source_platform,
+        domain_kind,
+        domain_key,
+        observation_at: row.get(11)?,
+        scope,
+        memory_type: row.get(13)?,
+        content: row.get(14)?,
         content_hash,
         source_event_ids: parse_i64_array(&source_event_ids_json),
         linked_memory_ids: parse_i64_array(&linked_memory_ids_json),
         tags: parse_tags(&tags_json),
         metadata: parse_json_value(&metadata_json),
-        importance: row.get(13)?,
-        sentiment: row.get(14)?,
-        source: row.get(15)?,
-        embedding_json: row.get(16)?,
-        state: row.get(17)?,
-        valid_at: row.get(18)?,
-        invalid_at: row.get(19)?,
-        supersedes_memory_id: row.get(20)?,
-        created_at: row.get(21)?,
-        updated_at: row.get(22)?,
-        archived_at: row.get(23)?,
-        access_count: row.get(24)?,
-        last_accessed_at: row.get(25)?,
+        importance: row.get(20)?,
+        sentiment: row.get(21)?,
+        source: row.get(22)?,
+        embedding_json: row.get(23)?,
+        state: row.get(24)?,
+        valid_at: row.get(25)?,
+        invalid_at: row.get(26)?,
+        supersedes_memory_id: row.get(27)?,
+        created_at: row.get(28)?,
+        updated_at: row.get(29)?,
+        archived_at: row.get(30)?,
+        access_count: row.get(31)?,
+        last_accessed_at: row.get(32)?,
     })
+}
+
+fn default_domain_kind_for_scope(scope: MemoryScope) -> MemoryDomainKind {
+    match scope {
+        MemoryScope::Private => MemoryDomainKind::PlatformPerson,
+        MemoryScope::Group => MemoryDomainKind::ChannelShared,
+        MemoryScope::Shared | MemoryScope::System => MemoryDomainKind::SessionThread,
+    }
+}
+
+fn normalized_domain_key(
+    domain_kind: MemoryDomainKind,
+    domain_key: Option<&str>,
+    actor_person_uid: Option<&str>,
+    subject_person_uid: Option<&str>,
+    source_platform: Option<&str>,
+    channel_uid: Option<&str>,
+    session_uid: Option<&str>,
+    user_uid: Option<&str>,
+) -> String {
+    let trimmed = domain_key.unwrap_or_default().trim();
+    if !trimmed.is_empty() {
+        return trimmed.to_string();
+    }
+    match domain_kind {
+        MemoryDomainKind::GlobalPerson => subject_person_uid
+            .or(actor_person_uid)
+            .or(user_uid)
+            .unwrap_or("global_person")
+            .to_string(),
+        MemoryDomainKind::PlatformPerson => {
+            let platform = source_platform.unwrap_or("unknown_platform");
+            let person = subject_person_uid
+                .or(actor_person_uid)
+                .or(user_uid)
+                .unwrap_or("unknown_person");
+            format!("{platform}:{person}")
+        }
+        MemoryDomainKind::ChannelShared => channel_uid.unwrap_or("channel_shared").to_string(),
+        MemoryDomainKind::ChannelPerson => {
+            let channel = channel_uid.unwrap_or("channel");
+            let person = subject_person_uid
+                .or(actor_person_uid)
+                .or(user_uid)
+                .unwrap_or("unknown_person");
+            format!("{channel}:{person}")
+        }
+        MemoryDomainKind::SessionThread => session_uid
+            .or(channel_uid)
+            .unwrap_or("session_thread")
+            .to_string(),
+    }
 }
 
 fn row_to_memory_history_record(row: &rusqlite::Row<'_>) -> rusqlite::Result<MemoryHistoryRecord> {
@@ -2132,7 +2301,8 @@ fn to_from_sql_error(err: String) -> rusqlite::Error {
 mod tests {
     use super::{MetadataStore, NewMemoryRecord};
     use crate::types::{
-        ListMemoriesRequest, MemoryScope, TaskKind, TaskStatus, UpdateMemoryRequest,
+        ListMemoriesRequest, MemoryDomainKind, MemoryScope, TaskKind, TaskStatus,
+        UpdateMemoryRequest,
     };
     use serde_json::json;
     use tempfile::tempdir;
@@ -2143,6 +2313,13 @@ mod tests {
             user_uid: Some("u1".to_string()),
             channel_uid: None,
             session_uid: Some("s1".to_string()),
+            actor_account_uid: Some("telegram:u1".to_string()),
+            actor_person_uid: Some("person:u1".to_string()),
+            subject_person_uid: Some("person:u1".to_string()),
+            source_platform: Some("telegram".to_string()),
+            domain_kind: MemoryDomainKind::PlatformPerson,
+            domain_key: "telegram:person:u1".to_string(),
+            observation_at: Some("2026-01-01T00:00:00Z".to_string()),
             scope: MemoryScope::Private,
             memory_type: "event".to_string(),
             content: content.to_string(),
@@ -2179,6 +2356,13 @@ mod tests {
                 Some("u1"),
                 None,
                 Some("s1"),
+                Some("telegram:u1"),
+                Some("person:u1"),
+                Some("person:u1"),
+                Some("telegram"),
+                Some(MemoryDomainKind::PlatformPerson),
+                Some("telegram:person:u1"),
+                Some("2026-01-01T00:00:00Z"),
                 &MemoryScope::Private,
                 "test",
                 &messages,
@@ -2547,6 +2731,11 @@ mod tests {
                 user_uid: None,
                 channel_uid: None,
                 session_uid: None,
+                actor_person_uid: None,
+                subject_person_uid: None,
+                source_platform: None,
+                domain_kind: None,
+                domain_key: None,
                 scope: None,
                 state: None,
                 memory_type: None,
@@ -2566,6 +2755,11 @@ mod tests {
                 user_uid: None,
                 channel_uid: None,
                 session_uid: None,
+                actor_person_uid: None,
+                subject_person_uid: None,
+                source_platform: None,
+                domain_kind: None,
+                domain_key: None,
                 scope: None,
                 state: Some("archived".to_string()),
                 memory_type: None,
@@ -2700,7 +2894,7 @@ mod tests {
 
         // include_archived = false should drop m3.
         let graph = store
-            .load_memory_graph("shore", None, false, 10, None, None)
+            .load_memory_graph("shore", None, false, 10, None, None, None, None, None, None)
             .expect("graph load");
         let ids: Vec<i64> = graph.memories.iter().map(|m| m.id).collect();
         assert_eq!(ids.len(), 2);
@@ -2730,7 +2924,7 @@ mod tests {
 
         // Sanity: include_archived=true pulls m3 back in.
         let graph_all = store
-            .load_memory_graph("shore", None, true, 10, None, None)
+            .load_memory_graph("shore", None, true, 10, None, None, None, None, None, None)
             .expect("graph load archived");
         assert_eq!(graph_all.memories.len(), 3);
         assert_eq!(graph_all.total_memories, 3);
@@ -2770,6 +2964,10 @@ mod tests {
                 10,
                 Some("user:alice"),
                 Some("telegram:group:42"),
+                None,
+                None,
+                None,
+                None,
             )
             .expect("load graph full visible");
         let full_ids: Vec<i64> = full_visible.memories.iter().map(|m| m.id).collect();
@@ -2780,7 +2978,18 @@ mod tests {
 
         // Only user matches => private + shared.
         let user_visible = store
-            .load_memory_graph("shore", None, false, 10, Some("user:alice"), None)
+            .load_memory_graph(
+                "shore",
+                None,
+                false,
+                10,
+                Some("user:alice"),
+                None,
+                None,
+                None,
+                None,
+                None,
+            )
             .expect("load graph user visible");
         let user_ids: Vec<i64> = user_visible.memories.iter().map(|m| m.id).collect();
         assert!(user_ids.contains(&private_mem.id));
@@ -2797,6 +3006,10 @@ mod tests {
                 10,
                 Some("user:bob"),
                 Some("telegram:group:99"),
+                None,
+                None,
+                None,
+                None,
             )
             .expect("load graph shared only");
         let shared_ids: Vec<i64> = shared_only.memories.iter().map(|m| m.id).collect();

@@ -353,6 +353,15 @@ class ExistingMemoryHint(BaseModel):
     content: str
 
 
+class MemoryDomain(BaseModel):
+    kind: str = "session_thread"
+    key: str = ""
+    platform: Optional[str] = None
+    channel_uid: Optional[str] = None
+    session_uid: Optional[str] = None
+    person_uid: Optional[str] = None
+
+
 class EntityDraft(BaseModel):
     """Named entity mentioned by a memory (Stage 2 will persist these)."""
 
@@ -372,6 +381,11 @@ class ScoreTurnRequest(BaseModel):
     user_uid: Optional[str] = None
     channel_uid: Optional[str] = None
     session_uid: Optional[str] = None
+    actor_account_uid: Optional[str] = None
+    actor_person_uid: Optional[str] = None
+    subject_person_uid: Optional[str] = None
+    source_platform: Optional[str] = None
+    domain: Optional[MemoryDomain] = None
     scope: str
     source: str
     messages: list[TurnMessage]
@@ -401,6 +415,12 @@ class MemoryDraft(BaseModel):
     user_uid: Optional[str] = None
     channel_uid: Optional[str] = None
     session_uid: Optional[str] = None
+    actor_account_uid: Optional[str] = None
+    actor_person_uid: Optional[str] = None
+    subject_person_uid: Optional[str] = None
+    source_platform: Optional[str] = None
+    domain: Optional[MemoryDomain] = None
+    observation_at: Optional[str] = None
     # Stage 1 additions: attribution + linking + entity pass-through.
     attributed_to: Optional[str] = None
     linked_existing_indices: list[str] = Field(default_factory=list)
@@ -798,7 +818,7 @@ async def reflect(req: ReflectRequest) -> ReflectResponse:
 _SCORE_TURN_SYSTEM_PROMPT = """你是 shore-memory 的记忆抽取器。任务是从一段多轮对话里抽取值得长期保留的事实、偏好、计划、关系、事件等。
 
 # 输入（user 消息是一个 JSON 对象）
-- identity: 身份上下文（agent_id / scope / source / user_uid / channel_uid / session_uid），用于回填你抽取出的每条记忆。
+- identity: 身份上下文（agent_id / scope / source / user_uid / channel_uid / session_uid / actor_account_uid / actor_person_uid / subject_person_uid / source_platform / domain），用于回填你抽取出的每条记忆。
 - observation_date: 当前对话发生的时间（ISO-8601），是唯一的时间锚点。
 - new_messages: 当前 turn 的消息数组，格式 [{"role": "user"/"assistant", "content": "..."}]。只从这里抽取。
 - last_k_events: 同一 session 里更早的消息（时间升序，最早在前），用来解析指代和背景。不要从这里抽记忆。
@@ -832,12 +852,18 @@ _SCORE_TURN_SYSTEM_PROMPT = """你是 shore-memory 的记忆抽取器。任务�
       "tags": ["..."],
       "entities": [{"name": "张三", "entity_type": "PERSON"}],
       "valid_at": "YYYY-MM-DD" | null,
-      "metadata": { "...": "..." },
       "scope": "private" | "group" | "shared" | "system",
       "source": "...",
       "user_uid": "...",
       "channel_uid": "...",
-      "session_uid": "..."
+      "session_uid": "...",
+      "actor_account_uid": "...",
+      "actor_person_uid": "...",
+      "subject_person_uid": "...",
+      "source_platform": "telegram" | "discord" | "qq" | "...",
+      "domain": {"kind": "...", "key": "...", "platform": null, "channel_uid": null, "session_uid": null, "person_uid": null},
+      "observation_at": "ISO-8601" | null,
+      "metadata": { "reason": "为什么值得记" }
     }
   ],
   "state_patch": {
@@ -850,7 +876,7 @@ _SCORE_TURN_SYSTEM_PROMPT = """你是 shore-memory 的记忆抽取器。任务�
 # 关键提醒
 - 如果 new_messages 全是寒暄或没有可抽取的事实，直接返回 {"memories": []}。
 - entity_type 建议使用：PERSON、PLACE、ORG、PRODUCT、WORK、BRAND、EVENT、OTHER。
-- scope/source/user_uid/channel_uid/session_uid 默认直接复用 identity 的值。
+- scope/source/user_uid/channel_uid/session_uid 以及 actor_*/domain/source_platform 默认直接复用 identity 的值。
 - 不要在响应里输出 JSON 以外的任何内容。
 """
 
@@ -917,6 +943,16 @@ def _coerce_memory_draft(item: dict[str, Any], req: ScoreTurnRequest) -> MemoryD
             if text:
                 linked_existing_indices.append(text)
 
+    domain_raw = item.get("domain")
+    domain: Optional[MemoryDomain]
+    if isinstance(domain_raw, dict):
+        try:
+            domain = MemoryDomain.model_validate(domain_raw)
+        except Exception:
+            domain = req.domain
+    else:
+        domain = req.domain
+
     return MemoryDraft(
         content=str(item.get("content", "")).strip(),
         tags=[str(tag) for tag in (item.get("tags") or []) if str(tag).strip()],
@@ -929,6 +965,16 @@ def _coerce_memory_draft(item: dict[str, Any], req: ScoreTurnRequest) -> MemoryD
         user_uid=str(item.get("user_uid", req.user_uid or "")).strip() or req.user_uid,
         channel_uid=str(item.get("channel_uid", req.channel_uid or "")).strip() or req.channel_uid,
         session_uid=str(item.get("session_uid", req.session_uid or "")).strip() or req.session_uid,
+        actor_account_uid=str(item.get("actor_account_uid", req.actor_account_uid or "")).strip()
+        or req.actor_account_uid,
+        actor_person_uid=str(item.get("actor_person_uid", req.actor_person_uid or "")).strip()
+        or req.actor_person_uid,
+        subject_person_uid=str(item.get("subject_person_uid", req.subject_person_uid or "")).strip()
+        or req.subject_person_uid,
+        source_platform=str(item.get("source_platform", req.source_platform or "")).strip()
+        or req.source_platform,
+        domain=domain,
+        observation_at=as_optional_str(item.get("observation_at")) or req.observation_date,
         attributed_to=as_optional_str(item.get("attributed_to")),
         linked_existing_indices=linked_existing_indices,
         entities=entities,
@@ -945,6 +991,11 @@ def _build_score_turn_user_payload(req: ScoreTurnRequest) -> dict[str, Any]:
             "user_uid": req.user_uid,
             "channel_uid": req.channel_uid,
             "session_uid": req.session_uid,
+            "actor_account_uid": req.actor_account_uid,
+            "actor_person_uid": req.actor_person_uid,
+            "subject_person_uid": req.subject_person_uid,
+            "source_platform": req.source_platform,
+            "domain": req.domain.model_dump() if req.domain is not None else None,
         },
         "observation_date": req.observation_date,
         "new_messages": [msg.model_dump() for msg in req.messages],
@@ -1205,6 +1256,12 @@ def heuristic_score_turn(req: ScoreTurnRequest) -> ScoreTurnResponse:
         user_uid=req.user_uid,
         channel_uid=req.channel_uid,
         session_uid=req.session_uid,
+        actor_account_uid=req.actor_account_uid,
+        actor_person_uid=req.actor_person_uid,
+        subject_person_uid=req.subject_person_uid,
+        source_platform=req.source_platform,
+        domain=req.domain,
+        observation_at=req.observation_date,
     )
 
     state_patch = None

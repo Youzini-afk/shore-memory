@@ -40,7 +40,8 @@ use crate::types::{
     EventMessageRequest, ExistingMemoryHint, ExportMemoriesRequest, ExportMemoriesResponse,
     GraphEntityNode, GraphMemoryEntityEdge, GraphMemoryNode, GraphRequest, GraphResponse,
     GraphStats, GraphSupersedeEdge, ListMemoriesRequest, ListMemoriesResponse,
-    MemoryDetailResponse, MemoryQueryDebug, MemoryRecord, MemoryScope, MemorySnippet,
+    MemoryDetailResponse, MemoryDomain, MemoryDomainKind, MemoryQueryDebug, MemoryRecord,
+    MemoryScope, MemorySnippet,
     RecallQueryPlan, RecallRecipe, RecallRequest, RecallResponse, ScoreBreakdown, ServerEvent,
     SyncSummaryResponse, TaskActionResponse, TaskKind, TaskRecord, TurnEventRequest, TurnMessage,
     UpdateMemoryRequest, UpdateMemoryResponse, WorkerMemoryDraft, WorkerScoreTurnRequest,
@@ -65,6 +66,9 @@ struct RecallScoredCandidate {
     memory: MemoryRecord,
     signals: FusionInputs,
     scope_weight: f32,
+    domain_weight: f32,
+    person_weight: f32,
+    time_weight: f32,
     combined: f32,
     divisor: f32,
     entities: Vec<EntityDraft>,
@@ -80,6 +84,9 @@ struct AggregatedRecallCandidate {
     memory: MemoryRecord,
     signals: FusionInputs,
     scope_weight: f32,
+    domain_weight: f32,
+    person_weight: f32,
+    time_weight: f32,
     combined: f32,
     divisor: f32,
     entities: Vec<EntityDraft>,
@@ -388,6 +395,9 @@ impl AppState {
             let normalized = draft.content.trim();
             if normalized.is_empty() {
                 continue;
+            }
+            if draft.observation_at.is_none() {
+                draft.observation_at = enriched.observation_date.clone();
             }
             let content_hash = blake3::hash(normalized.as_bytes()).to_hex().to_string();
 
@@ -1350,6 +1360,9 @@ impl AppState {
             else {
                 continue;
             };
+            let domain_weight = domain_weight_for_recall(request, request_scope, memory);
+            let person_weight = person_weight_for_recall(request, memory);
+            let time_weight = time_weight_for_recall(request.observation_at.as_deref(), now, memory);
             if !include_invalid_flag && !memory.is_currently_valid(now) {
                 continue;
             }
@@ -1364,7 +1377,10 @@ impl AppState {
                 memory: memory.clone(),
                 signals,
                 scope_weight,
-                combined: combined * scope_weight,
+                domain_weight,
+                person_weight,
+                time_weight,
+                combined: combined * scope_weight * domain_weight * person_weight * time_weight,
                 divisor,
                 entities: entities_by_memory.remove(id).unwrap_or_default(),
             });
@@ -1438,6 +1454,9 @@ impl AppState {
                         memory: candidate.memory.clone(),
                         signals: candidate.signals,
                         scope_weight: candidate.scope_weight,
+                        domain_weight: candidate.domain_weight,
+                        person_weight: candidate.person_weight,
+                        time_weight: candidate.time_weight,
                         combined: candidate.combined,
                         divisor: candidate.divisor,
                         entities: candidate.entities.clone(),
@@ -1455,6 +1474,9 @@ impl AppState {
                     entry.memory = candidate.memory;
                     entry.signals = candidate.signals;
                     entry.scope_weight = candidate.scope_weight;
+                    entry.domain_weight = candidate.domain_weight;
+                    entry.person_weight = candidate.person_weight;
+                    entry.time_weight = candidate.time_weight;
                     entry.combined = candidate.combined;
                     entry.divisor = candidate.divisor;
                     entry.best_subquery_index = Some(query_index);
@@ -1488,6 +1510,10 @@ impl AppState {
                 else {
                     continue;
                 };
+                let domain_weight = domain_weight_for_recall(&request, request_scope, &memory);
+                let person_weight = person_weight_for_recall(&request, &memory);
+                let time_weight =
+                    time_weight_for_recall(request.observation_at.as_deref(), &now, &memory);
                 if !include_invalid_flag && !memory.is_currently_valid(&now) {
                     continue;
                 }
@@ -1497,6 +1523,9 @@ impl AppState {
                         memory,
                         signals: FusionInputs::default(),
                         scope_weight,
+                        domain_weight,
+                        person_weight,
+                        time_weight,
                         combined: 0.0,
                         divisor: zero_divisor,
                         entities: Vec::new(),
@@ -1533,6 +1562,9 @@ impl AppState {
                         entity: s.signals.entity,
                         contiguity: s.signals.contiguity,
                         scope_weight: s.scope_weight,
+                        domain_weight: s.domain_weight,
+                        person_weight: s.person_weight,
+                        time_weight: s.time_weight,
                         combined: s.combined,
                         divisor: s.divisor,
                     })
@@ -1554,9 +1586,12 @@ impl AppState {
                 };
                 MemorySnippet {
                     id: s.memory.id,
-                    time: s.memory.created_at,
-                    content: s.memory.content,
+                    time: s.memory.effective_time(),
+                    content: s.memory.content.clone(),
                     scope: s.memory.scope,
+                    actor_person_uid: s.memory.actor_person_uid.clone(),
+                    subject_person_uid: s.memory.subject_person_uid.clone(),
+                    domain: Some(s.memory.domain_descriptor()),
                     score: Some(s.combined),
                     score_breakdown,
                     entities: s.entities,
@@ -1606,11 +1641,28 @@ impl AppState {
     ) -> Result<MemoryRecord> {
         let _reindex_guard = self.reindex_lock.read().await;
         let previous_memory_id = self.store.get_latest_memory_id_for_agent(agent_id)?;
+        let (domain_kind, domain_key) = resolve_domain_for_write(
+            draft.domain.as_ref(),
+            draft.scope,
+            draft.source_platform.as_deref(),
+            draft.channel_uid.as_deref(),
+            draft.session_uid.as_deref(),
+            draft.actor_person_uid.as_deref(),
+            draft.subject_person_uid.as_deref(),
+            draft.user_uid.as_deref(),
+        );
         let record = self.store.insert_memory(&NewMemoryRecord {
             agent_id: agent_id.to_string(),
             user_uid: draft.user_uid.clone(),
             channel_uid: draft.channel_uid.clone(),
             session_uid: draft.session_uid.clone(),
+            actor_account_uid: draft.actor_account_uid.clone(),
+            actor_person_uid: draft.actor_person_uid.clone(),
+            subject_person_uid: draft.subject_person_uid.clone(),
+            source_platform: draft.source_platform.clone(),
+            domain_kind,
+            domain_key,
+            observation_at: draft.observation_at.clone(),
             scope: draft.scope.clone(),
             memory_type: draft.memory_type.clone(),
             content: draft.content.clone(),
@@ -1901,6 +1953,18 @@ impl AppState {
                                 user_uid: None,
                                 channel_uid: None,
                                 session_uid: Some("model-config-test-session".to_string()),
+                                actor_account_uid: None,
+                                actor_person_uid: None,
+                                subject_person_uid: None,
+                                source_platform: Some("test".to_string()),
+                                domain: Some(MemoryDomain {
+                                    kind: MemoryDomainKind::SessionThread,
+                                    key: "model-config-test-session".to_string(),
+                                    platform: Some("test".to_string()),
+                                    channel_uid: None,
+                                    session_uid: Some("model-config-test-session".to_string()),
+                                    person_uid: None,
+                                }),
                                 scope: MemoryScope::Shared,
                                 source: "model_config_test".to_string(),
                                 messages: vec![TurnMessage {
@@ -2218,6 +2282,16 @@ async fn events_turn(
     }
 
     let scope = infer_scope(request.scope_hint.clone(), request.channel_uid.as_deref());
+    let (domain_kind, domain_key) = resolve_domain_for_write(
+        request.domain.as_ref(),
+        scope,
+        request.source_platform.as_deref(),
+        request.channel_uid.as_deref(),
+        request.session_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        request.subject_person_uid.as_deref(),
+        request.user_uid.as_deref(),
+    );
     let metadata = request.metadata.clone().unwrap_or_else(|| json!({}));
     let pairs = request
         .messages
@@ -2229,6 +2303,13 @@ async fn events_turn(
         request.user_uid.as_deref(),
         request.channel_uid.as_deref(),
         request.session_uid.as_deref(),
+        request.actor_account_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        request.subject_person_uid.as_deref(),
+        request.source_platform.as_deref(),
+        Some(domain_kind),
+        Some(domain_key.as_str()),
+        request.observation_at.as_deref(),
         &scope,
         &request.source,
         &pairs,
@@ -2244,10 +2325,16 @@ async fn events_turn(
                 "user_uid": request.user_uid,
                 "channel_uid": request.channel_uid,
                 "session_uid": request.session_uid,
+                "actor_account_uid": request.actor_account_uid,
+                "actor_person_uid": request.actor_person_uid,
+                "subject_person_uid": request.subject_person_uid,
+                "source_platform": request.source_platform,
+                "domain": request.domain,
                 "scope": scope,
                 "source": request.source,
                 "messages": request.messages,
                 "metadata": metadata,
+                "observation_date": request.observation_at,
             },
             "source_event_ids": source_event_ids,
         }),
@@ -2302,6 +2389,16 @@ async fn events_message(
         return Err(ServiceError::BadRequest("content is required".to_string()));
     }
     let scope = infer_scope(request.scope_hint.clone(), request.channel_uid.as_deref());
+    let (domain_kind, domain_key) = resolve_domain_for_write(
+        request.domain.as_ref(),
+        scope,
+        request.source_platform.as_deref(),
+        request.channel_uid.as_deref(),
+        request.session_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        request.subject_person_uid.as_deref(),
+        request.user_uid.as_deref(),
+    );
     let metadata = request.metadata.clone().unwrap_or_else(|| json!({}));
     let role = request.role.clone().unwrap_or_else(|| "system".to_string());
 
@@ -2311,6 +2408,13 @@ async fn events_message(
         request.user_uid.as_deref(),
         request.channel_uid.as_deref(),
         request.session_uid.as_deref(),
+        request.actor_account_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        request.subject_person_uid.as_deref(),
+        request.source_platform.as_deref(),
+        Some(domain_kind),
+        Some(domain_key.as_str()),
+        request.observation_at.as_deref(),
         &scope,
         &role,
         &request.content,
@@ -2328,10 +2432,16 @@ async fn events_message(
                     "user_uid": request.user_uid,
                     "channel_uid": request.channel_uid,
                     "session_uid": request.session_uid,
+                    "actor_account_uid": request.actor_account_uid,
+                    "actor_person_uid": request.actor_person_uid,
+                    "subject_person_uid": request.subject_person_uid,
+                    "source_platform": request.source_platform,
+                    "domain": request.domain,
                     "scope": scope,
                     "source": request.source,
                     "messages": [{ "role": role, "content": request.content }],
                     "metadata": metadata,
+                    "observation_date": request.observation_at,
                 },
                 "source_event_ids": [source_event_id],
             }),
@@ -2407,6 +2517,16 @@ async fn create_memory(
     let previous_memory_id = state
         .store
         .get_latest_memory_id_for_agent(&request.agent_id)?;
+    let (domain_kind, domain_key) = resolve_domain_for_write(
+        request.domain.as_ref(),
+        request.scope,
+        request.source_platform.as_deref(),
+        request.channel_uid.as_deref(),
+        request.session_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        request.subject_person_uid.as_deref(),
+        request.user_uid.as_deref(),
+    );
     let normalized_content = request.content.trim();
     let content_hash = if normalized_content.is_empty() {
         None
@@ -2422,6 +2542,13 @@ async fn create_memory(
         user_uid: request.user_uid.clone(),
         channel_uid: request.channel_uid.clone(),
         session_uid: request.session_uid.clone(),
+        actor_account_uid: request.actor_account_uid.clone(),
+        actor_person_uid: request.actor_person_uid.clone(),
+        subject_person_uid: request.subject_person_uid.clone(),
+        source_platform: request.source_platform.clone(),
+        domain_kind,
+        domain_key,
+        observation_at: request.observation_at.clone(),
         scope: request.scope.clone(),
         memory_type: request
             .memory_type
@@ -2441,7 +2568,7 @@ async fn create_memory(
             .unwrap_or_else(|| "manual".to_string()),
         embedding_json: None,
         state: "active".to_string(),
-        valid_at: None,
+        valid_at: request.valid_at.clone(),
         supersedes_memory_id: None,
     })?;
     state.store.insert_memory_history(
@@ -2681,6 +2808,10 @@ async fn graph(
         limit,
         request.user_uid.as_deref(),
         request.channel_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        request.subject_person_uid.as_deref(),
+        request.source_platform.as_deref(),
+        request.domain_kind,
     )?;
 
     // Fast lookup sets for the edge/entity pruning pass.
@@ -2730,6 +2861,12 @@ async fn graph(
                 state: m.state.clone(),
                 importance: m.importance,
                 session_uid: m.session_uid.clone(),
+                actor_person_uid: m.actor_person_uid.clone(),
+                subject_person_uid: m.subject_person_uid.clone(),
+                source_platform: m.source_platform.clone(),
+                domain_kind: m.domain_kind,
+                domain_key: m.domain_key.clone(),
+                observation_at: m.observation_at.clone(),
                 supersedes_memory_id: m.supersedes_memory_id,
                 archived_at: m.archived_at.clone(),
                 created_at: m.created_at.clone(),
@@ -3540,6 +3677,127 @@ fn dedupe_entity_drafts(raw: Vec<EntityDraft>) -> Vec<EntityDraft> {
         }
     }
     out
+}
+
+fn resolve_domain_for_write(
+    domain: Option<&MemoryDomain>,
+    scope: MemoryScope,
+    source_platform: Option<&str>,
+    channel_uid: Option<&str>,
+    session_uid: Option<&str>,
+    actor_person_uid: Option<&str>,
+    subject_person_uid: Option<&str>,
+    user_uid: Option<&str>,
+) -> (MemoryDomainKind, String) {
+    let kind = domain
+        .map(|value| value.kind)
+        .unwrap_or_else(|| match scope {
+            MemoryScope::Private => MemoryDomainKind::PlatformPerson,
+            MemoryScope::Group => MemoryDomainKind::ChannelShared,
+            MemoryScope::Shared | MemoryScope::System => MemoryDomainKind::SessionThread,
+        });
+
+    let provided_key = domain.map(|value| value.key.trim()).unwrap_or_default();
+    if !provided_key.is_empty() {
+        return (kind, provided_key.to_string());
+    }
+
+    let platform = domain
+        .and_then(|value| value.platform.as_deref())
+        .or(source_platform)
+        .unwrap_or("unknown_platform");
+    let channel = domain
+        .and_then(|value| value.channel_uid.as_deref())
+        .or(channel_uid)
+        .unwrap_or("channel");
+    let session = domain
+        .and_then(|value| value.session_uid.as_deref())
+        .or(session_uid)
+        .unwrap_or("session");
+    let person = domain
+        .and_then(|value| value.person_uid.as_deref())
+        .or(subject_person_uid)
+        .or(actor_person_uid)
+        .or(user_uid)
+        .unwrap_or("person");
+
+    let key = match kind {
+        MemoryDomainKind::GlobalPerson => person.to_string(),
+        MemoryDomainKind::PlatformPerson => format!("{platform}:{person}"),
+        MemoryDomainKind::ChannelShared => channel.to_string(),
+        MemoryDomainKind::ChannelPerson => format!("{channel}:{person}"),
+        MemoryDomainKind::SessionThread => session.to_string(),
+    };
+    (kind, key)
+}
+
+fn domain_weight_for_recall(
+    request: &RecallRequest,
+    request_scope: MemoryScope,
+    memory: &MemoryRecord,
+) -> f32 {
+    let focal_person = request.focal_person_uids.first().map(String::as_str);
+    let (request_kind, request_key) = resolve_domain_for_write(
+        request.domain.as_ref(),
+        request_scope,
+        request.source_platform.as_deref(),
+        request.channel_uid.as_deref(),
+        request.session_uid.as_deref(),
+        request.actor_person_uid.as_deref(),
+        focal_person,
+        request.user_uid.as_deref(),
+    );
+    if request_kind == memory.domain_kind && request_key == memory.domain_key {
+        return 1.0;
+    }
+    if request_kind == memory.domain_kind {
+        return 0.82;
+    }
+    if request.source_platform.as_deref().is_some()
+        && request.source_platform.as_deref() == memory.source_platform.as_deref()
+    {
+        return 0.72;
+    }
+    0.55
+}
+
+fn person_weight_for_recall(request: &RecallRequest, memory: &MemoryRecord) -> f32 {
+    let mut focal_people = request.focal_person_uids.clone();
+    if let Some(actor) = request.actor_person_uid.as_ref()
+        && !focal_people.iter().any(|item| item == actor)
+    {
+        focal_people.push(actor.clone());
+    }
+    if focal_people.is_empty() {
+        return 1.0;
+    }
+    let memory_person = memory
+        .subject_person_uid
+        .as_deref()
+        .or(memory.actor_person_uid.as_deref());
+    match memory_person {
+        Some(person) if focal_people.iter().any(|item| item == person) => 1.0,
+        Some(_) => 0.62,
+        None => 0.78,
+    }
+}
+
+fn time_weight_for_recall(
+    request_observation_at: Option<&str>,
+    now: &str,
+    memory: &MemoryRecord,
+) -> f32 {
+    let reference_ts = request_observation_at.unwrap_or(now);
+    let Ok(reference) = chrono::DateTime::parse_from_rfc3339(reference_ts) else {
+        return 1.0;
+    };
+    let memory_ts_raw = memory.effective_time();
+    let Ok(memory_ts) = chrono::DateTime::parse_from_rfc3339(&memory_ts_raw) else {
+        return 1.0;
+    };
+    let delta_secs = (reference.timestamp() - memory_ts.timestamp()).unsigned_abs() as f32;
+    let days = delta_secs / 86_400.0;
+    (1.0 / (1.0 + days / 30.0)).clamp(0.55, 1.0)
 }
 
 fn cache_key_for_recall(request: &RecallRequest, recall_epoch: u64) -> String {

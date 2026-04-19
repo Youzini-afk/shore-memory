@@ -80,6 +80,77 @@ pub enum MemoryScopeHint {
     System,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "snake_case")]
+pub enum MemoryDomainKind {
+    GlobalPerson,
+    PlatformPerson,
+    ChannelShared,
+    ChannelPerson,
+    SessionThread,
+}
+
+impl MemoryDomainKind {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            Self::GlobalPerson => "global_person",
+            Self::PlatformPerson => "platform_person",
+            Self::ChannelShared => "channel_shared",
+            Self::ChannelPerson => "channel_person",
+            Self::SessionThread => "session_thread",
+        }
+    }
+}
+
+impl std::fmt::Display for MemoryDomainKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for MemoryDomainKind {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "global_person" => Ok(Self::GlobalPerson),
+            "platform_person" => Ok(Self::PlatformPerson),
+            "channel_shared" => Ok(Self::ChannelShared),
+            "channel_person" => Ok(Self::ChannelPerson),
+            "session_thread" => Ok(Self::SessionThread),
+            _ => Err(format!("invalid memory domain kind: {s}")),
+        }
+    }
+}
+
+impl Default for MemoryDomainKind {
+    fn default() -> Self {
+        Self::SessionThread
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default, PartialEq, Eq)]
+pub struct MemoryDomain {
+    pub kind: MemoryDomainKind,
+    pub key: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub session_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub person_uid: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct IdentityAliasHint {
+    pub account_uid: String,
+    pub person_uid: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum TaskKind {
@@ -170,6 +241,18 @@ pub struct RecallRequest {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_account_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_person_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub focal_person_uids: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_platform: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<MemoryDomain>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub observation_at: Option<String>,
     pub query: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subqueries: Option<Vec<String>>,
@@ -208,6 +291,12 @@ pub struct MemorySnippet {
     pub time: String,
     pub content: String,
     pub scope: MemoryScope,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub actor_person_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subject_person_uid: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub domain: Option<MemoryDomain>,
     pub score: Option<f32>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score_breakdown: Option<ScoreBreakdown>,
@@ -229,6 +318,9 @@ pub struct ScoreBreakdown {
     pub entity: f32,
     pub contiguity: f32,
     pub scope_weight: f32,
+    pub domain_weight: f32,
+    pub person_weight: f32,
+    pub time_weight: f32,
     pub combined: f32,
     pub divisor: f32,
 }
@@ -275,9 +367,23 @@ pub struct TurnEventRequest {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default)]
+    pub actor_account_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
     pub source: String,
     pub scope_hint: Option<MemoryScopeHint>,
     pub messages: Vec<TurnMessage>,
+    #[serde(default)]
+    pub domain: Option<MemoryDomain>,
+    #[serde(default)]
+    pub observation_at: Option<String>,
+    #[serde(default)]
+    pub alias_hints: Vec<IdentityAliasHint>,
     pub metadata: Option<Value>,
 }
 
@@ -293,11 +399,25 @@ pub struct EventMessageRequest {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default)]
+    pub actor_account_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
     pub source: String,
     pub event_kind: String,
     pub role: Option<String>,
     pub content: String,
     pub scope_hint: Option<MemoryScopeHint>,
+    #[serde(default)]
+    pub domain: Option<MemoryDomain>,
+    #[serde(default)]
+    pub observation_at: Option<String>,
+    #[serde(default)]
+    pub alias_hints: Vec<IdentityAliasHint>,
     pub metadata: Option<Value>,
 }
 
@@ -307,14 +427,28 @@ pub struct CreateMemoryRequest {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default)]
+    pub actor_account_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
     pub scope: MemoryScope,
     pub memory_type: Option<String>,
     pub content: String,
     pub tags: Option<Vec<String>>,
+    #[serde(default)]
+    pub domain: Option<MemoryDomain>,
+    #[serde(default)]
+    pub observation_at: Option<String>,
     pub metadata: Option<Value>,
     pub importance: Option<f32>,
     pub sentiment: Option<String>,
     pub source: Option<String>,
+    #[serde(default)]
+    pub valid_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -323,6 +457,16 @@ pub struct ListMemoriesRequest {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
+    #[serde(default)]
+    pub domain_kind: Option<MemoryDomainKind>,
+    #[serde(default)]
+    pub domain_key: Option<String>,
     pub scope: Option<MemoryScope>,
     pub state: Option<String>,
     pub memory_type: Option<String>,
@@ -386,6 +530,14 @@ pub struct GraphRequest {
     pub state: Option<String>,
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
+    #[serde(default)]
+    pub domain_kind: Option<MemoryDomainKind>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -397,6 +549,12 @@ pub struct GraphMemoryNode {
     pub state: String,
     pub importance: f32,
     pub session_uid: Option<String>,
+    pub actor_person_uid: Option<String>,
+    pub subject_person_uid: Option<String>,
+    pub source_platform: Option<String>,
+    pub domain_kind: MemoryDomainKind,
+    pub domain_key: String,
+    pub observation_at: Option<String>,
     pub supersedes_memory_id: Option<i64>,
     pub archived_at: Option<String>,
     pub created_at: String,
@@ -498,6 +656,13 @@ pub struct MemoryRecord {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    pub actor_account_uid: Option<String>,
+    pub actor_person_uid: Option<String>,
+    pub subject_person_uid: Option<String>,
+    pub source_platform: Option<String>,
+    pub domain_kind: MemoryDomainKind,
+    pub domain_key: String,
+    pub observation_at: Option<String>,
     pub scope: MemoryScope,
     pub memory_type: String,
     pub content: String,
@@ -568,6 +733,24 @@ impl MemoryRecord {
             valid_at: self.valid_at.clone(),
             invalid_at: self.invalid_at.clone(),
             supersedes_memory_id: self.supersedes_memory_id,
+        }
+    }
+
+    pub fn effective_time(&self) -> String {
+        self.valid_at
+            .clone()
+            .or_else(|| self.observation_at.clone())
+            .unwrap_or_else(|| self.created_at.clone())
+    }
+
+    pub fn domain_descriptor(&self) -> MemoryDomain {
+        MemoryDomain {
+            kind: self.domain_kind,
+            key: self.domain_key.clone(),
+            platform: self.source_platform.clone(),
+            channel_uid: self.channel_uid.clone(),
+            session_uid: self.session_uid.clone(),
+            person_uid: self.subject_person_uid.clone().or_else(|| self.actor_person_uid.clone()),
         }
     }
 }
@@ -685,6 +868,16 @@ pub struct WorkerScoreTurnRequest {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default)]
+    pub actor_account_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
+    #[serde(default)]
+    pub domain: Option<MemoryDomain>,
     pub scope: MemoryScope,
     pub source: String,
     pub messages: Vec<TurnMessage>,
@@ -735,6 +928,18 @@ pub struct WorkerMemoryDraft {
     pub user_uid: Option<String>,
     pub channel_uid: Option<String>,
     pub session_uid: Option<String>,
+    #[serde(default)]
+    pub actor_account_uid: Option<String>,
+    #[serde(default)]
+    pub actor_person_uid: Option<String>,
+    #[serde(default)]
+    pub subject_person_uid: Option<String>,
+    #[serde(default)]
+    pub source_platform: Option<String>,
+    #[serde(default)]
+    pub domain: Option<MemoryDomain>,
+    #[serde(default)]
+    pub observation_at: Option<String>,
     /// "user" | "assistant" | other — for attribution accounting.
     #[serde(default)]
     pub attributed_to: Option<String>,
@@ -881,8 +1086,9 @@ pub fn scope_visible_for_selected_request(
 #[cfg(test)]
 mod tests {
     use super::{
-        MemoryRecord, MemoryScope, MemoryScopeHint, default_recall_scopes, infer_scope,
-        scope_visible_for_request, scope_visible_for_selected_request, selected_recall_scopes,
+        MemoryDomainKind, MemoryRecord, MemoryScope, MemoryScopeHint, default_recall_scopes,
+        infer_scope, scope_visible_for_request, scope_visible_for_selected_request,
+        selected_recall_scopes,
     };
     use serde_json::json;
 
@@ -897,6 +1103,17 @@ mod tests {
             user_uid: user_uid.map(ToString::to_string),
             channel_uid: channel_uid.map(ToString::to_string),
             session_uid: None,
+            actor_account_uid: user_uid.map(ToString::to_string),
+            actor_person_uid: user_uid.map(ToString::to_string),
+            subject_person_uid: user_uid.map(ToString::to_string),
+            source_platform: Some("test".to_string()),
+            domain_kind: if channel_uid.is_some() {
+                MemoryDomainKind::ChannelShared
+            } else {
+                MemoryDomainKind::GlobalPerson
+            },
+            domain_key: channel_uid.unwrap_or(user_uid.unwrap_or("global")).to_string(),
+            observation_at: None,
             scope,
             memory_type: "event".to_string(),
             content: "hello".to_string(),
